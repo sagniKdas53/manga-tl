@@ -2278,15 +2278,19 @@ pub async fn create_region_redo_overlay(
     // overlay has to reproduce exactly, or the redone bubble would be typeset unlike the one it
     // replaces.
     //
-    // Deliberately not filtered on visibility, of either the element or its layer. A bubble is
-    // resolved through the region it belongs to, so whichever layers happen to be hidden or
-    // stacked over each other at the time cannot change which region a redo lands on. Requiring
-    // `visible = TRUE` meant a redo silently did nothing whenever the user had toggled the layer
-    // off — or, on a second redo, whenever the first had already hidden what it replaced.
+    // Never filtered to visible-only: a bubble is resolved through the region it belongs to, so
+    // whichever layers happen to be hidden or stacked over each other cannot change which region a
+    // redo lands on. Requiring `visible = TRUE` meant a redo silently did nothing once the user had
+    // toggled the layer off — or, on a second redo, once the first had hidden what it replaced.
+    //
+    // But what is *rendering* wins the tie. Ordering by z_order alone can pick a hidden element
+    // that sits above a visible one, and then the update below hides something already invisible
+    // while the visible stale text stays underneath the new overlay — old and new composited on top
+    // of each other. Visible first, then topmost; hidden matches only when nothing is showing.
     let prev: LayerElement = sqlx::query_as(
         "SELECT e.* FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
          WHERE e.region_id = $1 AND l.type ILIKE $2 \
-         ORDER BY l.z_order DESC LIMIT 1",
+         ORDER BY (e.visible AND l.visible) DESC NULLS LAST, l.z_order DESC LIMIT 1",
     )
     .bind(region_id)
     .bind(layer_type)
@@ -2383,12 +2387,20 @@ pub async fn create_region_redo_overlay(
         return None;
     }
 
-    // Hide the one it replaces. Both layers stay visible and both are composited, so without this
-    // the old and new text would be drawn on top of each other.
-    let _ = sqlx::query("UPDATE layer_elements SET visible = FALSE WHERE id = $1")
-        .bind(prev.id)
-        .execute(&state.pool)
-        .await;
+    // Hide everything this supersedes — every element still showing for this region on a layer of
+    // this type, not merely the one the geometry came from. Layers are composited, so a single
+    // stale element left visible anywhere below draws straight through the new one. More than one
+    // can be showing at a time: the reader's duplicate-layer button leaves both copies visible.
+    let _ = sqlx::query(
+        "UPDATE layer_elements SET visible = FALSE \
+         WHERE region_id = $1 AND visible = TRUE AND layer_id <> $2 \
+           AND layer_id IN (SELECT id FROM layers WHERE type ILIKE $3)",
+    )
+    .bind(region_id)
+    .bind(layer_id)
+    .bind(layer_type)
+    .execute(&state.pool)
+    .await;
 
     tracing::info!(
         "Region {region_id} redo recorded as overlay layer {layer_id} (z={next_z}), superseding element {} on layer {}",

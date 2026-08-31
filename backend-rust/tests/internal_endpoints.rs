@@ -836,7 +836,10 @@ async fn redo_endpoints_enqueue_and_validate() {
         put_back.push(raw);
     }
     for raw in put_back {
-        redis.push_to_queue("queue:region-redo-tl", &raw).await.unwrap();
+        redis
+            .push_to_queue("queue:region-redo-tl", &raw)
+            .await
+            .unwrap();
     }
     let redone = redone.expect("region redo queued");
     assert_eq!(redone["priority"], "high");
@@ -981,7 +984,6 @@ async fn image_info_filters_regions_by_latest_ocr_layer_and_carries_context() {
     cleanup_series(&pool, series_id).await;
 }
 
-
 /// Redo callbacks used to drop their spend on the floor. A region redo goes out to a paid cloud
 /// model whenever the OCR provider is not local (perform_redo_ocr), and the worker attaches what it
 /// spent — but this route only ever wrote the text, so four paid redos on 2026-08-31 left no rows.
@@ -1106,7 +1108,6 @@ async fn redo_callbacks_persist_their_spend() {
     cleanup_series(&pool, series_id).await;
 }
 
-
 /// Region redo used to be the one destructive step in an editor that versions everything else by
 /// layer: a full re-run inserts a fresh layer and keeps the old one, but a redo overwrote the
 /// element in place and the previous reading was gone. Now it lands as a one-element layer stacked
@@ -1149,9 +1150,7 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
         "POST",
         &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
         internal(None),
-        Some(
-            serde_json::json!({"translatedText": "Was it really that big...?"}).to_string(),
-        ),
+        Some(serde_json::json!({"translatedText": "Was it really that big...?"}).to_string()),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -1163,37 +1162,61 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_eq!(base_text.as_deref(), Some("Was it that big?"), "original text was overwritten");
-    assert_eq!(base_visible, Some(false), "superseded element must be hidden or it draws twice");
+    assert_eq!(
+        base_text.as_deref(),
+        Some("Was it that big?"),
+        "original text was overwritten"
+    );
+    assert_eq!(
+        base_visible,
+        Some(false),
+        "superseded element must be hidden or it draws twice"
+    );
 
     // The redo is a new visible layer carrying exactly one element.
-    let (overlay_id, overlay_meta, overlay_z, overlay_visible): (Uuid, Option<serde_json::Value>, i32, Option<bool>) =
-        sqlx::query_as(
-            "SELECT id, metadata_json, z_order, visible FROM layers WHERE page_id = $1 AND id <> $2",
-        )
-        .bind(page_id)
-        .bind(base_layer)
-        .fetch_one(&pool)
-        .await
-        .expect("overlay layer");
+    let (overlay_id, overlay_meta, overlay_z, overlay_visible): (
+        Uuid,
+        Option<serde_json::Value>,
+        i32,
+        Option<bool>,
+    ) = sqlx::query_as(
+        "SELECT id, metadata_json, z_order, visible FROM layers WHERE page_id = $1 AND id <> $2",
+    )
+    .bind(page_id)
+    .bind(base_layer)
+    .fetch_one(&pool)
+    .await
+    .expect("overlay layer");
     assert_eq!(overlay_visible, Some(true));
-    assert!(overlay_z > 0, "overlay must stack above the layer it patches");
+    assert!(
+        overlay_z > 0,
+        "overlay must stack above the layer it patches"
+    );
     let meta = overlay_meta.expect("overlay metadata");
-    assert_eq!(meta.get("overlay").and_then(serde_json::Value::as_bool), Some(true));
+    assert_eq!(
+        meta.get("overlay").and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
     assert_eq!(
         meta.get("region_id").and_then(serde_json::Value::as_str),
         Some(region_id.to_string().as_str())
     );
 
-    let overlay_elements: Vec<(Option<String>, Option<bool>, Option<String>)> = sqlx::query_as(
-        "SELECT text, visible, font FROM layer_elements WHERE layer_id = $1",
-    )
-    .bind(overlay_id)
-    .fetch_all(&pool)
-    .await
-    .unwrap();
-    assert_eq!(overlay_elements.len(), 1, "an overlay carries only the redone element");
-    assert_eq!(overlay_elements[0].0.as_deref(), Some("Was it really that big...?"));
+    let overlay_elements: Vec<(Option<String>, Option<bool>, Option<String>)> =
+        sqlx::query_as("SELECT text, visible, font FROM layer_elements WHERE layer_id = $1")
+            .bind(overlay_id)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        overlay_elements.len(),
+        1,
+        "an overlay carries only the redone element"
+    );
+    assert_eq!(
+        overlay_elements[0].0.as_deref(),
+        Some("Was it really that big...?")
+    );
     assert_eq!(overlay_elements[0].1, Some(true));
     // Styling is inherited, or the redone bubble would typeset unlike the one it replaces.
     assert_eq!(overlay_elements[0].2.as_deref(), Some("Comic Neue"));
@@ -1209,7 +1232,6 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
 
     cleanup_series(&pool, series_id).await;
 }
-
 
 /// Re-reading a bubble invalidates the translation made from the old text, so a redo of the OCR
 /// carries on into a redo of that bubble's translation — one new OCR layer, then one new
@@ -1260,7 +1282,10 @@ async fn redo_ocr_requeues_the_translation_but_redo_translation_stands_alone() {
         "POST",
         &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
         internal(None),
-        Some(serde_json::json!({"text": "あんなに大きかったけ…", "detectedLanguage": "ja"}).to_string()),
+        Some(
+            serde_json::json!({"text": "あんなに大きかったけ…", "detectedLanguage": "ja"})
+                .to_string(),
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -1272,7 +1297,10 @@ async fn redo_ocr_requeues_the_translation_but_redo_translation_stands_alone() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(ocr_overlays, 1, "re-reading a region must leave an OCR overlay behind");
+    assert_eq!(
+        ocr_overlays, 1,
+        "re-reading a region must leave an OCR overlay behind"
+    );
 
     let tl_jobs: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM jobs WHERE image_id = $1 AND type = 'region-redo-tl'",
@@ -1281,7 +1309,10 @@ async fn redo_ocr_requeues_the_translation_but_redo_translation_stands_alone() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(tl_jobs, 1, "redo OCR must requeue the translation for that bubble");
+    assert_eq!(
+        tl_jobs, 1,
+        "redo OCR must requeue the translation for that bubble"
+    );
 
     // --- redo translation: one layer, and no OCR job comes back ---
     let (status, _, body) = request(
@@ -1381,6 +1412,214 @@ async fn redo_targets_the_region_even_when_its_layers_are_hidden() {
     assert_eq!(overlay_text.as_deref(), Some("second"));
     // Styling still comes from the element it supersedes, hidden or not.
     assert_eq!(overlay_font.as_deref(), Some("Comic Neue"));
+
+    cleanup_series(&pool, series_id).await;
+}
+
+/// Codex P1. Every other callback in this pipeline claims its delivery before applying anything;
+/// this one did not, which was survivable while it only wrote text. Once a repeat delivery could
+/// stack a second history layer, double-write the cost, and queue a second *paid* translation, it
+/// stopped being survivable.
+#[tokio::test]
+async fn a_repeated_region_callback_is_applied_once() {
+    let Some((app, pool, _redis, _state)) = app().await else {
+        return;
+    };
+    let (series_id, _chapter_id, page_id, image_id) = seed_pipeline(&pool).await;
+
+    let region_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO ocr_regions (id, text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あんなに','ja',10,20,100,50,$2)")
+        .bind(region_id)
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let base_layer = Uuid::new_v4();
+    sqlx::query("INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) VALUES ($1,'ocr',TRUE,0,$2,$3,now())")
+        .bind(base_layer)
+        .bind(serde_json::json!({"layer_name": "OCR"}))
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES ($1,'あんなに',10,20,100,50,TRUE,$2,$3)")
+        .bind(Uuid::new_v4())
+        .bind(base_layer)
+        .bind(region_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // The job the worker is reporting on, so claim_callback has a row to claim.
+    let job_id = format!("redo-dup-{region_id}");
+    sqlx::query("INSERT INTO jobs (id, type, status, image_id, attempt, max_attempts, created_at, updated_at) VALUES ($1,'region-redo-ocr','PROCESSING',$2,1,3,now(),now())")
+        .bind(&job_id)
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let body_json = serde_json::json!({
+        "jobId": job_id,
+        "text": "あんなに大きかったけ…",
+        "detectedLanguage": "ja",
+        "cost": {
+            "currency": "USD", "estimated_cost": 0.00004, "prompt_tokens": 400,
+            "completion_tokens": 10, "cached_tokens": 0, "unknown_calls": 0, "priced_calls": 1,
+            "breakdown": [{
+                "model": "qwen/qwen3-vl-32b-instruct", "provider": "openrouter",
+                "estimated_cost": 0.00004, "prompt_tokens": 400, "completion_tokens": 10,
+                "cached_tokens": 0, "generation_id": "gen-dup-1", "upstream_provider": "Alibaba",
+                "cost_source": "authoritative", "stage": "region-redo-ocr", "duration_ms": 900
+            }]
+        }
+    })
+    .to_string();
+
+    // Deliver it twice, exactly as a worker retry or a lost response would.
+    for _ in 0..2 {
+        let (status, _, body) = request(
+            &app,
+            "POST",
+            &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
+            internal(None),
+            Some(body_json.clone()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+    }
+
+    let overlays: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM layers WHERE page_id = $1 AND metadata_json->>'overlay' = 'true'",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        overlays, 1,
+        "a repeat delivery must not stack a second history layer"
+    );
+
+    let cost_rows: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM job_costs WHERE image_id = $1 AND generation_id = 'gen-dup-1'",
+    )
+    .bind(image_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap_or(0);
+    assert_eq!(cost_rows, 1, "the same call must not be billed twice");
+
+    let tl_jobs: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM jobs WHERE image_id = $1 AND type = 'region-redo-tl'",
+    )
+    .bind(image_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        tl_jobs, 1,
+        "a repeat delivery must not queue a second paid translation"
+    );
+
+    sqlx::query("DELETE FROM job_costs WHERE image_id = $1")
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM jobs WHERE image_id = $1")
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    cleanup_series(&pool, series_id).await;
+}
+
+/// Codex P2. Ordering by z_order alone can pick a hidden element sitting above a visible one — the
+/// update then hides what was already invisible, and the visible stale text stays underneath the
+/// new overlay, compositing old and new together. What is rendering wins the tie.
+#[tokio::test]
+async fn redo_supersedes_the_element_that_is_actually_rendering() {
+    let Some((app, pool, _redis, _state)) = app().await else {
+        return;
+    };
+    let (series_id, _chapter_id, page_id, _image_id) = seed_pipeline(&pool).await;
+
+    let region_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO ocr_regions (id, text, translated_text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あんなに','visible one','ja',10,20,100,50,$2)")
+        .bind(region_id)
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // Lower layer is the one on screen; a hidden layer sits above it.
+    let visible_layer = Uuid::new_v4();
+    let visible_element = Uuid::new_v4();
+    sqlx::query("INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) VALUES ($1,'translation',TRUE,0,$2,$3,now())")
+        .bind(visible_layer)
+        .bind(serde_json::json!({"layer_name": "Translation"}))
+        .bind(page_id)
+        .execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, font, layer_id, region_id) VALUES ($1,'visible one',10,20,100,50,TRUE,'Comic Neue',$2,$3)")
+        .bind(visible_element)
+        .bind(visible_layer)
+        .bind(region_id)
+        .execute(&pool).await.unwrap();
+
+    let hidden_layer = Uuid::new_v4();
+    let hidden_element = Uuid::new_v4();
+    sqlx::query("INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) VALUES ($1,'translation',FALSE,5,$2,$3,now())")
+        .bind(hidden_layer)
+        .bind(serde_json::json!({"layer_name": "Translation (hidden)"}))
+        .bind(page_id)
+        .execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, font, layer_id, region_id) VALUES ($1,'hidden one',99,99,10,10,TRUE,'Arial',$2,$3)")
+        .bind(hidden_element)
+        .bind(hidden_layer)
+        .bind(region_id)
+        .execute(&pool).await.unwrap();
+
+    let (status, _, body) = request(
+        &app,
+        "POST",
+        &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
+        internal(None),
+        Some(serde_json::json!({"translatedText": "redone"}).to_string()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // Geometry comes from the element that was on screen, not the hidden one above it.
+    let (_, overlay_font, overlay_x): (Option<String>, Option<String>, f64) = sqlx::query_as(
+        "SELECT e.text, e.font, e.x FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
+         WHERE l.page_id = $1 AND l.metadata_json->>'overlay' = 'true'",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .expect("overlay");
+    assert_eq!(
+        overlay_font.as_deref(),
+        Some("Comic Neue"),
+        "took geometry from the hidden element"
+    );
+    assert_eq!(overlay_x, 10.0);
+
+    // And nothing stale is left showing to draw through the new text.
+    let still_visible: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
+         WHERE e.region_id = $1 AND e.visible = TRUE AND l.metadata_json->>'overlay' IS DISTINCT FROM 'true'",
+    )
+    .bind(region_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        still_visible, 0,
+        "a stale element left visible composites under the new one"
+    );
 
     cleanup_series(&pool, series_id).await;
 }

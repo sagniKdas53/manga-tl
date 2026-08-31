@@ -923,6 +923,39 @@ pub async fn region_callback(
     };
 
     let translated = fields.contains_key("translatedText");
+
+    // Claim the delivery before anything non-idempotent runs. Every other callback in this pipeline
+    // is guarded this way (AUDIT-P4); this one was not, which was survivable while it only wrote
+    // text — that update is idempotent — but no longer is. A repeat delivery would now stack a
+    // second history layer, write the cost a second time, and, for a re-read, queue a second paid
+    // translation. Resolved once here and reused below rather than looked up again per side effect.
+    let image_id: Option<Uuid> = sqlx::query_scalar(
+        "SELECT p.image_id FROM ocr_regions r JOIN pages p ON p.id = r.page_id WHERE r.id = $1",
+    )
+    .bind(region_id)
+    .fetch_optional(&state.pool)
+    .await
+    .ok()
+    .flatten();
+    if let Some(image_id) = image_id {
+        let job_type = if translated {
+            "region-redo-tl"
+        } else {
+            "region-redo-ocr"
+        };
+        if !coordinator::claim_callback(
+            &state,
+            fields.get("jobId").and_then(Value::as_str),
+            image_id,
+            job_type,
+        )
+        .await
+        {
+            // Already applied. claim_callback has logged it; the first delivery did the work.
+            return StatusCode::OK.into_response();
+        }
+    }
+
     let result = sqlx::query(
         "UPDATE ocr_regions SET \
            text = COALESCE($2, text), \
@@ -975,26 +1008,18 @@ pub async fn region_callback(
             // Redoing a translation on its own does not come back the other way. Asking for a new
             // wording is not a claim that the source text was misread, and re-running OCR would
             // throw away the reading the user was working from.
-            if !translated {
-                if let Err(err) = coordinator::trigger_redo(&state, region_id, "translation").await {
-                    tracing::error!(
-                        "Region {region_id} was re-read but its translation could not be requeued: {err}"
-                    );
-                }
+            if !translated
+                && let Err(err) = coordinator::trigger_redo(&state, region_id, "translation").await
+            {
+                tracing::error!(
+                    "Region {region_id} was re-read but its translation could not be requeued: {err}"
+                );
             }
             // A region redo can go out to a paid cloud model — perform_redo_ocr does whenever the
             // OCR provider is not local — and the worker now attaches what it spent. This route
             // only knows the region, so the image it belongs to has to be resolved before the cost
             // row can be written.
             if let Some(cost) = fields.get("cost").filter(|c| !c.is_null()) {
-                let image_id: Option<Uuid> = sqlx::query_scalar(
-                    "SELECT p.image_id FROM ocr_regions r JOIN pages p ON p.id = r.page_id WHERE r.id = $1",
-                )
-                .bind(region_id)
-                .fetch_optional(&state.pool)
-                .await
-                .ok()
-                .flatten();
                 match image_id {
                     Some(image_id) => {
                         coordinator::save_job_costs(
