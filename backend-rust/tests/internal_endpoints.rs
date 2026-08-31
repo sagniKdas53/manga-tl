@@ -1093,3 +1093,107 @@ async fn redo_callbacks_persist_their_spend() {
 
     cleanup_series(&pool, series_id).await;
 }
+
+
+/// Region redo used to be the one destructive step in an editor that versions everything else by
+/// layer: a full re-run inserts a fresh layer and keeps the old one, but a redo overwrote the
+/// element in place and the previous reading was gone. Now it lands as a one-element layer stacked
+/// on top, and the element it replaces is hidden rather than overwritten.
+#[tokio::test]
+async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
+    let Some((app, pool, _redis, _state)) = app().await else {
+        return;
+    };
+    let (series_id, _chapter_id, page_id, _image_id) = seed_pipeline(&pool).await;
+
+    let region_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO ocr_regions (id, text, translated_text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あんなに','Was it that big?','ja',10,20,100,50,$2)")
+        .bind(region_id)
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // A full translation pass: one layer, one element, both visible.
+    let base_layer = Uuid::new_v4();
+    sqlx::query("INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) VALUES ($1,'translation','en',TRUE,0,$2,$3,now())")
+        .bind(base_layer)
+        .bind(serde_json::json!({"layer_name": "Translation", "qa": {"status": "completed"}}))
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let base_element = Uuid::new_v4();
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, font, text_color, layer_id, region_id) VALUES ($1,'Was it that big?',10,20,100,50,TRUE,'Comic Neue','#000000',$2,$3)")
+        .bind(base_element)
+        .bind(base_layer)
+        .bind(region_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let (status, _, body) = request(
+        &app,
+        "POST",
+        &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
+        internal(None),
+        Some(
+            serde_json::json!({"translatedText": "Was it really that big...?"}).to_string(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // The original element survives, hidden rather than rewritten — this is the whole point.
+    let (base_text, base_visible): (Option<String>, Option<bool>) =
+        sqlx::query_as("SELECT text, visible FROM layer_elements WHERE id = $1")
+            .bind(base_element)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(base_text.as_deref(), Some("Was it that big?"), "original text was overwritten");
+    assert_eq!(base_visible, Some(false), "superseded element must be hidden or it draws twice");
+
+    // The redo is a new visible layer carrying exactly one element.
+    let (overlay_id, overlay_meta, overlay_z, overlay_visible): (Uuid, Option<serde_json::Value>, i32, Option<bool>) =
+        sqlx::query_as(
+            "SELECT id, metadata_json, z_order, visible FROM layers WHERE page_id = $1 AND id <> $2",
+        )
+        .bind(page_id)
+        .bind(base_layer)
+        .fetch_one(&pool)
+        .await
+        .expect("overlay layer");
+    assert_eq!(overlay_visible, Some(true));
+    assert!(overlay_z > 0, "overlay must stack above the layer it patches");
+    let meta = overlay_meta.expect("overlay metadata");
+    assert_eq!(meta.get("overlay").and_then(serde_json::Value::as_bool), Some(true));
+    assert_eq!(
+        meta.get("region_id").and_then(serde_json::Value::as_str),
+        Some(region_id.to_string().as_str())
+    );
+
+    let overlay_elements: Vec<(Option<String>, Option<bool>, Option<String>)> = sqlx::query_as(
+        "SELECT text, visible, font FROM layer_elements WHERE layer_id = $1",
+    )
+    .bind(overlay_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(overlay_elements.len(), 1, "an overlay carries only the redone element");
+    assert_eq!(overlay_elements[0].0.as_deref(), Some("Was it really that big...?"));
+    assert_eq!(overlay_elements[0].1, Some(true));
+    // Styling is inherited, or the redone bubble would typeset unlike the one it replaces.
+    assert_eq!(overlay_elements[0].2.as_deref(), Some("Comic Neue"));
+
+    // And the canonical region still carries the current value for whatever reads it next.
+    let current: Option<String> =
+        sqlx::query_scalar("SELECT translated_text FROM ocr_regions WHERE id = $1")
+            .bind(region_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(current.as_deref(), Some("Was it really that big...?"));
+
+    cleanup_series(&pool, series_id).await;
+}

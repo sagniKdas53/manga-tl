@@ -450,9 +450,30 @@ async fn build_chapter_meta(
         chapter_unpriced += unpriced_calls;
 
         // Active visible translation layer drives the manual flags.
-        let active_layer = layers.iter().find(|l| {
-            l.layer_type.eq_ignore_ascii_case("translation") && l.visible.unwrap_or(false)
-        });
+        //
+        // Region-redo overlays are skipped, and the newest full layer wins. An overlay is a
+        // one-element patch stacked on top of a full pass: it is visible and it is a translation
+        // layer, but the QA verdict this reads lives in the full layer's metadata and an overlay
+        // carries none. Taking the overlay would silently report every page with a redone region
+        // as having no QA verdict at all.
+        let active_layer = layers
+            .iter()
+            .rev()
+            .find(|l| {
+                l.layer_type.eq_ignore_ascii_case("translation")
+                    && l.visible.unwrap_or(false)
+                    && !l
+                        .metadata_json
+                        .as_ref()
+                        .and_then(|m| m.get("overlay"))
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false)
+            })
+            .or_else(|| {
+                layers.iter().rev().find(|l| {
+                    l.layer_type.eq_ignore_ascii_case("translation") && l.visible.unwrap_or(false)
+                })
+            });
         match active_layer {
             Some(active) => {
                 page_meta["activeLayer"] = json!({

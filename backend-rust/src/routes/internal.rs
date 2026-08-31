@@ -952,17 +952,19 @@ pub async fn region_callback(
 
     match result {
         Ok(_) => {
-            if translated {
-                // Mirror onto the visible translation layer's element.
-                let _ = sqlx::query(
-                    "UPDATE layer_elements SET text=$2 WHERE region_id=$1 AND visible=TRUE \
-                     AND layer_id IN (SELECT id FROM layers WHERE type ILIKE 'translation' AND visible=TRUE)",
+            // Record the redo as a one-element layer stacked on top rather than overwriting the
+            // element in place. The old text used to be destroyed here — the only step in the
+            // editor that could not be undone, in the one place a user is most likely to want to
+            // compare two readings side by side.
+            let (layer_type, new_text) = if translated {
+                (
+                    "translation",
+                    fields.get("translatedText").and_then(Value::as_str),
                 )
-                .bind(region_id)
-                .bind(fields.get("translatedText").and_then(Value::as_str))
-                .execute(&state.pool)
-                .await;
-            }
+            } else {
+                ("ocr", fields.get("text").and_then(Value::as_str))
+            };
+            coordinator::create_region_redo_overlay(&state, region_id, new_text, layer_type).await;
             // A region redo can go out to a paid cloud model — perform_redo_ocr does whenever the
             // OCR provider is not local — and the worker now attaches what it spent. This route
             // only knows the region, so the image it belongs to has to be resolved before the cost

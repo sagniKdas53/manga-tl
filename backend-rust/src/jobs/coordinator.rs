@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::models::{Chapter, Image, Job, Layer, OcrRegion, Page, Panel, Series};
+use crate::models::{Chapter, Image, Job, Layer, LayerElement, OcrRegion, Page, Panel, Series};
 use crate::resolve::resolve_model;
 use crate::settings::load_global_settings;
 use crate::state::AppState;
@@ -2250,6 +2250,146 @@ pub async fn hide_translation_elements(
             el.id
         );
     }
+}
+
+/// Records a redone region as a one-element layer stacked on top, and hides the element it
+/// supersedes so the same bubble is not drawn twice.
+///
+/// Region redo was the one destructive step in a system that otherwise versions everything by
+/// layer: a full re-run inserts fresh regions and a new layer, while a redo overwrote
+/// `ocr_regions` and the visible layer element in place, so the previous read was simply gone.
+/// Losing it is the opposite of what the editor is for.
+///
+/// An overlay rather than a full copy because every renderer already composites — `render.py`
+/// filters elements on `layerVisible` instead of picking a layer, and the reader and the canvas
+/// export both iterate every visible layer — so one small layer on top is enough. It also keeps N
+/// redos to N small layers instead of N full copies whose visibility has to be reconciled, and
+/// they flatten on export for free.
+///
+/// Returns the new layer's id, or None when there is nothing to supersede (a region with no
+/// visible element of this type yet — in that case the in-place write is all there is to do).
+pub async fn create_region_redo_overlay(
+    state: &AppState,
+    region_id: Uuid,
+    new_text: Option<&str>,
+    layer_type: &str,
+) -> Option<Uuid> {
+    // The element being superseded, topmost first. It supplies the geometry and styling the
+    // overlay has to reproduce exactly, or the redone bubble would be typeset unlike the one it
+    // replaces.
+    let prev: LayerElement = sqlx::query_as(
+        "SELECT e.* FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
+         WHERE e.region_id = $1 AND l.type ILIKE $2 AND e.visible = TRUE AND l.visible = TRUE \
+         ORDER BY l.z_order DESC LIMIT 1",
+    )
+    .bind(region_id)
+    .bind(layer_type)
+    .fetch_optional(&state.pool)
+    .await
+    .ok()
+    .flatten()?;
+
+    let source_layer: Layer = sqlx::query_as("SELECT * FROM layers WHERE id = $1")
+        .bind(prev.layer_id)
+        .fetch_optional(&state.pool)
+        .await
+        .ok()
+        .flatten()?;
+    let page_id = source_layer.page_id;
+
+    let next_z: i32 =
+        sqlx::query_scalar("SELECT COALESCE(MAX(z_order), -1) + 1 FROM layers WHERE page_id = $1")
+            .bind(page_id)
+            .fetch_one(&state.pool)
+            .await
+            .unwrap_or(0);
+
+    let pretty_type = if layer_type.eq_ignore_ascii_case("translation") {
+        "Translation"
+    } else {
+        "OCR"
+    };
+    let metadata = json!({
+        "layer_name": format!("{pretty_type} (region redo)"),
+        // Marks this as a patch, not a full pass. export.rs keeps choosing the full layer as
+        // `activeLayer` on the strength of this, because the QA verdict lives in that layer's
+        // metadata and an overlay has none.
+        "overlay": true,
+        "region_id": region_id.to_string(),
+        "supersedes_layer": prev.layer_id.to_string(),
+        "layer_order": next_z,
+        "last_modified": chrono::Utc::now().to_rfc3339(),
+    });
+
+    let layer_id = Uuid::new_v4();
+    if let Err(err) = sqlx::query(
+        "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) \
+         VALUES ($1,$2,$3,TRUE,$4,$5,$6,now())",
+    )
+    .bind(layer_id)
+    .bind(&source_layer.layer_type)
+    .bind(&source_layer.target_language)
+    .bind(next_z)
+    .bind(&metadata)
+    .bind(page_id)
+    .execute(&state.pool)
+    .await
+    {
+        tracing::error!("Could not create redo overlay layer for region {region_id}: {err}");
+        return None;
+    }
+
+    if let Err(err) = sqlx::query(
+        "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, auto_size, \
+         font, font_style, font_weight, background_color, text_color, box_shape, mask_polygon, \
+         word_wrap, rotation, size, layer_id, region_id) \
+         VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)",
+    )
+    .bind(Uuid::new_v4())
+    .bind(new_text)
+    .bind(prev.x)
+    .bind(prev.y)
+    .bind(prev.max_width)
+    .bind(prev.max_height)
+    .bind(prev.auto_size)
+    .bind(&prev.font)
+    .bind(&prev.font_style)
+    .bind(&prev.font_weight)
+    .bind(&prev.background_color)
+    .bind(&prev.text_color)
+    .bind(&prev.box_shape)
+    .bind(&prev.mask_polygon)
+    .bind(prev.word_wrap)
+    .bind(prev.rotation)
+    .bind(prev.size)
+    .bind(layer_id)
+    .bind(region_id)
+    .execute(&state.pool)
+    .await
+    {
+        tracing::error!("Could not create redo overlay element for region {region_id}: {err}");
+        // Leave no half-made layer behind: an empty visible layer renders nothing but shows up in
+        // the layer list as if it held the redo.
+        let _ = sqlx::query("DELETE FROM layers WHERE id = $1")
+            .bind(layer_id)
+            .execute(&state.pool)
+            .await;
+        return None;
+    }
+
+    // Hide the one it replaces. Both layers stay visible and both are composited, so without this
+    // the old and new text would be drawn on top of each other.
+    let _ = sqlx::query("UPDATE layer_elements SET visible = FALSE WHERE id = $1")
+        .bind(prev.id)
+        .execute(&state.pool)
+        .await;
+
+    tracing::info!(
+        "Region {region_id} redo recorded as overlay layer {layer_id} (z={next_z}), superseding element {} on layer {}",
+        prev.id,
+        prev.layer_id
+    );
+    Some(layer_id)
 }
 
 /// The full QA verdict. Returns one of DUPLICATE / MANUAL_REVIEW / RETRIED /
