@@ -165,6 +165,14 @@ pub async fn claim_callback_tx(
     if !job.job_type.eq_ignore_ascii_case(job_type) {
         return Ok(true);
     }
+    if job.image_id != Some(image_id) {
+        tracing::warn!(
+            "Ignoring job {} while claiming {job_type} callback for image {image_id}: job belongs to image {:?}",
+            job.id,
+            job.image_id
+        );
+        return Ok(true);
+    }
     let res = sqlx::query(
         "UPDATE jobs SET callback_applied_at = now() WHERE id = $1 AND callback_applied_at IS NULL",
     )
@@ -2367,7 +2375,26 @@ pub async fn create_region_redo_overlay(
     region_id: Uuid,
     new_text: Option<&str>,
     layer_type: &str,
+    job_id: Option<&str>,
 ) -> Result<Option<Uuid>, sqlx::Error> {
+    let target_language: Option<String> = if layer_type.eq_ignore_ascii_case("translation") {
+        sqlx::query_scalar(
+            "SELECT COALESCE( \
+               (SELECT payload::jsonb->>'targetLanguage' FROM jobs WHERE id = $1), \
+               (SELECT s.target_language FROM ocr_regions r \
+                JOIN pages p ON p.id = r.page_id \
+                JOIN chapters c ON c.id = p.chapter_id \
+                JOIN series s ON s.id = c.series_id WHERE r.id = $2) \
+             )",
+        )
+        .bind(job_id)
+        .bind(region_id)
+        .fetch_one(&mut **tx)
+        .await?
+    } else {
+        None
+    };
+
     // The element being superseded, topmost first. It supplies the geometry and styling the
     // overlay has to reproduce exactly, or the redone bubble would be typeset unlike the one it
     // replaces.
@@ -2384,10 +2411,12 @@ pub async fn create_region_redo_overlay(
     let Some(prev): Option<LayerElement> = sqlx::query_as(
         "SELECT e.* FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
          WHERE e.region_id = $1 AND l.type ILIKE $2 \
+           AND ($3::text IS NULL OR LOWER(l.target_language) = LOWER($3)) \
          ORDER BY (e.visible AND l.visible) DESC NULLS LAST, l.z_order DESC LIMIT 1",
     )
     .bind(region_id)
     .bind(layer_type)
+    .bind(target_language.as_deref())
     .fetch_optional(&mut **tx)
     .await?
     else {
@@ -2475,12 +2504,16 @@ pub async fn create_region_redo_overlay(
     let hidden: Vec<Uuid> = sqlx::query_scalar(
         "UPDATE layer_elements SET visible = FALSE \
          WHERE region_id = $1 AND visible = TRUE AND layer_id <> $2 \
-           AND layer_id IN (SELECT id FROM layers WHERE type ILIKE $3 AND visible = TRUE) \
+           AND layer_id IN ( \
+             SELECT id FROM layers WHERE type ILIKE $3 AND visible = TRUE \
+               AND ($4::text IS NULL OR LOWER(target_language) = LOWER($4)) \
+           ) \
          RETURNING id",
     )
     .bind(region_id)
     .bind(layer_id)
     .bind(layer_type)
+    .bind(target_language.as_deref())
     .fetch_all(&mut **tx)
     .await?;
 

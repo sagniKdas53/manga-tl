@@ -1117,7 +1117,7 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
     let Some((app, pool, _redis, _state)) = app().await else {
         return;
     };
-    let (series_id, _chapter_id, page_id, _image_id) = seed_pipeline(&pool).await;
+    let (series_id, _chapter_id, page_id, image_id) = seed_pipeline(&pool).await;
 
     let region_id = Uuid::new_v4();
     sqlx::query("INSERT INTO ocr_regions (id, text, translated_text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あんなに','Was it that big?','ja',10,20,100,50,$2)")
@@ -1145,12 +1145,46 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
         .await
         .unwrap();
 
+    // Another visible target language may be stacked above English, but an English redo must not
+    // hide or inherit from it.
+    let spanish_layer = Uuid::new_v4();
+    let spanish_element = Uuid::new_v4();
+    sqlx::query("INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) VALUES ($1,'translation','es',TRUE,1,$2,$3,now())")
+        .bind(spanish_layer)
+        .bind(serde_json::json!({"layer_name": "Translation (Spanish)"}))
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, font, text_color, layer_id, region_id) VALUES ($1,'¿Era tan grande?',10,20,100,50,TRUE,'Comic Neue','#000000',$2,$3)")
+        .bind(spanish_element)
+        .bind(spanish_layer)
+        .bind(region_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let job_id = format!("redo-en-{region_id}");
+    sqlx::query("INSERT INTO jobs (id, type, status, image_id, attempt, max_attempts, payload, created_at, updated_at) VALUES ($1,'region-redo-tl','PROCESSING',$2,1,3,$3,now(),now())")
+        .bind(&job_id)
+        .bind(image_id)
+        .bind(serde_json::json!({"targetLanguage": "en"}).to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+
     let (status, _, body) = request(
         &app,
         "POST",
         &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
         internal(None),
-        Some(serde_json::json!({"translatedText": "Was it really that big...?"}).to_string()),
+        Some(
+            serde_json::json!({
+                "jobId": job_id,
+                "translatedText": "Was it really that big...?"
+            })
+            .to_string(),
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -1172,6 +1206,17 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
         Some(false),
         "superseded element must be hidden or it draws twice"
     );
+    let spanish_visible: Option<bool> =
+        sqlx::query_scalar("SELECT visible FROM layer_elements WHERE id = $1")
+            .bind(spanish_element)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        spanish_visible,
+        Some(true),
+        "redoing English must not suppress the Spanish translation"
+    );
 
     // The redo is a new visible layer carrying exactly one element.
     let (overlay_id, overlay_meta, overlay_z, overlay_visible): (
@@ -1180,10 +1225,10 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
         i32,
         Option<bool>,
     ) = sqlx::query_as(
-        "SELECT id, metadata_json, z_order, visible FROM layers WHERE page_id = $1 AND id <> $2",
+        "SELECT id, metadata_json, z_order, visible FROM layers \
+         WHERE page_id = $1 AND metadata_json->>'overlay' = 'true'",
     )
     .bind(page_id)
-    .bind(base_layer)
     .fetch_one(&pool)
     .await
     .expect("overlay layer");
@@ -1193,6 +1238,13 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
         "overlay must stack above the layer it patches"
     );
     let meta = overlay_meta.expect("overlay metadata");
+    let overlay_language: Option<String> =
+        sqlx::query_scalar("SELECT target_language FROM layers WHERE id = $1")
+            .bind(overlay_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(overlay_language.as_deref(), Some("en"));
     assert_eq!(
         meta.get("overlay").and_then(serde_json::Value::as_bool),
         Some(true)

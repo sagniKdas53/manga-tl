@@ -1022,8 +1022,14 @@ pub async fn region_callback(
     // Ok(None) means there was nothing to supersede, which is fine. An Err means the history layer
     // genuinely failed to write, and acknowledging that would leave the canonical text changed with
     // no record of what it replaced and no retry able to repair it.
-    if let Err(err) =
-        coordinator::create_region_redo_overlay(&mut tx, region_id, new_text, layer_type).await
+    if let Err(err) = coordinator::create_region_redo_overlay(
+        &mut tx,
+        region_id,
+        new_text,
+        layer_type,
+        claim_job_id,
+    )
+    .await
     {
         tracing::error!("Region {region_id} redo overlay could not be written: {err}");
         let _ = tx.rollback().await;

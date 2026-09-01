@@ -171,6 +171,93 @@ async fn cleanup_series(pool: &sqlx::PgPool, series_id: Uuid) {
         .await;
 }
 
+#[tokio::test]
+async fn callback_claim_does_not_consume_another_images_job() {
+    let Some((pool, _redis, _state)) = app().await else {
+        return;
+    };
+    let (series_id, _chapter_id, _page_id, current_image) =
+        seed_pipeline(&pool, Some("ja"), Some("en")).await;
+    let other_image = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO images (id, created_at, filename, storage_path, hash, width, height) \
+         VALUES ($1, now(), 'other.png', 'originals/other.png', $2, 64, 64)",
+    )
+    .bind(other_image)
+    .bind(format!("hash-other-{other_image}"))
+    .execute(&pool)
+    .await
+    .expect("other image");
+    let job_id = format!("redo-other-{other_image}");
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, image_id, attempt, max_attempts, created_at, updated_at) \
+         VALUES ($1,'region-redo-tl','PROCESSING',$2,1,3,now(),now())",
+    )
+    .bind(&job_id)
+    .bind(other_image)
+    .execute(&pool)
+    .await
+    .expect("job");
+
+    let mut tx = pool.begin().await.expect("transaction");
+    assert!(
+        manga_backend::jobs::coordinator::claim_callback_tx(
+            &mut tx,
+            Some(&job_id),
+            current_image,
+            "region-redo-tl",
+        )
+        .await
+        .expect("mismatched claim")
+    );
+    tx.commit().await.expect("commit mismatch");
+    let claimed: Option<chrono::DateTime<chrono::Utc>> =
+        sqlx::query_scalar("SELECT callback_applied_at FROM jobs WHERE id = $1")
+            .bind(&job_id)
+            .fetch_one(&pool)
+            .await
+            .expect("claim state");
+    assert!(
+        claimed.is_none(),
+        "another image's job must remain unclaimed"
+    );
+
+    let mut tx = pool.begin().await.expect("transaction");
+    assert!(
+        manga_backend::jobs::coordinator::claim_callback_tx(
+            &mut tx,
+            Some(&job_id),
+            other_image,
+            "region-redo-tl",
+        )
+        .await
+        .expect("matching claim")
+    );
+    tx.commit().await.expect("commit claim");
+    let claimed: Option<chrono::DateTime<chrono::Utc>> =
+        sqlx::query_scalar("SELECT callback_applied_at FROM jobs WHERE id = $1")
+            .bind(&job_id)
+            .fetch_one(&pool)
+            .await
+            .expect("claim state");
+    assert!(
+        claimed.is_some(),
+        "the owning image must still be able to claim its job"
+    );
+
+    sqlx::query("DELETE FROM jobs WHERE id = $1")
+        .bind(&job_id)
+        .execute(&pool)
+        .await
+        .expect("delete job");
+    sqlx::query("DELETE FROM images WHERE id = $1")
+        .bind(other_image)
+        .execute(&pool)
+        .await
+        .expect("delete image");
+    cleanup_series(&pool, series_id).await;
+}
+
 async fn insert_translation_version(
     pool: &sqlx::PgPool,
     page_id: Uuid,
