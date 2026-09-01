@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::models::{Chapter, Image, Job, Layer, OcrRegion, Page, Panel, Series};
+use crate::models::{Chapter, Image, Job, Layer, LayerElement, OcrRegion, Page, Panel, Series};
 use crate::resolve::resolve_model;
 use crate::settings::load_global_settings;
 use crate::state::AppState;
@@ -75,6 +75,30 @@ pub async fn resolve_callback_job(
     .flatten()
 }
 
+/// True when this layer is a region-redo overlay — a one-element patch stacked on a full pass,
+/// not a pass of its own.
+///
+/// Several places independently pick "the newest layer of this type" and treat what they get as
+/// complete: QA's hybrid prepare and its callback, get_image_info's region filter, and export's
+/// activeLayer. Every one of them is wrong about an overlay, and each was found separately. The
+/// test lives here so the next such reader has something to call instead of inventing a sixth.
+pub fn is_redo_overlay(layer: &Layer) -> bool {
+    layer
+        .metadata_json
+        .as_ref()
+        .and_then(|m| m.get("overlay"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+/// The newest *complete* layer of a type, ignoring region-redo overlays.
+pub fn latest_complete_layer<'a>(layers: &'a [Layer], layer_type: &str) -> Option<&'a Layer> {
+    layers
+        .iter()
+        .filter(|l| l.layer_type.eq_ignore_ascii_case(layer_type) && !is_redo_overlay(l))
+        .max_by_key(|l| l.z_order)
+}
+
 /// Claims the right to apply a result callback (AUDIT-P4). False ⇒ already applied:
 /// log and drop the duplicate.
 pub async fn claim_callback(
@@ -107,6 +131,62 @@ pub async fn claim_callback(
             true // fail-open like a lost race, never lose a genuine result
         }
     }
+}
+
+/// Transaction-scoped `claim_callback`, for callers whose writes must land or fail *with* the
+/// claim.
+///
+/// The pool-based version marks the delivery applied in its own statement, so a caller that claims
+/// and then fails leaves the job flagged and the worker's retry discarded as a duplicate — the
+/// result lost. Claiming inside the caller's transaction makes a rollback release the claim too.
+///
+/// Returns Ok(false) when the delivery was already applied.
+pub async fn claim_callback_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    job_id: Option<&str>,
+    image_id: Uuid,
+    job_type: &str,
+) -> Result<bool, sqlx::Error> {
+    let job: Option<Job> = match job_id.filter(|s| !s.is_empty()) {
+        Some(id) => {
+            sqlx::query_as("SELECT * FROM jobs WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&mut **tx)
+                .await?
+        }
+        // Deliberately no fallback to "newest job for this image and type". Region redos run
+        // several at a time on one image, one per bubble, so that lookup claims another region's
+        // job and drops this region's result as a duplicate.
+        None => None,
+    };
+    let Some(job) = job else {
+        return Ok(true); // nothing to deduplicate against — apply
+    };
+    if !job.job_type.eq_ignore_ascii_case(job_type) {
+        return Ok(true);
+    }
+    if job.image_id != Some(image_id) {
+        tracing::warn!(
+            "Ignoring job {} while claiming {job_type} callback for image {image_id}: job belongs to image {:?}",
+            job.id,
+            job.image_id
+        );
+        return Ok(true);
+    }
+    let res = sqlx::query(
+        "UPDATE jobs SET callback_applied_at = now() WHERE id = $1 AND callback_applied_at IS NULL",
+    )
+    .bind(&job.id)
+    .execute(&mut **tx)
+    .await?;
+    if res.rows_affected() == 0 {
+        tracing::warn!(
+            "Ignoring duplicate {job_type} callback for image {image_id} — job {} already applied its result",
+            job.id
+        );
+        return Ok(false);
+    }
+    Ok(true)
 }
 
 /// Resolves the page a callback reports on: exact pageId first, then first page for
@@ -1328,6 +1408,58 @@ pub async fn save_job_costs(
     }
 }
 
+/// Persists worker cost entries on a callback's transaction so the callback result, claim, and
+/// spend either commit together or all remain retryable.
+pub async fn save_job_costs_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    image_id: Uuid,
+    job_id: Option<&str>,
+    cost_map: &Value,
+) -> Result<(), sqlx::Error> {
+    let Some(obj) = cost_map.as_object() else {
+        return Ok(());
+    };
+    if obj.is_empty() {
+        return Ok(());
+    }
+    let entries: Vec<&Value> = match obj.get("breakdown").and_then(|b| b.as_array()) {
+        Some(list) => list.iter().collect(),
+        None if obj.contains_key("estimated_cost") => vec![cost_map],
+        None => Vec::new(),
+    };
+    for entry in entries {
+        let Some(entry_obj) = entry.as_object() else {
+            continue;
+        };
+        let number = |key: &str| entry_obj.get(key).and_then(|v| v.as_i64());
+        let float = |key: &str| entry_obj.get(key).and_then(|v| v.as_f64());
+        let text = |key: &str| entry_obj.get(key).and_then(|v| v.as_str());
+        let text_opt = |key: &str| text(key).filter(|s| !s.is_empty());
+        sqlx::query(
+            "INSERT INTO job_costs (id, image_id, job_id, provider, model, prompt_tokens, completion_tokens, \
+             estimated_cost, generation_id, upstream_provider, cached_tokens, cost_source, stage, duration_ms, created_at) \
+             VALUES ($1,$2,(SELECT id FROM jobs WHERE id = $3),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now())",
+        )
+        .bind(Uuid::new_v4())
+        .bind(image_id)
+        .bind(job_id.filter(|s| !s.is_empty()))
+        .bind(text("provider"))
+        .bind(text("model"))
+        .bind(number("prompt_tokens").map(|v| v as i32))
+        .bind(number("completion_tokens").map(|v| v as i32))
+        .bind(float("estimated_cost"))
+        .bind(text_opt("generation_id"))
+        .bind(text_opt("upstream_provider"))
+        .bind(number("cached_tokens").map(|v| v as i32))
+        .bind(text_opt("cost_source"))
+        .bind(text_opt("stage"))
+        .bind(number("duration_ms").map(|v| v as i32))
+        .execute(&mut **tx)
+        .await?;
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Text-box geometry (Java's TextBox/textBoxFor/freeTextBox)
 // ---------------------------------------------------------------------------
@@ -1628,15 +1760,6 @@ pub async fn handle_translation_callback(
         .collect();
 
     let is_redo = !existing_translation_layers.is_empty();
-    if is_redo {
-        for old in &existing_translation_layers {
-            sqlx::query("UPDATE layers SET visible = FALSE WHERE id = $1")
-                .bind(old.id)
-                .execute(&state.pool)
-                .await
-                .map_err(|e| e.to_string())?;
-        }
-    }
 
     // Z-order over ALL layers so the new one is always on top.
     let next_z = all_layers.iter().map(|l| l.z_order).max().unwrap_or(0) + 1;
@@ -1697,6 +1820,30 @@ pub async fn handle_translation_callback(
 
     let layer_id = Uuid::new_v4();
     let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+    if is_redo {
+        // Stand overlays down from newest to oldest before hiding the complete layers. Each
+        // overlay restores its predecessor, so this order walks the chain back to the complete
+        // layer and leaves that layer intact for a future editor toggle.
+        let mut old_layers = existing_translation_layers.clone();
+        old_layers.sort_by_key(|layer| std::cmp::Reverse(layer.z_order));
+        for old in old_layers.iter().filter(|layer| is_redo_overlay(layer)) {
+            sync_superseded_elements(&mut tx, old.id, false)
+                .await
+                .map_err(|e| e.to_string())?;
+            sqlx::query("UPDATE layers SET visible = FALSE WHERE id = $1")
+                .bind(old.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        for old in old_layers.iter().filter(|layer| !is_redo_overlay(layer)) {
+            sqlx::query("UPDATE layers SET visible = FALSE WHERE id = $1")
+                .bind(old.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+    }
     sqlx::query(
         "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) \
          VALUES ($1,'translation',$2,TRUE,$3,$4,$5,now())",
@@ -2047,11 +2194,10 @@ pub async fn prepare_hybrid_qa(
         .fetch_all(&state.pool)
         .await
         .map_err(|e| e.to_string())?;
-    let latest_translation = layers
-        .iter()
-        .filter(|l| l.layer_type.eq_ignore_ascii_case("translation"))
-        .max_by_key(|l| l.z_order)
-        .map(|l| l.id);
+    // Skips redo overlays: QA hides everything but the layer it picks, so choosing a one-element
+    // overlay would blank every other bubble on the page and leave direct fixes with no element to
+    // land on.
+    let latest_translation = latest_complete_layer(&layers, "translation").map(|l| l.id);
 
     for r in qa_results {
         let Some(region_id) = r
@@ -2122,7 +2268,14 @@ pub async fn prepare_hybrid_qa(
 
     // Visibility sweep: newest translation visible, OCR hidden, SFX visible, others kept.
     for layer in &layers {
-        let should_be_visible = if layer.layer_type.eq_ignore_ascii_case("translation") {
+        // Redo overlays are left exactly as the editor left them. An overlay is paired with the
+        // element it superseded — that element is flagged invisible and only
+        // `sync_superseded_elements` gives it back — so flipping the layer here would blank the
+        // redone bubble instead of reverting it. A stale overlay is not a worry: a fresh full
+        // translation pass already hides same-language layers, overlays included, before QA runs.
+        let should_be_visible = if is_redo_overlay(layer) {
+            layer.visible.unwrap_or(true)
+        } else if layer.layer_type.eq_ignore_ascii_case("translation") {
             latest_translation == Some(layer.id)
         } else if layer.layer_type.eq_ignore_ascii_case("ocr") {
             false
@@ -2142,6 +2295,52 @@ pub async fn prepare_hybrid_qa(
     Ok(())
 }
 
+/// Picks the single translation layer QA may change for this region.
+///
+/// A visible overlay layer is not enough. Older overlays stay visible as layers while their
+/// elements are hidden by newer redos. Select the topmost overlay whose element is rendering,
+/// then fall back to the newest complete translation layer.
+async fn qa_may_edit(
+    state: &AppState,
+    region_id: Uuid,
+    latest_translation: Option<Uuid>,
+) -> Option<Uuid> {
+    let active_overlay: Option<Uuid> = sqlx::query_scalar(
+        "SELECT l.id FROM layers l JOIN layer_elements e ON e.layer_id = l.id \
+         WHERE e.region_id = $1 \
+           AND l.type ILIKE 'translation' \
+           AND COALESCE(l.visible, TRUE) = TRUE \
+           AND COALESCE(e.visible, TRUE) = TRUE \
+           AND l.metadata_json->>'overlay' = 'true' \
+         ORDER BY l.z_order DESC LIMIT 1",
+    )
+    .bind(region_id)
+    .fetch_optional(&state.pool)
+    .await
+    .ok()
+    .flatten();
+    if active_overlay.is_some() {
+        return active_overlay;
+    }
+
+    if latest_translation.is_some() {
+        return latest_translation;
+    }
+
+    sqlx::query_scalar(
+        "SELECT l.id FROM layers l JOIN layer_elements e ON e.layer_id = l.id \
+         WHERE e.region_id = $1 \
+           AND l.type ILIKE 'translation' \
+           AND l.metadata_json->>'overlay' IS DISTINCT FROM 'true' \
+         ORDER BY l.z_order DESC LIMIT 1",
+    )
+    .bind(region_id)
+    .fetch_optional(&state.pool)
+    .await
+    .ok()
+    .flatten()
+}
+
 async fn apply_direct_fix(
     state: &AppState,
     region_id: Uuid,
@@ -2149,63 +2348,39 @@ async fn apply_direct_fix(
     corrected_text: Option<String>,
     font_size: Option<f64>,
 ) -> bool {
-    let elements: Vec<crate::models::LayerElement> =
-        sqlx::query_as("SELECT * FROM layer_elements WHERE region_id = $1")
-            .bind(region_id)
-            .fetch_all(&state.pool)
-            .await
-            .unwrap_or_default();
-    let mut applied = 0usize;
-    for el in elements {
-        // `None` means "no particular layer" -- apply to every translation layer -- which is what
-        // hide_translation_elements has always done with it. This used to read `None => false`,
-        // i.e. match nothing, so the whole loop body was skipped: handle_qa_callback passes None,
-        // making every direct_fix from the VLM QA path a silent no-op. The VLM would correctly
-        // spot an untranslated bubble, write the correction, and the correction went nowhere
-        // while the region was still stamped qa_status='fixed'.
-        if let Some(latest) = latest_translation
-            && el.layer_id != latest
-        {
-            continue; // older translation layers are already superseded history
-        }
-        let layer_type: Option<String> =
-            sqlx::query_scalar("SELECT type FROM layers WHERE id = $1")
-                .bind(el.layer_id)
-                .fetch_optional(&state.pool)
-                .await
-                .ok()
-                .flatten();
-        if !layer_type
-            .as_deref()
-            .map(|t| t.eq_ignore_ascii_case("translation"))
-            .unwrap_or(false)
-        {
-            continue;
-        }
-        let _ = sqlx::query(
-            "UPDATE layer_elements SET text=COALESCE($2,text), size=COALESCE($3,size) WHERE id=$1",
-        )
-        .bind(el.id)
-        .bind(corrected_text.clone().or(el.text.clone()))
-        .bind(font_size.or(el.size))
-        .execute(&state.pool)
-        .await;
-        if corrected_text.is_some() {
-            let _ = sqlx::query("UPDATE ocr_regions SET translated_text=$2 WHERE id=$1")
-                .bind(region_id)
-                .bind(corrected_text.clone())
-                .execute(&state.pool)
-                .await;
-        }
-        applied += 1;
-    }
-    if applied == 0 {
+    let Some(layer_id) = qa_may_edit(state, region_id, latest_translation).await else {
         tracing::warn!(
             "QA direct_fix for region {region_id} matched no translation element — \
              the correction was not applied"
         );
+        return false;
+    };
+    let applied = sqlx::query(
+        "UPDATE layer_elements SET text=COALESCE($3,text), size=COALESCE($4,size) \
+         WHERE region_id=$1 AND layer_id=$2",
+    )
+    .bind(region_id)
+    .bind(layer_id)
+    .bind(corrected_text.as_deref())
+    .bind(font_size)
+    .execute(&state.pool)
+    .await
+    .map(|result| result.rows_affected())
+    .unwrap_or(0);
+    if applied == 0 {
+        tracing::warn!(
+            "QA direct_fix for region {region_id} found layer {layer_id}, but no element was updated"
+        );
+        return false;
     }
-    applied > 0
+    if corrected_text.is_some() {
+        let _ = sqlx::query("UPDATE ocr_regions SET translated_text=$2 WHERE id=$1")
+            .bind(region_id)
+            .bind(corrected_text)
+            .execute(&state.pool)
+            .await;
+    }
+    true
 }
 
 /// Hide typeset text for a region QA judged a sound effect. Hidden, not deleted: an
@@ -2215,41 +2390,506 @@ pub async fn hide_translation_elements(
     region_id: Uuid,
     latest_translation: Option<Uuid>,
 ) {
-    let elements: Vec<crate::models::LayerElement> =
-        sqlx::query_as("SELECT * FROM layer_elements WHERE region_id = $1")
+    let Some(layer_id) = qa_may_edit(state, region_id, latest_translation).await else {
+        return;
+    };
+    let hidden =
+        sqlx::query("UPDATE layer_elements SET visible=FALSE WHERE region_id=$1 AND layer_id=$2")
             .bind(region_id)
-            .fetch_all(&state.pool)
+            .bind(layer_id)
+            .execute(&state.pool)
             .await
-            .unwrap_or_default();
-    for el in elements {
-        let layer_type: Option<String> =
-            sqlx::query_scalar("SELECT type FROM layers WHERE id = $1")
-                .bind(el.layer_id)
-                .fetch_optional(&state.pool)
-                .await
-                .ok()
-                .flatten();
-        let is_translation = layer_type
-            .as_deref()
-            .map(|t| t.eq_ignore_ascii_case("translation"))
-            .unwrap_or(false);
-        if !is_translation {
+            .map(|result| result.rows_affected())
+            .unwrap_or(0);
+    tracing::info!(
+        "QA rejected region {region_id} as SFX, hiding {hidden} element(s) on layer {layer_id}"
+    );
+}
+
+/// Records a redone region as a one-element layer stacked on top, and hides the element it
+/// supersedes so the same bubble is not drawn twice.
+///
+/// Region redo was the one destructive step in a system that otherwise versions everything by
+/// layer: a full re-run inserts fresh regions and a new layer, while a redo overwrote
+/// `ocr_regions` and the visible layer element in place, so the previous read was simply gone.
+/// Losing it is the opposite of what the editor is for.
+///
+/// An overlay rather than a full copy because every renderer already composites — `render.py`
+/// filters elements on `layerVisible` instead of picking a layer, and the reader and the canvas
+/// export both iterate every visible layer — so one small layer on top is enough. It also keeps N
+/// redos to N small layers instead of N full copies whose visibility has to be reconciled, and
+/// they flatten on export for free.
+///
+/// Returns the new layer's id, or None when there is nothing to supersede (a region with no
+/// visible element of this type yet — in that case the in-place write is all there is to do).
+pub async fn create_region_redo_overlay(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    region_id: Uuid,
+    new_text: Option<&str>,
+    layer_type: &str,
+    job_id: Option<&str>,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    let target_language: Option<String> = if layer_type.eq_ignore_ascii_case("translation") {
+        sqlx::query_scalar(
+            "SELECT COALESCE( \
+               (SELECT payload::jsonb->>'targetLanguage' FROM jobs WHERE id = $1), \
+               (SELECT s.target_language FROM ocr_regions r \
+                JOIN pages p ON p.id = r.page_id \
+                JOIN chapters c ON c.id = p.chapter_id \
+                JOIN series s ON s.id = c.series_id WHERE r.id = $2) \
+             )",
+        )
+        .bind(job_id)
+        .bind(region_id)
+        .fetch_one(&mut **tx)
+        .await?
+    } else {
+        None
+    };
+
+    // The element being superseded, topmost first. It supplies the geometry and styling the
+    // overlay has to reproduce exactly, or the redone bubble would be typeset unlike the one it
+    // replaces.
+    //
+    // Never filtered to visible-only: a bubble is resolved through the region it belongs to, so
+    // whichever layers happen to be hidden or stacked over each other cannot change which region a
+    // redo lands on. Requiring `visible = TRUE` meant a redo silently did nothing once the user had
+    // toggled the layer off — or, on a second redo, once the first had hidden what it replaced.
+    //
+    // But what is *rendering* wins the tie. Ordering by z_order alone can pick a hidden element
+    // that sits above a visible one, and then the update below hides something already invisible
+    // while the visible stale text stays underneath the new overlay — old and new composited on top
+    // of each other. Visible first, then topmost; hidden matches only when nothing is showing.
+    let Some(prev): Option<LayerElement> = sqlx::query_as(
+        "SELECT e.* FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
+         WHERE e.region_id = $1 AND l.type ILIKE $2 \
+           AND ($3::text IS NULL OR LOWER(l.target_language) = LOWER($3)) \
+         ORDER BY (e.visible AND l.visible) DESC NULLS LAST, l.z_order DESC LIMIT 1",
+    )
+    .bind(region_id)
+    .bind(layer_type)
+    .bind(target_language.as_deref())
+    .fetch_optional(&mut **tx)
+    .await?
+    else {
+        // Nothing to supersede — a region with no element of this type yet. Not an error: the
+        // in-place write is all there is to do. Distinct from the Err path, which means the write
+        // genuinely failed and the caller must not acknowledge the delivery.
+        return Ok(None);
+    };
+
+    let Some(source_layer): Option<Layer> = sqlx::query_as("SELECT * FROM layers WHERE id = $1")
+        .bind(prev.layer_id)
+        .fetch_optional(&mut **tx)
+        .await?
+    else {
+        return Ok(None);
+    };
+    let page_id = source_layer.page_id;
+
+    let next_z: i32 =
+        sqlx::query_scalar("SELECT COALESCE(MAX(z_order), -1) + 1 FROM layers WHERE page_id = $1")
+            .bind(page_id)
+            .fetch_one(&mut **tx)
+            .await
+            .unwrap_or(0);
+
+    let pretty_type = if layer_type.eq_ignore_ascii_case("translation") {
+        "Translation"
+    } else {
+        "OCR"
+    };
+    let metadata = json!({
+        "layer_name": format!("{pretty_type} (region redo)"),
+        // Marks this as a patch, not a full pass. export.rs keeps choosing the full layer as
+        // `activeLayer` on the strength of this, because the QA verdict lives in that layer's
+        // metadata and an overlay has none.
+        "overlay": true,
+        "region_id": region_id.to_string(),
+        "supersedes_layer": prev.layer_id.to_string(),
+        "layer_order": next_z,
+        "last_modified": chrono::Utc::now().to_rfc3339(),
+    });
+
+    let layer_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) \
+         VALUES ($1,$2,$3,TRUE,$4,$5,$6,now())",
+    )
+    .bind(layer_id)
+    .bind(&source_layer.layer_type)
+    .bind(&source_layer.target_language)
+    .bind(next_z)
+    .bind(&metadata)
+    .bind(page_id)
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, auto_size, \
+         font, font_style, font_weight, background_color, text_color, box_shape, mask_polygon, \
+         word_wrap, rotation, size, layer_id, region_id) \
+         VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)",
+    )
+    .bind(Uuid::new_v4())
+    .bind(new_text)
+    .bind(prev.x)
+    .bind(prev.y)
+    .bind(prev.max_width)
+    .bind(prev.max_height)
+    .bind(prev.auto_size)
+    .bind(&prev.font)
+    .bind(&prev.font_style)
+    .bind(&prev.font_weight)
+    .bind(&prev.background_color)
+    .bind(&prev.text_color)
+    .bind(&prev.box_shape)
+    .bind(&prev.mask_polygon)
+    .bind(prev.word_wrap)
+    .bind(prev.rotation)
+    .bind(prev.size)
+    .bind(layer_id)
+    .bind(region_id)
+    .execute(&mut **tx)
+    .await?;
+
+    let hidden: Vec<Uuid> = sqlx::query_scalar(
+        "UPDATE layer_elements SET visible = FALSE \
+         WHERE region_id = $1 AND visible = TRUE AND layer_id <> $2 \
+           AND layer_id IN ( \
+             SELECT id FROM layers WHERE type ILIKE $3 AND visible = TRUE \
+               AND ($4::text IS NULL OR LOWER(target_language) = LOWER($4)) \
+           ) \
+         RETURNING id",
+    )
+    .bind(region_id)
+    .bind(layer_id)
+    .bind(layer_type)
+    .bind(target_language.as_deref())
+    .fetch_all(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        "UPDATE layers SET metadata_json = jsonb_set(metadata_json::jsonb, '{superseded_elements}', $2::jsonb) WHERE id = $1",
+    )
+    .bind(layer_id)
+    .bind(json!(hidden.iter().map(|i| i.to_string()).collect::<Vec<_>>()))
+    .execute(&mut **tx)
+    .await?;
+
+    tracing::info!(
+        "Region {region_id} redo recorded as overlay layer {layer_id} (z={next_z}), superseding element {} on layer {}",
+        prev.id,
+        prev.layer_id
+    );
+    Ok(Some(layer_id))
+}
+
+type PredecessorRow = (Option<bool>, Uuid, Option<bool>, Option<Value>);
+
+async fn predecessor_elements(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    layer_id: Uuid,
+    ids: &[Uuid],
+    exposed_only: bool,
+) -> Result<Vec<Uuid>, sqlx::Error> {
+    let mut predecessors = Vec::new();
+    let mut queue = ids.to_vec();
+    let mut seen = Vec::new();
+    while let Some(element_id) = queue.pop() {
+        if seen.contains(&element_id) {
             continue;
         }
-        if let Some(latest) = latest_translation
-            && el.layer_id != latest
-        {
-            continue; // older translation layers are already superseded history
+        seen.push(element_id);
+        let row: Option<PredecessorRow> = sqlx::query_as(
+            "SELECT e.visible, l.id, l.visible, l.metadata_json FROM layer_elements e \
+             JOIN layers l ON l.id = e.layer_id WHERE e.id = $1",
+        )
+        .bind(element_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+        let Some((element_visible, owning_layer, layer_visible, layer_meta)) = row else {
+            continue;
+        };
+        let is_overlay = layer_meta
+            .as_ref()
+            .and_then(|meta| meta.get("overlay"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let is_target = owning_layer != layer_id
+            && if is_overlay {
+                layer_visible.unwrap_or(false)
+                    && (!exposed_only || element_visible.unwrap_or(false))
+            } else {
+                true
+            };
+        if is_target {
+            predecessors.push(element_id);
+            continue;
         }
-        let _ = sqlx::query("UPDATE layer_elements SET visible=FALSE WHERE id=$1")
-            .bind(el.id)
-            .execute(&state.pool)
-            .await;
-        tracing::info!(
-            "QA rejected region {region_id} as SFX — hiding its typeset element {}",
-            el.id
-        );
+        if let Some(meta) = layer_meta
+            && let Some(list) = meta.get("superseded_elements").and_then(Value::as_array)
+        {
+            for id in list.iter().filter_map(Value::as_str) {
+                if let Ok(id) = Uuid::parse_str(id) {
+                    queue.push(id);
+                }
+            }
+        }
     }
+    Ok(predecessors)
+}
+
+async fn active_overlay_successor(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    layer_id: Uuid,
+    region_id: Uuid,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    sqlx::query_scalar(
+        "WITH RECURSIVE successor_layers(id) AS ( \
+           SELECT candidate.id FROM layers candidate \
+           JOIN layer_elements predecessor ON predecessor.layer_id = $1 \
+           WHERE candidate.id <> $1 \
+             AND candidate.page_id = (SELECT page_id FROM layers WHERE id = $1) \
+             AND candidate.metadata_json->>'overlay' = 'true' \
+             AND candidate.metadata_json->>'region_id' = $2 \
+             AND EXISTS ( \
+               SELECT 1 FROM jsonb_array_elements_text( \
+                 CASE WHEN jsonb_typeof(candidate.metadata_json->'superseded_elements') = 'array' \
+                   THEN candidate.metadata_json->'superseded_elements' ELSE '[]'::jsonb END \
+               ) referenced(element_id) \
+               WHERE referenced.element_id = predecessor.id::text \
+             ) \
+           UNION \
+           SELECT candidate.id FROM successor_layers previous \
+           JOIN layer_elements predecessor ON predecessor.layer_id = previous.id \
+           JOIN layers candidate \
+             ON candidate.id <> $1 \
+            AND candidate.page_id = (SELECT page_id FROM layers WHERE id = $1) \
+            AND candidate.metadata_json->>'overlay' = 'true' \
+            AND candidate.metadata_json->>'region_id' = $2 \
+           WHERE EXISTS ( \
+             SELECT 1 FROM jsonb_array_elements_text( \
+               CASE WHEN jsonb_typeof(candidate.metadata_json->'superseded_elements') = 'array' \
+                 THEN candidate.metadata_json->'superseded_elements' ELSE '[]'::jsonb END \
+             ) referenced(element_id) \
+             WHERE referenced.element_id = predecessor.id::text \
+           ) \
+         ) \
+         SELECT successor.id FROM successor_layers successor \
+         JOIN layers layer ON layer.id = successor.id \
+         WHERE layer.visible = TRUE \
+           AND EXISTS ( \
+             SELECT 1 FROM layer_elements element \
+             WHERE element.layer_id = successor.id \
+               AND element.region_id = $3 \
+               AND element.visible = TRUE \
+           ) \
+         LIMIT 1",
+    )
+    .bind(layer_id)
+    .bind(region_id.to_string())
+    .bind(region_id)
+    .fetch_optional(&mut **tx)
+    .await
+}
+
+/// Keeps a redo overlay and the elements it superseded in step.
+///
+/// The overlay hides what it replaces so the two do not composite, but that flag lives on the
+/// *element*, not on the overlay. Hiding or deleting the overlay therefore left the bubble blank
+/// rather than reverting it — the previous reading still in the database and still unreachable.
+///
+/// `active` is whether the overlay is (about to be) in effect: false when it is being hidden or
+/// deleted, true when it is shown again. A no-op for any layer that is not a redo overlay.
+///
+/// Restoration walks the chain rather than flipping the ids recorded on this layer. Redo twice and
+/// the layers chain — base ← A ← B — so standing A down while B is up must not surface the base
+/// underneath B, and standing B down afterwards must not stop at A's element when A's own layer is
+/// hidden, which would leave the bubble showing nothing at all. Both cases are the same question:
+/// what is the newest reading for this region that lives on a layer the user can actually see.
+pub async fn sync_superseded_elements(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    layer_id: Uuid,
+    active: bool,
+) -> Result<(), sqlx::Error> {
+    let metadata: Option<Value> =
+        sqlx::query_scalar("SELECT metadata_json FROM layers WHERE id = $1")
+            .bind(layer_id)
+            .fetch_optional(&mut **tx)
+            .await?
+            .flatten();
+    let Some(metadata) = metadata else {
+        return Ok(());
+    };
+    if !metadata
+        .get("overlay")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+    let ids: Vec<Uuid> = metadata
+        .get("superseded_elements")
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter()
+                .filter_map(Value::as_str)
+                .filter_map(|s| Uuid::parse_str(s).ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    if ids.is_empty() {
+        return Ok(());
+    }
+
+    if active {
+        // The recorded element may belong to an overlay that is still hidden. Follow that
+        // overlay's history until reaching the element that is currently exposed, then hide it.
+        let exposed = predecessor_elements(tx, layer_id, &ids, true).await?;
+        if exposed.is_empty() {
+            return Ok(());
+        }
+        sqlx::query("UPDATE layer_elements SET visible = FALSE WHERE id = ANY($1)")
+            .bind(&exposed)
+            .execute(&mut **tx)
+            .await?;
+        return Ok(());
+    }
+
+    let Some(region_id) = metadata
+        .get("region_id")
+        .and_then(Value::as_str)
+        .and_then(|s| Uuid::parse_str(s).ok())
+    else {
+        return Ok(());
+    };
+
+    // Walk through hidden overlays, but retain a full-layer predecessor even when its layer is
+    // hidden. Its element visibility still has to be restored now so showing that layer later
+    // brings the reading back.
+    let restore = predecessor_elements(tx, layer_id, &ids, false).await?;
+
+    // Follow the recorded replacement chain. z-order is presentation state that users can reorder;
+    // it does not say which overlay superseded which.
+    if let Some(successor) = active_overlay_successor(tx, layer_id, region_id).await? {
+        tracing::info!(
+            "Redo overlay {layer_id} stood down, but overlay {successor} still supersedes region {region_id} — leaving its elements hidden"
+        );
+        return Ok(());
+    }
+
+    if restore.is_empty() {
+        return Ok(());
+    }
+    sqlx::query("UPDATE layer_elements SET visible = TRUE WHERE id = ANY($1)")
+        .bind(&restore)
+        .execute(&mut **tx)
+        .await?;
+    tracing::info!(
+        "Redo overlay {layer_id} stood down — restored {} element(s) for region {region_id}",
+        restore.len()
+    );
+    Ok(())
+}
+
+/// Rewrites overlay history before one layer is deleted.
+///
+/// A successor records element ids, and deleting their owning layer cascades those elements away.
+/// Replace each reference to the deleted layer with that layer's own predecessors so later toggles
+/// can still reach the surviving history.
+pub async fn relink_overlay_successors(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    layer_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let metadata: Option<Value> =
+        sqlx::query_scalar("SELECT metadata_json FROM layers WHERE id = $1")
+            .bind(layer_id)
+            .fetch_optional(&mut **tx)
+            .await?
+            .flatten();
+    let Some(metadata) = metadata else {
+        return Ok(());
+    };
+    if !metadata
+        .get("overlay")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+
+    let predecessors: Vec<Uuid> = metadata
+        .get("superseded_elements")
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter()
+                .filter_map(Value::as_str)
+                .filter_map(|id| Uuid::parse_str(id).ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    let owned: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM layer_elements WHERE layer_id = $1")
+        .bind(layer_id)
+        .fetch_all(&mut **tx)
+        .await?;
+    if owned.is_empty() {
+        return Ok(());
+    }
+
+    let successors: Vec<(Uuid, Option<Value>)> = sqlx::query_as(
+        "SELECT id, metadata_json FROM layers \
+         WHERE id <> $1 \
+           AND page_id = (SELECT page_id FROM layers WHERE id = $1) \
+           AND metadata_json->>'overlay' = 'true' \
+         FOR UPDATE",
+    )
+    .bind(layer_id)
+    .fetch_all(&mut **tx)
+    .await?;
+
+    for (successor_id, successor_meta) in successors {
+        let Some(mut successor_meta) = successor_meta else {
+            continue;
+        };
+        let Some(recorded) = successor_meta
+            .get("superseded_elements")
+            .and_then(Value::as_array)
+        else {
+            continue;
+        };
+        let mut changed = false;
+        let mut rewritten = Vec::new();
+        for recorded_id in recorded.iter().filter_map(Value::as_str) {
+            let Ok(recorded_id) = Uuid::parse_str(recorded_id) else {
+                continue;
+            };
+            if owned.contains(&recorded_id) {
+                changed = true;
+                for predecessor in &predecessors {
+                    if !rewritten.contains(predecessor) {
+                        rewritten.push(*predecessor);
+                    }
+                }
+            } else if !rewritten.contains(&recorded_id) {
+                rewritten.push(recorded_id);
+            }
+        }
+        if !changed {
+            continue;
+        }
+        successor_meta["superseded_elements"] =
+            json!(rewritten.iter().map(Uuid::to_string).collect::<Vec<_>>());
+        if let Some(object) = successor_meta.as_object_mut() {
+            object.remove("supersedes_layer");
+        }
+        sqlx::query("UPDATE layers SET metadata_json = $2 WHERE id = $1")
+            .bind(successor_id)
+            .bind(successor_meta)
+            .execute(&mut **tx)
+            .await?;
+    }
+    Ok(())
 }
 
 /// The full QA verdict. Returns one of DUPLICATE / MANUAL_REVIEW / RETRIED /
@@ -2294,11 +2934,7 @@ pub async fn handle_qa_callback(
                 .fetch_all(&state.pool)
                 .await
                 .unwrap_or_default();
-            layers
-                .iter()
-                .filter(|l| l.layer_type.eq_ignore_ascii_case("translation"))
-                .max_by_key(|l| l.z_order)
-                .map(|l| l.id)
+            latest_complete_layer(&layers, "translation").map(|l| l.id)
         }
         None => None,
     };

@@ -449,10 +449,23 @@ async fn build_chapter_meta(
         // needs to know it is incomplete.
         chapter_unpriced += unpriced_calls;
 
-        // Active visible translation layer drives the manual flags.
-        let active_layer = layers.iter().find(|l| {
-            l.layer_type.eq_ignore_ascii_case("translation") && l.visible.unwrap_or(false)
-        });
+        // Active visible translation layer drives the manual flags. Redo overlays are skipped —
+        // an overlay is visible and is a translation layer, but the QA verdict this reads lives in
+        // the full layer's metadata, so taking one would report every page with a redone region as
+        // having no QA verdict.
+        let active_layer = layers
+            .iter()
+            .rev()
+            .find(|l| {
+                l.layer_type.eq_ignore_ascii_case("translation")
+                    && l.visible.unwrap_or(false)
+                    && !crate::jobs::coordinator::is_redo_overlay(l)
+            })
+            .or_else(|| {
+                layers.iter().rev().find(|l| {
+                    l.layer_type.eq_ignore_ascii_case("translation") && l.visible.unwrap_or(false)
+                })
+            });
         match active_layer {
             Some(active) => {
                 page_meta["activeLayer"] = json!({

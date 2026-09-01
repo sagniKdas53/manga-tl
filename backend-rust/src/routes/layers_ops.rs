@@ -21,16 +21,47 @@ pub async fn delete_layer(
     if let Some(denied) = deny_viewer(&user, "/api/layers/{id}") {
         return denied;
     }
+    // Deleting a redo overlay has to give back what it hid, or the bubble it patched vanishes: the
+    // overlay held the new text and the element underneath is still flagged invisible. The two go
+    // in one transaction — a restore that failed quietly while the delete succeeded would cascade
+    // the overlay's element away and leave the region permanently blank, with no overlay left to
+    // toggle back.
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(err) => {
+            tracing::error!("Could not open a transaction to delete layer {id}: {err}");
+            return error::internal_error("/api/layers/{id}");
+        }
+    };
+    if let Err(err) = crate::jobs::coordinator::sync_superseded_elements(&mut tx, id, false).await {
+        tracing::error!(
+            "Could not restore what overlay {id} superseded, refusing to delete: {err}"
+        );
+        let _ = tx.rollback().await;
+        return error::internal_error("/api/layers/{id}");
+    }
+    if let Err(err) = crate::jobs::coordinator::relink_overlay_successors(&mut tx, id).await {
+        tracing::error!("Could not relink successors of overlay {id}, refusing to delete: {err}");
+        let _ = tx.rollback().await;
+        return error::internal_error("/api/layers/{id}");
+    }
     let result = sqlx::query("DELETE FROM layers WHERE id = $1")
         .bind(id)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await;
     match result {
         Ok(res) if res.rows_affected() > 0 => {
+            if let Err(err) = tx.commit().await {
+                tracing::error!("Could not commit deletion of layer {id}: {err}");
+                return error::internal_error("/api/layers/{id}");
+            }
             touch_page(&state.pool, id).await;
             StatusCode::OK.into_response()
         }
-        _ => StatusCode::NOT_FOUND.into_response(),
+        _ => {
+            let _ = tx.rollback().await;
+            StatusCode::NOT_FOUND.into_response()
+        }
     }
 }
 
@@ -52,6 +83,14 @@ pub async fn update_layer(
     // Java: Boolean.TRUE.equals(value) — non-true values become false.
     let visible = payload.get("visible").map(|v| v.as_bool().unwrap_or(false));
 
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(err) => {
+            tracing::error!("Could not open a transaction for layer {id}: {err}");
+            return error::internal_error("/api/layers/{id}");
+        }
+    };
+
     let updated = sqlx::query(
         "UPDATE layers SET \
            z_order = COALESCE($2, z_order), visible = COALESCE($3, visible) \
@@ -60,12 +99,39 @@ pub async fn update_layer(
     .bind(id)
     .bind(z_order)
     .bind(visible)
-    .execute(&state.pool)
-    .await
-    .expect("layer update");
+    .execute(&mut *tx)
+    .await;
+
+    let updated = match updated {
+        Ok(updated) => updated,
+        Err(err) => {
+            tracing::error!("Could not update layer {id}: {err}");
+            let _ = tx.rollback().await;
+            return error::internal_error("/api/layers/{id}");
+        }
+    };
 
     if updated.rows_affected() == 0 {
+        let _ = tx.rollback().await;
         return StatusCode::NOT_FOUND.into_response();
+    }
+    // Toggling a redo overlay off restores the reading it replaced, and toggling it back on hides
+    // that reading again — so the layer switch actually compares the two, which is what it looks
+    // like it should do. The flag and the restore share the transaction: flipping `visible` while
+    // the restore failed would leave the bubble blank with the overlay already switched off, and
+    // nothing left to toggle to bring it back.
+    if let Some(visible) = visible
+        && let Err(err) =
+            crate::jobs::coordinator::sync_superseded_elements(&mut tx, id, visible).await
+    {
+        tracing::error!("Could not sync what overlay {id} superseded: {err}");
+        let _ = tx.rollback().await;
+        return error::internal_error("/api/layers/{id}");
+    }
+
+    if let Err(err) = tx.commit().await {
+        tracing::error!("Could not commit the update to layer {id}: {err}");
+        return error::internal_error("/api/layers/{id}");
     }
     touch_page(&state.pool, id).await;
     StatusCode::OK.into_response()
