@@ -225,7 +225,9 @@ describe("ModelOverridesAccordion", () => {
     );
 
     fireEvent.mouseDown(getSelectByLabel("TL LLM Model"));
-    await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
 
     expect(
       screen.getByRole("option", {

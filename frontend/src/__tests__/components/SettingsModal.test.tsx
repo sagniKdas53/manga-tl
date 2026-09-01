@@ -202,7 +202,8 @@ describe("SettingsModal", () => {
       fireEvent.click(
         screen.getByRole("option", {
           name: (accessibleName) =>
-            accessibleName === option || accessibleName.startsWith(`${option} · `),
+            accessibleName === option ||
+            accessibleName.startsWith(`${option} · `),
         }),
       );
     };

@@ -200,9 +200,7 @@ describe("ImportChapterDialog", () => {
     await waitFor(() =>
       expect(screen.getByRole("listbox")).toBeInTheDocument(),
     );
-    fireEvent.click(
-      screen.getByRole("option", { name: /^vlm-ocr-1 · / }),
-    );
+    fireEvent.click(screen.getByRole("option", { name: /^vlm-ocr-1 · / }));
 
     fireEvent.mouseDown(selects[2]);
     await waitFor(() =>

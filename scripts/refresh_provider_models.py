@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -55,10 +56,18 @@ class RefreshError(RuntimeError):
     """Raised when a refresh would leave the production config invalid."""
 
 
-def fetch(url: str, timeout: int = 45) -> dict[str, Any]:
+def fetch(
+    url: str,
+    *,
+    authorization: str | None = None,
+    timeout: int = 45,
+) -> dict[str, Any]:
+    headers = {"User-Agent": "manga-library/provider-catalog-refresh"}
+    if authorization:
+        headers["Authorization"] = authorization
     request = urllib.request.Request(
         url,
-        headers={"User-Agent": "manga-library/provider-catalog-refresh"},
+        headers=headers,
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
@@ -103,7 +112,15 @@ def is_openrouter_free(model: dict[str, Any]) -> bool:
     completion = _number(pricing.get("completion"))
     if prompt != 0 or completion != 0:
         return False
-    return all((_number(pricing.get(key)) or 0) == 0 for key in ("request", "image"))
+    optional_charges = (
+        "request",
+        "image",
+        "web_search",
+        "internal_reasoning",
+        "input_cache_read",
+        "input_cache_write",
+    )
+    return all((_number(pricing.get(key)) or 0) == 0 for key in optional_charges)
 
 
 def supports_task(model: dict[str, Any], task: str) -> bool:
@@ -273,9 +290,15 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
+        nvidia_api_key = os.environ.get("NVIDIA_API_KEY")
+        if not nvidia_api_key:
+            raise RefreshError("NVIDIA_API_KEY is required to read the NVIDIA model catalog")
         document = json.loads(args.config.read_text(encoding="utf-8"))
         openrouter_catalog = fetch(OPENROUTER_MODELS).get("data") or []
-        nvidia_catalog = fetch(NVIDIA_MODELS).get("data") or []
+        nvidia_catalog = fetch(
+            NVIDIA_MODELS,
+            authorization=f"Bearer {nvidia_api_key}",
+        ).get("data") or []
         if not openrouter_catalog or not nvidia_catalog:
             raise RefreshError("a provider returned an empty catalog; refusing a partial refresh")
         updated, changes = refresh_document(document, openrouter_catalog, nvidia_catalog)

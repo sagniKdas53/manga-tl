@@ -1,7 +1,14 @@
 import copy
 import unittest
+from unittest.mock import MagicMock, patch
 
-from refresh_provider_models import MANAGED_BY, RefreshError, refresh_document
+from refresh_provider_models import (
+    MANAGED_BY,
+    RefreshError,
+    fetch,
+    is_openrouter_free,
+    refresh_document,
+)
 
 
 def openrouter_model(model_id, *, free=False, vision=False, score=10):
@@ -62,6 +69,23 @@ class RefreshProviderModelsTest(unittest.TestCase):
             openrouter_model("free/code-model:free", free=True, score=100),
         ]
         self.nvidia = [{"id": "nvidia/live", "owned_by": "nvidia"}]
+
+    @patch("refresh_provider_models.urllib.request.urlopen")
+    def test_fetch_sends_authorization_header(self, urlopen):
+        response = MagicMock()
+        response.read.return_value = b'{"data": []}'
+        urlopen.return_value.__enter__.return_value = response
+
+        fetch("https://example.test/models", authorization="Bearer nvidia-key")
+
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.get_header("Authorization"), "Bearer nvidia-key")
+
+    def test_cache_charges_prevent_a_model_from_being_marked_free(self):
+        model = openrouter_model("cached/model:free", free=True)
+        model["pricing"]["input_cache_read"] = "0.0000001"
+
+        self.assertFalse(is_openrouter_free(model))
 
     def test_refreshes_prices_and_replaces_free_entries(self):
         updated, changes = refresh_document(self.document, self.openrouter, self.nvidia)
