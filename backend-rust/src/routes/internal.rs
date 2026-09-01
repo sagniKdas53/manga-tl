@@ -271,23 +271,9 @@ pub async fn get_image_info(
         }
         None => Vec::new(),
     };
-    // The latest *complete* OCR pass. Region-redo overlays are skipped: an overlay is a
-    // one-element patch that sits at the top of the stack, and the filter below treats whatever
-    // this picks as the definitive set of regions for the page. Counting one would collapse
-    // `ocrRegions` to the single redone bubble for every consumer of this endpoint — the reader and
-    // the worker's own redo handler included.
-    let latest_ocr_layer = layers
-        .iter()
-        .filter(|l| {
-            l.layer_type.eq_ignore_ascii_case("ocr")
-                && !l
-                    .metadata_json
-                    .as_ref()
-                    .and_then(|m| m.get("overlay"))
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false)
-        })
-        .max_by_key(|l| l.z_order);
+    // The latest *complete* OCR pass: the filter below treats whatever this picks as the
+    // definitive set of regions for the page, and an overlay is one bubble.
+    let latest_ocr_layer = coordinator::latest_complete_layer(&layers, "ocr");
 
     let all_regions: Vec<OcrRegion> = match page {
         Some(page) => sqlx::query_as("SELECT * FROM ocr_regions WHERE page_id = $1")
@@ -1049,53 +1035,49 @@ pub async fn region_callback(
         return internal_error_text(err);
     }
 
+    // A re-read invalidates the translation that was made from the old text, so redoing the
+    // OCR carries on into a redo of that bubble's translation: one new OCR layer, then one
+    // new translation layer. The translation job reads the region's current text, which is
+    // why the in-place write above is kept — the layers are the history, `ocr_regions` is
+    // what the next stage reads.
+    //
+    // Redoing a translation on its own does not come back the other way. Asking for a new
+    // wording is not a claim that the source text was misread, and re-running OCR would
+    // throw away the reading the user was working from.
+    //
+    // Enqueued after the commit, so it cannot be rolled back once queued. The cost of that
+    // ordering is that a failure here leaves a re-read page with its old translation and no
+    // retry to fix it — logged loudly, and recoverable by redoing the translation by hand.
+    if !translated
+        && let Err(err) = coordinator::trigger_redo(&state, region_id, "translation").await
     {
-        {
-            // A re-read invalidates the translation that was made from the old text, so redoing the
-            // OCR carries on into a redo of that bubble's translation: one new OCR layer, then one
-            // new translation layer. The translation job reads the region's current text, which is
-            // why the in-place write above is kept — the layers are the history, `ocr_regions` is
-            // what the next stage reads.
-            //
-            // Redoing a translation on its own does not come back the other way. Asking for a new
-            // wording is not a claim that the source text was misread, and re-running OCR would
-            // throw away the reading the user was working from.
-            //
-            // Enqueued after the commit, so it cannot be rolled back once queued. The cost of that
-            // ordering is that a failure here leaves a re-read page with its old translation and no
-            // retry to fix it — logged loudly, and recoverable by redoing the translation by hand.
-            if !translated
-                && let Err(err) = coordinator::trigger_redo(&state, region_id, "translation").await
-            {
-                tracing::error!(
-                    "Region {region_id} was re-read but its translation could not be requeued ({err}) \
-                     — the page now shows a new reading with its previous translation, redo the \
-                     translation for this bubble to resolve it"
-                );
+        tracing::error!(
+            "Region {region_id} was re-read but its translation could not be requeued ({err}) \
+             — the page now shows a new reading with its previous translation, redo the \
+             translation for this bubble to resolve it"
+        );
+    }
+    // A region redo can go out to a paid cloud model — perform_redo_ocr does whenever the
+    // OCR provider is not local — and the worker now attaches what it spent. This route
+    // only knows the region, so the image it belongs to has to be resolved before the cost
+    // row can be written.
+    if let Some(cost) = fields.get("cost").filter(|c| !c.is_null()) {
+        match image_id {
+            Some(image_id) => {
+                coordinator::save_job_costs(
+                    &state,
+                    image_id,
+                    fields.get("jobId").and_then(Value::as_str),
+                    cost,
+                )
+                .await;
             }
-            // A region redo can go out to a paid cloud model — perform_redo_ocr does whenever the
-            // OCR provider is not local — and the worker now attaches what it spent. This route
-            // only knows the region, so the image it belongs to has to be resolved before the cost
-            // row can be written.
-            if let Some(cost) = fields.get("cost").filter(|c| !c.is_null()) {
-                match image_id {
-                    Some(image_id) => {
-                        coordinator::save_job_costs(
-                            &state,
-                            image_id,
-                            fields.get("jobId").and_then(Value::as_str),
-                            cost,
-                        )
-                        .await;
-                    }
-                    None => tracing::warn!(
-                        "Region {region_id} callback carried a cost but no image could be resolved for it"
-                    ),
-                }
-            }
-            StatusCode::OK.into_response()
+            None => tracing::warn!(
+                "Region {region_id} callback carried a cost but no image could be resolved for it"
+            ),
         }
     }
+    StatusCode::OK.into_response()
 }
 
 /// Sub-router mounted under `/api/internal`.

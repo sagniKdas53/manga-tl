@@ -725,6 +725,37 @@ async fn standing_down_an_overlay_leaves_a_newer_one_alone() {
         "the base reading must stay hidden while a newer overlay still supersedes this region"
     );
 
+    // …and now stand the newer one down too. Its own record points at the first overlay's element,
+    // whose layer is hidden — restoring that would leave the bubble showing nothing at all, so the
+    // walk has to carry on back to the base.
+    let (status, _, _) = send(
+        app.clone(),
+        "PUT",
+        &format!("/tlhub/api/layers/{}", layer_ids[2]),
+        Some(&token),
+        Some(serde_json::json!({"visible": false}).to_string()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let base_visible: Option<bool> =
+        sqlx::query_scalar("SELECT visible FROM layer_elements WHERE id = $1")
+            .bind(base_element)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let first_visible: Option<bool> =
+        sqlx::query_scalar("SELECT visible FROM layer_elements WHERE id = $1")
+            .bind(first_element)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        (base_visible, first_visible),
+        (Some(true), Some(false)),
+        "with both overlays down the base reading must come back, not the one on a hidden layer"
+    );
+
     sqlx::query("DELETE FROM series WHERE id = $1")
         .bind(series_id)
         .execute(&pool)

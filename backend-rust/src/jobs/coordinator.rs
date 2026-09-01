@@ -75,6 +75,30 @@ pub async fn resolve_callback_job(
     .flatten()
 }
 
+/// True when this layer is a region-redo overlay — a one-element patch stacked on a full pass,
+/// not a pass of its own.
+///
+/// Several places independently pick "the newest layer of this type" and treat what they get as
+/// complete: QA's hybrid prepare and its callback, get_image_info's region filter, and export's
+/// activeLayer. Every one of them is wrong about an overlay, and each was found separately. The
+/// test lives here so the next such reader has something to call instead of inventing a sixth.
+pub fn is_redo_overlay(layer: &Layer) -> bool {
+    layer
+        .metadata_json
+        .as_ref()
+        .and_then(|m| m.get("overlay"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+/// The newest *complete* layer of a type, ignoring region-redo overlays.
+pub fn latest_complete_layer<'a>(layers: &'a [Layer], layer_type: &str) -> Option<&'a Layer> {
+    layers
+        .iter()
+        .filter(|l| l.layer_type.eq_ignore_ascii_case(layer_type) && !is_redo_overlay(l))
+        .max_by_key(|l| l.z_order)
+}
+
 /// Claims the right to apply a result callback (AUDIT-P4). False ⇒ already applied:
 /// log and drop the duplicate.
 pub async fn claim_callback(
@@ -2095,11 +2119,10 @@ pub async fn prepare_hybrid_qa(
         .fetch_all(&state.pool)
         .await
         .map_err(|e| e.to_string())?;
-    let latest_translation = layers
-        .iter()
-        .filter(|l| l.layer_type.eq_ignore_ascii_case("translation"))
-        .max_by_key(|l| l.z_order)
-        .map(|l| l.id);
+    // Skips redo overlays: QA hides everything but the layer it picks, so choosing a one-element
+    // overlay would blank every other bubble on the page and leave direct fixes with no element to
+    // land on.
+    let latest_translation = latest_complete_layer(&layers, "translation").map(|l| l.id);
 
     for r in qa_results {
         let Some(region_id) = r
@@ -2170,7 +2193,14 @@ pub async fn prepare_hybrid_qa(
 
     // Visibility sweep: newest translation visible, OCR hidden, SFX visible, others kept.
     for layer in &layers {
-        let should_be_visible = if layer.layer_type.eq_ignore_ascii_case("translation") {
+        // Redo overlays are left exactly as the editor left them. An overlay is paired with the
+        // element it superseded — that element is flagged invisible and only
+        // `sync_superseded_elements` gives it back — so flipping the layer here would blank the
+        // redone bubble instead of reverting it. A stale overlay is not a worry: a fresh full
+        // translation pass already hides same-language layers, overlays included, before QA runs.
+        let should_be_visible = if is_redo_overlay(layer) {
+            layer.visible.unwrap_or(true)
+        } else if layer.layer_type.eq_ignore_ascii_case("translation") {
             latest_translation == Some(layer.id)
         } else if layer.layer_type.eq_ignore_ascii_case("ocr") {
             false
@@ -2190,6 +2220,34 @@ pub async fn prepare_hybrid_qa(
     Ok(())
 }
 
+/// Whether a QA correction for a region may land on the layer holding this element.
+///
+/// The newest complete translation pass, plus any *visible* region-redo overlay stacked on it.
+/// The overlay matters because it is what the reader is actually looking at for that bubble: the
+/// element inside the complete layer has been flagged invisible, so a correction written there
+/// would be stamped as applied and never render. `None` means "no particular layer" — every
+/// translation layer, which is how both callers have always read it.
+async fn qa_may_edit(state: &AppState, layer_id: Uuid, latest_translation: Option<Uuid>) -> bool {
+    let Some(layer): Option<Layer> = sqlx::query_as("SELECT * FROM layers WHERE id = $1")
+        .bind(layer_id)
+        .fetch_optional(&state.pool)
+        .await
+        .ok()
+        .flatten()
+    else {
+        return false;
+    };
+    if !layer.layer_type.eq_ignore_ascii_case("translation") {
+        return false;
+    }
+    match latest_translation {
+        Some(latest) => {
+            layer.id == latest || (is_redo_overlay(&layer) && layer.visible.unwrap_or(true))
+        }
+        None => true,
+    }
+}
+
 async fn apply_direct_fix(
     state: &AppState,
     region_id: Uuid,
@@ -2205,30 +2263,12 @@ async fn apply_direct_fix(
             .unwrap_or_default();
     let mut applied = 0usize;
     for el in elements {
-        // `None` means "no particular layer" -- apply to every translation layer -- which is what
-        // hide_translation_elements has always done with it. This used to read `None => false`,
-        // i.e. match nothing, so the whole loop body was skipped: handle_qa_callback passes None,
-        // making every direct_fix from the VLM QA path a silent no-op. The VLM would correctly
-        // spot an untranslated bubble, write the correction, and the correction went nowhere
-        // while the region was still stamped qa_status='fixed'.
-        if let Some(latest) = latest_translation
-            && el.layer_id != latest
-        {
+        // This used to read `None => false`, i.e. match nothing, so the whole loop body was
+        // skipped: handle_qa_callback passes None, making every direct_fix from the VLM QA path a
+        // silent no-op. The VLM would correctly spot an untranslated bubble, write the correction,
+        // and the correction went nowhere while the region was still stamped qa_status='fixed'.
+        if !qa_may_edit(state, el.layer_id, latest_translation).await {
             continue; // older translation layers are already superseded history
-        }
-        let layer_type: Option<String> =
-            sqlx::query_scalar("SELECT type FROM layers WHERE id = $1")
-                .bind(el.layer_id)
-                .fetch_optional(&state.pool)
-                .await
-                .ok()
-                .flatten();
-        if !layer_type
-            .as_deref()
-            .map(|t| t.eq_ignore_ascii_case("translation"))
-            .unwrap_or(false)
-        {
-            continue;
         }
         let _ = sqlx::query(
             "UPDATE layer_elements SET text=COALESCE($2,text), size=COALESCE($3,size) WHERE id=$1",
@@ -2270,23 +2310,7 @@ pub async fn hide_translation_elements(
             .await
             .unwrap_or_default();
     for el in elements {
-        let layer_type: Option<String> =
-            sqlx::query_scalar("SELECT type FROM layers WHERE id = $1")
-                .bind(el.layer_id)
-                .fetch_optional(&state.pool)
-                .await
-                .ok()
-                .flatten();
-        let is_translation = layer_type
-            .as_deref()
-            .map(|t| t.eq_ignore_ascii_case("translation"))
-            .unwrap_or(false);
-        if !is_translation {
-            continue;
-        }
-        if let Some(latest) = latest_translation
-            && el.layer_id != latest
-        {
+        if !qa_may_edit(state, el.layer_id, latest_translation).await {
             continue; // older translation layers are already superseded history
         }
         let _ = sqlx::query("UPDATE layer_elements SET visible=FALSE WHERE id=$1")
@@ -2456,31 +2480,38 @@ pub async fn create_region_redo_overlay(
 
 /// Keeps a redo overlay and the elements it superseded in step.
 ///
-/// The overlay hides what it replaces so the two do not composite on top of each other, but that
-/// flag lives on the *element*, not on the overlay. Hiding or deleting the overlay therefore left
-/// the bubble blank rather than reverting it — the previous reading was still in the database and
-/// still unreachable, which defeats the point of keeping it.
+/// The overlay hides what it replaces so the two do not composite, but that flag lives on the
+/// *element*, not on the overlay. Hiding or deleting the overlay therefore left the bubble blank
+/// rather than reverting it — the previous reading still in the database and still unreachable.
 ///
 /// `active` is whether the overlay is (about to be) in effect: false when it is being hidden or
-/// deleted, which restores what it replaced; true when it is shown again, which hides them once
-/// more. A no-op for any layer that is not a redo overlay.
-pub async fn sync_superseded_elements(state: &AppState, layer_id: Uuid, active: bool) {
+/// deleted, true when it is shown again. A no-op for any layer that is not a redo overlay.
+///
+/// Restoration walks the chain rather than flipping the ids recorded on this layer. Redo twice and
+/// the layers chain — base ← A ← B — so standing A down while B is up must not surface the base
+/// underneath B, and standing B down afterwards must not stop at A's element when A's own layer is
+/// hidden, which would leave the bubble showing nothing at all. Both cases are the same question:
+/// what is the newest reading for this region that lives on a layer the user can actually see.
+pub async fn sync_superseded_elements(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    layer_id: Uuid,
+    active: bool,
+) -> Result<(), sqlx::Error> {
     let metadata: Option<Value> =
         sqlx::query_scalar("SELECT metadata_json FROM layers WHERE id = $1")
             .bind(layer_id)
-            .fetch_optional(&state.pool)
-            .await
-            .ok()
+            .fetch_optional(&mut **tx)
+            .await?
             .flatten();
     let Some(metadata) = metadata else {
-        return;
+        return Ok(());
     };
     if !metadata
         .get("overlay")
         .and_then(Value::as_bool)
         .unwrap_or(false)
     {
-        return;
+        return Ok(());
     }
     let ids: Vec<Uuid> = metadata
         .get("superseded_elements")
@@ -2493,62 +2524,103 @@ pub async fn sync_superseded_elements(state: &AppState, layer_id: Uuid, active: 
         })
         .unwrap_or_default();
     if ids.is_empty() {
-        return;
+        return Ok(());
     }
 
-    // Restoring is only safe when nothing newer is still standing on this region. Redo twice and
-    // the layers chain — the first overlay records the base element, the second records the first
-    // overlay's. Switching the *first* one off would otherwise put the base element back while the
-    // second overlay is still showing, and the oldest and newest readings would render together.
-    // Hiding is always safe, so this guard applies to restoration only.
-    if !active {
-        let region_id = metadata
-            .get("region_id")
-            .and_then(Value::as_str)
-            .and_then(|s| Uuid::parse_str(s).ok());
-        if let Some(region_id) = region_id {
-            let z_order: Option<i32> =
-                sqlx::query_scalar("SELECT z_order FROM layers WHERE id = $1")
-                    .bind(layer_id)
-                    .fetch_optional(&state.pool)
-                    .await
-                    .ok()
-                    .flatten();
-            let successor: Option<Uuid> = sqlx::query_scalar(
-                "SELECT l.id FROM layers l \
-                 WHERE l.page_id = (SELECT page_id FROM layers WHERE id = $1) \
-                   AND l.id <> $1 AND l.visible = TRUE \
-                   AND l.metadata_json->>'overlay' = 'true' \
-                   AND l.metadata_json->>'region_id' = $2 \
-                   AND l.z_order > $3 LIMIT 1",
-            )
-            .bind(layer_id)
-            .bind(region_id.to_string())
-            .bind(z_order.unwrap_or(i32::MIN))
-            .fetch_optional(&state.pool)
-            .await
-            .ok()
-            .flatten();
-            if let Some(successor) = successor {
-                tracing::info!(
-                    "Redo overlay {layer_id} stood down, but overlay {successor} still supersedes region {region_id} — leaving its elements hidden"
-                );
-                return;
+    // Putting the overlay back in effect is unconditional: hide exactly what it recorded.
+    if active {
+        sqlx::query("UPDATE layer_elements SET visible = FALSE WHERE id = ANY($1)")
+            .bind(&ids)
+            .execute(&mut **tx)
+            .await?;
+        return Ok(());
+    }
+
+    let Some(region_id) = metadata
+        .get("region_id")
+        .and_then(Value::as_str)
+        .and_then(|s| Uuid::parse_str(s).ok())
+    else {
+        return Ok(());
+    };
+
+    // Walk back from each recorded element to the first predecessor whose layer is actually
+    // visible. An element on a hidden layer is not a reading anyone can see, so restoring it would
+    // blank the bubble; what it in turn superseded is the real answer.
+    let mut restore: Vec<Uuid> = Vec::new();
+    let mut queue = ids.clone();
+    let mut seen: Vec<Uuid> = Vec::new();
+    while let Some(element_id) = queue.pop() {
+        if seen.contains(&element_id) {
+            continue;
+        }
+        seen.push(element_id);
+        let row: Option<(Uuid, Option<bool>, Option<Value>)> = sqlx::query_as(
+            "SELECT l.id, l.visible, l.metadata_json FROM layer_elements e \
+             JOIN layers l ON l.id = e.layer_id WHERE e.id = $1",
+        )
+        .bind(element_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+        let Some((owning_layer, layer_visible, layer_meta)) = row else {
+            continue;
+        };
+        if layer_visible.unwrap_or(false) && owning_layer != layer_id {
+            restore.push(element_id);
+            continue;
+        }
+        // Hidden (or this very layer): step back to whatever that layer superseded.
+        if let Some(meta) = layer_meta
+            && let Some(list) = meta.get("superseded_elements").and_then(Value::as_array)
+        {
+            for id in list.iter().filter_map(Value::as_str) {
+                if let Ok(id) = Uuid::parse_str(id) {
+                    queue.push(id);
+                }
             }
         }
     }
 
-    let _ = sqlx::query("UPDATE layer_elements SET visible = $2 WHERE id = ANY($1)")
-        .bind(&ids)
-        .bind(!active)
-        .execute(&state.pool)
-        .await;
+    // Only once nothing newer is still standing on this region. Redo twice and switching the first
+    // overlay off would otherwise surface its predecessor underneath the second, rendering the
+    // oldest and newest readings together.
+    let z_order: Option<i32> = sqlx::query_scalar("SELECT z_order FROM layers WHERE id = $1")
+        .bind(layer_id)
+        .fetch_optional(&mut **tx)
+        .await?
+        .flatten();
+    let successor: Option<Uuid> = sqlx::query_scalar(
+        "SELECT l.id FROM layers l \
+         WHERE l.page_id = (SELECT page_id FROM layers WHERE id = $1) \
+           AND l.id <> $1 AND l.visible = TRUE \
+           AND l.metadata_json->>'overlay' = 'true' \
+           AND l.metadata_json->>'region_id' = $2 \
+           AND l.z_order > $3 LIMIT 1",
+    )
+    .bind(layer_id)
+    .bind(region_id.to_string())
+    .bind(z_order.unwrap_or(i32::MIN))
+    .fetch_optional(&mut **tx)
+    .await?;
+    if let Some(successor) = successor {
+        tracing::info!(
+            "Redo overlay {layer_id} stood down, but overlay {successor} still supersedes region {region_id} — leaving its elements hidden"
+        );
+        return Ok(());
+    }
+
+    if restore.is_empty() {
+        return Ok(());
+    }
+    sqlx::query("UPDATE layer_elements SET visible = TRUE WHERE id = ANY($1)")
+        .bind(&restore)
+        .execute(&mut **tx)
+        .await?;
     tracing::info!(
-        "Redo overlay {layer_id} {} — {} superseded element(s) {}",
-        if active { "re-applied" } else { "stood down" },
-        ids.len(),
-        if active { "hidden again" } else { "restored" }
+        "Redo overlay {layer_id} stood down — restored {} element(s) for region {region_id}",
+        restore.len()
     );
+    Ok(())
 }
 
 /// The full QA verdict. Returns one of DUPLICATE / MANUAL_REVIEW / RETRIED /
@@ -2593,11 +2665,7 @@ pub async fn handle_qa_callback(
                 .fetch_all(&state.pool)
                 .await
                 .unwrap_or_default();
-            layers
-                .iter()
-                .filter(|l| l.layer_type.eq_ignore_ascii_case("translation"))
-                .max_by_key(|l| l.z_order)
-                .map(|l| l.id)
+            latest_complete_layer(&layers, "translation").map(|l| l.id)
         }
         None => None,
     };
