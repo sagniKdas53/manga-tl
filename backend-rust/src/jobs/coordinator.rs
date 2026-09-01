@@ -2526,8 +2526,19 @@ async fn predecessor_elements(
         let Some((element_visible, owning_layer, layer_visible, layer_meta)) = row else {
             continue;
         };
-        let layer_is_visible = layer_visible.unwrap_or(false) && owning_layer != layer_id;
-        if layer_is_visible && (!exposed_only || element_visible.unwrap_or(false)) {
+        let is_overlay = layer_meta
+            .as_ref()
+            .and_then(|meta| meta.get("overlay"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let is_target = owning_layer != layer_id
+            && if is_overlay {
+                layer_visible.unwrap_or(false)
+                    && (!exposed_only || element_visible.unwrap_or(false))
+            } else {
+                true
+            };
+        if is_target {
             predecessors.push(element_id);
             continue;
         }
@@ -2542,6 +2553,60 @@ async fn predecessor_elements(
         }
     }
     Ok(predecessors)
+}
+
+async fn active_overlay_successor(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    layer_id: Uuid,
+    region_id: Uuid,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    sqlx::query_scalar(
+        "WITH RECURSIVE successor_layers(id) AS ( \
+           SELECT candidate.id FROM layers candidate \
+           JOIN layer_elements predecessor ON predecessor.layer_id = $1 \
+           WHERE candidate.id <> $1 \
+             AND candidate.page_id = (SELECT page_id FROM layers WHERE id = $1) \
+             AND candidate.metadata_json->>'overlay' = 'true' \
+             AND candidate.metadata_json->>'region_id' = $2 \
+             AND EXISTS ( \
+               SELECT 1 FROM jsonb_array_elements_text( \
+                 CASE WHEN jsonb_typeof(candidate.metadata_json->'superseded_elements') = 'array' \
+                   THEN candidate.metadata_json->'superseded_elements' ELSE '[]'::jsonb END \
+               ) referenced(element_id) \
+               WHERE referenced.element_id = predecessor.id::text \
+             ) \
+           UNION \
+           SELECT candidate.id FROM successor_layers previous \
+           JOIN layer_elements predecessor ON predecessor.layer_id = previous.id \
+           JOIN layers candidate \
+             ON candidate.id <> $1 \
+            AND candidate.page_id = (SELECT page_id FROM layers WHERE id = $1) \
+            AND candidate.metadata_json->>'overlay' = 'true' \
+            AND candidate.metadata_json->>'region_id' = $2 \
+           WHERE EXISTS ( \
+             SELECT 1 FROM jsonb_array_elements_text( \
+               CASE WHEN jsonb_typeof(candidate.metadata_json->'superseded_elements') = 'array' \
+                 THEN candidate.metadata_json->'superseded_elements' ELSE '[]'::jsonb END \
+             ) referenced(element_id) \
+             WHERE referenced.element_id = predecessor.id::text \
+           ) \
+         ) \
+         SELECT successor.id FROM successor_layers successor \
+         JOIN layers layer ON layer.id = successor.id \
+         WHERE layer.visible = TRUE \
+           AND EXISTS ( \
+             SELECT 1 FROM layer_elements element \
+             WHERE element.layer_id = successor.id \
+               AND element.region_id = $3 \
+               AND element.visible = TRUE \
+           ) \
+         LIMIT 1",
+    )
+    .bind(layer_id)
+    .bind(region_id.to_string())
+    .bind(region_id)
+    .fetch_optional(&mut **tx)
+    .await
 }
 
 /// Keeps a redo overlay and the elements it superseded in step.
@@ -2615,32 +2680,14 @@ pub async fn sync_superseded_elements(
         return Ok(());
     };
 
-    // An element on a hidden layer is not a reading anyone can see. Walk back to the first
-    // predecessor whose layer is visible and restore that element.
+    // Walk through hidden overlays, but retain a full-layer predecessor even when its layer is
+    // hidden. Its element visibility still has to be restored now so showing that layer later
+    // brings the reading back.
     let restore = predecessor_elements(tx, layer_id, &ids, false).await?;
 
-    // Only once nothing newer is still standing on this region. Redo twice and switching the first
-    // overlay off would otherwise surface its predecessor underneath the second, rendering the
-    // oldest and newest readings together.
-    let z_order: Option<i32> = sqlx::query_scalar("SELECT z_order FROM layers WHERE id = $1")
-        .bind(layer_id)
-        .fetch_optional(&mut **tx)
-        .await?
-        .flatten();
-    let successor: Option<Uuid> = sqlx::query_scalar(
-        "SELECT l.id FROM layers l \
-         WHERE l.page_id = (SELECT page_id FROM layers WHERE id = $1) \
-           AND l.id <> $1 AND l.visible = TRUE \
-           AND l.metadata_json->>'overlay' = 'true' \
-           AND l.metadata_json->>'region_id' = $2 \
-           AND l.z_order > $3 LIMIT 1",
-    )
-    .bind(layer_id)
-    .bind(region_id.to_string())
-    .bind(z_order.unwrap_or(i32::MIN))
-    .fetch_optional(&mut **tx)
-    .await?;
-    if let Some(successor) = successor {
+    // Follow the recorded replacement chain. z-order is presentation state that users can reorder;
+    // it does not say which overlay superseded which.
+    if let Some(successor) = active_overlay_successor(tx, layer_id, region_id).await? {
         tracing::info!(
             "Redo overlay {layer_id} stood down, but overlay {successor} still supersedes region {region_id} — leaving its elements hidden"
         );

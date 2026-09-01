@@ -464,7 +464,7 @@ async fn layer_and_element_lifecycle_with_gating() {
     cleanup(&pool).await;
 }
 
-/// Codex, third pass. The overlay hides the element it replaces so the two do not composite, but
+/// The overlay hides the element it replaces so the two do not composite, but
 /// that flag lives on the element rather than on the overlay — so toggling the overlay off, or
 /// deleting it to get back to the previous reading, left the bubble blank instead of reverting it.
 /// The original was still in the database and still unreachable, which defeats keeping it at all.
@@ -577,7 +577,18 @@ async fn hiding_or_deleting_a_redo_overlay_gives_the_original_back() {
             .unwrap()
     };
 
-    // Toggle the overlay off — the original comes back.
+    // Hide the full layer first, then stand the overlay down. The base element still has to be
+    // released while its layer is hidden so showing that layer later does not leave a blank bubble.
+    let (status, _, _) = send(
+        app.clone(),
+        "PUT",
+        &format!("/tlhub/api/layers/{base_layer}"),
+        Some(&token),
+        Some(serde_json::json!({"visible": false}).to_string()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
     let (status, _, _) = send(
         app.clone(),
         "PUT",
@@ -591,6 +602,21 @@ async fn hiding_or_deleting_a_redo_overlay_gives_the_original_back() {
         base_visible(pool.clone()).await,
         Some(true),
         "hiding the overlay must restore what it replaced, not blank the bubble"
+    );
+
+    let (status, _, _) = send(
+        app.clone(),
+        "PUT",
+        &format!("/tlhub/api/layers/{base_layer}"),
+        Some(&token),
+        Some(serde_json::json!({"visible": true}).to_string()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        base_visible(pool.clone()).await,
+        Some(true),
+        "showing the full layer later must reveal the predecessor released by the hidden overlay"
     );
 
     // Toggle it back on — the original steps aside again so the two never composite.
@@ -633,7 +659,7 @@ async fn hiding_or_deleting_a_redo_overlay_gives_the_original_back() {
         .expect("cleanup user");
 }
 
-/// Codex, fourth pass. Redo a region twice and the overlays chain: the first records the base
+/// Redoing a region twice chains the overlays: the first records the base
 /// element, the second records the first overlay's. Switching the *first* one off must not put the
 /// base element back while the second is still showing, or the oldest and newest readings render
 /// together.
@@ -702,7 +728,18 @@ async fn standing_down_an_overlay_leaves_a_newer_one_alone() {
         layer_ids.push(layer);
     }
 
-    // Stand down the FIRST overlay while the second is still showing.
+    // Reordering is presentation-only. Put the older overlay above the newer one, then stand the
+    // older overlay down; the metadata chain must still identify the newer active successor.
+    let (status, _, _) = send(
+        app.clone(),
+        "PUT",
+        &format!("/tlhub/api/layers/{}", layer_ids[1]),
+        Some(&token),
+        Some(serde_json::json!({"zOrder": 99}).to_string()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
     let (status, _, _) = send(
         app.clone(),
         "PUT",
