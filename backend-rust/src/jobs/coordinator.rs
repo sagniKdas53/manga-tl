@@ -1700,15 +1700,6 @@ pub async fn handle_translation_callback(
         .collect();
 
     let is_redo = !existing_translation_layers.is_empty();
-    if is_redo {
-        for old in &existing_translation_layers {
-            sqlx::query("UPDATE layers SET visible = FALSE WHERE id = $1")
-                .bind(old.id)
-                .execute(&state.pool)
-                .await
-                .map_err(|e| e.to_string())?;
-        }
-    }
 
     // Z-order over ALL layers so the new one is always on top.
     let next_z = all_layers.iter().map(|l| l.z_order).max().unwrap_or(0) + 1;
@@ -1769,6 +1760,30 @@ pub async fn handle_translation_callback(
 
     let layer_id = Uuid::new_v4();
     let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+    if is_redo {
+        // Stand overlays down from newest to oldest before hiding the complete layers. Each
+        // overlay restores its predecessor, so this order walks the chain back to the complete
+        // layer and leaves that layer intact for a future editor toggle.
+        let mut old_layers = existing_translation_layers.clone();
+        old_layers.sort_by_key(|layer| std::cmp::Reverse(layer.z_order));
+        for old in old_layers.iter().filter(|layer| is_redo_overlay(layer)) {
+            sync_superseded_elements(&mut tx, old.id, false)
+                .await
+                .map_err(|e| e.to_string())?;
+            sqlx::query("UPDATE layers SET visible = FALSE WHERE id = $1")
+                .bind(old.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        for old in old_layers.iter().filter(|layer| !is_redo_overlay(layer)) {
+            sqlx::query("UPDATE layers SET visible = FALSE WHERE id = $1")
+                .bind(old.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+    }
     sqlx::query(
         "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) \
          VALUES ($1,'translation',$2,TRUE,$3,$4,$5,now())",
@@ -2220,32 +2235,50 @@ pub async fn prepare_hybrid_qa(
     Ok(())
 }
 
-/// Whether a QA correction for a region may land on the layer holding this element.
+/// Picks the single translation layer QA may change for this region.
 ///
-/// The newest complete translation pass, plus any *visible* region-redo overlay stacked on it.
-/// The overlay matters because it is what the reader is actually looking at for that bubble: the
-/// element inside the complete layer has been flagged invisible, so a correction written there
-/// would be stamped as applied and never render. `None` means "no particular layer" — every
-/// translation layer, which is how both callers have always read it.
-async fn qa_may_edit(state: &AppState, layer_id: Uuid, latest_translation: Option<Uuid>) -> bool {
-    let Some(layer): Option<Layer> = sqlx::query_as("SELECT * FROM layers WHERE id = $1")
-        .bind(layer_id)
-        .fetch_optional(&state.pool)
-        .await
-        .ok()
-        .flatten()
-    else {
-        return false;
-    };
-    if !layer.layer_type.eq_ignore_ascii_case("translation") {
-        return false;
+/// A visible overlay layer is not enough. Older overlays stay visible as layers while their
+/// elements are hidden by newer redos. Select the topmost overlay whose element is rendering,
+/// then fall back to the newest complete translation layer.
+async fn qa_may_edit(
+    state: &AppState,
+    region_id: Uuid,
+    latest_translation: Option<Uuid>,
+) -> Option<Uuid> {
+    let active_overlay: Option<Uuid> = sqlx::query_scalar(
+        "SELECT l.id FROM layers l JOIN layer_elements e ON e.layer_id = l.id \
+         WHERE e.region_id = $1 \
+           AND l.type ILIKE 'translation' \
+           AND COALESCE(l.visible, TRUE) = TRUE \
+           AND COALESCE(e.visible, TRUE) = TRUE \
+           AND l.metadata_json->>'overlay' = 'true' \
+         ORDER BY l.z_order DESC LIMIT 1",
+    )
+    .bind(region_id)
+    .fetch_optional(&state.pool)
+    .await
+    .ok()
+    .flatten();
+    if active_overlay.is_some() {
+        return active_overlay;
     }
-    match latest_translation {
-        Some(latest) => {
-            layer.id == latest || (is_redo_overlay(&layer) && layer.visible.unwrap_or(true))
-        }
-        None => true,
+
+    if latest_translation.is_some() {
+        return latest_translation;
     }
+
+    sqlx::query_scalar(
+        "SELECT l.id FROM layers l JOIN layer_elements e ON e.layer_id = l.id \
+         WHERE e.region_id = $1 \
+           AND l.type ILIKE 'translation' \
+           AND l.metadata_json->>'overlay' IS DISTINCT FROM 'true' \
+         ORDER BY l.z_order DESC LIMIT 1",
+    )
+    .bind(region_id)
+    .fetch_optional(&state.pool)
+    .await
+    .ok()
+    .flatten()
 }
 
 async fn apply_direct_fix(
@@ -2255,45 +2288,39 @@ async fn apply_direct_fix(
     corrected_text: Option<String>,
     font_size: Option<f64>,
 ) -> bool {
-    let elements: Vec<crate::models::LayerElement> =
-        sqlx::query_as("SELECT * FROM layer_elements WHERE region_id = $1")
-            .bind(region_id)
-            .fetch_all(&state.pool)
-            .await
-            .unwrap_or_default();
-    let mut applied = 0usize;
-    for el in elements {
-        // This used to read `None => false`, i.e. match nothing, so the whole loop body was
-        // skipped: handle_qa_callback passes None, making every direct_fix from the VLM QA path a
-        // silent no-op. The VLM would correctly spot an untranslated bubble, write the correction,
-        // and the correction went nowhere while the region was still stamped qa_status='fixed'.
-        if !qa_may_edit(state, el.layer_id, latest_translation).await {
-            continue; // older translation layers are already superseded history
-        }
-        let _ = sqlx::query(
-            "UPDATE layer_elements SET text=COALESCE($2,text), size=COALESCE($3,size) WHERE id=$1",
-        )
-        .bind(el.id)
-        .bind(corrected_text.clone().or(el.text.clone()))
-        .bind(font_size.or(el.size))
-        .execute(&state.pool)
-        .await;
-        if corrected_text.is_some() {
-            let _ = sqlx::query("UPDATE ocr_regions SET translated_text=$2 WHERE id=$1")
-                .bind(region_id)
-                .bind(corrected_text.clone())
-                .execute(&state.pool)
-                .await;
-        }
-        applied += 1;
-    }
-    if applied == 0 {
+    let Some(layer_id) = qa_may_edit(state, region_id, latest_translation).await else {
         tracing::warn!(
             "QA direct_fix for region {region_id} matched no translation element — \
              the correction was not applied"
         );
+        return false;
+    };
+    let applied = sqlx::query(
+        "UPDATE layer_elements SET text=COALESCE($3,text), size=COALESCE($4,size) \
+         WHERE region_id=$1 AND layer_id=$2",
+    )
+    .bind(region_id)
+    .bind(layer_id)
+    .bind(corrected_text.as_deref())
+    .bind(font_size)
+    .execute(&state.pool)
+    .await
+    .map(|result| result.rows_affected())
+    .unwrap_or(0);
+    if applied == 0 {
+        tracing::warn!(
+            "QA direct_fix for region {region_id} found layer {layer_id}, but no element was updated"
+        );
+        return false;
     }
-    applied > 0
+    if corrected_text.is_some() {
+        let _ = sqlx::query("UPDATE ocr_regions SET translated_text=$2 WHERE id=$1")
+            .bind(region_id)
+            .bind(corrected_text)
+            .execute(&state.pool)
+            .await;
+    }
+    true
 }
 
 /// Hide typeset text for a region QA judged a sound effect. Hidden, not deleted: an
@@ -2303,25 +2330,20 @@ pub async fn hide_translation_elements(
     region_id: Uuid,
     latest_translation: Option<Uuid>,
 ) {
-    let elements: Vec<crate::models::LayerElement> =
-        sqlx::query_as("SELECT * FROM layer_elements WHERE region_id = $1")
+    let Some(layer_id) = qa_may_edit(state, region_id, latest_translation).await else {
+        return;
+    };
+    let hidden =
+        sqlx::query("UPDATE layer_elements SET visible=FALSE WHERE region_id=$1 AND layer_id=$2")
             .bind(region_id)
-            .fetch_all(&state.pool)
-            .await
-            .unwrap_or_default();
-    for el in elements {
-        if !qa_may_edit(state, el.layer_id, latest_translation).await {
-            continue; // older translation layers are already superseded history
-        }
-        let _ = sqlx::query("UPDATE layer_elements SET visible=FALSE WHERE id=$1")
-            .bind(el.id)
+            .bind(layer_id)
             .execute(&state.pool)
-            .await;
-        tracing::info!(
-            "QA rejected region {region_id} as SFX — hiding its typeset element {}",
-            el.id
-        );
-    }
+            .await
+            .map(|result| result.rows_affected())
+            .unwrap_or(0);
+    tracing::info!(
+        "QA rejected region {region_id} as SFX, hiding {hidden} element(s) on layer {layer_id}"
+    );
 }
 
 /// Records a redone region as a one-element layer stacked on top, and hides the element it
@@ -2478,6 +2500,8 @@ pub async fn create_region_redo_overlay(
     Ok(Some(layer_id))
 }
 
+type PredecessorRow = (Option<bool>, Uuid, Option<bool>, Option<Value>);
+
 async fn predecessor_elements(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     layer_id: Uuid,
@@ -2492,7 +2516,7 @@ async fn predecessor_elements(
             continue;
         }
         seen.push(element_id);
-        let row: Option<(Option<bool>, Uuid, Option<bool>, Option<Value>)> = sqlx::query_as(
+        let row: Option<PredecessorRow> = sqlx::query_as(
             "SELECT e.visible, l.id, l.visible, l.metadata_json FROM layer_elements e \
              JOIN layers l ON l.id = e.layer_id WHERE e.id = $1",
         )

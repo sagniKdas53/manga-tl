@@ -171,6 +171,225 @@ async fn cleanup_series(pool: &sqlx::PgPool, series_id: Uuid) {
         .await;
 }
 
+async fn insert_translation_version(
+    pool: &sqlx::PgPool,
+    page_id: Uuid,
+    region_id: Uuid,
+    z_order: i32,
+    text: &str,
+    element_visible: bool,
+    predecessor: Option<Uuid>,
+) -> (Uuid, Uuid) {
+    let layer_id = Uuid::new_v4();
+    let element_id = Uuid::new_v4();
+    let metadata = match predecessor {
+        Some(predecessor) => serde_json::json!({
+            "layer_name": format!("redo {z_order}"),
+            "overlay": true,
+            "region_id": region_id.to_string(),
+            "superseded_elements": [predecessor.to_string()],
+        }),
+        None => serde_json::json!({"layer_name": "Translation"}),
+    };
+    sqlx::query(
+        "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) \
+         VALUES ($1,'translation','en',TRUE,$2,$3,$4,now())",
+    )
+    .bind(layer_id)
+    .bind(z_order)
+    .bind(metadata)
+    .bind(page_id)
+    .execute(pool)
+    .await
+    .expect("translation layer");
+    sqlx::query(
+        "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) \
+         VALUES ($1,$2,10,20,100,50,$3,$4,$5)",
+    )
+    .bind(element_id)
+    .bind(text)
+    .bind(element_visible)
+    .bind(layer_id)
+    .bind(region_id)
+    .execute(pool)
+    .await
+    .expect("translation element");
+    (layer_id, element_id)
+}
+
+#[tokio::test]
+async fn full_translation_pass_restores_overlay_predecessors() {
+    let Some((pool, _redis, state)) = app().await else {
+        return;
+    };
+    let (series_id, _chapter_id, page_id, image_id) =
+        seed_pipeline(&pool, Some("ja"), Some("en")).await;
+    let region_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO ocr_regions (id, text, translated_text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) \
+         VALUES (uuid_generate_v4(),'原文','base','ja',10,20,100,50,$1) RETURNING id",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .expect("region");
+    let (base_layer, base_element) =
+        insert_translation_version(&pool, page_id, region_id, 0, "base", false, None).await;
+    let (first_overlay, first_overlay_element) = insert_translation_version(
+        &pool,
+        page_id,
+        region_id,
+        1,
+        "redo A",
+        false,
+        Some(base_element),
+    )
+    .await;
+    let (second_overlay, second_overlay_element) = insert_translation_version(
+        &pool,
+        page_id,
+        region_id,
+        2,
+        "redo B",
+        true,
+        Some(first_overlay_element),
+    )
+    .await;
+
+    manga_backend::jobs::coordinator::handle_translation_callback(
+        &state,
+        None,
+        image_id,
+        &[serde_json::json!({
+            "regionId": region_id.to_string(),
+            "pageId": page_id.to_string(),
+            "translatedText": "fresh pass",
+            "translationFailed": false,
+        })],
+        None,
+    )
+    .await
+    .expect("translation callback");
+
+    let old_layer_visibility: Vec<(Uuid, Option<bool>)> =
+        sqlx::query_as("SELECT id, visible FROM layers WHERE id = ANY($1) ORDER BY id")
+            .bind([base_layer, first_overlay, second_overlay])
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert!(
+        old_layer_visibility
+            .iter()
+            .all(|(_, visible)| *visible == Some(false))
+    );
+    let old_element_visibility: Vec<(Uuid, Option<bool>)> =
+        sqlx::query_as("SELECT id, visible FROM layer_elements WHERE id = ANY($1) ORDER BY id")
+            .bind([base_element, first_overlay_element, second_overlay_element])
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert!(old_element_visibility.contains(&(base_element, Some(true))));
+    assert!(old_element_visibility.contains(&(first_overlay_element, Some(true))));
+    assert!(old_element_visibility.contains(&(second_overlay_element, Some(true))));
+
+    cleanup_series(&pool, series_id).await;
+}
+
+#[tokio::test]
+async fn qa_direct_fix_edits_only_the_rendered_overlay() {
+    let Some((pool, _redis, state)) = app().await else {
+        return;
+    };
+    let (series_id, _chapter_id, page_id, image_id) =
+        seed_pipeline(&pool, Some("ja"), Some("en")).await;
+    let region_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO ocr_regions (id, text, translated_text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) \
+         VALUES (uuid_generate_v4(),'原文','base','ja',10,20,100,50,$1) RETURNING id",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .expect("region");
+    let (_base_layer, base_element) =
+        insert_translation_version(&pool, page_id, region_id, 0, "base", false, None).await;
+    let (_first_layer, first_element) = insert_translation_version(
+        &pool,
+        page_id,
+        region_id,
+        1,
+        "redo A",
+        false,
+        Some(base_element),
+    )
+    .await;
+    let (_second_layer, second_element) = insert_translation_version(
+        &pool,
+        page_id,
+        region_id,
+        2,
+        "redo B",
+        true,
+        Some(first_element),
+    )
+    .await;
+
+    let result = serde_json::json!({
+        "regionId": region_id.to_string(),
+        "qaStatus": "direct_fix",
+        "qaScore": 0.9,
+        "directFix": {"correctedText": "normal QA fixed"},
+    });
+    manga_backend::jobs::coordinator::handle_qa_callback(
+        &state,
+        None,
+        image_id,
+        Some(page_id),
+        std::slice::from_ref(&result),
+        None,
+    )
+    .await
+    .expect("QA callback");
+
+    let texts = |pool: sqlx::PgPool| async move {
+        sqlx::query_as::<_, (Uuid, Option<String>)>(
+            "SELECT id, text FROM layer_elements WHERE id = ANY($1) ORDER BY id",
+        )
+        .bind([base_element, first_element, second_element])
+        .fetch_all(&pool)
+        .await
+        .unwrap()
+    };
+    let after_normal = texts(pool.clone()).await;
+    assert!(after_normal.contains(&(base_element, Some("base".into()))));
+    assert!(after_normal.contains(&(first_element, Some("redo A".into()))));
+    assert!(after_normal.contains(&(second_element, Some("normal QA fixed".into()))));
+
+    sqlx::query("UPDATE layer_elements SET text='redo B' WHERE id=$1")
+        .bind(second_element)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let hybrid_result = serde_json::json!({
+        "regionId": region_id.to_string(),
+        "qaStatus": "direct_fix",
+        "qaScore": 0.9,
+        "directFix": {"correctedText": "hybrid QA fixed"},
+    });
+    manga_backend::jobs::coordinator::prepare_hybrid_qa(
+        &state,
+        image_id,
+        Some(page_id),
+        &[hybrid_result],
+    )
+    .await
+    .expect("hybrid QA prepare");
+    let after_hybrid = texts(pool.clone()).await;
+    assert!(after_hybrid.contains(&(base_element, Some("base".into()))));
+    assert!(after_hybrid.contains(&(first_element, Some("redo A".into()))));
+    assert!(after_hybrid.contains(&(second_element, Some("hybrid QA fixed".into()))));
+
+    cleanup_series(&pool, series_id).await;
+}
+
 #[tokio::test]
 async fn qa_retry_budget_exhaustion_completes_without_retranslate() {
     let Some((pool, redis, state)) = app().await else {

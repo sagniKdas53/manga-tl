@@ -1611,7 +1611,7 @@ async fn redo_supersedes_the_element_that_is_actually_rendering() {
     // available for a future toggle.
     let element_visibility: Vec<(Uuid, Option<bool>)> =
         sqlx::query_as("SELECT id, visible FROM layer_elements WHERE id = ANY($1) ORDER BY id")
-            .bind(&[visible_element, hidden_element])
+            .bind([visible_element, hidden_element])
             .fetch_all(&pool)
             .await
             .unwrap();
