@@ -199,7 +199,12 @@ describe("SettingsModal", () => {
     // 4=QA Provider, 5=QA Mode, 6=QA LLM Model, 7=QA VLM Model, 8=Routing Strategy, 9=Use Fallback Models
     const change = (idx: number, option: string) => {
       fireEvent.mouseDown(selects[idx]);
-      fireEvent.click(screen.getByRole("option", { name: option }));
+      fireEvent.click(
+        screen.getByRole("option", {
+          name: (accessibleName) =>
+            accessibleName === option || accessibleName.startsWith(`${option} · `),
+        }),
+      );
     };
 
     change(0, "local");

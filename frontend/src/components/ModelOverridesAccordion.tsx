@@ -12,7 +12,8 @@ import Select from "@mui/material/Select";
 import Typography from "@mui/material/Typography";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import type { SystemSettingsDto } from "../types";
+import { modelOptionLabel } from "../modelPricing";
+import type { ModelEntry, SystemSettingsDto } from "../types";
 
 const QA_MODES = ["auto", "llm", "vlm", "hybrid", "none"];
 
@@ -92,7 +93,7 @@ const renderModelOptions = (
   capability: "ocr" | "tl" | "qaLLM" | "qaVLM",
   legacyList: string[] | undefined,
 ) => {
-  let models: { id: string; name: string; free?: boolean }[] = [];
+  let models: ModelEntry[] = [];
   if (providerMap) {
     models = providerMap[provider]?.[capability] || [];
   } else if (legacyList) {
@@ -115,8 +116,7 @@ const renderModelOptions = (
       key={m.id}
       value={m.id}
     >
-      {m.name}
-      {m.free ? " (Free)" : ""}
+      {modelOptionLabel(m)}
     </MenuItem>
   ));
 };
