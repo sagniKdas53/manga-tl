@@ -249,6 +249,46 @@ describe("Reader project ZIP export", () => {
     vi.restoreAllMocks();
   });
 
+  it("never paints OCR text into the canvas PNG export", async () => {
+    render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={[mockPage]}
+        theme="dark"
+      />,
+    );
+
+    const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
+    Object.defineProperty(img, "naturalWidth", {
+      value: 1200,
+      configurable: true,
+    });
+    Object.defineProperty(img, "naturalHeight", {
+      value: 1600,
+      configurable: true,
+    });
+    fireEvent.load(img);
+    fireEvent.click(await screen.findByText("Export Page (PNG)"));
+
+    await waitFor(() => {
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
+    });
+    const contexts = vi
+      .mocked(HTMLCanvasElement.prototype.getContext)
+      .mock.results.map((result) => result.value)
+      .filter((context) => context !== null);
+    expect(contexts.length).toBeGreaterThan(0);
+    const renderedText = vi
+      .mocked(contexts[0]!.fillText)
+      .mock.calls.map(([text]) => String(text))
+      .join(" ");
+    expect(renderedText).toContain("Am I");
+    expect(renderedText).not.toContain("\u79c1\u306f");
+  });
+
   it("produces an archive that opens, with the expected entries and a readable project.json", async () => {
     render(
       <Reader

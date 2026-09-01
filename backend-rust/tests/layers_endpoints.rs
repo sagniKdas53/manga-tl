@@ -756,6 +756,73 @@ async fn standing_down_an_overlay_leaves_a_newer_one_alone() {
         "with both overlays down the base reading must come back, not the one on a hidden layer"
     );
 
+    // Show the newest overlay while the middle layer remains hidden. The base is the element that
+    // is currently exposed, so reactivation must walk through the middle node and hide the base.
+    let (status, _, _) = send(
+        app.clone(),
+        "PUT",
+        &format!("/tlhub/api/layers/{}", layer_ids[2]),
+        Some(&token),
+        Some(serde_json::json!({"visible": true}).to_string()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let base_visible: Option<bool> =
+        sqlx::query_scalar("SELECT visible FROM layer_elements WHERE id = $1")
+            .bind(base_element)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        base_visible,
+        Some(false),
+        "showing the newest overlay must hide the exposed base, not only its hidden predecessor"
+    );
+
+    // Delete the hidden middle node while the newest overlay remains visible. Its history must
+    // point directly to the base before the middle element is removed by the cascade.
+    let (status, _, _) = send(
+        app.clone(),
+        "DELETE",
+        &format!("/tlhub/api/layers/{}", layer_ids[1]),
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let successor_predecessors: Option<serde_json::Value> =
+        sqlx::query_scalar("SELECT metadata_json->'superseded_elements' FROM layers WHERE id = $1")
+            .bind(layer_ids[2])
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        successor_predecessors,
+        Some(serde_json::json!([base_element.to_string()])),
+        "deleting the middle overlay must relink the newest overlay to the base"
+    );
+
+    let (status, _, _) = send(
+        app.clone(),
+        "PUT",
+        &format!("/tlhub/api/layers/{}", layer_ids[2]),
+        Some(&token),
+        Some(serde_json::json!({"visible": false}).to_string()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let base_visible: Option<bool> =
+        sqlx::query_scalar("SELECT visible FROM layer_elements WHERE id = $1")
+            .bind(base_element)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        base_visible,
+        Some(true),
+        "the newest overlay must still restore the base after the middle node is deleted"
+    );
+
     sqlx::query("DELETE FROM series WHERE id = $1")
         .bind(series_id)
         .execute(&pool)

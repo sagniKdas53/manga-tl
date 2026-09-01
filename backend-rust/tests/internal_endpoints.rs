@@ -1607,10 +1607,22 @@ async fn redo_supersedes_the_element_that_is_actually_rendering() {
     );
     assert_eq!(overlay_x, 10.0);
 
-    // And nothing stale is left showing to draw through the new text.
+    // The visible stale element steps aside, but the hidden historical layer keeps its own element
+    // available for a future toggle.
+    let element_visibility: Vec<(Uuid, Option<bool>)> =
+        sqlx::query_as("SELECT id, visible FROM layer_elements WHERE id = ANY($1) ORDER BY id")
+            .bind(&[visible_element, hidden_element])
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert!(element_visibility.contains(&(visible_element, Some(false))));
+    assert!(element_visibility.contains(&(hidden_element, Some(true))));
+
+    // Nothing stale on a rendered layer is left showing through the new text.
     let still_visible: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
-         WHERE e.region_id = $1 AND e.visible = TRUE AND l.metadata_json->>'overlay' IS DISTINCT FROM 'true'",
+         WHERE e.region_id = $1 AND e.visible = TRUE AND l.visible = TRUE \
+           AND l.metadata_json->>'overlay' IS DISTINCT FROM 'true'",
     )
     .bind(region_id)
     .fetch_one(&pool)

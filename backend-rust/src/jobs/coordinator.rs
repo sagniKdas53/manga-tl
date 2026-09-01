@@ -2453,7 +2453,7 @@ pub async fn create_region_redo_overlay(
     let hidden: Vec<Uuid> = sqlx::query_scalar(
         "UPDATE layer_elements SET visible = FALSE \
          WHERE region_id = $1 AND visible = TRUE AND layer_id <> $2 \
-           AND layer_id IN (SELECT id FROM layers WHERE type ILIKE $3) \
+           AND layer_id IN (SELECT id FROM layers WHERE type ILIKE $3 AND visible = TRUE) \
          RETURNING id",
     )
     .bind(region_id)
@@ -2476,6 +2476,48 @@ pub async fn create_region_redo_overlay(
         prev.layer_id
     );
     Ok(Some(layer_id))
+}
+
+async fn predecessor_elements(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    layer_id: Uuid,
+    ids: &[Uuid],
+    exposed_only: bool,
+) -> Result<Vec<Uuid>, sqlx::Error> {
+    let mut predecessors = Vec::new();
+    let mut queue = ids.to_vec();
+    let mut seen = Vec::new();
+    while let Some(element_id) = queue.pop() {
+        if seen.contains(&element_id) {
+            continue;
+        }
+        seen.push(element_id);
+        let row: Option<(Option<bool>, Uuid, Option<bool>, Option<Value>)> = sqlx::query_as(
+            "SELECT e.visible, l.id, l.visible, l.metadata_json FROM layer_elements e \
+             JOIN layers l ON l.id = e.layer_id WHERE e.id = $1",
+        )
+        .bind(element_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+        let Some((element_visible, owning_layer, layer_visible, layer_meta)) = row else {
+            continue;
+        };
+        let layer_is_visible = layer_visible.unwrap_or(false) && owning_layer != layer_id;
+        if layer_is_visible && (!exposed_only || element_visible.unwrap_or(false)) {
+            predecessors.push(element_id);
+            continue;
+        }
+        if let Some(meta) = layer_meta
+            && let Some(list) = meta.get("superseded_elements").and_then(Value::as_array)
+        {
+            for id in list.iter().filter_map(Value::as_str) {
+                if let Ok(id) = Uuid::parse_str(id) {
+                    queue.push(id);
+                }
+            }
+        }
+    }
+    Ok(predecessors)
 }
 
 /// Keeps a redo overlay and the elements it superseded in step.
@@ -2527,10 +2569,15 @@ pub async fn sync_superseded_elements(
         return Ok(());
     }
 
-    // Putting the overlay back in effect is unconditional: hide exactly what it recorded.
     if active {
+        // The recorded element may belong to an overlay that is still hidden. Follow that
+        // overlay's history until reaching the element that is currently exposed, then hide it.
+        let exposed = predecessor_elements(tx, layer_id, &ids, true).await?;
+        if exposed.is_empty() {
+            return Ok(());
+        }
         sqlx::query("UPDATE layer_elements SET visible = FALSE WHERE id = ANY($1)")
-            .bind(&ids)
+            .bind(&exposed)
             .execute(&mut **tx)
             .await?;
         return Ok(());
@@ -2544,42 +2591,9 @@ pub async fn sync_superseded_elements(
         return Ok(());
     };
 
-    // Walk back from each recorded element to the first predecessor whose layer is actually
-    // visible. An element on a hidden layer is not a reading anyone can see, so restoring it would
-    // blank the bubble; what it in turn superseded is the real answer.
-    let mut restore: Vec<Uuid> = Vec::new();
-    let mut queue = ids.clone();
-    let mut seen: Vec<Uuid> = Vec::new();
-    while let Some(element_id) = queue.pop() {
-        if seen.contains(&element_id) {
-            continue;
-        }
-        seen.push(element_id);
-        let row: Option<(Uuid, Option<bool>, Option<Value>)> = sqlx::query_as(
-            "SELECT l.id, l.visible, l.metadata_json FROM layer_elements e \
-             JOIN layers l ON l.id = e.layer_id WHERE e.id = $1",
-        )
-        .bind(element_id)
-        .fetch_optional(&mut **tx)
-        .await?;
-        let Some((owning_layer, layer_visible, layer_meta)) = row else {
-            continue;
-        };
-        if layer_visible.unwrap_or(false) && owning_layer != layer_id {
-            restore.push(element_id);
-            continue;
-        }
-        // Hidden (or this very layer): step back to whatever that layer superseded.
-        if let Some(meta) = layer_meta
-            && let Some(list) = meta.get("superseded_elements").and_then(Value::as_array)
-        {
-            for id in list.iter().filter_map(Value::as_str) {
-                if let Ok(id) = Uuid::parse_str(id) {
-                    queue.push(id);
-                }
-            }
-        }
-    }
+    // An element on a hidden layer is not a reading anyone can see. Walk back to the first
+    // predecessor whose layer is visible and restore that element.
+    let restore = predecessor_elements(tx, layer_id, &ids, false).await?;
 
     // Only once nothing newer is still standing on this region. Redo twice and switching the first
     // overlay off would otherwise surface its predecessor underneath the second, rendering the
@@ -2620,6 +2634,105 @@ pub async fn sync_superseded_elements(
         "Redo overlay {layer_id} stood down — restored {} element(s) for region {region_id}",
         restore.len()
     );
+    Ok(())
+}
+
+/// Rewrites overlay history before one layer is deleted.
+///
+/// A successor records element ids, and deleting their owning layer cascades those elements away.
+/// Replace each reference to the deleted layer with that layer's own predecessors so later toggles
+/// can still reach the surviving history.
+pub async fn relink_overlay_successors(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    layer_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let metadata: Option<Value> =
+        sqlx::query_scalar("SELECT metadata_json FROM layers WHERE id = $1")
+            .bind(layer_id)
+            .fetch_optional(&mut **tx)
+            .await?
+            .flatten();
+    let Some(metadata) = metadata else {
+        return Ok(());
+    };
+    if !metadata
+        .get("overlay")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+
+    let predecessors: Vec<Uuid> = metadata
+        .get("superseded_elements")
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter()
+                .filter_map(Value::as_str)
+                .filter_map(|id| Uuid::parse_str(id).ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    let owned: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM layer_elements WHERE layer_id = $1")
+        .bind(layer_id)
+        .fetch_all(&mut **tx)
+        .await?;
+    if owned.is_empty() {
+        return Ok(());
+    }
+
+    let successors: Vec<(Uuid, Option<Value>)> = sqlx::query_as(
+        "SELECT id, metadata_json FROM layers \
+         WHERE id <> $1 \
+           AND page_id = (SELECT page_id FROM layers WHERE id = $1) \
+           AND metadata_json->>'overlay' = 'true' \
+         FOR UPDATE",
+    )
+    .bind(layer_id)
+    .fetch_all(&mut **tx)
+    .await?;
+
+    for (successor_id, successor_meta) in successors {
+        let Some(mut successor_meta) = successor_meta else {
+            continue;
+        };
+        let Some(recorded) = successor_meta
+            .get("superseded_elements")
+            .and_then(Value::as_array)
+        else {
+            continue;
+        };
+        let mut changed = false;
+        let mut rewritten = Vec::new();
+        for recorded_id in recorded.iter().filter_map(Value::as_str) {
+            let Ok(recorded_id) = Uuid::parse_str(recorded_id) else {
+                continue;
+            };
+            if owned.contains(&recorded_id) {
+                changed = true;
+                for predecessor in &predecessors {
+                    if !rewritten.contains(predecessor) {
+                        rewritten.push(*predecessor);
+                    }
+                }
+            } else if !rewritten.contains(&recorded_id) {
+                rewritten.push(recorded_id);
+            }
+        }
+        if !changed {
+            continue;
+        }
+        successor_meta["superseded_elements"] =
+            json!(rewritten.iter().map(Uuid::to_string).collect::<Vec<_>>());
+        if let Some(object) = successor_meta.as_object_mut() {
+            object.remove("supersedes_layer");
+        }
+        sqlx::query("UPDATE layers SET metadata_json = $2 WHERE id = $1")
+            .bind(successor_id)
+            .bind(successor_meta)
+            .execute(&mut **tx)
+            .await?;
+    }
     Ok(())
 }
 

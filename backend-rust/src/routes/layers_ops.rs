@@ -40,6 +40,11 @@ pub async fn delete_layer(
         let _ = tx.rollback().await;
         return error::internal_error("/api/layers/{id}");
     }
+    if let Err(err) = crate::jobs::coordinator::relink_overlay_successors(&mut tx, id).await {
+        tracing::error!("Could not relink successors of overlay {id}, refusing to delete: {err}");
+        let _ = tx.rollback().await;
+        return error::internal_error("/api/layers/{id}");
+    }
     let result = sqlx::query("DELETE FROM layers WHERE id = $1")
         .bind(id)
         .execute(&mut *tx)
