@@ -185,6 +185,16 @@ export interface ModelEntry {
   id: string;
   name: string;
   free?: boolean;
+  pricing?: {
+    currency?: string;
+    promptPerMillion?: number;
+    completionPerMillion?: number;
+    cacheReadPerMillion?: number;
+    request?: number;
+    image?: number;
+    note?: string;
+    source?: string;
+  };
 }
 
 export interface SystemSettingsDto {

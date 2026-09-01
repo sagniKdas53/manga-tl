@@ -177,4 +177,65 @@ describe("ModelOverridesAccordion", () => {
       screen.getByRole("button", { name: "Clear QA Mode override" }),
     ).toBeInTheDocument();
   });
+
+  it("shows model prices and free-credit labels in the picker", async () => {
+    const pricedSettings = {
+      ...settings,
+      providerModelsMap: {
+        openrouter: {
+          tl: [
+            {
+              id: "paid/model",
+              name: "Paid model",
+              free: false,
+              pricing: {
+                promptPerMillion: 0.25,
+                completionPerMillion: 1.5,
+              },
+            },
+            { id: "free/model", name: "Free model", free: true },
+          ],
+          qaLLM: [{ id: "qa-llm-1", name: "QA LLM", free: true }],
+          qaVLM: [{ id: "qa-vlm-1", name: "QA VLM", free: true }],
+          ocr: [{ id: "ocr-model-1", name: "OCR", free: true }],
+        },
+        gemini: {},
+        local: {
+          ocr: [
+            {
+              id: "PP-OCRv6",
+              name: "PP-OCRv6",
+              free: true,
+              pricing: { note: "Free credits" },
+            },
+          ],
+        },
+      },
+    } as SystemSettingsDto;
+
+    render(
+      <ModelOverridesAccordion
+        expanded
+        onToggle={() => {}}
+        settings={pricedSettings}
+        inherited={{}}
+        value={emptyValue}
+        onChange={() => {}}
+      />,
+    );
+
+    fireEvent.mouseDown(getSelectByLabel("TL LLM Model"));
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
+
+    expect(
+      screen.getByRole("option", {
+        name: "Paid model · $0.250/M input · $1.50/M output",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Free model · Free" }),
+    ).toBeInTheDocument();
+  });
 });

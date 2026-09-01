@@ -17,6 +17,7 @@ pub struct ModelEntry {
     pub id: String,
     pub name: String,
     pub free: bool,
+    pub pricing: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -118,6 +119,7 @@ impl ProviderConfigCache {
                                     .unwrap_or(&id)
                                     .to_string(),
                                 free: m.get("free").and_then(|v| v.as_bool()).unwrap_or(false),
+                                pricing: m.get("pricing").filter(|v| v.is_object()).cloned(),
                                 id,
                             })
                         })
@@ -174,7 +176,7 @@ impl ProviderConfigCache {
         map.get(&key)?.defaults.get(task).cloned()
     }
 
-    /// {provider: {task: [{id,name,free}]}} in the shape SystemSettingsDto exposes.
+    /// {provider: {task: [{id,name,free,pricing?}]}} in the shape SystemSettingsDto exposes.
     pub fn get_provider_models_map(&self) -> serde_json::Value {
         let map = self.snapshot();
         let mut out = serde_json::Map::new();
@@ -186,9 +188,17 @@ impl ProviderConfigCache {
                     serde_json::to_value(
                         models
                             .iter()
-                            .map(
-                                |m| serde_json::json!({"id": m.id, "name": m.name, "free": m.free}),
-                            )
+                            .map(|m| {
+                                let mut entry = serde_json::json!({
+                                    "id": m.id,
+                                    "name": m.name,
+                                    "free": m.free
+                                });
+                                if let Some(pricing) = &m.pricing {
+                                    entry["pricing"] = pricing.clone();
+                                }
+                                entry
+                            })
                             .collect::<Vec<_>>(),
                     )
                     .unwrap_or_default(),
@@ -333,6 +343,36 @@ mod tests {
             cache.get_default_model("openrouter", "tl").as_deref(),
             Some("deepseek/deepseek-v4-pro")
         );
+    }
+
+    #[test]
+    fn provider_models_map_preserves_optional_pricing() {
+        let cache = cache_from(
+            r#"{
+              "providers": {
+                "openrouter": {
+                  "models": {
+                    "tl": [{
+                      "id": "priced/model",
+                      "name": "Priced model",
+                      "free": false,
+                      "pricing": {
+                        "currency": "USD",
+                        "promptPerMillion": 0.25,
+                        "completionPerMillion": 1.5,
+                        "source": "openrouter"
+                      }
+                    }]
+                  }
+                }
+              }
+            }"#,
+        );
+
+        let map = cache.get_provider_models_map();
+        let pricing = &map["openrouter"]["tl"][0]["pricing"];
+        assert_eq!(pricing["promptPerMillion"], 0.25);
+        assert_eq!(pricing["completionPerMillion"], 1.5);
     }
 
     /// An empty cache does not fail validation (Java parity: deployments whose worker

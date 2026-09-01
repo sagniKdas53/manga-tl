@@ -11,8 +11,9 @@ import InputLabel from "@mui/material/InputLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import Typography from "@mui/material/Typography";
+import { modelOptionLabel } from "../modelPricing";
 import { safeFetch } from "../utils";
-import type { SystemSettingsDto } from "../types";
+import type { ModelEntry, SystemSettingsDto } from "../types";
 import { useToast } from "./ToastContext";
 
 export interface SettingsModalProps {
@@ -59,7 +60,7 @@ const renderModelOptions = (
   capability: "ocr" | "tl" | "qaLLM" | "qaVLM",
   legacyList: string[] | undefined,
 ) => {
-  let models: { id: string; name: string; free?: boolean }[] = [];
+  let models: ModelEntry[] = [];
   if (providerMap) {
     models = providerMap[provider]?.[capability] || [];
   } else if (legacyList) {
@@ -82,8 +83,7 @@ const renderModelOptions = (
       key={m.id}
       value={m.id}
     >
-      {m.name}
-      {m.free ? " (Free)" : ""}
+      {modelOptionLabel(m)}
     </MenuItem>
   ));
 };

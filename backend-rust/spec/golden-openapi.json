@@ -346,6 +346,43 @@
           },
           "name": {
             "type": "string"
+          },
+          "pricing": {
+            "$ref": "#/components/schemas/ModelPricingDto"
+          }
+        },
+        "type": "object"
+      },
+      "ModelPricingDto": {
+        "properties": {
+          "cacheReadPerMillion": {
+            "format": "double",
+            "type": "number"
+          },
+          "completionPerMillion": {
+            "format": "double",
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "image": {
+            "format": "double",
+            "type": "number"
+          },
+          "note": {
+            "type": "string"
+          },
+          "promptPerMillion": {
+            "format": "double",
+            "type": "number"
+          },
+          "request": {
+            "format": "double",
+            "type": "number"
+          },
+          "source": {
+            "type": "string"
           }
         },
         "type": "object"

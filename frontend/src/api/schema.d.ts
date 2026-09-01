@@ -1094,6 +1094,22 @@ export interface components {
             free?: boolean;
             id?: string;
             name?: string;
+            pricing?: components["schemas"]["ModelPricingDto"];
+        };
+        ModelPricingDto: {
+            /** Format: double */
+            cacheReadPerMillion?: number;
+            /** Format: double */
+            completionPerMillion?: number;
+            currency?: string;
+            /** Format: double */
+            image?: number;
+            note?: string;
+            /** Format: double */
+            promptPerMillion?: number;
+            /** Format: double */
+            request?: number;
+            source?: string;
         };
         OcrCallbackDto: {
             /** Format: double */
