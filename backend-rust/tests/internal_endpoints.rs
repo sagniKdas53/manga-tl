@@ -46,7 +46,14 @@ async fn app() -> Option<(
     Arc<RedisService>,
     manga_backend::state::AppState,
 )> {
-    let pool = db::connect(&db_config_from_env()?).await.ok()?;
+    let database = db_config_from_env()?;
+    let pool = match db::connect(&database).await {
+        Ok(pool) => pool,
+        Err(err) => {
+            eprintln!("skipping internal endpoint tests: database connection failed: {err}");
+            return None;
+        }
+    };
     let addr = std::env::var("REDIS_TEST_ADDR").ok()?;
     let (host, port) = addr.split_once(':')?;
     let redis = Arc::new(
@@ -1585,6 +1592,159 @@ async fn a_repeated_region_callback_is_applied_once() {
         .execute(&pool)
         .await
         .unwrap();
+    cleanup_series(&pool, series_id).await;
+}
+
+#[tokio::test]
+async fn region_callback_rolls_back_claim_when_cost_persistence_fails() {
+    let Some((app, pool, _redis, _state)) = app().await else {
+        return;
+    };
+    let (series_id, _chapter_id, page_id, image_id) = seed_pipeline(&pool).await;
+
+    let region_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO ocr_regions (id, text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'before','ja',10,20,100,50,$2)")
+        .bind(region_id)
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let base_layer = Uuid::new_v4();
+    sqlx::query("INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) VALUES ($1,'ocr',TRUE,0,$2,$3,now())")
+        .bind(base_layer)
+        .bind(serde_json::json!({"layer_name": "OCR"}))
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES ($1,'before',10,20,100,50,TRUE,$2,$3)")
+        .bind(Uuid::new_v4())
+        .bind(base_layer)
+        .bind(region_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let job_id = format!("redo-cost-rollback-{region_id}");
+    sqlx::query("INSERT INTO jobs (id, type, status, image_id, attempt, max_attempts, created_at, updated_at) VALUES ($1,'region-redo-ocr','PROCESSING',$2,1,3,now(),now())")
+        .bind(&job_id)
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    sqlx::query(
+        "CREATE OR REPLACE FUNCTION public.fail_region_redo_cost_for_test() \
+         RETURNS trigger LANGUAGE plpgsql AS $$ \
+         BEGIN \
+           IF NEW.generation_id = 'gen-cost-rollback' THEN \
+             RAISE EXCEPTION 'forced job cost failure'; \
+           END IF; \
+           RETURN NEW; \
+         END; \
+         $$",
+    )
+    .execute(&pool)
+    .await
+    .expect("failure function");
+    sqlx::query("DROP TRIGGER IF EXISTS fail_region_redo_cost_for_test ON job_costs")
+        .execute(&pool)
+        .await
+        .expect("drop stale trigger");
+    sqlx::query(
+        "CREATE TRIGGER fail_region_redo_cost_for_test \
+         BEFORE INSERT ON job_costs FOR EACH ROW \
+         EXECUTE FUNCTION public.fail_region_redo_cost_for_test()",
+    )
+    .execute(&pool)
+    .await
+    .expect("failure trigger");
+
+    let payload = serde_json::json!({
+        "jobId": job_id,
+        "text": "after",
+        "detectedLanguage": "ja",
+        "cost": {
+            "breakdown": [{
+                "provider": "openrouter", "model": "test/model",
+                "estimated_cost": 0.001, "generation_id": "gen-cost-rollback",
+                "stage": "region-redo-ocr"
+            }]
+        }
+    })
+    .to_string();
+    let (failed_status, _, failed_body) = request(
+        &app,
+        "POST",
+        &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
+        internal(None),
+        Some(payload.clone()),
+    )
+    .await;
+
+    let text_after_failure: Option<String> =
+        sqlx::query_scalar("SELECT text FROM ocr_regions WHERE id = $1")
+            .bind(region_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let overlays_after_failure: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM layers WHERE page_id = $1 AND metadata_json->>'overlay' = 'true'",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let claim_after_failure: Option<chrono::DateTime<chrono::Utc>> =
+        sqlx::query_scalar("SELECT callback_applied_at FROM jobs WHERE id = $1")
+            .bind(&job_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    sqlx::query("DROP TRIGGER fail_region_redo_cost_for_test ON job_costs")
+        .execute(&pool)
+        .await
+        .expect("drop failure trigger");
+    sqlx::query("DROP FUNCTION public.fail_region_redo_cost_for_test()")
+        .execute(&pool)
+        .await
+        .expect("drop failure function");
+
+    let rolled_back = failed_status == StatusCode::INTERNAL_SERVER_ERROR
+        && text_after_failure.as_deref() == Some("before")
+        && overlays_after_failure == 0
+        && claim_after_failure.is_none();
+    if !rolled_back {
+        cleanup_series(&pool, series_id).await;
+        panic!(
+            "cost failure must roll back callback and claim: status={failed_status}, body={failed_body}, text={text_after_failure:?}, overlays={overlays_after_failure}, claim={claim_after_failure:?}"
+        );
+    }
+
+    let (retry_status, _, retry_body) = request(
+        &app,
+        "POST",
+        &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
+        internal(None),
+        Some(payload),
+    )
+    .await;
+    assert_eq!(retry_status, StatusCode::OK, "{retry_body}");
+    let (current_text, claimed, cost_rows): (Option<String>, bool, i64) = sqlx::query_as(
+        "SELECT r.text, j.callback_applied_at IS NOT NULL, \
+           (SELECT COUNT(*) FROM job_costs c WHERE c.job_id = j.id) \
+         FROM ocr_regions r CROSS JOIN jobs j WHERE r.id = $1 AND j.id = $2",
+    )
+    .bind(region_id)
+    .bind(&job_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(current_text.as_deref(), Some("after"));
+    assert!(claimed);
+    assert_eq!(cost_rows, 1);
+
     cleanup_series(&pool, series_id).await;
 }
 

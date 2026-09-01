@@ -1408,6 +1408,58 @@ pub async fn save_job_costs(
     }
 }
 
+/// Persists worker cost entries on a callback's transaction so the callback result, claim, and
+/// spend either commit together or all remain retryable.
+pub async fn save_job_costs_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    image_id: Uuid,
+    job_id: Option<&str>,
+    cost_map: &Value,
+) -> Result<(), sqlx::Error> {
+    let Some(obj) = cost_map.as_object() else {
+        return Ok(());
+    };
+    if obj.is_empty() {
+        return Ok(());
+    }
+    let entries: Vec<&Value> = match obj.get("breakdown").and_then(|b| b.as_array()) {
+        Some(list) => list.iter().collect(),
+        None if obj.contains_key("estimated_cost") => vec![cost_map],
+        None => Vec::new(),
+    };
+    for entry in entries {
+        let Some(entry_obj) = entry.as_object() else {
+            continue;
+        };
+        let number = |key: &str| entry_obj.get(key).and_then(|v| v.as_i64());
+        let float = |key: &str| entry_obj.get(key).and_then(|v| v.as_f64());
+        let text = |key: &str| entry_obj.get(key).and_then(|v| v.as_str());
+        let text_opt = |key: &str| text(key).filter(|s| !s.is_empty());
+        sqlx::query(
+            "INSERT INTO job_costs (id, image_id, job_id, provider, model, prompt_tokens, completion_tokens, \
+             estimated_cost, generation_id, upstream_provider, cached_tokens, cost_source, stage, duration_ms, created_at) \
+             VALUES ($1,$2,(SELECT id FROM jobs WHERE id = $3),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now())",
+        )
+        .bind(Uuid::new_v4())
+        .bind(image_id)
+        .bind(job_id.filter(|s| !s.is_empty()))
+        .bind(text("provider"))
+        .bind(text("model"))
+        .bind(number("prompt_tokens").map(|v| v as i32))
+        .bind(number("completion_tokens").map(|v| v as i32))
+        .bind(float("estimated_cost"))
+        .bind(text_opt("generation_id"))
+        .bind(text_opt("upstream_provider"))
+        .bind(number("cached_tokens").map(|v| v as i32))
+        .bind(text_opt("cost_source"))
+        .bind(text_opt("stage"))
+        .bind(number("duration_ms").map(|v| v as i32))
+        .execute(&mut **tx)
+        .await?;
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Text-box geometry (Java's TextBox/textBoxFor/freeTextBox)
 // ---------------------------------------------------------------------------

@@ -1036,6 +1036,32 @@ pub async fn region_callback(
         return internal_error_text(err);
     }
 
+    // The callback claim and its paid-model spend are one delivery. If the cost insert fails,
+    // rolling this transaction back leaves the job unclaimed so the worker can retry everything.
+    if let Some(cost) = fields.get("cost").filter(|cost| !cost.is_null()) {
+        match image_id {
+            Some(image_id) => {
+                if let Err(err) = coordinator::save_job_costs_tx(
+                    &mut tx,
+                    image_id,
+                    fields.get("jobId").and_then(Value::as_str),
+                    cost,
+                )
+                .await
+                {
+                    tracing::error!(
+                        "Region {region_id} callback could not persist its cost: {err}"
+                    );
+                    let _ = tx.rollback().await;
+                    return internal_error_text(err);
+                }
+            }
+            None => tracing::warn!(
+                "Region {region_id} callback carried a cost but no image could be resolved for it"
+            ),
+        }
+    }
+
     if let Err(err) = tx.commit().await {
         tracing::error!("Region {region_id} callback could not commit: {err}");
         return internal_error_text(err);
@@ -1062,26 +1088,6 @@ pub async fn region_callback(
              — the page now shows a new reading with its previous translation, redo the \
              translation for this bubble to resolve it"
         );
-    }
-    // A region redo can go out to a paid cloud model — perform_redo_ocr does whenever the
-    // OCR provider is not local — and the worker now attaches what it spent. This route
-    // only knows the region, so the image it belongs to has to be resolved before the cost
-    // row can be written.
-    if let Some(cost) = fields.get("cost").filter(|c| !c.is_null()) {
-        match image_id {
-            Some(image_id) => {
-                coordinator::save_job_costs(
-                    &state,
-                    image_id,
-                    fields.get("jobId").and_then(Value::as_str),
-                    cost,
-                )
-                .await;
-            }
-            None => tracing::warn!(
-                "Region {region_id} callback carried a cost but no image could be resolved for it"
-            ),
-        }
     }
     StatusCode::OK.into_response()
 }
