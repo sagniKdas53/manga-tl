@@ -13,6 +13,7 @@ import {
   isSimplePolygon,
   isVertexMoveValid,
   isRotationValid,
+  normalizeDegrees,
   Polygon,
 } from "../../utils/polygonUtils";
 
@@ -180,5 +181,24 @@ describe("polygonUtils", () => {
     it("should return false if any rotated vertex goes out of bounds", () => {
       expect(isRotationValid(square, { w: 1, h: 1 })).toBe(false);
     });
+  });
+});
+
+describe("normalizeDegrees (AUDIT-R5)", () => {
+  it("folds an accumulated angle into [0, 360)", () => {
+    // The rotation handle accumulates deltas, so two full turns would otherwise store 720 and a
+    // counter-clockwise nudge past zero would store -3. Both render the same but read as nonsense
+    // in the inspector, and they defeat "is this rotated?" checks that compare against 0.
+    expect(normalizeDegrees(0)).toBe(0);
+    expect(normalizeDegrees(45)).toBe(45);
+    expect(normalizeDegrees(360)).toBe(0);
+    expect(normalizeDegrees(725)).toBe(5);
+    expect(normalizeDegrees(-3)).toBe(357);
+    expect(normalizeDegrees(-370)).toBe(350);
+  });
+
+  it("treats a non-finite angle as unrotated rather than propagating NaN", () => {
+    expect(normalizeDegrees(NaN)).toBe(0);
+    expect(normalizeDegrees(Infinity)).toBe(0);
   });
 });

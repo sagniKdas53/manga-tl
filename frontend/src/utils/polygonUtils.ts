@@ -290,3 +290,15 @@ export function isRotationValid(
   }
   return true;
 }
+
+/**
+ * Fold an angle into [0, 360).
+ *
+ * A rotation handle accumulates deltas, so dragging round twice would otherwise store 720 and a
+ * counter-clockwise nudge past zero would store -3. Both render identically, but they read as
+ * nonsense in the inspector and they defeat "is this element rotated?" checks that compare to 0.
+ */
+export function normalizeDegrees(angle: number): number {
+  if (!Number.isFinite(angle)) return 0;
+  return ((angle % 360) + 360) % 360;
+}

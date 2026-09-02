@@ -45,6 +45,7 @@ import {
   rectToPolygon,
   ellipseToPolygon,
   rotatePolygon,
+  normalizeDegrees,
   translatePolygon,
   isVertexMoveValid,
   isRotationValid,
@@ -489,6 +490,7 @@ export const Reader: React.FC<ReaderProps> = ({
     originalY: number;
     originalW: number;
     originalH: number;
+    originalRotation: number;
   } | null>(null);
 
   /** Minimum polygon area in square SVG-coord pixels (~36px font, 2 chars) */
@@ -1496,7 +1498,8 @@ export const Reader: React.FC<ReaderProps> = ({
         } else {
           polygon = rectToPolygon(x, y, w, h, rotation);
         }
-        // Bake rotation into polygon — the element's rotation field becomes 0
+        // The generated polygon is page-space, so `rectToPolygon`/`ellipseToPolygon` above already
+        // placed it at the element's angle.
         const newMaskPolygon = JSON.stringify(
           polygon.map(([px, py]) => [Math.round(px), Math.round(py)]),
         );
@@ -1504,9 +1507,12 @@ export const Reader: React.FC<ReaderProps> = ({
         // Capture state for undo before we mutate
         pushToHistoryStack(element as LayerElement);
 
+        // AUDIT-R5: `rotation` is NOT reset to 0 here any more. It used to be, on the reasoning
+        // that the angle had been "baked into the polygon" — but only the *outline* was baked.
+        // The text has no polygon, so zeroing the field silently straightened every rotated
+        // element's glyphs the moment it was reshaped, in the reader as well as the export.
         const updates: Partial<LayerElement> = {
           maskPolygon: newMaskPolygon,
-          rotation: 0,
         };
         setSelectedItem((prev) => (prev ? { ...prev, ...updates } : prev));
         setLayers((prev) =>
@@ -1558,6 +1564,7 @@ export const Reader: React.FC<ReaderProps> = ({
       originalY: element.y,
       originalW: element.maxWidth || 100,
       originalH: element.maxHeight || 100,
+      originalRotation: element.rotation || 0,
     });
   };
 
@@ -1741,27 +1748,30 @@ export const Reader: React.FC<ReaderProps> = ({
 
       if (!isRotationValid(rotatedPoly, imageDims)) return; // All verts must stay in image
 
-      // AUDIT-F14: round the polygon *before* measuring it, not after. `maxWidth`/`maxHeight` are
-      // integer columns, and the bbox of the raw rotated polygon is fractional — which used to make
-      // every subsequent save 400 until the box was un-rotated. Measuring the rounded polygon also
-      // stops the stored mask and the stored box drifting up to a pixel apart from each other.
+      // AUDIT-R5. Rotating changes the element's *angle*. It does not change its box.
+      //
+      // This used to overwrite x/y/maxWidth/maxHeight with the bounding box of the rotated
+      // polygon, which is a different rectangle and a bigger one: a 45°-rotated 100×20 box has an
+      // 85×85 bbox. So the box grew every time you turned the element, the fitter sized text for a
+      // rectangle that no longer matched the plate, and — because a rotated bbox is fractional —
+      // every field in the inspector filled up with numbers like 828.5163351 and the save 400'd
+      // (AUDIT-F14).
+      //
+      // The box is now left exactly as it was and `rotation` carries the angle, which is what both
+      // renderers set glyphs along. The mask polygon is page-space, so it *is* rotated here, and
+      // rounded so the stored outline stays on whole pixels.
       const roundedPoly: Polygon = rotatedPoly.map(([px, py]) => [
         Math.round(px),
         Math.round(py),
       ]);
-      const bbox = polygonBBox(roundedPoly);
       const newMaskPolygon = JSON.stringify(roundedPoly);
+      const newRotation = normalizeDegrees(
+        rotationDrag.originalRotation + deltaAngle,
+      );
 
       setSelectedItem((prev) =>
         prev && prev.id === rotationDrag.elementId
-          ? {
-              ...prev,
-              maskPolygon: newMaskPolygon,
-              x: bbox.x,
-              y: bbox.y,
-              maxWidth: bbox.w,
-              maxHeight: bbox.h,
-            }
+          ? { ...prev, maskPolygon: newMaskPolygon, rotation: newRotation }
           : prev,
       );
       setLayers((prev) =>
@@ -1769,14 +1779,7 @@ export const Reader: React.FC<ReaderProps> = ({
           ...l,
           elements: l.elements.map((el) =>
             el.id === rotationDrag.elementId
-              ? {
-                  ...el,
-                  maskPolygon: newMaskPolygon,
-                  x: bbox.x,
-                  y: bbox.y,
-                  maxWidth: bbox.w,
-                  maxHeight: bbox.h,
-                }
+              ? { ...el, maskPolygon: newMaskPolygon, rotation: newRotation }
               : el,
           ),
         })),
@@ -1797,14 +1800,11 @@ export const Reader: React.FC<ReaderProps> = ({
         }
 
         if (updatedElement) {
-          const origBbox = polygonBBox(rotationDrag.originalPolygon);
+          // The box was never touched, so undo only has to put the angle and outline back.
           const originalElement: LayerElement = {
             ...(updatedElement as LayerElement),
             maskPolygon: JSON.stringify(rotationDrag.originalPolygon),
-            x: origBbox.x,
-            y: origBbox.y,
-            maxWidth: origBbox.w,
-            maxHeight: origBbox.h,
+            rotation: rotationDrag.originalRotation,
           };
           setTimeout(() => {
             pushToHistoryStack(originalElement);
@@ -2389,13 +2389,16 @@ export const Reader: React.FC<ReaderProps> = ({
           const width = el.maxWidth || 100;
           const height = el.maxHeight || 100;
 
+          // AUDIT-R5: the angle applies to the glyphs whether or not the element has a mask
+          // polygon. The old `if (!el.maskPolygon)` guard skipped rotation in exactly the case
+          // where the user had rotated something — the rotation handle only exists in reshape
+          // mode, which requires a polygon — so the plate turned and the text stayed level.
           ctx.save();
-          if (!el.maskPolygon) {
-            // Apply rotation around element center only if not absolute maskPolygon
+          if (el.rotation) {
             const cx = el.x + width / 2;
             const cy = el.y + height / 2;
             ctx.translate(cx, cy);
-            ctx.rotate(((el.rotation || 0) * Math.PI) / 180);
+            ctx.rotate((el.rotation * Math.PI) / 180);
             ctx.translate(-cx, -cy);
           }
 
@@ -2602,12 +2605,13 @@ export const Reader: React.FC<ReaderProps> = ({
             el.fontStyle || "normal",
           );
           const fSize = fit.fontSize;
+          // AUDIT-R5: as above — the glyphs turn with the element, polygon or not.
           textCtx.save();
-          if (!el.maskPolygon) {
+          if (el.rotation) {
             const cx = el.x + width / 2;
             const cy = el.y + height / 2;
             textCtx.translate(cx, cy);
-            textCtx.rotate(((el.rotation || 0) * Math.PI) / 180);
+            textCtx.rotate((el.rotation * Math.PI) / 180);
             textCtx.translate(-cx, -cy);
           }
           textCtx.font = `${el.fontWeight || "bold"} ${el.fontStyle === "italic" ? "italic " : ""}${fSize}px "${el.font || "Comic Neue"}", sans-serif`;
@@ -3595,11 +3599,18 @@ export const Reader: React.FC<ReaderProps> = ({
                     return (
                       <g
                         key={element.id}
-                        transform={
-                          element.maskPolygon
-                            ? undefined
-                            : `rotate(${element.rotation || 0}, ${cx}, ${cy})`
-                        }
+                        // AUDIT-R5. Everything in this group except the mask polygon is expressed
+                        // in the element's own unrotated box coordinates — the backdrop rect, the
+                        // editor borders, the drag handle and the text — so the group turns as a
+                        // whole. The polygon is the one exception: it is already in absolute page
+                        // coordinates and carries the rotation itself, so it undoes this rotation
+                        // about the same centre and nets out to identity.
+                        //
+                        // The old guard skipped the rotation entirely whenever a polygon existed,
+                        // which is precisely when the user had rotated something — the rotation
+                        // handle only appears in reshape mode, and reshape mode requires a
+                        // polygon. So the plate turned and the text stayed level.
+                        transform={`rotate(${element.rotation || 0}, ${cx}, ${cy})`}
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedItem({ ...element, isLayerElement: true });
@@ -3621,6 +3632,7 @@ export const Reader: React.FC<ReaderProps> = ({
                                     <>
                                       <polygon
                                         points={pointsStr}
+                                        transform={`rotate(${-(element.rotation || 0)}, ${cx}, ${cy})`}
                                         fill={
                                           element.backgroundColor || "#ffffff"
                                         }
