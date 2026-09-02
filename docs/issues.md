@@ -1,6 +1,6 @@
 # Issues & Technical Debt
 
-> **Standing: 96 filed, 72 closed, 24 open.** Re-audited 2026-09-02 against the field report in
+> **Standing: 96 filed, 73 closed, 23 open.** Re-audited 2026-09-02 against the field report in
 > `new issues.pdf`. Three previously-open items were closed as *obsolete* — they described Java
 > files the Rust rewrite deleted. Twenty-eight new items are filed (one, `AUDIT-B17`, found while
 > fixing another), and seven are already fixed: `AUDIT-F14`, `AUDIT-F17`, `AUDIT-F18`,
@@ -138,7 +138,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R5`](#audit-r5-high-rotation-turned-the-plate-and-left-the-glyphs-level) | High | Render/Frontend | The plate turned, the glyphs stayed level, and the box inflated on every turn — in the reader as well as the export | **Fixed 2026-09-03** |
 | [`AUDIT-R6`](#audit-r6-medium-there-is-no-vertical-text-mode) | Medium | Render | No vertical setting; rotation is the only workaround and it does not render | Design needed |
 | [`AUDIT-F16`](#audit-f16-medium-text-padding-is-a-hardcoded-constant) | Medium | Render/Frontend | Padding is `(ew - 8) * 0.95`, hardcoded, unexposed, and differs from the reader | Ready (folds into `AUDIT-R1`) |
-| [`AUDIT-R7`](#audit-r7-medium-a-rectangle-arrives-as-a-40-vertex-polygon) | Medium | Worker | `epsilon = 0.002 * arcLength` keeps every pixel of contour jitter | **Root-caused, ready** |
+| [`AUDIT-R7`](#audit-r7-medium-a-rectangle-arrived-as-a-40-vertex-polygon) | Medium | Worker | The simplification tolerance was a fraction of the *perimeter*, so small shapes got a sub-pixel tolerance and kept every vertex | **Fixed 2026-09-03** |
 | [`AUDIT-F15`](#audit-f15-medium-a-hidden-element-cannot-be-reached-again) | Medium | Frontend | Hiding an element removes the only way to select it | Ready |
 | [`AUDIT-R1`](#audit-r1-medium-the-two-renderers-disagree-by-95-of-font-size) | Medium | Render | Frontend sets 9.5% larger type than the worker | Ready: close the inset gap, then make the worker canonical (D8) |
 
@@ -285,19 +285,44 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   Fix them together: give the element a padding field, default it to today's effective value, and
   have both renderers read it. That closes R1 by construction rather than by agreeing on a number.
 
-### `AUDIT-R7` (medium): A rectangle arrives as a 40-vertex polygon
+### `AUDIT-R7` (medium): A rectangle arrived as a 40-vertex polygon
 
-- **Locations:** `worker/src/worker/services/bubble_detector.py:204-206`.
-- **Problem:** `epsilon = 0.002 * cv2.arcLength(contour, True)` is roughly ten times tighter than the
-  usual 0.01–0.02, so every pixel of anti-aliasing jitter along a straight edge survives
-  `approxPolyDP`. A rectangular caption plate comes back with dozens of collinear vertices, which is
-  what the screenshot shows: a box that should have four handles has about forty.
-- **Cost:** it is not only ugly. Every vertex is a drag target in reshape mode, is stored in
-  `mask_polygon`, is re-serialised on every save, and is walked by `mask_solidity` and the merge
-  hull.
-- **Next Step:** raise epsilon and add a collinearity pass, then a rectangle snap when the simplified
-  hull is within tolerance of its own bounding box. Measure vertex counts before/after on the corpus;
-  do not eyeball it — the tolerance that flattens jitter can also flatten a real balloon tail.
+- **Locations:** `worker/src/worker/services/bubble_detector.py`, `handlers/ocr.py`
+  (`get_split_polygon`, the unmatched-bubble search, `cover_balloon_polygon`),
+  `services/merge_regions.py` (`_merged_mask_polygon`).
+- **The interesting cause.** Every contour was simplified with
+  `epsilon = 0.002 * cv2.arcLength(contour, True)` — a tolerance **proportional to the perimeter**.
+  That is backwards:
+
+  | outline | old tolerance |
+  | :--- | :--- |
+  | 3000px-perimeter balloon | 6.0px — fine |
+  | 800px-perimeter bubble | 1.6px — adequate |
+  | **200px-perimeter caption plate** | **0.4px — below one pixel, so nothing was removed** |
+
+  The smaller and simpler the shape, the tighter the tolerance it was held to. That is precisely
+  why the shapes that should have come back as four points were the worst offenders.
+- **The second cause.** `cover_balloon_polygon` samples every corner with the same `corner_steps`
+  however small its radius, so a synthesized plate around a short caption was **28 points by
+  construction** — which is the screenshot.
+- **Cost:** every vertex is a drag target in reshape mode, is stored in `mask_polygon`, is
+  re-serialised on every save, and is walked by `mask_solidity` and the merge hull.
+- **Fixed 2026-09-03.** One `simplify_mask_polygon` at an **absolute** 2px tolerance
+  (`MASK_POLYGON_TOLERANCE_PX`, env-overridable), applied at all four sites. At any size that
+  flattens rasterisation jitter along a straight edge, while a balloon's tail — which sticks out
+  far more than 2px, that being the point of a tail — survives untouched. Measured on synthetic
+  contours: a jittery rectangle goes 56 → 4 points, a circle with a tail 38 → 19 with the tail
+  intact.
+- **Both directions are pinned by tests**, because a tolerance loose enough to flatten jitter is
+  also loose enough to flatten a feature: `test_a_rectangle_comes_back_as_a_rectangle`,
+  `test_a_balloon_tail_survives_because_it_is_not_jitter`, and
+  `test_the_old_relative_tolerance_is_what_made_small_shapes_worst`, which pins the old epsilon
+  below 1px and shows the jitter surviving it.
+- **`_merged_mask_polygon` had no simplification at all** — the convex hull of several rounded
+  outlines carries every point that happens to be extreme. It goes through the same tolerance now.
+- **Not done:** snapping a near-rectangular hull to its own bounding box. The simplifier gets a
+  rectangle to four points already, and a snap would be the step that could square away a shape
+  that is *nearly* a rectangle but deliberately is not.
 
 ### `AUDIT-F15` (medium): A hidden element cannot be reached again
 
@@ -797,6 +822,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | `AUDIT-B12` | QA's verdicts never reached the rendered output | 2026-09-02 | The pipeline renders before it runs QA, and nothing re-rendered. QA now enqueues one `finalPass` render, which does not re-enter QA. |
 | `AUDIT-B13` | A page with no translatable text failed the job | 2026-09-02 | Worker raised, costing three whole-job retries and a red queue row, for pages whose only region was an SFX or an OCR misfire. Completes with a `WARNING` notification now. |
 | `AUDIT-F20` | The Queue Manager never moved active jobs up | 2026-09-02 | `PROCESSING` shared sort rank 1 with `PENDING` and `COMPLETED`, so starting work did not move a row. |
+| `AUDIT-R7` | A rectangle arrived as a 40-vertex polygon | 2026-09-03 | The simplification tolerance was `0.002 × perimeter`, which is 0.4px on a small caption plate — below one pixel, so nothing was removed. Smaller shapes got tighter tolerances. Now an absolute 2px everywhere, plus the synthesized cover plate (28 points by construction) and the merge hull (never simplified at all). |
 | `AUDIT-R5` | Rotation turned the plate and left the glyphs level | 2026-09-03 | `rotation` was effectively always 0: the handle wrote the angle into the mask polygon and the *bounding box of that polygon* into x/y/w/h instead. So the plate tilted, the text stayed level (in the reader too — the canvas skipped `ctx.rotate` exactly when a polygon existed), and the box inflated on every turn. `rotation` is the angle now and the box is left alone. |
 | `AUDIT-B17` | `jobs.page_id` was never written | 2026-09-03 | The column existed and `Job` deserialised it, but the INSERT omitted it, so every row read back had `pageId: null` and the obvious `WHERE page_id = …` matched nothing. Fixed because `AUDIT-W13`'s gate must attribute a blocker to one page. |
 | `AUDIT-W13` | Context-injected translation ran in parallel | 2026-09-02 | Four light slots translated four consecutive pages at once, so each read a predecessor still in flight — and because the context query is `COALESCE(translated_text, text)`, that predecessor handed back its Japanese source labelled as the previous page's dialogue. Gated in the dispatcher, so no slot is held while a job waits. |
