@@ -84,10 +84,10 @@ each later one is wasted effort until the earlier one holds.
     reached `/rendered` or the chapter ZIP. QA now enqueues one `finalPass` render. Worth noting
     what this was **not**: all three renderers already refuse to paint a plate for a hidden or
     blank element. The seam was the pipeline order.
-  - [ ] `AUDIT-B15` — the same missing link for *human* edits. Nothing an editor does enqueues a
-    render, so `/rendered` stays frozen at pipeline output. `pages.last_edited_at` and
-    `pages.last_rendered_at` both already exist, so the staleness test is free; what is missing is
-    a debounced sweeper that acts on it.
+  - [ ] `AUDIT-B15` — **corrected**: the debounced sweeper for human edits *does* exist and runs
+    every 5s. Its defect is that it stamps `last_rendered_at` when it *asks* for the render, not
+    when the render lands, and gates that on an `is_ok()` that is always true. A lost render job
+    therefore falsifies the sweeper's own predicate and strands that edit forever.
 - [/] **Seam 3 — the UI does not believe the backend.**
   - [x] `AUDIT-F17` — the reader filtered SSE down to four job types on one page. Both halves
     fixed; the allow-list was removed rather than extended, because it goes stale silently.

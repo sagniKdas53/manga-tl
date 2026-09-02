@@ -44,7 +44,7 @@ fill the bubble" partly overlaps `AUDIT-R1`, the 9.5% renderer disagreement.
    padding, per-element addressing). The canvas offers a control; the export ignores it, or the
    save rejects it.
 2. **The rendered artifact and the canvas have no link.** Edits never re-render (`AUDIT-B15`),
-   QA's own verdicts never reach the export either, because it runs after the only render
+   QA's own verdicts never reached the export, because it runs after the only render
    (`AUDIT-B12`), and rotation is baked into a polygon the renderer never reads (`AUDIT-R5`).
 3. **The UI does not believe the backend.** SSE arrives and is discarded for the wrong job type
    or the wrong page (`AUDIT-F17`), thumbnails and cards never re-poll (`AUDIT-F19`), the queue
@@ -145,7 +145,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 
 | ID | Sev | Component | Summary | State |
 | :--- | :--- | :--- | :--- | :--- |
-| [`AUDIT-B15`](#audit-b15-high-canvas-edits-never-reach-the-rendered-output) | High | Backend | No edit enqueues a render job; `/rendered` is frozen at pipeline output | **Root-caused, ready** |
+| [`AUDIT-B15`](#audit-b15-medium-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently) | Medium | Backend | The 5s re-render sweeper marks a page rendered when it *asks* for the render, so a lost render job strands that edit forever | Root-caused; needs repro to confirm it is the reported symptom |
 | [`AUDIT-B12`](#audit-b12-medium-qas-verdicts-never-reach-the-rendered-output) | Medium | Backend/Render | QA runs *after* the only render, so no `direct_fix` or `reject_sfx` reaches the export | **Fixed 2026-09-02** |
 | [`AUDIT-B16`](#audit-b16-low-region-redo-layer-provenance) | Low | Backend | A region redo's new layer is not always what the reader ends up showing | Needs repro |
 | [`AUDIT-R11`](#audit-r11-high-no-texture-aware-erasure-d1) | High | Render | Flat-fill erasure only; complex backgrounds are destroyed | = [D1](render_quality_gap_2026-08-05.md), roadmap item |
@@ -304,22 +304,36 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 
 ## 2. Seam 2 — the canvas and the artifact are not connected
 
-### `AUDIT-B15` (high): Canvas edits never reach the rendered output
+### `AUDIT-B15` (medium): The debounced re-render is one-shot and can lose an edit permanently
 
-- **Locations:** `backend-rust/src/routes/layers.rs` (`update_layer_element`),
-  `backend-rust/src/routes/layers_ops.rs`, `backend-rust/src/routes/page.rs:868-877`.
-- **Problem:** No write path enqueues a `render` job. `update_layer_element` calls `touch_page`,
-  which sets `pages.last_edited_at`, and nothing consumes that column to schedule work.
-  `/api/pages/{id}/rendered` serves `rendered/{imageId}.png` from MinIO — the object the pipeline
-  wrote once, before any human touched the page. Every hand correction is invisible to the chapter
-  ZIP, to `/rendered`, and to `handleExportRenderedPng`.
-- **Severity:** this is what makes the whole editor decorative. It also silently undermines
-  [`LOCK-2`](#lock-2--an-ocr-layer-never-reaches-an-export-whatever-the-reader-is-showing): the rule
-  says the worker is authoritative for exports, which is only a good rule while the worker's output
-  is current.
-- **Next Step:** debounce-enqueue a `render` job off `last_edited_at`, and have `/rendered` answer
-  409/regenerate when `last_edited_at > rendered_at`. Needs a `rendered_at` column. Do not re-render
-  synchronously per keystroke — the reader autosaves on a timer.
+- **Correction, 2026-09-02.** This was first filed as "no edit anywhere enqueues a render job". That
+  is **wrong** — I missed the sweeper. `recovery::process_pending_renders`
+  (`backend-rust/src/jobs/recovery.rs:145-197`) runs every 5s (`jobs/mod.rs:34-40`), finds pages
+  with `last_edited_at` older than 10s whose `last_rendered_at` predates the edit, and enqueues a
+  render redo. `touch_page` is called from all six mutating layer routes. The link exists.
+- **What is actually wrong with it.** The sweeper stamps `last_rendered_at = now()` at *enqueue*
+  time (`recovery.rs:187`), not when the render lands, and it gates that on
+  `trigger_page_redo(...).is_ok()` — which is not a real check, because `trigger_page_redo` returns
+  `Ok(())` unconditionally after calling `enqueue_job_directly`, and `enqueue_job_directly` swallows
+  its own insert failure with a `tracing::error!` and returns `()`.
+
+  So the stamp says "rendered" the moment the job is *asked for*. If that job is then lost — the
+  insert failed, the queue was cleared, the worker was down long enough for the row to exhaust its
+  attempts — the page's `last_rendered_at` is already newer than its `last_edited_at`, the sweeper's
+  own predicate excludes it forever, and that edit never renders again. There is no retry, because
+  the only trigger is the predicate that was just falsified.
+- **Why this is a plausible reading of the report** ("changes to the canvas are not synced to the
+  rendered output like ever"): the failure is sticky. One lost render per page is enough to make the
+  feature look permanently broken for that page, and editing more does not recover it — a *new*
+  edit does re-arm the predicate, so the symptom is intermittent rather than total, which is exactly
+  how it would be described.
+- **Next Step:** stamp `last_rendered_at` from the render callback only — it already does this
+  (`internal.rs:1157-1161` for the image, `coordinator.rs:2077-2082` for the page) — and give the
+  sweeper a separate "render requested at" marker so it debounces without claiming completion.
+  Make `trigger_page_redo` propagate the enqueue failure rather than returning `Ok(())` regardless.
+- **Still needs a repro to confirm** this is the reported symptom and not a second cause. Capture a
+  page where an edit did not reach `/rendered`, and compare its `last_edited_at`,
+  `last_rendered_at`, and the status of its most recent `render` job.
 
 ### `AUDIT-B12` (medium): QA's verdicts never reach the rendered output
 
@@ -345,9 +359,10 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   `finalPass: true`. `handle_render_callback` reads that flag off the job row and skips enqueuing
   QA, so the render→QA→render→QA loop cannot start. The flag rides the job payload rather than
   Redis so an eviction cannot leave the loop live.
-- **Still open underneath this:** the same missing link for *human* edits — see
-  [`AUDIT-B15`](#audit-b15-high-canvas-edits-never-reach-the-rendered-output). QA now re-renders;
-  the editor still does not.
+- **Note:** human edits have their own path to a re-render (the 5s debounced sweeper), which is why
+  this needed a fix of its own. QA is not an editor and never went through it. See
+  [`AUDIT-B15`](#audit-b15-medium-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently)
+  for the defect in that sweeper.
 
 ### `AUDIT-B16` (low): Region-redo layer provenance
 
