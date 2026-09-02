@@ -1733,12 +1733,14 @@ pub async fn handle_translation_callback(
         if let Some(mut job) =
             resolve_callback_job(&state.pool, job_id, image_id, "translation").await
         {
-            sqlx::query("UPDATE jobs SET status='COMPLETED', error=$2, updated_at=now() WHERE id=$1")
-                .bind(&job.id)
-                .bind("No translatable text: no region produced a translation")
-                .execute(&state.pool)
-                .await
-                .map_err(|e| e.to_string())?;
+            sqlx::query(
+                "UPDATE jobs SET status='COMPLETED', error=$2, updated_at=now() WHERE id=$1",
+            )
+            .bind(&job.id)
+            .bind("No translatable text: no region produced a translation")
+            .execute(&state.pool)
+            .await
+            .map_err(|e| e.to_string())?;
             job.status = "COMPLETED".into();
             job.error = Some("No translatable text: no region produced a translation".into());
             state
