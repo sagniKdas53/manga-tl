@@ -551,6 +551,31 @@ pub async fn enqueue_job_directly(
         }
     }
 
+    // AUDIT-R1/F16: the rectangle text is fitted into. Sent on every job rather than only render
+    // jobs, because layout also reasons about the text box and the two must not diverge again.
+    // Clamped in the same directions as the settings route: a 0% safety margin or a padding wider
+    // than the box fits everything into nothing.
+    job.insert(
+        "textBoxPaddingPx".into(),
+        json!(
+            crate::settings::setting_value(&state.pool, "textBoxPaddingPx", "4")
+                .await
+                .parse::<i32>()
+                .unwrap_or(4)
+                .clamp(0, 64)
+        ),
+    );
+    job.insert(
+        "textBoxSafetyPercent".into(),
+        json!(
+            crate::settings::setting_value(&state.pool, "textBoxSafetyPercent", "95")
+                .await
+                .parse::<i32>()
+                .unwrap_or(95)
+                .clamp(1, 100)
+        ),
+    );
+
     customize(&mut job);
 
     let payload = Value::Object(job).to_string();

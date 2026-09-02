@@ -38,6 +38,20 @@ pub struct SystemSettingsDto {
     pub activeProviders: Vec<String>,
     pub activeOcrProviders: Vec<String>,
     pub providerModelsMap: serde_json::Value,
+    /// AUDIT-R1/F16: the inset applied to an element's box before text is fitted into it.
+    /// Lives here rather than as a literal in each renderer, because there used to be three
+    /// different answers in the frontend alone and a fourth in `render.py`.
+    ///
+    /// `serde(default)` because this struct is both the GET response and the PUT body: a client
+    /// that predates these fields — including a browser holding an older bundle — must still be
+    /// able to save its settings rather than getting a 400 for omitting a field it has never
+    /// heard of. Serialization always emits a number, so the GET side is unaffected.
+    #[serde(default = "default_text_box_padding_px")]
+    pub textBoxPaddingPx: i32,
+    /// Percent of what remains after the padding that text may use; 95 leaves a 5% safety
+    /// margin so glyphs do not touch the balloon outline.
+    #[serde(default = "default_text_box_safety_percent")]
+    pub textBoxSafetyPercent: i32,
 }
 
 async fn build_dto(state: &AppState) -> SystemSettingsDto {
@@ -93,7 +107,31 @@ async fn build_dto(state: &AppState) -> SystemSettingsDto {
         activeProviders: active_providers,
         activeOcrProviders: active_ocr_providers,
         providerModelsMap: state.providers.get_provider_models_map(),
+        textBoxPaddingPx: clamped_setting(&state.pool, "textBoxPaddingPx", 4, 0, 64).await,
+        textBoxSafetyPercent: clamped_setting(&state.pool, "textBoxSafetyPercent", 95, 1, 100)
+            .await,
     }
+}
+
+fn default_text_box_padding_px() -> i32 {
+    4
+}
+
+fn default_text_box_safety_percent() -> i32 {
+    95
+}
+
+/// An integer setting, defaulted and clamped.
+///
+/// The clamps are not decoration: a safety percent of 0 fits every element into a zero-width box
+/// and a padding wider than the box does the same, so a typo in the settings form would silently
+/// stop the whole library typesetting.
+async fn clamped_setting(pool: &sqlx::PgPool, key: &str, default: i32, low: i32, high: i32) -> i32 {
+    setting_value(pool, key, &default.to_string())
+        .await
+        .parse::<i32>()
+        .unwrap_or(default)
+        .clamp(low, high)
 }
 
 /// GET /api/settings
@@ -125,6 +163,19 @@ pub async fn update_settings(
         &state.pool,
         "useFallbackModels",
         &dto.useFallbackModels.to_string(),
+    )
+    .await;
+
+    save_setting(
+        &state.pool,
+        "textBoxPaddingPx",
+        &dto.textBoxPaddingPx.clamp(0, 64).to_string(),
+    )
+    .await;
+    save_setting(
+        &state.pool,
+        "textBoxSafetyPercent",
+        &dto.textBoxSafetyPercent.clamp(1, 100).to_string(),
     )
     .await;
 
