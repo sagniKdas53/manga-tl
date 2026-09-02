@@ -14,6 +14,7 @@ import { safeFetch } from "../utils";
 import ModelOverridesAccordion, {
   type ModelOverridesValue,
 } from "./ModelOverridesAccordion";
+import { fetchHighestChapterNumber } from "./chapterNumbering";
 
 interface ImportChapterDialogProps {
   open: boolean;
@@ -92,6 +93,12 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
     if (open) {
       Promise.resolve().then(() => {
         setUseFallbackModels(series.useFallbackModels ?? null);
+        // AUDIT-F18: `useState(nextNum)` only ever saw the value this component first mounted
+        // with. The dialog is mounted once and toggled with `open`, so after importing chapter 3
+        // the next open still proposed 3. Re-sync the proposal each time it opens, and clear the
+        // title with it so the previous chapter's name is not offered for the next one.
+        setChapterNum(nextNum);
+        setTitle("");
       });
       safeFetch("/api/settings", {
         headers: { Authorization: `Bearer ${user.token}` },
@@ -104,6 +111,30 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
         })
         .catch(() => {});
     }
+  }, [open, series, nextNum, user.token]);
+
+  // Ask the server for the highest chapter number, exactly as CreateChapterDialog does.
+  //
+  // AUDIT-F18: `nextNum` is derived from the `chapters` prop, which is one page of 15, so on a
+  // longer series its maximum is not the series maximum and the proposal collides with a chapter
+  // that already exists. The local guess above keeps the field populated while this resolves.
+  useEffect(() => {
+    if (!open || !series) return;
+    let cancelled = false;
+
+    void fetchHighestChapterNumber(series.id, user.token)
+      .then((highest) => {
+        // A stale response must not overwrite a number the user has since typed.
+        if (cancelled || highest === null) return;
+        setChapterNum(highest + 1);
+      })
+      .catch(() => {
+        // Leave the local guess in place; the server rejects a duplicate anyway.
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, series, user.token]);
 
   const handleSubmit = async (e: React.FormEvent) => {

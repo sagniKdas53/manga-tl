@@ -21,6 +21,28 @@ pub(crate) fn deny_viewer(user: &AuthUser, instance: &str) -> Option<Response> {
     None
 }
 
+/// `maxWidth`/`maxHeight` are `integer` columns, but the editor derives them from geometry.
+///
+/// AUDIT-F14: rotating a box runs its corners through `rotatePoint`, which does trigonometry and
+/// does not round, so the bounding box of a rotated polygon is fractional. A plain `Option<i32>`
+/// made serde reject the entire body, axum turned that into a `JsonRejection`, and the handler
+/// answered 400 — so *every* save failed for as long as the box stayed rotated, while dragging
+/// (which rounds client-side) kept working. The column is still an integer; the rounding just
+/// happens here rather than being demanded of every caller.
+fn deserialize_rounded_i32<'de, D>(deserializer: D) -> Result<Option<i32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<f64>::deserialize(deserializer)?;
+    Ok(value.map(|v| {
+        if v.is_nan() {
+            0
+        } else {
+            v.round().clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32
+        }
+    }))
+}
+
 #[derive(Deserialize)]
 #[allow(non_snake_case)]
 pub struct LayerElementInput {
@@ -32,9 +54,9 @@ pub struct LayerElementInput {
     pub size: Option<f64>,
     #[serde(default)]
     pub autoSize: Option<bool>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_rounded_i32")]
     pub maxWidth: Option<i32>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_rounded_i32")]
     pub maxHeight: Option<i32>,
     #[serde(default)]
     pub wordWrap: Option<bool>,
@@ -305,4 +327,42 @@ pub async fn create_image_layer(
     let layer = insert_layer(&state.pool, page_id, &payload).await;
     touch_page(&state.pool, layer.id).await;
     Json(layer).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// AUDIT-F14. Rotating a box gives it a fractional bounding box, and the editor puts that
+    /// straight into `maxWidth`/`maxHeight`. Before this, serde rejected the body and the save
+    /// came back 400 — so a rotated element could never be saved again, by any means.
+    #[test]
+    fn accepts_the_fractional_box_a_rotation_produces() {
+        let body = r#"{"maxWidth": 186.43, "maxHeight": 187.91, "rotation": 12.5}"#;
+        let dto: LayerElementInput = serde_json::from_str(body).expect("rotated box must parse");
+        assert_eq!(dto.maxWidth, Some(186));
+        assert_eq!(dto.maxHeight, Some(188));
+        assert_eq!(dto.rotation, Some(12.5));
+    }
+
+    #[test]
+    fn still_takes_a_plain_integer_box() {
+        let dto: LayerElementInput =
+            serde_json::from_str(r#"{"maxWidth": 150, "maxHeight": 80}"#).expect("integers parse");
+        assert_eq!(dto.maxWidth, Some(150));
+        assert_eq!(dto.maxHeight, Some(80));
+    }
+
+    /// A partial update must stay partial: an absent field means "leave it alone" (the SQL is all
+    /// `COALESCE`), and an explicit null must not become 0.
+    #[test]
+    fn absent_and_null_box_dimensions_both_stay_none() {
+        let absent: LayerElementInput = serde_json::from_str(r#"{"text": "hi"}"#).expect("parses");
+        assert_eq!(absent.maxWidth, None);
+        assert_eq!(absent.maxHeight, None);
+
+        let explicit_null: LayerElementInput =
+            serde_json::from_str(r#"{"maxWidth": null}"#).expect("parses");
+        assert_eq!(explicit_null.maxWidth, None);
+    }
 }

@@ -551,8 +551,14 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
 
   const sortJobs = useCallback(
     (jobsList: Job[]) => {
+      // AUDIT-F20: PROCESSING used to share rank 1 with PENDING and COMPLETED, so a job starting
+      // work did not move at all — it stayed wherever `createdAt` had put it, which reads from
+      // the outside as the queue neither prioritising active items nor updating. It gets its own
+      // rank now. The tie between PENDING and COMPLETED is kept deliberately: those two swap as a
+      // page finishes, and separating them would make finished rows jump the queue on their way
+      // out. FAILED stays last so a stuck row does not push live work down the list.
       const statusOrder: Record<string, number> = {
-        PROCESSING: 1,
+        PROCESSING: 0,
         PENDING: 1,
         COMPLETED: 1,
         PAUSED: 2,

@@ -520,57 +520,81 @@ export const Reader: React.FC<ReaderProps> = ({
     };
   }, []);
 
-  // Listen for job_update events and refresh page if processing completed
+  // Listen for job_update events and drop the cache for whichever page the job touched.
+  //
+  // AUDIT-F17. This used to do two things wrong, and both of them looked like "SSE is broken":
+  //
+  //   1. It matched an allow-list of four job types, so `qa` — the last stage to touch a page,
+  //      which rewrites text and hides rejected elements — left the reader showing pre-QA output.
+  //      An allow-list is the wrong shape here: it silently goes stale every time a job type is
+  //      added, which is how `qa`, `qa-re-ocr`, `render` and `layout` came to be missing. Every
+  //      pipeline stage mutates something the reader draws, so any completion invalidates.
+  //   2. It ignored completions for every page but the open one, so a page the reader was about
+  //      to turn to kept whatever the prefetch had already cached — the reported "pages other
+  //      than the open one have layer updates [that] are not fetched".
+  //
+  // Bumping the epoch is what makes this safe: `fetchPageDetails` refuses to write its result
+  // into the cache if the epoch moved while it was in flight, so an in-flight prefetch for the
+  // page that just changed cannot repopulate what we are clearing.
   useEffect(() => {
     return subscribe((event) => {
-      if (event.type === "job_update") {
-        try {
-          const data = JSON.parse(event.data);
-          if (
-            data.status === "COMPLETED" &&
-            selectedPage &&
-            (data.pageId === selectedPage.id ||
-              data.imageId === selectedPage.imageId)
-          ) {
-            const relevantTypes = [
-              "ocr",
-              "translation",
-              "region-redo-ocr",
-              "region-redo-tl",
-            ];
-            if (relevantTypes.includes(data.type)) {
-              console.log(
-                `SSE event: Reloading page layers due to ${data.type} job completion`,
-              );
+      if (event.type !== "job_update") return;
+      let data: {
+        status?: string;
+        pageId?: string;
+        imageId?: string;
+        type?: string;
+        error?: string;
+      };
+      try {
+        data = JSON.parse(event.data);
+      } catch (e) {
+        console.error("Failed to parse job_update in Reader", e);
+        return;
+      }
 
-              // Bust cache for this page & image so fresh data is fetched.
-              // Bumping the epoch also invalidates any request already in
-              // flight, which would otherwise refill the cache we just cleared.
-              pageDetailsCache.current.delete(selectedPage.id);
-              pageDetailsCache.current.delete(selectedPage.imageId);
-              prefetchQueue.current.delete(selectedPage.id);
-              cacheEpochRef.current += 1;
+      // A job carries an imageId always and a pageId only sometimes, so resolve both against the
+      // chapter's page list before deciding what to invalidate.
+      const page =
+        pages.find((p) => p.id === data.pageId || p.imageId === data.imageId) ??
+        (selectedPage &&
+        (selectedPage.id === data.pageId ||
+          selectedPage.imageId === data.imageId)
+          ? selectedPage
+          : null);
+      if (!page) return;
+      const isOpenPage = selectedPage?.id === page.id;
 
-              Promise.resolve().then(() => {
-                setCacheEpoch(cacheEpochRef.current);
-                setLoadedImageId(null);
-              });
-              showToast("New layers available — refreshed", "success");
-            }
-          } else if (
-            data.status === "FAILED" &&
-            selectedPage &&
-            (data.pageId === selectedPage.id ||
-              data.imageId === selectedPage.imageId)
-          ) {
-            showToast(`Job failed: ${data.error || "Unknown error"}`, "error");
-          }
-        } catch (e) {
-          console.error("Failed to parse job_update in Reader", e);
+      if (data.status === "FAILED") {
+        if (isOpenPage) {
+          showToast(`Job failed: ${data.error || "Unknown error"}`, "error");
         }
+        return;
+      }
+      if (data.status !== "COMPLETED") return;
+
+      pageDetailsCache.current.delete(page.id);
+      pageDetailsCache.current.delete(page.imageId);
+      prefetchQueue.current.delete(page.id);
+      cacheEpochRef.current += 1;
+
+      Promise.resolve().then(() => {
+        setCacheEpoch(cacheEpochRef.current);
+        // Only the open page is re-read on screen; a background page is simply dropped from the
+        // cache, so the next navigation or prefetch pass picks up the new layers.
+        if (isOpenPage) {
+          setLoadedImageId(null);
+        }
+      });
+
+      if (isOpenPage) {
+        console.log(
+          `SSE event: Reloading page layers due to ${data.type} job completion`,
+        );
+        showToast("New layers available — refreshed", "success");
       }
     });
-  }, [subscribe, selectedPage, showToast]);
+  }, [subscribe, selectedPage, pages, showToast]);
 
   // Window title synchronization
   useEffect(() => {
@@ -1717,10 +1741,16 @@ export const Reader: React.FC<ReaderProps> = ({
 
       if (!isRotationValid(rotatedPoly, imageDims)) return; // All verts must stay in image
 
-      const bbox = polygonBBox(rotatedPoly);
-      const newMaskPolygon = JSON.stringify(
-        rotatedPoly.map(([px, py]) => [Math.round(px), Math.round(py)]),
-      );
+      // AUDIT-F14: round the polygon *before* measuring it, not after. `maxWidth`/`maxHeight` are
+      // integer columns, and the bbox of the raw rotated polygon is fractional — which used to make
+      // every subsequent save 400 until the box was un-rotated. Measuring the rounded polygon also
+      // stops the stored mask and the stored box drifting up to a pixel apart from each other.
+      const roundedPoly: Polygon = rotatedPoly.map(([px, py]) => [
+        Math.round(px),
+        Math.round(py),
+      ]);
+      const bbox = polygonBBox(roundedPoly);
+      const newMaskPolygon = JSON.stringify(roundedPoly);
 
       setSelectedItem((prev) =>
         prev && prev.id === rotationDrag.elementId
