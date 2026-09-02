@@ -567,4 +567,113 @@ describe("ReaderRightSidebar", () => {
 
     expect(screen.getByText("Original OCR Text")).toBeInTheDocument();
   });
+
+  // AUDIT-F15. The `visible` toggle lives on the *selected* element's inspector, and selecting
+  // means clicking the element on the canvas — which a hidden element cannot be. Hiding was a
+  // one-way door. The layer panel lists elements now, and the list is reachable either way.
+  describe("reaching a hidden element (AUDIT-F15)", () => {
+    const hiddenElement = {
+      id: "e-hidden",
+      text: "you can still find me",
+      layerId: "l1",
+      visible: false,
+    } as unknown as import("../../types").LayerElement;
+
+    const shownElement = {
+      id: "e-shown",
+      text: "visible one",
+      layerId: "l1",
+      visible: true,
+    } as unknown as import("../../types").LayerElement;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderSidebar = (over: Record<string, any> = {}) => {
+      const props = {
+        selectedItem: null,
+        setSelectedItem: vi.fn(),
+        activeLayerId: "l1",
+        setActiveLayerId: vi.fn(),
+        sortedLayers: [
+          {
+            layer: {
+              id: "l1",
+              type: "translation",
+              visible: true,
+              metadataJson: { layer_name: "Test TL Layer" },
+            } as unknown as import("../../types").Layer,
+            elements: [shownElement, hiddenElement],
+          },
+        ],
+        layers: [],
+        manuallyShownOcrLayers: new Set<string>(),
+        cleanScanlationView: false,
+        handleMoveLayer: vi.fn(),
+        handleCreateTranslationLayer: vi.fn(),
+        handleCreateSfxLayer: vi.fn(),
+        handleToggleLayerVisibility: vi.fn(),
+        handleCloneLayer: vi.fn(),
+        handleDeleteLayer: vi.fn(),
+        handleAddNewElement: vi.fn(),
+        handleLaunchEyeDropper: vi.fn(),
+        handleRedoPageOcr: vi.fn(),
+        isRedoingPageOcr: false,
+        handleRedoPageTranslation: vi.fn(),
+        isRedoingPageTranslation: false,
+        handleExportPng: vi.fn(),
+        handleExportRenderedPng: vi.fn(),
+        handleExportZip: vi.fn(),
+        interactionMode: "none",
+        setInteractionMode: vi.fn(),
+        undoStack: [],
+        handleUndo: vi.fn(),
+        handleEnterReshapeMode: vi.fn(),
+        handleUpdateSelectedElement: vi.fn(),
+        dirtyElements: new Set<string>(),
+        handleSaveElementChanges: vi.fn(),
+        handleSetElementVisibility: vi.fn(),
+        handleDeleteElement: vi.fn(),
+        ocrRegions: [],
+        isRedoingRegionOcr: false,
+        handleRedoRegion: vi.fn(),
+        isRedoingRegionTl: false,
+        ...over,
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      render(<ReaderRightSidebar {...(props as any)} />);
+      return props;
+    };
+
+    it("says how many of a layer's elements are hidden", () => {
+      renderSidebar();
+      expect(screen.getByText(/1 hidden/)).toBeInTheDocument();
+    });
+
+    it("lists a hidden element once the layer is expanded, and can select it", () => {
+      const props = renderSidebar();
+      // Collapsed: the canvas is the only handle, which is the bug.
+      expect(
+        screen.queryByText("you can still find me"),
+      ).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByText(/2 elements/));
+
+      const row = screen.getByText("you can still find me");
+      expect(row).toBeInTheDocument();
+      fireEvent.click(row);
+      expect(props.setSelectedItem).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "e-hidden", isLayerElement: true }),
+      );
+    });
+
+    it("shows a hidden element again from the list", () => {
+      const props = renderSidebar();
+      fireEvent.click(screen.getByText(/2 elements/));
+
+      fireEvent.click(screen.getByLabelText("Show element"));
+      expect(props.handleSetElementVisibility).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "e-hidden" }),
+        true,
+      );
+    });
+  });
 });

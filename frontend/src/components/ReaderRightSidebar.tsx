@@ -138,6 +138,35 @@ const layerElementCountSx = {
   color: "var(--text-dim, var(--text-muted))",
 } as const;
 
+// AUDIT-F15: the layer's elements, listed under it. Indented and hairlined so the list reads as
+// belonging to the row above rather than as more layers.
+const elementListSx = {
+  ml: 3,
+  mb: 0.5,
+  borderLeft: "1px solid var(--border-color)",
+  pl: 1,
+} as const;
+
+const elementRowSx = {
+  display: "flex",
+  alignItems: "center",
+  gap: 0.5,
+  borderRadius: 1,
+  px: 0.5,
+  cursor: "pointer",
+  "&:hover": { backgroundColor: "var(--bg-input, rgba(0,0,0,0.06))" },
+} as const;
+
+const elementLabelSx = {
+  flex: 1,
+  minWidth: 0,
+  fontSize: "12px",
+  color: "var(--text-muted)",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+} as const;
+
 const layerActionsRowSx = {
   display: "flex",
   alignItems: "center",
@@ -395,6 +424,7 @@ export interface ReaderRightSidebarProps {
   handleUpdateSelectedElement: (updates: Partial<LayerElement>) => void;
   dirtyElements: Set<string>;
   handleSaveElementChanges: (element: LayerElement) => void;
+  handleSetElementVisibility: (element: LayerElement, visible: boolean) => void;
   handleDeleteElement: (id: string) => void;
   ocrRegions: OcrRegion[];
   isRedoingRegionOcr: boolean;
@@ -403,6 +433,20 @@ export interface ReaderRightSidebarProps {
 }
 
 const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
+  // AUDIT-F15: which layers have their element list open. A layer's elements are the only way to
+  // reach one that has been hidden — hiding removes it from the canvas, which was the only place
+  // it could be selected.
+  const [expandedLayers, setExpandedLayers] = React.useState<Set<string>>(
+    new Set(),
+  );
+  const toggleLayerExpanded = React.useCallback((layerId: string) => {
+    setExpandedLayers((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(layerId)) next.add(layerId);
+      return next;
+    });
+  }, []);
+
   const {
     selectedItem,
     setSelectedItem,
@@ -413,6 +457,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     handleCreateTranslationLayer,
     handleCreateSfxLayer,
     handleToggleLayerVisibility,
+    handleSetElementVisibility,
     handleCloneLayer,
     handleDeleteLayer,
     handleAddNewElement,
@@ -529,121 +574,221 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 const isActive = lData.layer.id === activeLayerId;
                 const isVisible = lData.layer.visible;
                 const stackNumber = sortedLayers.length - idx;
+                const isExpanded = expandedLayers.has(lData.layer.id);
+                const hiddenCount = lData.elements.filter(
+                  (el) => !el.visible,
+                ).length;
                 return (
-                  <Box
-                    key={lData.layer.id}
-                    onClick={() => setActiveLayerId(lData.layer.id)}
-                    sx={[
-                      layerRowBaseSx,
-                      {
-                        border: isActive
-                          ? "1px solid var(--primary)"
-                          : "1px solid var(--border-color)",
-                        backgroundColor: isActive
-                          ? "var(--primary-glow)"
-                          : "transparent",
-                        boxShadow: isActive
-                          ? "0 0 8px var(--primary-glow)"
-                          : "none",
-                        opacity: isVisible ? 1 : 0.5,
-                        "&:hover": {
-                          borderColor: isActive
-                            ? "var(--primary)"
-                            : "var(--text-dim, var(--text-muted))",
-                        },
-                      },
-                    ]}
-                  >
+                  <React.Fragment key={lData.layer.id}>
                     <Box
+                      onClick={() => setActiveLayerId(lData.layer.id)}
                       sx={[
-                        layerStackNumberBaseSx,
+                        layerRowBaseSx,
                         {
+                          border: isActive
+                            ? "1px solid var(--primary)"
+                            : "1px solid var(--border-color)",
                           backgroundColor: isActive
-                            ? "var(--primary)"
-                            : "var(--bg-input, rgba(0,0,0,0.06))",
-                          color: isActive ? "#fff" : "var(--text-muted)",
+                            ? "var(--primary-glow)"
+                            : "transparent",
+                          boxShadow: isActive
+                            ? "0 0 8px var(--primary-glow)"
+                            : "none",
+                          opacity: isVisible ? 1 : 0.5,
+                          "&:hover": {
+                            borderColor: isActive
+                              ? "var(--primary)"
+                              : "var(--text-dim, var(--text-muted))",
+                          },
                         },
                       ]}
                     >
-                      {stackNumber}
-                    </Box>
-                    <Box sx={layerNameColumnSx}>
-                      <Typography
-                        component="span"
+                      <Box
                         sx={[
-                          layerNameBaseSx,
+                          layerStackNumberBaseSx,
                           {
-                            fontWeight: isActive ? 700 : 600,
-                            color: isActive
-                              ? "var(--primary-hover)"
-                              : "var(--text-main)",
+                            backgroundColor: isActive
+                              ? "var(--primary)"
+                              : "var(--bg-input, rgba(0,0,0,0.06))",
+                            color: isActive ? "#fff" : "var(--text-muted)",
                           },
                         ]}
                       >
-                        {typeof lData.layer.metadataJson?.layer_name ===
-                        "string"
-                          ? lData.layer.metadataJson.layer_name
-                          : lData.layer.type === "translation"
-                            ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || "EN"})`
-                            : lData.layer.type === "sfx"
-                              ? "SFX Layer"
-                              : lData.layer.type === "ocr"
-                                ? "OCR Layer"
-                                : `Layer (${lData.layer.type})`}
-                      </Typography>
-                      <Typography
-                        component="span"
-                        sx={layerElementCountSx}
-                      >
-                        {lData.elements.length} elements
-                        {!isVisible ? " · hidden" : ""}
-                      </Typography>
-                    </Box>
-                    <Box
-                      sx={layerActionsRowSx}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Tooltip title={isVisible ? "Hide layer" : "Show layer"}>
-                        <IconButton
-                          size="small"
-                          onClick={() =>
-                            handleToggleLayerVisibility(lData.layer.id)
-                          }
-                          sx={{
-                            color: isVisible
-                              ? "var(--primary)"
-                              : "var(--text-dim, var(--text-muted))",
+                        {stackNumber}
+                      </Box>
+                      <Box sx={layerNameColumnSx}>
+                        <Typography
+                          component="span"
+                          sx={[
+                            layerNameBaseSx,
+                            {
+                              fontWeight: isActive ? 700 : 600,
+                              color: isActive
+                                ? "var(--primary-hover)"
+                                : "var(--text-main)",
+                            },
+                          ]}
+                        >
+                          {typeof lData.layer.metadataJson?.layer_name ===
+                          "string"
+                            ? lData.layer.metadataJson.layer_name
+                            : lData.layer.type === "translation"
+                              ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || "EN"})`
+                              : lData.layer.type === "sfx"
+                                ? "SFX Layer"
+                                : lData.layer.type === "ocr"
+                                  ? "OCR Layer"
+                                  : `Layer (${lData.layer.type})`}
+                        </Typography>
+                        <Typography
+                          component="span"
+                          sx={[
+                            layerElementCountSx,
+                            {
+                              cursor: lData.elements.length
+                                ? "pointer"
+                                : "default",
+                              userSelect: "none",
+                            },
+                          ]}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (lData.elements.length) {
+                              toggleLayerExpanded(lData.layer.id);
+                            }
                           }}
+                          title={
+                            lData.elements.length
+                              ? "Show this layer's elements"
+                              : undefined
+                          }
                         >
-                          {isVisible ? (
-                            <VisibilityIcon fontSize="small" />
-                          ) : (
-                            <VisibilityOffIcon fontSize="small" />
-                          )}
-                        </IconButton>
-                      </Tooltip>
+                          {lData.elements.length > 0
+                            ? `${isExpanded ? "▾" : "▸"} `
+                            : ""}
+                          {lData.elements.length} elements
+                          {hiddenCount ? ` · ${hiddenCount} hidden` : ""}
+                          {!isVisible ? " · layer hidden" : ""}
+                        </Typography>
+                      </Box>
+                      <Box
+                        sx={layerActionsRowSx}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Tooltip
+                          title={isVisible ? "Hide layer" : "Show layer"}
+                        >
+                          <IconButton
+                            size="small"
+                            onClick={() =>
+                              handleToggleLayerVisibility(lData.layer.id)
+                            }
+                            sx={{
+                              color: isVisible
+                                ? "var(--primary)"
+                                : "var(--text-dim, var(--text-muted))",
+                            }}
+                          >
+                            {isVisible ? (
+                              <VisibilityIcon fontSize="small" />
+                            ) : (
+                              <VisibilityOffIcon fontSize="small" />
+                            )}
+                          </IconButton>
+                        </Tooltip>
 
-                      <Tooltip title="Clone layer (copies above, hides original as backup)">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleCloneLayer(lData.layer.id)}
-                          sx={cloneLayerButtonSx}
-                        >
-                          <ContentCopyIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                        <Tooltip title="Clone layer (copies above, hides original as backup)">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleCloneLayer(lData.layer.id)}
+                            sx={cloneLayerButtonSx}
+                          >
+                            <ContentCopyIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
 
-                      <Tooltip title="Delete layer">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleDeleteLayer(lData.layer.id)}
-                          sx={deleteLayerButtonSx}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                        <Tooltip title="Delete layer">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDeleteLayer(lData.layer.id)}
+                            sx={deleteLayerButtonSx}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
                     </Box>
-                  </Box>
+                    {isExpanded && (
+                      <Box sx={elementListSx}>
+                        {lData.elements.map((element) => {
+                          const elementVisible = element.visible !== false;
+                          const isSelectedElement =
+                            selectedItem?.id === element.id &&
+                            selectedItem?.isLayerElement;
+                          const label =
+                            (element.text || "").trim() || "(no text)";
+                          return (
+                            <Box
+                              key={element.id}
+                              onClick={() => {
+                                setActiveLayerId(lData.layer.id);
+                                setSelectedItem({
+                                  ...element,
+                                  isLayerElement: true,
+                                });
+                              }}
+                              sx={[
+                                elementRowSx,
+                                {
+                                  opacity: elementVisible ? 1 : 0.55,
+                                  backgroundColor: isSelectedElement
+                                    ? "var(--primary-glow)"
+                                    : "transparent",
+                                },
+                              ]}
+                            >
+                              <Typography
+                                component="span"
+                                sx={elementLabelSx}
+                                title={label}
+                              >
+                                {label}
+                              </Typography>
+                              <Tooltip
+                                title={
+                                  elementVisible
+                                    ? "Hide element"
+                                    : "Show element"
+                                }
+                              >
+                                <IconButton
+                                  size="small"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSetElementVisibility(
+                                      element,
+                                      !elementVisible,
+                                    );
+                                  }}
+                                  sx={{
+                                    color: elementVisible
+                                      ? "var(--primary)"
+                                      : "var(--text-dim, var(--text-muted))",
+                                  }}
+                                >
+                                  {elementVisible ? (
+                                    <VisibilityIcon fontSize="small" />
+                                  ) : (
+                                    <VisibilityOffIcon fontSize="small" />
+                                  )}
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    )}
+                  </React.Fragment>
                 );
               })
             )}

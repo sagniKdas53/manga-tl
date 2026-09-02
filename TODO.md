@@ -62,9 +62,9 @@ touches nothing else, so none of D1/D6/D7/D8/D10/D14/D15/D16 are recoverable by 
 
 ### 2. Audit backlog — re-oriented 2026-09-02
 
-Full detail in [docs/issues.md](docs/issues.md). **96 filed, 73 closed, 23 open.** The 2026-09-02
+Full detail in [docs/issues.md](docs/issues.md). **96 filed, 74 closed, 22 open.** The 2026-09-02
 field report added 28 items; `AUDIT-Q1`, `AUDIT-Q2` and `AUDIT-T3` closed as obsolete because they
-named Java files the Rust rewrite deleted. Ten of the new items are already fixed.
+named Java files the Rust rewrite deleted. Eleven of the new items are already fixed.
 
 The report is not 24 independent bugs. It is **three seams**, and they have to close in order —
 each later one is wasted effort until the earlier one holds.
@@ -82,7 +82,8 @@ each later one is wasted effort until the earlier one holds.
   - [x] `AUDIT-R7` — the simplification tolerance was a fraction of the *perimeter*, so a small
     caption plate got a sub-pixel tolerance and kept every vertex. Absolute 2px now, at all four
     sites — including the merge hull, which had none at all.
-  - [ ] `AUDIT-F15` — hidden elements become unselectable.
+  - [x] `AUDIT-F15` — hiding an element removed the only way to select it. The layer panel
+    lists elements now, each selectable with its own visibility toggle.
 - [/] **Seam 2 — the canvas and the artifact are not connected.**
   - [x] `AUDIT-B12` — QA runs *after* the only render, so no `direct_fix` or `reject_sfx` ever
     reached `/rendered` or the chapter ZIP. QA now enqueues one `finalPass` render. Worth noting
