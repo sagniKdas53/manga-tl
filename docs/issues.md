@@ -1,6 +1,6 @@
 # Issues & Technical Debt
 
-> **Standing: 96 filed, 70 closed, 26 open.** Re-audited 2026-09-02 against the field report in
+> **Standing: 96 filed, 71 closed, 25 open.** Re-audited 2026-09-02 against the field report in
 > `new issues.pdf`. Three previously-open items were closed as *obsolete* — they described Java
 > files the Rust rewrite deleted. Twenty-eight new items are filed (one, `AUDIT-B17`, found while
 > fixing another), and seven are already fixed: `AUDIT-F14`, `AUDIT-F17`, `AUDIT-F18`,
@@ -166,7 +166,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | :--- | :--- | :--- | :--- | :--- |
 | [`AUDIT-W13`](#audit-w13-high-context-injected-translation-ran-in-parallel) | High | Worker/Backend | "Previous page dialogue" was read while the previous page was still translating — and `COALESCE` handed back its Japanese | **Fixed 2026-09-02** |
 | [`AUDIT-W14`](#audit-w14-medium-the-slot-policy-lets-slow-network-work-crowd-out-local-work) | Medium | Worker/Backend | Four light slots + a per-cycle capacity snapshot; OCR waits behind LLM calls | Needs measurement |
-| [`AUDIT-B17`](#audit-b17-low-jobspage_id-is-never-written) | Low | Backend | `jobs.page_id` exists, is deserialised, and is never populated by the INSERT | Ready |
+| [`AUDIT-B17`](#audit-b17-low-jobspage_id-was-never-written) | Low | Backend | `jobs.page_id` existed, was deserialised, and was never populated by the INSERT | **Fixed 2026-09-03** |
 | [`AUDIT-B13`](#audit-b13-medium-a-page-with-no-translatable-text-fails-the-job) | Medium | Worker/Backend | An untranslatable page raises and burns 3 attempts; it should warn | **Fixed 2026-09-02** |
 | [`AUDIT-B14`](#audit-b14-medium-delete-then-re-add-leaves-a-chapter-inconsistent) | Medium | Backend/Frontend | Page count stale, old slot held, reader hangs on the loading screen | Needs repro |
 | [`AUDIT-W3`](#audit-w3-medium-cooldowns-and-lock-waits-burn-a-job-slot) | Medium | Worker | Cooldowns and lock waits block a concurrency slot doing nothing | Deprioritized; needs concurrency test harness |
@@ -529,11 +529,24 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   `recovery.rs` returns it to PENDING or fails it, and a FAILED job is neither PENDING nor
   PROCESSING. A page that produced no OCR regions never enqueues a translation, so it never blocks
   the pages after it.
-- **Joins through `image_id`, not `page_id`.** `jobs.page_id` exists as a column and is **never
-  written** — `enqueue_job_directly`'s INSERT omits it, so it is NULL on every row. Filed as
-  [`AUDIT-B17`](#audit-b17-low-jobspage_id-is-never-written).
+- **Two holes found in review** on [#116](https://github.com/sagniKdas53/manga-tl/pull/116):
+  1. **Joining blockers through `image_id` let a page block itself.** Uploading the same file twice
+     into one chapter is a supported path — `upload_page` appends a second page at `max+1` pointing
+     at the *existing* image row — so one `image_id` can belong to two pages of one chapter. The
+     later page's own job then matched the earlier page, satisfied `prev.page_number <
+     me.page_number`, and requeued itself forever: a hard deadlock on a shape duplicate and blank
+     pages produce routinely. Blockers are attributed by **page** now, which required fixing
+     [`AUDIT-B17`](#audit-b17-low-jobspage_id-was-never-written) first. Rows predating that have a
+     NULL `page_id` and simply do not block — the fail-open direction.
+  2. **A PENDING job that never reached Redis blocked the chapter forever.** The insert and the
+     Redis push are two steps; if the push fails, the row stays PENDING with nothing to pick it up,
+     because the stale sweep only looks at PROCESSING and `requeue_pending_jobs` only runs at
+     startup or on resume. That hole predates this gate, but the gate turned "one page never
+     finishes" into "every later page of the chapter waits behind it". A new 2-minute sweep,
+     `recovery::requeue_orphaned_pending_jobs`, puts such rows back on their queue.
+     `started_at IS NULL` is what separates orphaned from in-flight.
 
-### `AUDIT-B17` (low): `jobs.page_id` is never written
+### `AUDIT-B17` (low): `jobs.page_id` was never written
 
 - **Locations:** `backend-rust/src/jobs/coordinator.rs:558-570` (the INSERT),
   `backend-rust/src/models.rs:314` (the field).
@@ -545,8 +558,10 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Consequence today:** consumers have to fall back to `imageId`, which is why the `AUDIT-F17`
   fix resolves a page by either key. Nothing is broken by it, but it is a trap: the obvious code
   (`WHERE page_id = …`) silently matches nothing.
-- **Next Step:** add `page_id` to the INSERT — `enqueue_job_directly` has already resolved
-  `page_opt` by that point, so the value is in hand.
+- **Fixed 2026-09-03.** `enqueue_job_directly` has already resolved `page_opt` by the time it
+  inserts, so the value was simply not being bound. Promoted from "ready" to done because
+  `AUDIT-W13`'s ordering gate needs to attribute a blocking job to one page, and image identity
+  cannot do that — see the deadlock recorded there.
 
 ### `AUDIT-W14` (medium): The slot policy lets slow network work crowd out local work
 
@@ -745,6 +760,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | `AUDIT-B12` | QA's verdicts never reached the rendered output | 2026-09-02 | The pipeline renders before it runs QA, and nothing re-rendered. QA now enqueues one `finalPass` render, which does not re-enter QA. |
 | `AUDIT-B13` | A page with no translatable text failed the job | 2026-09-02 | Worker raised, costing three whole-job retries and a red queue row, for pages whose only region was an SFX or an OCR misfire. Completes with a `WARNING` notification now. |
 | `AUDIT-F20` | The Queue Manager never moved active jobs up | 2026-09-02 | `PROCESSING` shared sort rank 1 with `PENDING` and `COMPLETED`, so starting work did not move a row. |
+| `AUDIT-B17` | `jobs.page_id` was never written | 2026-09-03 | The column existed and `Job` deserialised it, but the INSERT omitted it, so every row read back had `pageId: null` and the obvious `WHERE page_id = …` matched nothing. Fixed because `AUDIT-W13`'s gate must attribute a blocker to one page. |
 | `AUDIT-W13` | Context-injected translation ran in parallel | 2026-09-02 | Four light slots translated four consecutive pages at once, so each read a predecessor still in flight — and because the context query is `COALESCE(translated_text, text)`, that predecessor handed back its Japanese source labelled as the previous page's dialogue. Gated in the dispatcher, so no slot is held while a job waits. |
 | `AUDIT-F18` | Import Chapter kept a stale chapter number | 2026-09-02 | `useState(nextNum)` only read its argument on first mount. Re-syncs on open and asks the server for the true maximum. |
 | `AUDIT-Q1` | ~253 redundant `Objects.requireNonNull` calls | 2026-09-02 | **Obsolete.** All four named files lived under `backend/src/main/java/`, deleted by the Rust rewrite. `docker-compose.yml` builds `backend-rust/Dockerfile`. Nothing to clean up. |

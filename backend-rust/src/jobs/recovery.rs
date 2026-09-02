@@ -5,8 +5,13 @@
 //!   * every 5 s: DebouncedRenderService.processPendingRenders — pages edited >10s ago
 //!     whose render predates the edit get a render redo (skipped within 5 min of a
 //!     recent render failure)
+//!   * every 2 min: requeue_orphaned_pending_jobs — PENDING rows that are on no queue at
+//!     all go back on one (AUDIT-W13 review)
+
+use std::collections::HashSet;
 
 use crate::jobs::coordinator;
+use crate::jobs::{HEAVY_QUEUES, LIGHT_QUEUES};
 use crate::state::AppState;
 
 /// Boot-time reset of orphaned PROCESSING jobs, in one transaction.
@@ -252,4 +257,77 @@ pub async fn report_health(state: &AppState) {
     tracing::info!(
         "Health: queue[pending={pending}, processing={processing}, failed={failed}] redis={redis}"
     );
+}
+
+/// Re-push PENDING jobs that are on no Redis queue.
+///
+/// A job is inserted PENDING and then pushed onto its queue as two separate steps. If the push
+/// fails — a transient Redis error, a connection dropped between the two — the row stays PENDING
+/// forever with nothing to pick it up: `recover_stale_processing_jobs` only looks at PROCESSING,
+/// and `requeue_pending_jobs` only runs at startup or on resume.
+///
+/// That hole predates the ordering gate, but the gate makes it much worse. Before, an orphaned
+/// job meant one page never finished. Now, if that page belongs to a chapter with context
+/// injection on, `earlier_page_is_still_translating` counts it as an outstanding predecessor and
+/// **every later page of the chapter waits behind it** — indefinitely, even after Redis recovers.
+///
+/// `started_at IS NULL` is what separates orphaned from in-flight: the dispatcher stamps it on a
+/// 202, so a row that has one is at a worker rather than lost. There is a millisecond window
+/// between the dispatcher popping a job and stamping it in which this sweep could re-push a job
+/// that is fine; the duplicate is harmless, because the worker re-reads the job's status before
+/// processing and skips anything no longer PENDING.
+pub async fn requeue_orphaned_pending_jobs(state: &AppState) {
+    let Some(redis) = &state.redis else { return };
+    // While paused, PENDING rows are *meant* to be off the queues — requeue_pending_jobs puts them
+    // back on resume. An unreadable pause gate reads as paused, so a Redis wobble cannot make this
+    // sweep flood the queues.
+    if redis.queue_paused().await.unwrap_or(true) {
+        return;
+    }
+
+    let mut queued: HashSet<String> = HashSet::new();
+    for queue in HEAVY_QUEUES.into_iter().chain(LIGHT_QUEUES) {
+        for entry in redis.list_range(queue).await.unwrap_or_default() {
+            if let Some(id) = serde_json::from_str::<serde_json::Value>(&entry)
+                .ok()
+                .and_then(|value| {
+                    value
+                        .get("jobId")
+                        .and_then(|id| id.as_str())
+                        .map(str::to_string)
+                })
+            {
+                queued.insert(id);
+            }
+        }
+    }
+
+    // The grace period keeps this off the heels of an enqueue that is still in progress.
+    let orphaned: Vec<crate::models::Job> = sqlx::query_as(
+        "SELECT * FROM jobs WHERE status = 'PENDING' AND started_at IS NULL \
+           AND updated_at < now() - interval '2 minutes' ORDER BY created_at ASC",
+    )
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+
+    let mut requeued = 0usize;
+    for job in orphaned {
+        if queued.contains(&job.id) {
+            continue;
+        }
+        let Some(payload) = job.payload.as_deref() else {
+            continue;
+        };
+        tracing::warn!(
+            "Job {} ({}) is PENDING but on no queue — re-pushing",
+            job.id,
+            job.job_type
+        );
+        coordinator::push_job_to_redis(state, &job.job_type, payload).await;
+        requeued += 1;
+    }
+    if requeued > 0 {
+        tracing::info!("Re-pushed {requeued} orphaned PENDING job(s) onto their queues");
+    }
 }

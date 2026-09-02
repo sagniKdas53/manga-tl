@@ -166,9 +166,13 @@ impl Dispatcher {
     /// would have been the obvious alternative and would have burned a light slot for the whole
     /// wait — the failure mode `AUDIT-W3` already describes. This keeps W13 independent of W3.
     ///
-    /// Joins through `image_id` because `jobs.page_id` exists as a column but is never written —
-    /// `enqueue_job_directly`'s INSERT omits it, so it is NULL on every row. `prev.chapter_id =
-    /// me.chapter_id` keeps a cloned chapter sharing an image from blocking the original.
+    /// Attributes a blocker to a **page**, not an image. A duplicate upload into the same chapter
+    /// is a supported path — `upload_page` appends a second page at `max+1` pointing at the
+    /// *existing* image row — so one `image_id` can belong to two pages of one chapter. Joining
+    /// through `image_id` made the later page's own job match the earlier page, satisfy
+    /// `prev.page_number < me.page_number`, and block itself forever. `jobs.page_id` is populated
+    /// as of AUDIT-B17; rows predating that have NULL and simply do not block, which is the
+    /// fail-open direction.
     ///
     /// It blocks on the whole run-up to a translation — `panel-detection`, `ocr`, `layout` as well
     /// as `translation` — not just on translation itself. Pages move through the pipeline at
@@ -192,7 +196,7 @@ impl Dispatcher {
         sqlx::query_scalar::<_, bool>(
             "SELECT EXISTS ( \
                  SELECT 1 FROM jobs j \
-                   JOIN pages prev ON prev.image_id = j.image_id \
+                   JOIN pages prev ON prev.id = j.page_id \
                   WHERE j.type IN ('panel-detection', 'ocr', 'layout', 'translation') \
                     AND j.status IN ('PENDING', 'PROCESSING') \
                     AND prev.chapter_id = me.chapter_id \

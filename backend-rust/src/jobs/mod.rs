@@ -31,6 +31,17 @@ pub fn spawn_scheduled_tasks(state: &crate::state::AppState) {
         }
     });
 
+    // AUDIT-W13 review: PENDING rows that never reached a queue. Cheap — one LRANGE per queue
+    // plus one indexed query — so it can run often enough that a lost push is a blip rather than
+    // a stalled chapter.
+    let orphan_state = state.clone();
+    tokio::spawn(async move {
+        loop {
+            recovery::requeue_orphaned_pending_jobs(&orphan_state).await;
+            tokio::time::sleep(Duration::from_secs(120)).await;
+        }
+    });
+
     let render_state = state.clone();
     tokio::spawn(async move {
         loop {
