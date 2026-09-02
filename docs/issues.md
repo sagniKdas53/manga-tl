@@ -355,10 +355,28 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   `reject_sfx` hid an element the rendered PNG still had typeset. The reader looked right and the
   artifact did not — which from the outside is indistinguishable from "the mask is still kept".
 - **Fixed 2026-09-02.** `handle_qa_callback` tracks whether it changed anything (`direct_fix`
-  applied, or an element hidden) and, on the terminal branch, enqueues one more render carrying
-  `finalPass: true`. `handle_render_callback` reads that flag off the job row and skips enqueuing
-  QA, so the render→QA→render→QA loop cannot start. The flag rides the job payload rather than
-  Redis so an eviction cannot leave the loop live.
+  applied, or an element hidden) and enqueues one more render carrying `finalPass: true`.
+  `handle_render_callback` reads that flag off the job row and skips enqueuing QA, so the
+  render→QA→render→QA loop cannot start. The flag rides the job payload rather than Redis so an
+  eviction cannot leave the loop live.
+- **Three things the first cut got wrong**, caught in review on
+  [#115](https://github.com/sagniKdas53/manga-tl/pull/115):
+  1. **The manual-review path skipped the render.** One QA response can carry both an accepted
+     `direct_fix` on region A *and* `needsManualIntervention` on region B. That returns
+     `MANUAL_REVIEW` from an earlier branch, so the accepted edits — already written to the layers —
+     never reached the artifact and nothing would come back for them. Halting means "stop
+     translating", not "leave the export disagreeing with the layers". Both terminal branches
+     render now.
+  2. **The retry path still does not, deliberately.** A retry re-runs translation (or `qa-re-ocr`,
+     which leads back to translation) and the translation callback renders on its own, so a render
+     here would be thrown away and would race the retranslation about to rewrite the same layers.
+  3. **"Page Processing Complete" fired before the render landed.** The QA callback announced
+     corrections the exported PNG did not yet carry, and could not retract the claim if that render
+     then failed. When QA defers to a final render the claim moves with it: the job carries
+     `completesPipeline`, the render callback emits the notification once the artifact matches, and
+     a *failed* final render emits `Re-render Failed` rather than silence. A manual-review render
+     carries `completesPipeline: false` — it re-renders, but nothing is complete, so it claims
+     nothing.
 - **Note:** human edits have their own path to a re-render (the 5s debounced sweeper), which is why
   this needed a fix of its own. QA is not an editor and never went through it. See
   [`AUDIT-B15`](#audit-b15-medium-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently)
@@ -434,9 +452,15 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   group-ranking pass reads the same table, so a chapter with live work did not rise either. From
   the outside that is exactly the report: the queue neither prioritises active items nor appears to
   update. (`sortJobs` *is* re-run on every `job_update`; the sort just had nothing to say.)
-- **Fixed 2026-09-02.** `PROCESSING` gets rank 0. `PENDING` and `COMPLETED` keep their tie
-  deliberately — they swap as a page finishes, and separating them would make finished rows jump
+- **Fixed 2026-09-02.** `PROCESSING` gets its own top rank. `PENDING` and `COMPLETED` keep their
+  tie deliberately — they swap as a page finishes, and separating them would make finished rows jump
   the queue on the way out — and `FAILED` stays last so a stuck row does not push live work down.
+- **The first cut inverted the fix**, caught in review. It used `PROCESSING: 0`, and both lookups
+  read the table as `statusOrder[status] || 99` — a `0` rank is falsy, so a running job took the
+  *unknown-status* fallback and sorted below even `FAILED`. Ranks now start at 1 so no rank is
+  falsy, and the lookups use `?? 99` as well. Guarded by
+  `puts a running job at the top of its chapter, above pending and failed`, which asserts rendered
+  row order and fails on the `0`/`||` combination.
 
 ### `AUDIT-P10` (unranked): SSE → WebSocket
 
@@ -612,6 +636,12 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   `CreateChapterDialog` already does — asks the server for the highest chapter number rather than
   trusting `nextNum`, which is derived from one 15-row page of chapters and is simply wrong on a
   longer series.
+- **And a race that came with it**, caught in review: the lookup is asynchronous and its `cancelled`
+  guard only fires when the effect tears down — closing the dialog — never on typing. A slow
+  response therefore landed on top of a number the user had deliberately chosen. A touched-flag
+  now blocks the write. **`CreateChapterDialog` had the identical defect**, under a comment
+  claiming the protection it did not provide; fixed there too rather than left next to the one
+  being fixed.
 
 ### `AUDIT-F21` (low): Dark mode is unpleasant to read
 

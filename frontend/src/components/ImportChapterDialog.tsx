@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
@@ -36,6 +36,11 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [chapterNum, setChapterNum] = useState(nextNum);
+  // Set the moment the user types in the Chapter Number field, cleared when the dialog reopens.
+  // The server lookup below is async, and `cancelled` only covers the dialog being closed — it
+  // does not fire on typing, so without this a slow response lands on top of a number the user
+  // deliberately chose.
+  const numberTouchedRef = useRef(false);
   const [title, setTitle] = useState("");
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
@@ -97,6 +102,7 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
         // with. The dialog is mounted once and toggled with `open`, so after importing chapter 3
         // the next open still proposed 3. Re-sync the proposal each time it opens, and clear the
         // title with it so the previous chapter's name is not offered for the next one.
+        numberTouchedRef.current = false;
         setChapterNum(nextNum);
         setTitle("");
       });
@@ -125,7 +131,7 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
     void fetchHighestChapterNumber(series.id, user.token)
       .then((highest) => {
         // A stale response must not overwrite a number the user has since typed.
-        if (cancelled || highest === null) return;
+        if (cancelled || numberTouchedRef.current || highest === null) return;
         setChapterNum(highest + 1);
       })
       .catch(() => {
@@ -215,7 +221,10 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
             label="Chapter Number"
             type="number"
             value={chapterNum}
-            onChange={(e) => setChapterNum(parseFloat(e.target.value) || 0)}
+            onChange={(e) => {
+              numberTouchedRef.current = true;
+              setChapterNum(parseFloat(e.target.value) || 0);
+            }}
             required
             fullWidth
             margin="normal"
