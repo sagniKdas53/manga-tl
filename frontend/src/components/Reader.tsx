@@ -1564,7 +1564,6 @@ export const Reader: React.FC<ReaderProps> = ({
       originalY: element.y,
       originalW: element.maxWidth || 100,
       originalH: element.maxHeight || 100,
-      originalRotation: element.rotation || 0,
     });
   };
 
@@ -1716,6 +1715,7 @@ export const Reader: React.FC<ReaderProps> = ({
       originalY: element.y,
       originalW: element.maxWidth || 100,
       originalH: element.maxHeight || 100,
+      originalRotation: element.rotation || 0,
     });
   };
 
