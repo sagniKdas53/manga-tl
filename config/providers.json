@@ -71,9 +71,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 1.6,
-              "completionPerMillion": 3.2,
-              "cacheReadPerMillion": 0.135
+              "promptPerMillion": 1.04226,
+              "completionPerMillion": 2.08452,
+              "cacheReadPerMillion": 0.086855
             },
             "pinned": true
           },
@@ -84,9 +84,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.07476,
-              "completionPerMillion": 0.14952,
-              "cacheReadPerMillion": 0.014952
+              "promptPerMillion": 0.088606,
+              "completionPerMillion": 0.177212,
+              "cacheReadPerMillion": 0.0177212
             }
           },
           {
@@ -319,9 +319,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.07476,
-              "completionPerMillion": 0.14952,
-              "cacheReadPerMillion": 0.014952
+              "promptPerMillion": 0.088606,
+              "completionPerMillion": 0.177212,
+              "cacheReadPerMillion": 0.0177212
             }
           },
           {
@@ -331,9 +331,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 1.6,
-              "completionPerMillion": 3.2,
-              "cacheReadPerMillion": 0.135
+              "promptPerMillion": 1.04226,
+              "completionPerMillion": 2.08452,
+              "cacheReadPerMillion": 0.086855
             },
             "pinned": true
           },
@@ -984,16 +984,6 @@
       "models": {
         "tl": [
           {
-            "id": "openai/gpt-oss-120b",
-            "name": "GPT-OSS 120B",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "nvidia-catalog",
-              "note": "Free credits"
-            }
-          },
-          {
             "id": "minimaxai/minimax-m3",
             "name": "Minimax M3",
             "free": true,
@@ -1015,16 +1005,6 @@
           }
         ],
         "qaLLM": [
-          {
-            "id": "openai/gpt-oss-120b",
-            "name": "GPT-OSS 120B",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "nvidia-catalog",
-              "note": "Free credits"
-            }
-          },
           {
             "id": "minimaxai/minimax-m3",
             "name": "Minimax M3",
