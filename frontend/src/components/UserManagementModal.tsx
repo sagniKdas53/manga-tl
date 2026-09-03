@@ -151,14 +151,18 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             </Typography>
             <Typography
               variant="body2"
-              color="text.secondary"
+              sx={{
+                color: "text.secondary",
+              }}
             >
               {user.email}
             </Typography>
             <Typography
               variant="caption"
-              color="text.secondary"
-              sx={{ textTransform: "capitalize" }}
+              sx={{
+                color: "text.secondary",
+                textTransform: "capitalize",
+              }}
             >
               Role: {user.role}
             </Typography>

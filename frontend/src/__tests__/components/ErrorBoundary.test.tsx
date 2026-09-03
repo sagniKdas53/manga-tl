@@ -2,6 +2,21 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
 
+/**
+ * Replace `window.location` for the duration of a test.
+ *
+ * `delete window.location` then assigning needs two casts to typecheck -- `window` is not a
+ * `Record<string, unknown>`, and the DOM lib types the location setter as `string & Location`.
+ * `defineProperty` is what the assignment desugars to anyway, and it needs neither.
+ */
+const stubLocation = (value: unknown) => {
+  Object.defineProperty(window, "location", {
+    value,
+    writable: true,
+    configurable: true,
+  });
+};
+
 const Boom = ({ message }: { message: string }) => {
   throw new Error(message);
 };
@@ -18,12 +33,11 @@ describe("ErrorBoundary", () => {
 
     reload = vi.fn();
     originalLocation = window.location;
-    delete (window as Record<string, unknown>).location;
-    window.location = { pathname: "/", reload } as unknown as Location;
+    stubLocation({ pathname: "/", reload });
   });
 
   afterEach(() => {
-    window.location = originalLocation;
+    stubLocation(originalLocation);
     vi.restoreAllMocks();
   });
 

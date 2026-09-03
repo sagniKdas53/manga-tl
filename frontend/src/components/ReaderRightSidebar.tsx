@@ -406,7 +406,7 @@ export interface ReaderRightSidebarProps {
   handleCloneLayer: (id: string) => void;
   handleDeleteLayer: (id: string) => void;
   handleAddNewElement: (type: "text" | "mask") => void;
-  handleLaunchEyeDropper: (field: string) => void;
+  handleLaunchEyeDropper: (field?: "backgroundColor" | "textColor") => void;
   handleRedoPageOcr: () => void;
   isRedoingPageOcr: boolean;
   handleRedoPageTranslation: () => void;
@@ -1504,7 +1504,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     }
                   />
                 }
-                slotProps={{ typography: { fontSize: "12px" } }}
+                slotProps={{ typography: { sx: { fontSize: "12px" } } }}
                 label="Auto-size text to fit bubble"
               />
 
@@ -1520,7 +1520,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     }
                   />
                 }
-                slotProps={{ typography: { fontSize: "12px" } }}
+                slotProps={{ typography: { sx: { fontSize: "12px" } } }}
                 label="Visible"
               />
 
@@ -1536,7 +1536,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     }
                   />
                 }
-                slotProps={{ typography: { fontSize: "12px" } }}
+                slotProps={{ typography: { sx: { fontSize: "12px" } } }}
                 label="Clean background mask"
               />
             </Grid>

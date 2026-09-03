@@ -44,8 +44,10 @@ const ChapterDragOverlay: React.FC<ChapterDragOverlayProps> = ({
         }}
       >
         <Stack
-          alignItems="center"
           spacing={2}
+          sx={{
+            alignItems: "center",
+          }}
         >
           <Box
             sx={{
@@ -71,7 +73,9 @@ const ChapterDragOverlay: React.FC<ChapterDragOverlayProps> = ({
           </Typography>
           <Typography
             variant="body2"
-            color="text.secondary"
+            sx={{
+              color: "text.secondary",
+            }}
           >
             Release to add multiple files to Chapter {chapterNumber}
           </Typography>

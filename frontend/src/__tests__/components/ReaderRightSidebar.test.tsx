@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import ReaderRightSidebar from "../../components/ReaderRightSidebar";
@@ -41,6 +40,9 @@ describe("ReaderRightSidebar", () => {
         ocrRegions={[]}
         isRedoingRegionTl={false}
         handleRedoRegion={vi.fn()}
+        handleExportRenderedPng={vi.fn()}
+        handleSetElementVisibility={vi.fn()}
+        isRedoingRegionOcr={false}
       />,
     );
     expect(
@@ -112,12 +114,10 @@ describe("ReaderRightSidebar", () => {
         handleDeleteElement={vi.fn()}
         ocrRegions={[]}
         isRedoingRegionOcr={false}
-        handleRedoRegionOcr={vi.fn()}
-        isRedoingRegionTranslation={false}
-        handleRedoRegionTranslation={vi.fn()}
-        handleDeleteRegion={vi.fn()}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
+        handleExportRenderedPng={vi.fn()}
+        handleSetElementVisibility={vi.fn()}
       />,
     );
     expect(screen.getByText(/Test TL Layer/)).toBeInTheDocument();
@@ -186,12 +186,10 @@ describe("ReaderRightSidebar", () => {
           } as unknown as import("../../types").OcrRegion,
         ]}
         isRedoingRegionOcr={false}
-        handleRedoRegionOcr={vi.fn()}
-        isRedoingRegionTranslation={false}
-        handleRedoRegionTranslation={vi.fn()}
-        handleDeleteRegion={vi.fn()}
         handleRedoRegion={handleRedoRegion}
         isRedoingRegionTl={false}
+        handleExportRenderedPng={vi.fn()}
+        handleSetElementVisibility={vi.fn()}
       />,
     );
     expect(screen.getByText("Element Inspector")).toBeInTheDocument();
@@ -246,12 +244,10 @@ describe("ReaderRightSidebar", () => {
         handleDeleteElement={vi.fn()}
         ocrRegions={[]}
         isRedoingRegionOcr={false}
-        handleRedoRegionOcr={vi.fn()}
-        isRedoingRegionTranslation={false}
-        handleRedoRegionTranslation={vi.fn()}
-        handleDeleteRegion={vi.fn()}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
+        handleExportRenderedPng={vi.fn()}
+        handleSetElementVisibility={vi.fn()}
       />,
     );
     expect(screen.getByText(/Dragging…/i)).toBeInTheDocument();
@@ -291,12 +287,10 @@ describe("ReaderRightSidebar", () => {
         handleDeleteElement={vi.fn()}
         ocrRegions={[]}
         isRedoingRegionOcr={false}
-        handleRedoRegionOcr={vi.fn()}
-        isRedoingRegionTranslation={false}
-        handleRedoRegionTranslation={vi.fn()}
-        handleDeleteRegion={vi.fn()}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
+        handleExportRenderedPng={vi.fn()}
+        handleSetElementVisibility={vi.fn()}
       />,
     );
     expect(screen.getByText(/Reshaping…/i)).toBeInTheDocument();
@@ -365,12 +359,10 @@ describe("ReaderRightSidebar", () => {
         handleDeleteElement={vi.fn()}
         ocrRegions={[]}
         isRedoingRegionOcr={false}
-        handleRedoRegionOcr={vi.fn()}
-        isRedoingRegionTranslation={false}
-        handleRedoRegionTranslation={vi.fn()}
-        handleDeleteRegion={vi.fn()}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
+        handleExportRenderedPng={vi.fn()}
+        handleSetElementVisibility={vi.fn()}
       />,
     );
 
@@ -478,6 +470,9 @@ describe("ReaderRightSidebar", () => {
         ocrRegions={[]}
         isRedoingRegionTl={false}
         handleRedoRegion={vi.fn()}
+        handleExportRenderedPng={vi.fn()}
+        handleSetElementVisibility={vi.fn()}
+        isRedoingRegionOcr={false}
       />,
     );
 
@@ -562,6 +557,9 @@ describe("ReaderRightSidebar", () => {
         ocrRegions={[mockRegion]}
         isRedoingRegionTl={false}
         handleRedoRegion={mockHandleRedoRegion}
+        handleExportRenderedPng={vi.fn()}
+        handleSetElementVisibility={vi.fn()}
+        isRedoingRegionOcr={false}
       />,
     );
 

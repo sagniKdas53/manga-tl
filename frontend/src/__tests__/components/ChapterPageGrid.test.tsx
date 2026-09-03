@@ -24,6 +24,8 @@ describe("ChapterPageGrid", () => {
   const mockOnDeletePage = vi.fn();
   const mockOnMovePage = vi.fn();
   const mockOnSelectPage = vi.fn();
+  const mockOnLoadMore = vi.fn();
+  const mockOnToggleSort = vi.fn();
 
   it("renders pages and page counts", () => {
     render(
@@ -32,6 +34,12 @@ describe("ChapterPageGrid", () => {
         onDeletePage={mockOnDeletePage}
         onMovePage={mockOnMovePage}
         onSelectPage={mockOnSelectPage}
+        totalCount={mockPages.length}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
       />,
     );
 
@@ -50,6 +58,12 @@ describe("ChapterPageGrid", () => {
         onDeletePage={mockOnDeletePage}
         onMovePage={mockOnMovePage}
         onSelectPage={mockOnSelectPage}
+        totalCount={mockPages.length}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
       />,
     );
 
@@ -67,6 +81,12 @@ describe("ChapterPageGrid", () => {
         onDeletePage={mockOnDeletePage}
         onMovePage={mockOnMovePage}
         onSelectPage={mockOnSelectPage}
+        totalCount={mockPages.length}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
       />,
     );
 
@@ -86,6 +106,12 @@ describe("ChapterPageGrid", () => {
         onDeletePage={mockOnDeletePage}
         onMovePage={mockOnMovePage}
         onSelectPage={mockOnSelectPage}
+        totalCount={mockPages.length}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
       />,
     );
 

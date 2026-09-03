@@ -316,7 +316,9 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
         <Typography
           variant="body2"
-          color="text.secondary"
+          sx={{
+            color: "text.secondary",
+          }}
         >
           Model Overrides (Optional)
         </Typography>

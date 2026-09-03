@@ -12,6 +12,12 @@ interface LazyImageProps extends Omit<
   maxRetries?: number;
   /** Base delay before the first retry; doubles on each subsequent attempt. */
   retryBaseDelayMs?: number;
+  /**
+   * Called on every failed load, including attempts this component will go on to retry.
+   * Re-declared because the base img attributes are `Omit`ted above so the retry handler can
+   * own the DOM `onError`.
+   */
+  onError?: React.ReactEventHandler<HTMLImageElement>;
 }
 
 interface RetryState {

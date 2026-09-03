@@ -1,5 +1,15 @@
 import { createTheme } from "@mui/material/styles";
 
+// Opt in to MUI's CSS-variables typing. `createTheme` only widens `Theme` with `colorSchemes`,
+// `vars` and friends when `CssThemeVariables` says they are enabled -- everything else in this
+// file already depends on them at runtime, so without this the theme is built one way and typed
+// another, and `theme.colorSchemes` reads as a property that does not exist.
+declare module "@mui/material/styles" {
+  interface CssThemeVariables {
+    enabled: true;
+  }
+}
+
 // AUDIT-F1: previously `themeObj(mode)`, rebuilt from scratch on every light/dark toggle via
 // `useMemo(() => themeObj(mode), [mode])` in App.tsx — a whole new MUI theme object (and a
 // re-render of every consumer, re-serialising every Emotion style in the tree) on each toggle.
@@ -14,7 +24,6 @@ export const theme = createTheme({
   // class instead — the same class name (and node, `documentElement`) the app's own
   // pre-existing custom-CSS-variable system already toggles in `App.tsx`, so both stay in
   // sync off the same `mode` value without fighting each other.
-  colorSchemeSelector: "class",
   colorSchemes: {
     light: {
       palette: {
@@ -80,7 +89,12 @@ export const theme = createTheme({
       },
     },
   },
-  cssVariables: true,
+  cssVariables: {
+    // MUI v9 moved this under `cssVariables`; at the top level it was silently ignored,
+    // which put the selector back on its "media" default -- the exact bypass the comment above
+    // exists to prevent.
+    colorSchemeSelector: "class",
+  },
   typography: {
     fontFamily: '"Plus Jakarta Sans", "Roboto", system-ui, sans-serif',
     h1: { fontFamily: '"Outfit", sans-serif' },

@@ -1,5 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+/**
+ * Replace `window.location` for the duration of a test.
+ *
+ * `delete window.location` then assigning needs two casts to typecheck -- `window` is not a
+ * `Record<string, unknown>`, and the DOM lib types the location setter as `string & Location`.
+ * `defineProperty` is what the assignment desugars to anyway, and it needs neither.
+ */
+const stubLocation = (value: unknown) => {
+  Object.defineProperty(window, "location", {
+    value,
+    writable: true,
+    configurable: true,
+  });
+};
+
 describe("safeFetch", () => {
   let mockFetch: ReturnType<typeof vi.fn>;
   let originalLocation: typeof window.location;
@@ -14,14 +29,13 @@ describe("safeFetch", () => {
 
     // Safely mock window.location
     originalLocation = window.location;
-    delete (window as Record<string, unknown>).location;
-    window.location = {
+    stubLocation({
       pathname: "",
       href: "http://localhost/",
       origin: "http://localhost",
       host: "localhost",
       protocol: "http:",
-    } as unknown as Location;
+    });
 
     // Dynamically import utils to ensure it picks up the mocked global.fetch
     vi.resetModules();
@@ -31,7 +45,7 @@ describe("safeFetch", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    window.location = originalLocation;
+    stubLocation(originalLocation);
     vi.restoreAllMocks();
   });
 
@@ -273,21 +287,20 @@ describe("getContextPath", () => {
 
   const withPath = async (pathname: string) => {
     vi.resetModules();
-    window.location = {
+    stubLocation({
       pathname,
       href: `http://localhost${pathname}`,
-    } as unknown as Location;
+    });
     const { getContextPath } = await import("../../utils");
     return getContextPath();
   };
 
   beforeEach(() => {
     originalLocation = window.location;
-    delete (window as Record<string, unknown>).location;
   });
 
   afterEach(() => {
-    window.location = originalLocation;
+    stubLocation(originalLocation);
   });
 
   it("strips the app's own route roots", async () => {

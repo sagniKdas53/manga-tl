@@ -14,8 +14,8 @@ import {
   isVertexMoveValid,
   isRotationValid,
   normalizeDegrees,
-  Polygon,
 } from "../../utils/polygonUtils";
+import type { Polygon } from "../../utils/polygonUtils";
 
 describe("polygonUtils", () => {
   const square: Polygon = [

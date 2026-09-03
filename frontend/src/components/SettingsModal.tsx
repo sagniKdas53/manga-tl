@@ -331,8 +331,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             >
               <Typography
                 variant="overline"
-                color="text.disabled"
                 sx={{
+                  color: "text.disabled",
                   display: "block",
                   m: 0,
                   p: 0,
@@ -440,8 +440,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <Grid size={12}>
               <Typography
                 variant="overline"
-                color="text.disabled"
                 sx={{
+                  color: "text.disabled",
                   display: "block",
                   borderTop: 1,
                   borderColor: "divider",
@@ -518,8 +518,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <Grid size={12}>
               <Typography
                 variant="overline"
-                color="text.disabled"
                 sx={{
+                  color: "text.disabled",
                   display: "block",
                   borderTop: 1,
                   borderColor: "divider",
@@ -563,7 +563,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 {(tlProviderUnavailable || qaProviderUnavailable) && (
                   <Typography
                     variant="caption"
-                    color="text.secondary"
+                    sx={{
+                      color: "text.secondary",
+                    }}
                   >
                     Providers not available yet — retrying in the background…
                   </Typography>
@@ -663,8 +665,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <Grid size={12}>
               <Typography
                 variant="overline"
-                color="text.disabled"
                 sx={{
+                  color: "text.disabled",
                   display: "block",
                   borderTop: 1,
                   borderColor: "divider",

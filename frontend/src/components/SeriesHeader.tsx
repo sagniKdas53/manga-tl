@@ -153,7 +153,9 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
               ) : (
                 <Typography
                   variant="body1"
-                  color="text.secondary"
+                  sx={{
+                    color: "text.secondary",
+                  }}
                 >
                   {series.title}
                 </Typography>
@@ -188,8 +190,10 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                 <Grid>
                   <Typography
                     variant="body2"
-                    color="text.secondary"
                     gutterBottom
+                    sx={{
+                      color: "text.secondary",
+                    }}
                   >
                     Language
                   </Typography>
@@ -201,8 +205,10 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                 <Grid>
                   <Typography
                     variant="body2"
-                    color="text.secondary"
                     gutterBottom
+                    sx={{
+                      color: "text.secondary",
+                    }}
                   >
                     Direction
                   </Typography>
@@ -214,14 +220,18 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                 <Grid>
                   <Typography
                     variant="body2"
-                    color="text.secondary"
                     gutterBottom
+                    sx={{
+                      color: "text.secondary",
+                    }}
                   >
                     Chapters
                   </Typography>
                   <Typography
                     variant="body1"
-                    fontWeight="medium"
+                    sx={{
+                      fontWeight: "medium",
+                    }}
                   >
                     {chapterCount}
                   </Typography>
@@ -229,8 +239,10 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                 <Grid>
                   <Typography
                     variant="body2"
-                    color="text.secondary"
                     gutterBottom
+                    sx={{
+                      color: "text.secondary",
+                    }}
                   >
                     Fallback Models
                   </Typography>
@@ -258,8 +270,10 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                   <Grid>
                     <Typography
                       variant="body2"
-                      color="text.secondary"
                       gutterBottom
+                      sx={{
+                        color: "text.secondary",
+                      }}
                     >
                       Strategy
                     </Typography>
@@ -272,7 +286,9 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                     ) : (
                       <Typography
                         variant="body2"
-                        color="text.secondary"
+                        sx={{
+                          color: "text.secondary",
+                        }}
                       >
                         N/A
                       </Typography>
@@ -282,8 +298,10 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                 <Grid>
                   <Typography
                     variant="body2"
-                    color="text.secondary"
                     gutterBottom
+                    sx={{
+                      color: "text.secondary",
+                    }}
                   >
                     QA Mode
                   </Typography>
@@ -295,7 +313,9 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                   ) : (
                     <Typography
                       variant="body2"
-                      color="text.secondary"
+                      sx={{
+                        color: "text.secondary",
+                      }}
                     >
                       N/A
                     </Typography>
@@ -307,8 +327,10 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
               <Box sx={{ mb: 3 }}>
                 <Typography
                   variant="subtitle2"
-                  color="text.secondary"
                   gutterBottom
+                  sx={{
+                    color: "text.secondary",
+                  }}
                 >
                   Configured Models
                 </Typography>

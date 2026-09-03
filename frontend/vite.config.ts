@@ -1,5 +1,6 @@
-/// <reference types="vitest" />
-import { defineConfig } from "vite";
+// `defineConfig` comes from vitest, not vite: the `test` block below is not part of vite's
+// own config type, and a bare `/// <reference types="vitest" />` does not widen it.
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 // https://vite.dev/config/

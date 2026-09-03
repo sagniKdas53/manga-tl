@@ -58,10 +58,12 @@ const ChapterPageGrid: React.FC<ChapterPageGridProps> = ({
     <>
       <Stack
         direction={{ xs: "column", sm: "row" }}
-        justifyContent="space-between"
-        alignItems={{ xs: "stretch", sm: "center" }}
         spacing={1}
-        sx={{ mb: 1 }}
+        sx={{
+          justifyContent: "space-between",
+          alignItems: { xs: "stretch", sm: "center" },
+          mb: 1,
+        }}
       >
         <Typography
           variant="h5"

@@ -1,8 +1,7 @@
-import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import ReaderLeftSidebar from "../../components/ReaderLeftSidebar";
-import { Page } from "../../types";
+import type { Page } from "../../types";
 
 vi.mock("../../components/ToastContext", () => ({
   useToast: () => ({ showToast: vi.fn() }),
@@ -18,11 +17,12 @@ describe("ReaderLeftSidebar Component", () => {
     pageNumber: 1,
     imageId: "image-123",
     url: "http://example.com/image.jpg",
-    width: 800,
-    height: 1200,
+    filename: "page-001.png",
   };
 
   const defaultProps = {
+    prefetchAhead: 2,
+    setPrefetchAhead: vi.fn(),
     showPanels: true,
     setShowPanels: vi.fn(),
     showOcr: true,
