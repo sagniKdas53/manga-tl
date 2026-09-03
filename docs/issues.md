@@ -1,6 +1,6 @@
 # Issues & Technical Debt
 
-> **Standing: 96 filed, 73 closed, 23 open.** Re-audited 2026-09-02 against the field report in
+> **Standing: 96 filed, 74 closed, 22 open.** Re-audited 2026-09-02 against the field report in
 > `new issues.pdf`. Three previously-open items were closed as *obsolete* — they described Java
 > files the Rust rewrite deleted. Twenty-eight new items are filed (one, `AUDIT-B17`, found while
 > fixing another), and seven are already fixed: `AUDIT-F14`, `AUDIT-F17`, `AUDIT-F18`,
@@ -139,7 +139,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R6`](#audit-r6-medium-there-is-no-vertical-text-mode) | Medium | Render | No vertical setting; rotation is the only workaround and it does not render | Design needed |
 | [`AUDIT-F16`](#audit-f16-medium-text-padding-is-a-hardcoded-constant) | Medium | Render/Frontend | Padding is `(ew - 8) * 0.95`, hardcoded, unexposed, and differs from the reader | Ready (folds into `AUDIT-R1`) |
 | [`AUDIT-R7`](#audit-r7-medium-a-rectangle-arrived-as-a-40-vertex-polygon) | Medium | Worker | The simplification tolerance was a fraction of the *perimeter*, so small shapes got a sub-pixel tolerance and kept every vertex | **Fixed 2026-09-03** |
-| [`AUDIT-F15`](#audit-f15-medium-a-hidden-element-cannot-be-reached-again) | Medium | Frontend | Hiding an element removes the only way to select it | Ready |
+| [`AUDIT-F15`](#audit-f15-medium-a-hidden-element-could-not-be-reached-again) | Medium | Frontend | Hiding an element removed the only way to select it | **Fixed 2026-09-03** |
 | [`AUDIT-R1`](#audit-r1-medium-the-two-renderers-disagree-by-95-of-font-size) | Medium | Render | Frontend sets 9.5% larger type than the worker | Ready: close the inset gap, then make the worker canonical (D8) |
 
 ### Seam 2 — the canvas and the artifact are not connected
@@ -324,15 +324,23 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   rectangle to four points already, and a snap would be the step that could square away a shape
   that is *nearly* a rectangle but deliberately is not.
 
-### `AUDIT-F15` (medium): A hidden element cannot be reached again
+### `AUDIT-F15` (medium): A hidden element could not be reached again
 
 - **Locations:** `frontend/src/components/ReaderRightSidebar.tsx:1370-1373` (the visibility toggle),
   `:530` (layer-level visibility).
 - **Problem:** The `visible` checkbox lives on the *selected* element's inspector, and selection
   happens by clicking the element on the canvas. Hiding it removes the only handle. The layer panel
   lists layers and element counts, never the elements themselves, so there is no list to select from.
-- **Next Step:** make the layer row expand into its elements. That is also the prerequisite for
-  `AUDIT-B12` being reviewable by hand — a QA-rejected element is a hidden element.
+- **Fixed 2026-09-03.** The layer row's element count is now an expander, and the list under it
+  gives every element a click-to-select row and its own visibility toggle. The row header also
+  reports how many of the layer's elements are hidden, so a page is not silently missing text with
+  nothing to say so.
+- **Needed a new handler, not the existing one.** `handleUpdateSelectedElement` can only act on
+  whatever is selected, which is the circularity that made hiding one-way.
+  `handleSetElementVisibility` takes the element by identity instead.
+- **This is also what makes [`AUDIT-B12`](#audit-b12-medium-qas-verdicts-never-reach-the-rendered-output)
+  reviewable by hand** — a QA-rejected element is a hidden element, and until now there was no way
+  to look at one and disagree.
 
 ### `AUDIT-R1` (medium): The two renderers disagree by 9.5% of font size
 
@@ -822,6 +830,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | `AUDIT-B12` | QA's verdicts never reached the rendered output | 2026-09-02 | The pipeline renders before it runs QA, and nothing re-rendered. QA now enqueues one `finalPass` render, which does not re-enter QA. |
 | `AUDIT-B13` | A page with no translatable text failed the job | 2026-09-02 | Worker raised, costing three whole-job retries and a red queue row, for pages whose only region was an SFX or an OCR misfire. Completes with a `WARNING` notification now. |
 | `AUDIT-F20` | The Queue Manager never moved active jobs up | 2026-09-02 | `PROCESSING` shared sort rank 1 with `PENDING` and `COMPLETED`, so starting work did not move a row. |
+| `AUDIT-F15` | A hidden element could not be reached again | 2026-09-03 | The `visible` toggle lived on the selected element's inspector and selecting meant clicking it on the canvas, so hiding was a one-way door. The layer panel lists elements now, each selectable with its own toggle. |
 | `AUDIT-R7` | A rectangle arrived as a 40-vertex polygon | 2026-09-03 | The simplification tolerance was `0.002 × perimeter`, which is 0.4px on a small caption plate — below one pixel, so nothing was removed. Smaller shapes got tighter tolerances. Now an absolute 2px everywhere, plus the synthesized cover plate (28 points by construction) and the merge hull (never simplified at all). |
 | `AUDIT-R5` | Rotation turned the plate and left the glyphs level | 2026-09-03 | `rotation` was effectively always 0: the handle wrote the angle into the mask polygon and the *bounding box of that polygon* into x/y/w/h instead. So the plate tilted, the text stayed level (in the reader too — the canvas skipped `ctx.rotate` exactly when a polygon existed), and the box inflated on every turn. `rotation` is the angle now and the box is left alone. |
 | `AUDIT-B17` | `jobs.page_id` was never written | 2026-09-03 | The column existed and `Job` deserialised it, but the INSERT omitted it, so every row read back had `pageId: null` and the obvious `WHERE page_id = …` matched nothing. Fixed because `AUDIT-W13`'s gate must attribute a blocker to one page. |

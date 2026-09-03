@@ -1274,6 +1274,35 @@ export const Reader: React.FC<ReaderProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleUndo, handleRedo, activeLayerId, handleMoveLayer]);
 
+  /**
+   * Show or hide one element by identity, without it having to be the selected one.
+   *
+   * AUDIT-F15: `handleUpdateSelectedElement` can only act on whatever is selected, and selecting
+   * an element means clicking it on the canvas — which a hidden element cannot be. That made
+   * hiding a one-way door. The layer panel's element list drives this instead.
+   */
+  const handleSetElementVisibility = useCallback(
+    (element: LayerElement, visible: boolean) => {
+      const updated = { ...element, visible } as LayerElement;
+      pushToHistoryStack(element);
+      setLayers((prevLayers) =>
+        prevLayers.map((l) => ({
+          ...l,
+          elements: l.elements.map((el) =>
+            el.id === element.id ? updated : el,
+          ),
+        })),
+      );
+      setSelectedItem((prev: SelectedItemType) =>
+        prev && prev.id === element.id
+          ? ({ ...prev, visible } as SelectedItemType)
+          : prev,
+      );
+      void handleSaveElementChanges(updated, false);
+    },
+    [pushToHistoryStack, handleSaveElementChanges],
+  );
+
   const handleUpdateSelectedElement = (updates: Partial<LayerElement>) => {
     setSelectedItem((prev: SelectedItemType) => {
       if (!prev) return null;
@@ -4012,6 +4041,7 @@ export const Reader: React.FC<ReaderProps> = ({
             handleUpdateSelectedElement={handleUpdateSelectedElement}
             dirtyElements={dirtyElements}
             handleSaveElementChanges={handleSaveElementChanges}
+            handleSetElementVisibility={handleSetElementVisibility}
             handleDeleteElement={handleDeleteElement}
             ocrRegions={ocrRegions}
             isRedoingRegionOcr={isRedoingRegionOcr}
