@@ -221,4 +221,9 @@ export interface SystemSettingsDto {
   activeProviders?: string[];
   activeOcrProviders?: string[];
   providerModelsMap?: Record<string, Record<string, ModelEntry[]>>;
+
+  /** AUDIT-R1/F16: pixels trimmed from each edge of an element's box before text is fitted. */
+  textBoxPaddingPx?: number;
+  /** Percent of what remains that text may use; 95 leaves a 5% safety margin. */
+  textBoxSafetyPercent?: number;
 }

@@ -1,6 +1,6 @@
 # Issues & Technical Debt
 
-> **Standing: 96 filed, 74 closed, 22 open.** Re-audited 2026-09-02 against the field report in
+> **Standing: 97 filed, 76 closed, 21 open.** Re-audited 2026-09-02 against the field report in
 > `new issues.pdf`. Three previously-open items were closed as *obsolete* — they described Java
 > files the Rust rewrite deleted. Twenty-eight new items are filed (one, `AUDIT-B17`, found while
 > fixing another), and seven are already fixed: `AUDIT-F14`, `AUDIT-F17`, `AUDIT-F18`,
@@ -137,10 +137,10 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-F14`](#audit-f14-high-rotating-a-box-makes-every-save-fail) | High | Frontend/Backend | Rotating a text box 400s the save | **Fixed 2026-09-02** |
 | [`AUDIT-R5`](#audit-r5-high-rotation-turned-the-plate-and-left-the-glyphs-level) | High | Render/Frontend | The plate turned, the glyphs stayed level, and the box inflated on every turn — in the reader as well as the export | **Fixed 2026-09-03** |
 | [`AUDIT-R6`](#audit-r6-medium-there-is-no-vertical-text-mode) | Medium | Render | No vertical setting; rotation is the only workaround and it does not render | Design needed |
-| [`AUDIT-F16`](#audit-f16-medium-text-padding-is-a-hardcoded-constant) | Medium | Render/Frontend | Padding is `(ew - 8) * 0.95`, hardcoded, unexposed, and differs from the reader | Ready (folds into `AUDIT-R1`) |
+| [`AUDIT-F16`](#audit-f16-medium-text-padding-was-a-hardcoded-constant) | Medium | Render/Frontend | Padding was `(ew - 8) * 0.95`, hardcoded and unreachable | **Fixed 2026-09-03** |
 | [`AUDIT-R7`](#audit-r7-medium-a-rectangle-arrived-as-a-40-vertex-polygon) | Medium | Worker | The simplification tolerance was a fraction of the *perimeter*, so small shapes got a sub-pixel tolerance and kept every vertex | **Fixed 2026-09-03** |
 | [`AUDIT-F15`](#audit-f15-medium-a-hidden-element-could-not-be-reached-again) | Medium | Frontend | Hiding an element removed the only way to select it | **Fixed 2026-09-03** |
-| [`AUDIT-R1`](#audit-r1-medium-the-two-renderers-disagree-by-95-of-font-size) | Medium | Render | Frontend sets 9.5% larger type than the worker | Ready: close the inset gap, then make the worker canonical (D8) |
+| [`AUDIT-R1`](#audit-r1-medium-four-answers-to-what-rectangle-does-text-go-in) | Medium | Render | Four different fitted rectangles — the live reader used none at all | **Fixed 2026-09-03** |
 
 ### Seam 2 — the canvas and the artifact are not connected
 
@@ -167,6 +167,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-W13`](#audit-w13-high-context-injected-translation-ran-in-parallel) | High | Worker/Backend | "Previous page dialogue" was read while the previous page was still translating — and `COALESCE` handed back its Japanese | **Fixed 2026-09-02** |
 | [`AUDIT-W14`](#audit-w14-medium-the-slot-policy-lets-slow-network-work-crowd-out-local-work) | Medium | Worker/Backend | Four light slots + a per-cycle capacity snapshot; OCR waits behind LLM calls | Needs measurement |
 | [`AUDIT-B17`](#audit-b17-low-jobspage_id-was-never-written) | Low | Backend | `jobs.page_id` existed, was deserialised, and was never populated by the INSERT | **Fixed 2026-09-03** |
+| [`AUDIT-B18`](#audit-b18-low-there-is-no-schema-migration-runner) | Low | Backend | `init.sql` only runs on a fresh volume, so no column can ever be added to a live deployment | Ready |
 | [`AUDIT-B13`](#audit-b13-medium-a-page-with-no-translatable-text-fails-the-job) | Medium | Worker/Backend | An untranslatable page raises and burns 3 attempts; it should warn | **Fixed 2026-09-02** |
 | [`AUDIT-B14`](#audit-b14-medium-delete-then-re-add-leaves-a-chapter-inconsistent) | Medium | Backend/Frontend | Page count stale, old slot held, reader hangs on the loading screen | Needs repro |
 | [`AUDIT-W3`](#audit-w3-medium-cooldowns-and-lock-waits-burn-a-job-slot) | Medium | Worker | Cooldowns and lock waits block a concurrency slot doing nothing | Deprioritized; needs concurrency test harness |
@@ -274,16 +275,41 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   rotated English is not vertical English, which stacks upright glyphs.
 - **Next Step:** blocked on `AUDIT-R5` landing first; the transform machinery is shared.
 
-### `AUDIT-F16` (medium): Text padding is a hardcoded constant
+### `AUDIT-F16` (medium): Text padding was a hardcoded constant
 
-- **Locations:** `worker/src/worker/handlers/render.py:1135-1136`.
-- **Problem:** `text_box_w = int((ew - 8) * 0.95)` — a 4px inset and a 5% margin, chosen once, applied
-  to every element of every kind, and not applied at all on the frontend. There is no per-element or
-  per-series control, so a caption that wants to breathe and a balloon that is already tight get the
-  same treatment.
-- **Note:** this is the *same constant* that `AUDIT-R1` measures as the 9.5% renderer disagreement.
-  Fix them together: give the element a padding field, default it to today's effective value, and
-  have both renderers read it. That closes R1 by construction rather than by agreeing on a number.
+- **Problem:** `text_box_w = int((ew - 8) * 0.95)` — a 4px inset and a 5% margin, chosen once,
+  applied to every element of every kind, unreachable from anywhere, and *not applied at all* on the
+  frontend. A caption that wants to breathe and a balloon that is already tight got the same
+  treatment, and there was no dial.
+- **Fixed 2026-09-03**, as one change with [`AUDIT-R1`](#audit-r1-medium-four-answers-to-what-rectangle-does-text-go-in),
+  because agreeing on a number and being able to change it are the same problem: the reason there
+  were four rectangles is that each side owned its own literal.
+- **Stored as two global settings** (`textBoxPaddingPx`, `textBoxSafetyPercent`) in the existing
+  `system_settings` key/value table — **no schema change**, so no migration risk on a running
+  deployment. Surfaced in the Settings dialog, sent to the worker on the job payload, and read by
+  the reader from `/api/settings`.
+- **Clamped on every boundary** (0–64px, 1–100%): a 0% margin, or a padding wider than half the
+  box, fits every element into a zero-width rectangle — a typo in a settings form would otherwise
+  stop the whole library typesetting.
+- **The DTO fields deserialize with `serde(default)`**, because the struct is both the GET response
+  and the PUT body: a browser holding an older bundle must still be able to save its settings
+  rather than getting a 400 for omitting a field it has never heard of.
+- **Not done:** *per-element* padding. That needs a column on `layer_elements`, and there is no
+  migration runner — `init.sql` only runs on a fresh volume, so a new column would break every
+  existing deployment until one exists. Filed as [`AUDIT-B18`](#audit-b18-low-there-is-no-schema-migration-runner).
+
+### `AUDIT-B18` (low): There is no schema migration runner
+
+- **Locations:** `database/init.sql` (a `pg_dump`, mounted at `docker-entrypoint-initdb.d`),
+  `backend-rust/src/db.rs:48` (`build_postgres_url`, marked "consumed by migration tooling in an
+  upcoming slice"), and a vestigial `flyway_schema_history` table from the Java era.
+- **Problem:** `init.sql` runs **only on a fresh Postgres volume**. There is no path that applies a
+  schema change to a database that already exists, so any new column silently breaks every running
+  deployment — `SELECT *` into a struct expecting it fails at runtime.
+- **Consequence today:** it is a hard ceiling on design. `AUDIT-F16` wanted per-element padding and
+  took a global setting instead; `AUDIT-B17` was fixable only because the column already existed.
+- **Next Step:** `sqlx::migrate!` is already a dependency-compatible option and `build_postgres_url`
+  was written for it. Small, but it must land before anything that needs a column.
 
 ### `AUDIT-R7` (medium): A rectangle arrived as a 40-vertex polygon
 
@@ -342,15 +368,22 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   reviewable by hand** — a QA-rejected element is a hidden element, and until now there was no way
   to look at one and disagree.
 
-### `AUDIT-R1` (medium): The two renderers disagree by 9.5% of font size
+### `AUDIT-R1` (medium): Four answers to "what rectangle does text go in?"
 
-- **Locations:** `worker/src/worker/handlers/render.py` (`render_image_core`, the `text_box_*`
-  block) vs `frontend/src/components/Reader.tsx` (the `fitTextInBox` call).
-- **Problem:** the worker insets the element box before fitting —
-  `text_box_w = int((ew - 8) * 0.95)`, a 4px inset plus a 5% safety margin — and the frontend
-  passes `element.maxWidth`/`maxHeight` raw. Same fitter, same fonts, different rectangle.
+- **Locations:** `worker/src/worker/handlers/render.py` (`text_box_*`) and **three** call sites in
+  `frontend/src/components/Reader.tsx`.
+- **Filed as "the two renderers disagree". It was worse than that — the frontend disagreed with
+  itself:**
 
-  Measured over a 300-element sample of the 400-export corpus:
+  | caller | rectangle |
+  | :--- | :--- |
+  | the live reader (SVG overlay) | the **raw box** — no inset at all |
+  | the reader's PNG export | box inset by 4px |
+  | the reader's ZIP export | box inset by 4px |
+  | `render.py`, which produces every real artifact | box inset by 4px, then × 0.95 |
+
+  The one with no inset is the one on screen — the surface the typesetting was being judged on.
+- **Measured** over a 300-element sample of the 400-export corpus:
 
   | | share of elements |
   | :--- | :--- |
@@ -358,19 +391,23 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   | identical | 12 (4%) |
   | worker larger | 16 (5%) |
 
-  Median frontend/worker font ratio **1.095**, mean 1.106.
-
-  This is the whole of the reported "the reader always looks better than the export". It is not a
-  quality difference between the implementations — it is one inset applied on one side.
-- **Why it matters beyond looks:** the reader is a preview of an artifact it does not produce.
-  Anything tuned by eye in the reader is tuned against the wrong geometry.
-- **Next Step:** merged with `AUDIT-F16` — make the inset an element field both renderers read,
-  rather than a constant one of them applies. Then [D8](render_quality_gap_2026-08-05.md#d8--the-two-renderers-disagree)
-  becomes actionable: make the worker canonical and have the browser export fetch
-  `/api/pages/{id}/rendered`, keeping the canvas path for live preview only.
-- **Note on direction:** a backend *canvas* render is not required and would be a third
-  implementation. The worker's PIL renderer is already the single-source candidate and already gets
-  layer filtering right (see [`LOCK-2`](#lock-2--an-ocr-layer-never-reaches-an-export-whatever-the-reader-is-showing)).
+  Median frontend/worker font ratio **1.095**. That is the whole of the reported "the reader always
+  looks better than the export" — not a quality difference between implementations, one inset
+  applied on one side.
+- **Fixed 2026-09-03, together with [`AUDIT-F16`](#audit-f16-medium-text-padding-was-a-hardcoded-constant).**
+  One definition per language — `textFitBox` in `frontend/src/utils/textFitBox.ts` and
+  `text_fit_box` in `render.py` — both driven by the same two settings, and **both asserted against
+  the same parity table with the same numbers**. They are in different languages and nothing else
+  can catch them drifting apart, which is precisely how there came to be four.
+- **Parity was closed by giving the reader the worker's rectangle, not the reverse.** The margin
+  exists to stop glyphs touching the balloon outline; it belongs on both sides rather than neither.
+- **Consequence to expect:** type in the reader gets *smaller*, because the reader was the one
+  being generous. It now matches what ships.
+- **Next Step (unchanged):** with the two agreeing,
+  [D8](render_quality_gap_2026-08-05.md#d8--the-two-renderers-disagree) becomes actionable — make
+  the worker canonical and have the browser export fetch `/api/pages/{id}/rendered`, keeping the
+  canvas path for live preview only. A backend *canvas* render is still not required and would be
+  a third implementation.
 
 ---
 
@@ -830,6 +867,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | `AUDIT-B12` | QA's verdicts never reached the rendered output | 2026-09-02 | The pipeline renders before it runs QA, and nothing re-rendered. QA now enqueues one `finalPass` render, which does not re-enter QA. |
 | `AUDIT-B13` | A page with no translatable text failed the job | 2026-09-02 | Worker raised, costing three whole-job retries and a red queue row, for pages whose only region was an SFX or an OCR misfire. Completes with a `WARNING` notification now. |
 | `AUDIT-F20` | The Queue Manager never moved active jobs up | 2026-09-02 | `PROCESSING` shared sort rank 1 with `PENDING` and `COMPLETED`, so starting work did not move a row. |
+| `AUDIT-R1` + `AUDIT-F16` | Four answers to "what rectangle does text go in?" | 2026-09-03 | The live reader used the raw box, the frontend's exports insetted 4px, and `render.py` insetted 4px then took 95%. One definition per language now, both driven by the same two settings and asserted against the same parity table. |
 | `AUDIT-F15` | A hidden element could not be reached again | 2026-09-03 | The `visible` toggle lived on the selected element's inspector and selecting meant clicking it on the canvas, so hiding was a one-way door. The layer panel lists elements now, each selectable with its own toggle. |
 | `AUDIT-R7` | A rectangle arrived as a 40-vertex polygon | 2026-09-03 | The simplification tolerance was `0.002 × perimeter`, which is 0.4px on a small caption plate — below one pixel, so nothing was removed. Smaller shapes got tighter tolerances. Now an absolute 2px everywhere, plus the synthesized cover plate (28 points by construction) and the merge hull (never simplified at all). |
 | `AUDIT-R5` | Rotation turned the plate and left the glyphs level | 2026-09-03 | `rotation` was effectively always 0: the handle wrote the angle into the mask polygon and the *bounding box of that polygon* into x/y/w/h instead. So the plate tilted, the text stayed level (in the reader too — the canvas skipped `ctx.rotate` exactly when a polygon existed), and the box inflated on every turn. `rotation` is the angle now and the box is left alone. |

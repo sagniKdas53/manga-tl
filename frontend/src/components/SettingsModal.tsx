@@ -10,6 +10,7 @@ import Grid from "@mui/material/Grid";
 import InputLabel from "@mui/material/InputLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
+import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { modelOptionLabel } from "../modelPricing";
 import { safeFetch } from "../utils";
@@ -700,6 +701,45 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   </MenuItem>
                 </Select>
               </FormControl>
+            </Grid>
+
+            {/* AUDIT-F16: the space around text inside its box. It used to be a literal in
+                render.py with no way to reach it, and three different literals in the frontend --
+                including the live reader, which used none at all. */}
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="Text Box Padding (px)"
+                helperText="Trimmed from each edge before text is fitted"
+                value={settings.textBoxPaddingPx ?? 4}
+                onChange={(e) =>
+                  handleChange(
+                    "textBoxPaddingPx",
+                    Math.min(64, Math.max(0, parseInt(e.target.value) || 0)),
+                  )
+                }
+                slotProps={{ htmlInput: { min: 0, max: 64, step: 1 } }}
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="Text Safety Margin (%)"
+                helperText="Of what remains after padding; 95 keeps glyphs off the outline"
+                value={settings.textBoxSafetyPercent ?? 95}
+                onChange={(e) =>
+                  handleChange(
+                    "textBoxSafetyPercent",
+                    Math.min(100, Math.max(1, parseInt(e.target.value) || 1)),
+                  )
+                }
+                slotProps={{ htmlInput: { min: 1, max: 100, step: 1 } }}
+              />
             </Grid>
 
             <Grid size={{ xs: 12, sm: 6 }}>

@@ -38,6 +38,27 @@ pub struct SystemSettingsDto {
     pub activeProviders: Vec<String>,
     pub activeOcrProviders: Vec<String>,
     pub providerModelsMap: serde_json::Value,
+    /// AUDIT-R1/F16: the inset applied to an element's box before text is fitted into it.
+    /// Lives here rather than as a literal in each renderer, because there used to be three
+    /// different answers in the frontend alone and a fourth in `render.py`.
+    ///
+    /// `Option` because this struct is both the GET response and the PUT body, and the two are
+    /// not symmetric. A client that predates these fields — including a browser holding an older
+    /// bundle — omits them, and must still be able to save its settings rather than getting a 400
+    /// for a field it has never heard of.
+    ///
+    /// It must not have its omission read as an instruction, either. Defaulting an absent field
+    /// to 4/95 and then writing it, which is what `serde(default)` did here, meant saving an
+    /// unrelated model setting from a stale tab silently reset the global text geometry. Absent
+    /// now means "leave it alone"; `update_settings` skips a `None`.
+    ///
+    /// `build_dto` always fills both, so the GET response still always carries a number.
+    #[serde(default)]
+    pub textBoxPaddingPx: Option<i32>,
+    /// Percent of what remains after the padding that text may use; 95 leaves a 5% safety
+    /// margin so glyphs do not touch the balloon outline.
+    #[serde(default)]
+    pub textBoxSafetyPercent: Option<i32>,
 }
 
 async fn build_dto(state: &AppState) -> SystemSettingsDto {
@@ -93,7 +114,24 @@ async fn build_dto(state: &AppState) -> SystemSettingsDto {
         activeProviders: active_providers,
         activeOcrProviders: active_ocr_providers,
         providerModelsMap: state.providers.get_provider_models_map(),
+        textBoxPaddingPx: Some(clamped_setting(&state.pool, "textBoxPaddingPx", 4, 0, 64).await),
+        textBoxSafetyPercent: Some(
+            clamped_setting(&state.pool, "textBoxSafetyPercent", 95, 1, 100).await,
+        ),
     }
+}
+
+/// An integer setting, defaulted and clamped.
+///
+/// The clamps are not decoration: a safety percent of 0 fits every element into a zero-width box
+/// and a padding wider than the box does the same, so a typo in the settings form would silently
+/// stop the whole library typesetting.
+async fn clamped_setting(pool: &sqlx::PgPool, key: &str, default: i32, low: i32, high: i32) -> i32 {
+    setting_value(pool, key, &default.to_string())
+        .await
+        .parse::<i32>()
+        .unwrap_or(default)
+        .clamp(low, high)
 }
 
 /// GET /api/settings
@@ -127,6 +165,24 @@ pub async fn update_settings(
         &dto.useFallbackModels.to_string(),
     )
     .await;
+
+    // Absent means "not mine to change", not "reset to the default" — see the DTO fields.
+    if let Some(padding) = dto.textBoxPaddingPx {
+        save_setting(
+            &state.pool,
+            "textBoxPaddingPx",
+            &padding.clamp(0, 64).to_string(),
+        )
+        .await;
+    }
+    if let Some(safety) = dto.textBoxSafetyPercent {
+        save_setting(
+            &state.pool,
+            "textBoxSafetyPercent",
+            &safety.clamp(1, 100).to_string(),
+        )
+        .await;
+    }
 
     Json(build_dto(&state).await).into_response()
 }

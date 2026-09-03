@@ -62,9 +62,9 @@ touches nothing else, so none of D1/D6/D7/D8/D10/D14/D15/D16 are recoverable by 
 
 ### 2. Audit backlog — re-oriented 2026-09-02
 
-Full detail in [docs/issues.md](docs/issues.md). **96 filed, 74 closed, 22 open.** The 2026-09-02
+Full detail in [docs/issues.md](docs/issues.md). **97 filed, 76 closed, 21 open.** The 2026-09-02
 field report added 28 items; `AUDIT-Q1`, `AUDIT-Q2` and `AUDIT-T3` closed as obsolete because they
-named Java files the Rust rewrite deleted. Eleven of the new items are already fixed.
+named Java files the Rust rewrite deleted. Thirteen of the new items are already fixed.
 
 The report is not 24 independent bugs. It is **three seams**, and they have to close in order —
 each later one is wasted effort until the earlier one holds.
@@ -77,8 +77,11 @@ each later one is wasted effort until the earlier one holds.
     *bounding box of that polygon* into x/y/w/h. The plate tilted, the glyphs stayed level (in the
     reader too), and the box inflated on every turn. `rotation` is the angle now, the box is left
     alone, and both renderers set glyphs along it.
-  - [ ] `AUDIT-F16`/`AUDIT-R1` — padding is a constant in one renderer and absent in the other.
-    Fix them as one: make the inset an element field both renderers read.
+  - [x] `AUDIT-F16`/`AUDIT-R1` — worse than filed: there were **four** answers to "what rectangle
+    does text go in?", three of them in the frontend, and the one with no inset at all was the
+    live reader. One definition per language now, both driven by the same two global settings and
+    asserted against the same parity table. Not per-element — that needs a column, and there is no
+    migration runner (`AUDIT-B18`).
   - [x] `AUDIT-R7` — the simplification tolerance was a fraction of the *perimeter*, so a small
     caption plate got a sub-pixel tolerance and kept every vertex. Absolute 2px now, at all four
     sites — including the merge hull, which had none at all.

@@ -1311,6 +1311,10 @@ export interface components {
             qaVlmModel?: string;
             qaVlmModelList?: string[];
             routingStrategy?: string;
+            /** Format: int32 */
+            textBoxPaddingPx?: number;
+            /** Format: int32 */
+            textBoxSafetyPercent?: number;
             tlLlmModelList?: string[];
             tlModel?: string;
             tlProvider?: string;

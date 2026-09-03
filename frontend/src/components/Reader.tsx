@@ -31,6 +31,11 @@ import {
 } from "../utils/fitText";
 import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
 import { hasDetectedBubble, paintLayerMask } from "../utils/maskPaint";
+import {
+  DEFAULT_TEXT_BOX_INSET,
+  textFitBox,
+  type TextBoxInset,
+} from "../utils/textFitBox";
 import { usePersistedState } from "../hooks/usePersistedState";
 import ConfirmModal from "./ConfirmModal";
 import InfoModal from "./InfoModal";
@@ -405,6 +410,38 @@ export const Reader: React.FC<ReaderProps> = ({
   // that lands while a fetch is in flight is silently lost.
   const cacheEpochRef = useRef(0);
   const [cacheEpoch, setCacheEpoch] = useState(0);
+
+  // AUDIT-F16: the fitted rectangle's inset, from global settings rather than a literal. Starts at
+  // the value the pipeline has always used, so the reader is never briefly fitting to a different
+  // box than the export while the request is in flight.
+  const [textBoxInset, setTextBoxInset] = useState<TextBoxInset>(
+    DEFAULT_TEXT_BOX_INSET,
+  );
+  useEffect(() => {
+    let cancelled = false;
+    void safeFetch("/api/settings", {
+      headers: { Authorization: `Bearer ${user.token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        setTextBoxInset({
+          paddingPx: Number(
+            data.textBoxPaddingPx ?? DEFAULT_TEXT_BOX_INSET.paddingPx,
+          ),
+          safetyPercent: Number(
+            data.textBoxSafetyPercent ?? DEFAULT_TEXT_BOX_INSET.safetyPercent,
+          ),
+        });
+      })
+      .catch(() => {
+        // Keep the default. Fitting to the historical rectangle is right either way; it is only
+        // the *tuning* that is unavailable, and a reader that refuses to typeset is worse.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user.token]);
   // Page id of the most recent request made by the page-details effect, so a
   // late response for a page we already navigated away from is discarded.
   const requestedPageIdRef = useRef<string | null>(null);
@@ -2437,15 +2474,20 @@ export const Reader: React.FC<ReaderProps> = ({
             displayText = displayText.toUpperCase();
           }
 
+          // AUDIT-R1: one definition of the fitted rectangle, shared with render.py.
+          const fitBox = textFitBox(
+            { x: el.x, y: el.y, width, height },
+            textBoxInset,
+          );
           const fit = fitTextInBox(
             displayText,
-            width - 8,
-            height - 8,
+            fitBox.width,
+            fitBox.height,
             el.font || "Comic Neue",
             el.size || 16,
             el.boxShape === "elliptical" ? "elliptical" : "rectangular",
-            el.x + 4,
-            el.y + 4,
+            fitBox.x,
+            fitBox.y,
             el.maskPolygon,
             el.fontWeight || "bold",
             el.fontStyle || "normal",
@@ -2530,6 +2572,9 @@ export const Reader: React.FC<ReaderProps> = ({
     selectedPage,
     user,
     imageDims,
+    // AUDIT-R1: an export must use the inset in force now, not the one captured when this
+    // callback was last built, or a settings change would apply to the reader and not the file.
+    textBoxInset,
     regionsById,
     sortedLayers,
     dirtyElements,
@@ -2620,15 +2665,20 @@ export const Reader: React.FC<ReaderProps> = ({
             displayText = displayText.toUpperCase();
           }
 
+          // AUDIT-R1: one definition of the fitted rectangle, shared with render.py.
+          const fitBox = textFitBox(
+            { x: el.x, y: el.y, width, height },
+            textBoxInset,
+          );
           const fit = fitTextInBox(
             displayText,
-            width - 8,
-            height - 8,
+            fitBox.width,
+            fitBox.height,
             el.font || "Comic Neue",
             el.size || 16,
             el.boxShape === "elliptical" ? "elliptical" : "rectangular",
-            el.x + 4,
-            el.y + 4,
+            fitBox.x,
+            fitBox.y,
             el.maskPolygon,
             el.fontWeight || "bold",
             el.fontStyle || "normal",
@@ -2785,6 +2835,9 @@ export const Reader: React.FC<ReaderProps> = ({
     selectedPage,
     user,
     imageDims,
+    // AUDIT-R1: an export must use the inset in force now, not the one captured when this
+    // callback was last built, or a settings change would apply to the reader and not the file.
+    textBoxInset,
     regionsById,
     layers,
     dirtyElements,
@@ -3590,17 +3643,34 @@ export const Reader: React.FC<ReaderProps> = ({
                     let fontSize: number;
                     let overflow: boolean;
 
+                    // AUDIT-R1: the live reader used the *raw* box here — no inset at all —
+                    // while the frontend's own exports insetted by 4px and render.py insetted by
+                    // 4px and then took 95%. Three rectangles, one of them on the screen the
+                    // typesetting was being judged on. Same rectangle as the export now.
+                    const svgFitBox = textFitBox(
+                      {
+                        x: element.x,
+                        y: element.y,
+                        width: element.maxWidth || 100,
+                        height: element.maxHeight || 100,
+                      },
+                      textBoxInset,
+                    );
+                    // The preview's DOM box must be the rectangle the fitter was given, not a
+                    // literal. `svgFitBox.x` is `element.x` plus the configured, clamped padding,
+                    // so this is that padding after every guard textFitBox applies.
+                    const previewPadding = svgFitBox.x - element.x;
                     const fit = fitTextInBox(
                       element.text || "",
-                      element.maxWidth || 100,
-                      element.maxHeight || 100,
+                      svgFitBox.width,
+                      svgFitBox.height,
                       element.font || "Comic Neue",
                       element.size || 16,
                       element.boxShape === "elliptical"
                         ? "elliptical"
                         : "rectangular",
-                      element.x,
-                      element.y,
+                      svgFitBox.x,
+                      svgFitBox.y,
                       element.maskPolygon,
                       element.fontWeight || "bold",
                       element.fontStyle || "normal",
@@ -3927,7 +3997,7 @@ export const Reader: React.FC<ReaderProps> = ({
                               alignItems: "center",
                               justifyContent: "center",
                               textAlign: "center",
-                              padding: "4px",
+                              padding: `${previewPadding}px`,
                               boxSizing: "border-box",
                               overflow: "hidden",
                             }}
@@ -3959,8 +4029,8 @@ export const Reader: React.FC<ReaderProps> = ({
                                       key={i}
                                       style={{
                                         position: "absolute",
-                                        left: `${lineCenterX - element.x}px`,
-                                        top: `${lineY - element.y}px`,
+                                        left: `${lineCenterX - element.x - previewPadding}px`,
+                                        top: `${lineY - element.y - previewPadding}px`,
                                         transform: "translate(-50%, -50%)",
                                         fontFamily: `"${element.font || "Comic Neue"}", sans-serif`,
                                         fontSize: `${fontSize}px`,
