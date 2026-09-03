@@ -3656,6 +3656,10 @@ export const Reader: React.FC<ReaderProps> = ({
                       },
                       textBoxInset,
                     );
+                    // The preview's DOM box must be the rectangle the fitter was given, not a
+                    // literal. `svgFitBox.x` is `element.x` plus the configured, clamped padding,
+                    // so this is that padding after every guard textFitBox applies.
+                    const previewPadding = svgFitBox.x - element.x;
                     const fit = fitTextInBox(
                       element.text || "",
                       svgFitBox.width,
@@ -3993,7 +3997,7 @@ export const Reader: React.FC<ReaderProps> = ({
                               alignItems: "center",
                               justifyContent: "center",
                               textAlign: "center",
-                              padding: "4px",
+                              padding: `${previewPadding}px`,
                               boxSizing: "border-box",
                               overflow: "hidden",
                             }}
@@ -4025,8 +4029,8 @@ export const Reader: React.FC<ReaderProps> = ({
                                       key={i}
                                       style={{
                                         position: "absolute",
-                                        left: `${lineCenterX - element.x}px`,
-                                        top: `${lineY - element.y}px`,
+                                        left: `${lineCenterX - element.x - previewPadding}px`,
+                                        top: `${lineY - element.y - previewPadding}px`,
                                         transform: "translate(-50%, -50%)",
                                         fontFamily: `"${element.font || "Comic Neue"}", sans-serif`,
                                         fontSize: `${fontSize}px`,

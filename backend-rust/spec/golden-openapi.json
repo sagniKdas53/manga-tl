@@ -913,6 +913,14 @@
           "routingStrategy": {
             "type": "string"
           },
+          "textBoxPaddingPx": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "textBoxSafetyPercent": {
+            "format": "int32",
+            "type": "integer"
+          },
           "tlLlmModelList": {
             "items": {
               "type": "string"
