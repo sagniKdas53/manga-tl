@@ -484,6 +484,120 @@ describe("Reader Component", () => {
     });
   });
 
+  it("refreshes on a qa completion, not only the four types it used to allow (AUDIT-F17)", async () => {
+    // QA is the last stage to touch a page — it rewrites text and hides rejected elements — and
+    // was missing from the handler's allow-list, so the reader kept showing pre-QA output until
+    // it was reloaded by hand. The allow-list is gone; any completion invalidates.
+    render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={[mockPage]}
+        theme="dark"
+      />,
+    );
+
+    await screen.findByText(/Test Series/);
+
+    const sseCallback = (
+      mockSubscribe.mock.calls as [
+        ((event: { type: string; data: string }) => void)?,
+      ][]
+    )[0]?.[0];
+    mockSafeFetch.mockClear();
+
+    sseCallback?.({
+      type: "job_update",
+      data: JSON.stringify({
+        status: "COMPLETED",
+        imageId: "img1",
+        type: "qa",
+      }),
+    });
+
+    await waitFor(() => {
+      const urls = mockSafeFetch.mock.calls.map((call) => call[0] as string);
+      expect(urls).toContain("/api/pages/p1");
+    });
+  });
+
+  it("drops a background page's cached details when a job completes for it (AUDIT-F17)", async () => {
+    // The handler used to require the job to be for the *open* page, so a prefetched neighbour
+    // kept its pre-translation details for as long as the reader stayed open — the reported
+    // "pages other than the open one have layer updates [that] are not fetched".
+    const p1 = { ...mockPage, id: "p1", pageNumber: 1, imageId: "img1" };
+    const p2 = { ...mockPage, id: "p2", pageNumber: 2, imageId: "img2" };
+    const p3 = { ...mockPage, id: "p3", pageNumber: 3, imageId: "img3" };
+
+    const { rerender } = render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={[p1, p2, p3]}
+        theme="dark"
+      />,
+    );
+
+    // p2 is inside the prefetch window, so it lands in the details cache.
+    await waitFor(() => {
+      const urls = mockSafeFetch.mock.calls.map((call) => call[0] as string);
+      expect(urls).toContain("/api/pages/p2");
+    });
+
+    const sseCallback = (
+      mockSubscribe.mock.calls as [
+        ((event: { type: string; data: string }) => void)?,
+      ][]
+    )[0]?.[0];
+    mockSafeFetch.mockClear();
+
+    // A translation finishes for p2 while p1 is the page on screen.
+    sseCallback?.({
+      type: "job_update",
+      data: JSON.stringify({
+        status: "COMPLETED",
+        pageId: "p2",
+        imageId: "img2",
+        type: "translation",
+      }),
+    });
+
+    // It is p2 that changed, so p1 must not be told to reload.
+    expect(mockShowToast).not.toHaveBeenCalledWith(
+      "New layers available — refreshed",
+      "success",
+    );
+
+    const { useParams } = await import("react-router-dom");
+    vi.mocked(useParams).mockReturnValue({
+      pageNumber: "2",
+      seriesId: "s1",
+      chapterId: "c1",
+    });
+    mockSafeFetch.mockClear();
+
+    rerender(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={[p1, p2, p3]}
+        theme="dark"
+      />,
+    );
+
+    // Turning to p2 must go back to the server rather than serving the stale cache entry.
+    await waitFor(() => {
+      const urls = mockSafeFetch.mock.calls.map((call) => call[0] as string);
+      expect(urls).toContain("/api/pages/p2");
+    });
+  });
+
   /**
    * The measured reason this gate exists: the old bidirectional window fired on navigation,
    * putting five image requests on the wire within 25 ms and pushing image p95 to 2482 ms

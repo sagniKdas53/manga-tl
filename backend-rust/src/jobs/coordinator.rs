@@ -1715,18 +1715,34 @@ pub async fn handle_translation_callback(
         .filter(|r| !r.get("translationFailed").map(falsy).unwrap_or(false))
         .count();
 
+    // AUDIT-B13: a page with nothing translatable on it is a warning, not a failure.
+    //
+    // This used to mark the job FAILED, which put a red row in the queue that the user had to
+    // dismiss by hand — for pages whose only regions were an SFX, a watermark, or an OCR misfire
+    // on a texture. It is also the wrong signal for the retry machinery: the worker has already
+    // made up to three attempts per region (batch, batch retry, then individual fallback with the
+    // fallback models) before it reports zero successes, so the whole-job retries this triggered
+    // were three more rounds of LLM calls that could not produce a different answer.
+    //
+    // Note this is the *all regions failed* case. Zero regions is handled earlier, and quietly,
+    // by the OCR callback — that page never enqueues a translation at all.
     if success_count == 0 {
-        tracing::warn!("All translations failed for image {image_id} — not creating empty layer");
+        tracing::warn!(
+            "No region on image {image_id} produced a translation — completing with a warning rather than failing"
+        );
         if let Some(mut job) =
             resolve_callback_job(&state.pool, job_id, image_id, "translation").await
         {
-            sqlx::query("UPDATE jobs SET status='FAILED', error=$2, updated_at=now() WHERE id=$1")
-                .bind(&job.id)
-                .bind("Translation failed: no regions were successfully translated")
-                .execute(&state.pool)
-                .await
-                .map_err(|e| e.to_string())?;
-            job.status = "FAILED".into();
+            sqlx::query(
+                "UPDATE jobs SET status='COMPLETED', error=$2, updated_at=now() WHERE id=$1",
+            )
+            .bind(&job.id)
+            .bind("No translatable text: no region produced a translation")
+            .execute(&state.pool)
+            .await
+            .map_err(|e| e.to_string())?;
+            job.status = "COMPLETED".into();
+            job.error = Some("No translatable text: no region produced a translation".into());
             state
                 .sse
                 .emit_event_for_image(
@@ -1736,6 +1752,19 @@ pub async fn handle_translation_callback(
                 )
                 .await;
         }
+        state
+            .sse
+            .emit_notification_for_image(
+                image_id,
+                "WARNING",
+                "No Translatable Text",
+                &format!(
+                    "Nothing on this page could be translated — all {} detected region(s) came back empty. The page is left as it is.",
+                    translations.len()
+                ),
+                None,
+            )
+            .await;
         return Ok(());
     }
 
@@ -1998,15 +2027,64 @@ fn falsy(value: &Value) -> bool {
             .unwrap_or(false)
 }
 
+/// Re-render a page whose layers QA has just changed, marked so it does not re-enter QA.
+///
+/// AUDIT-B12. The pipeline renders *before* it runs QA, so without this every QA verdict lands
+/// after the only render the page gets. `finalPass` is what stops `handle_render_callback` queuing
+/// QA off the back of it, which would be a render/QA loop with no ceiling.
+/// `completes_pipeline` decides who gets to say the page is done. On the terminal QA path the
+/// answer is this render, not the QA callback — see `handle_render_callback`. On the manual-review
+/// path nothing is complete, so the render happens but claims nothing.
+async fn enqueue_final_pass_render(
+    state: &AppState,
+    image_id: Uuid,
+    page_id: Option<Uuid>,
+    completes_pipeline: bool,
+) {
+    tracing::info!("QA changed layers for image {image_id}; re-rendering so the export matches");
+    enqueue_job_directly(state, "render", image_id, page_id, None, "normal", |job| {
+        job.insert("finalPass".into(), json!(true));
+        job.insert("completesPipeline".into(), json!(completes_pipeline));
+    })
+    .await;
+}
+
+/// `(is_final_pass, completes_pipeline)` for a render job, read from its stored payload.
+///
+/// Read from the job row rather than threaded through the callback, because the worker's render
+/// callback does not echo the payload back. A job that cannot be resolved reads as `(false, false)`,
+/// which keeps the pre-existing behaviour (run QA, notify from the QA callback) for every job that
+/// predates these flags.
+async fn final_pass_flags(state: &AppState, job_id: Option<&str>) -> (bool, bool) {
+    let Some(job_id) = job_id else {
+        return (false, false);
+    };
+    let payload: Option<String> = sqlx::query_scalar("SELECT payload FROM jobs WHERE id = $1")
+        .bind(job_id)
+        .fetch_optional(&state.pool)
+        .await
+        .ok()
+        .flatten();
+    let Some(value) = payload.and_then(|raw| serde_json::from_str::<Value>(&raw).ok()) else {
+        return (false, false);
+    };
+    let flag = |key: &str| value.get(key).and_then(Value::as_bool).unwrap_or(false);
+    (flag("finalPass"), flag("completesPipeline"))
+}
+
 /// Render callback: stamp pages rendered, skip QA when manual edits exist, else queue QA.
+///
+/// Returns `true` when this render is the one that finishes the page — QA's `finalPass` on a
+/// terminal pass. The caller emits "Page Processing Complete" off that, so the claim is made when
+/// the artifact actually matches the layers rather than one render job earlier.
 pub async fn handle_render_callback(
     state: &AppState,
     job_id: Option<&str>,
     image_id: Uuid,
     page_id: Option<Uuid>,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     if !claim_callback(state, job_id, image_id, "render").await {
-        return Ok(());
+        return Ok(false);
     }
 
     let pages: Vec<Page> = match page_id {
@@ -2047,7 +2125,18 @@ pub async fn handle_render_callback(
         }
     }
 
-    if manual_changes_done {
+    // AUDIT-B12: a render QA itself asked for must not queue QA again — that is a render/QA loop
+    // with no ceiling. The flag rides on the job payload rather than on Redis so it cannot be lost
+    // to an eviction and leave the loop live.
+    let (is_final_pass, completes_pipeline) = final_pass_flags(state, job_id).await;
+    if is_final_pass {
+        tracing::info!(
+            "Received Render callback for image: {image_id}. This was QA's own re-render; not re-running QA."
+        );
+        if let Some(redis) = &state.redis {
+            let _ = redis.delete(&format!("pipeline:trace:{image_id}")).await;
+        }
+    } else if manual_changes_done {
         tracing::info!(
             "Received Render callback for image: {image_id}. Skipping QA as manual edits exist."
         );
@@ -2071,7 +2160,7 @@ pub async fn handle_render_callback(
         )
         .await;
     }
-    Ok(())
+    Ok(is_final_pass && completes_pipeline)
 }
 
 /// QA retries are counted per PAGE when known (two chapters sharing a duplicated image
@@ -2914,6 +3003,9 @@ pub async fn handle_qa_callback(
 
     let mut needs_retry = false;
     let mut needs_manual_intervention = false;
+    // AUDIT-B12: set when QA rewrote text or hid an element, i.e. when the rendered PNG on disk
+    // no longer matches the layers. See the final render pass at the end of this function.
+    let mut qa_changed_the_page = false;
     let mut regions_to_re_ocr: Vec<String> = Vec::new();
     let mut failed_regions_list: Vec<Value> = Vec::new();
     // 0 total, 1 passed, 2 failed, 3 fixed/direct_fix, 4 manual_review
@@ -2986,6 +3078,7 @@ pub async fn handle_qa_callback(
                     apply_direct_fix(state, region_id, latest_translation, corrected, font_size)
                         .await;
                 final_status = if fixed {
+                    qa_changed_the_page = true;
                     "fixed".into()
                 } else {
                     "failed".into()
@@ -3029,6 +3122,7 @@ pub async fn handle_qa_callback(
                 }
             } else if status_before.eq_ignore_ascii_case("reject_sfx") {
                 hide_translation_elements(state, region_id, latest_translation).await;
+                qa_changed_the_page = true;
             }
 
             let _ = sqlx::query(
@@ -3189,6 +3283,14 @@ pub async fn handle_qa_callback(
 
     if needs_manual_intervention {
         tracing::warn!("QA requested manual intervention for image {image_id}. Halting pipeline.");
+        // One QA response can carry both an accepted verdict and a region needing a human: a
+        // direct_fix on region A and needsManualIntervention on region B. Those accepted edits are
+        // already written to the layers, and this branch halts the pipeline — so without a render
+        // here they would never reach the PNG or the ZIP, and nothing would come back for them.
+        // Halting means "stop translating", not "leave the artifact disagreeing with the layers".
+        if qa_changed_the_page {
+            enqueue_final_pass_render(state, image_id, qa_page_id, false).await;
+        }
         if let Some(redis) = &state.redis {
             if let Some(page_id) = qa_page_id {
                 let _ = redis.delete(&format!("page:qa:retries:{page_id}")).await;
@@ -3249,6 +3351,10 @@ pub async fn handle_qa_callback(
             )
             .await;
         }
+        // Deliberately no final render on this path. A retry re-runs translation (or qa-re-ocr,
+        // which leads back to translation), and the translation callback enqueues a render of its
+        // own — so rendering here would be work thrown away, and would race the retranslation
+        // that is about to rewrite the same layers.
         Ok("RETRIED")
     } else {
         if needs_retry {
@@ -3262,12 +3368,33 @@ pub async fn handle_qa_callback(
         } else {
             tracing::info!("QA passed for image {image_id}. Pipeline complete!");
         }
+        // AUDIT-B12. The pipeline renders *before* it runs QA — `render` is enqueued in exactly
+        // one place, at the end of the translation callback — so until now every QA verdict landed
+        // after the only render the page ever got. A `direct_fix` rewrote text that `/rendered`
+        // and the chapter ZIP kept showing in its uncorrected form, and a `reject_sfx` hid an
+        // element the rendered PNG still had typeset. The reader looked right and the artifact did
+        // not, which is the whole of the reported "QA rejections don't reach the output".
+        //
+        // Only when QA actually changed something, and marked `finalPass` so `handle_render_callback`
+        // does not queue QA again off the back of it — that would be an unbounded render/QA loop.
+        // AUDIT-B12 follow-up: when QA changed something, the page is not finished until the
+        // re-render lands. Saying "Page Processing Complete" here would let the user export the
+        // still-stale PNG, and would be a claim we cannot retract if that render then fails. The
+        // render callback makes the claim instead, off `completesPipeline`.
+        //
+        // `qa_unusable` cannot coincide with `qa_changed_the_page`: unusable means no verdict was
+        // applied, so there is nothing to re-render and COMPLETED_NO_QA still answers here.
+        if qa_changed_the_page {
+            enqueue_final_pass_render(state, image_id, qa_page_id, true).await;
+        }
         if let Some(redis) = &state.redis {
             let _ = redis.delete(&qa_retry_key(image_id, qa_page_id)).await;
             let _ = redis.delete(&format!("pipeline:trace:{image_id}")).await;
         }
         Ok(if qa_unusable {
             "COMPLETED_NO_QA"
+        } else if qa_changed_the_page {
+            "COMPLETED_PENDING_RENDER"
         } else {
             "COMPLETED"
         })

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
 import Dialog from "@mui/material/Dialog";
@@ -75,6 +75,11 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Set the moment the user types in the Chapter Number field, cleared whenever the dialog is
+  // (re)opened. `cancelled` below only fires when the effect tears down — closing the dialog or
+  // changing series — never on typing, so on its own it does not stop a slow response landing on
+  // top of a number the user deliberately chose. Same defect as AUDIT-F18's in ImportChapterDialog.
+  const numberTouchedRef = useRef(false);
   const [prevOpen, setPrevOpen] = useState(false);
   const [prevEditingChapter, setPrevEditingChapter] = useState<Chapter | null>(
     null,
@@ -116,6 +121,14 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
     setPrevOpen(false);
   }
 
+  // Not in the render-phase reset block above: that runs during render, and a ref must not be
+  // written there. Opening the dialog is the event that clears it either way.
+  useEffect(() => {
+    if (open) {
+      numberTouchedRef.current = false;
+    }
+  }, [open]);
+
   useEffect(() => {
     if (open && !settings) {
       safeFetch("/api/settings", {
@@ -147,7 +160,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
     void fetchHighestChapterNumber(selectedSeries.id, user.token)
       .then((highest) => {
         // A stale response must not overwrite a number the user has since typed.
-        if (cancelled || highest === null) return;
+        if (cancelled || numberTouchedRef.current || highest === null) return;
         setNumber(highest + 1);
       })
       .catch(() => {
@@ -258,7 +271,10 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
           label="Chapter Number"
           type="number"
           value={number}
-          onChange={(e) => setNumber(Number(e.target.value))}
+          onChange={(e) => {
+            numberTouchedRef.current = true;
+            setNumber(Number(e.target.value));
+          }}
           required
           fullWidth
           margin="normal"

@@ -551,12 +551,23 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
 
   const sortJobs = useCallback(
     (jobsList: Job[]) => {
+      // AUDIT-F20: PROCESSING used to share rank 1 with PENDING and COMPLETED, so a job starting
+      // work did not move at all — it stayed wherever `createdAt` had put it, which reads from
+      // the outside as the queue neither prioritising active items nor updating. It gets its own
+      // rank now. The tie between PENDING and COMPLETED is kept deliberately: those two swap as a
+      // page finishes, and separating them would make finished rows jump the queue on their way
+      // out. FAILED stays last so a stuck row does not push live work down the list.
+      //
+      // Ranks start at 1, not 0. Both lookups below fall back to 99 for an unrecognised status,
+      // and a 0 rank is falsy — so with `PROCESSING: 0` and `||` the running job took the
+      // *unknown* rank and sorted below even FAILED, exactly inverting the fix. The `?? 99` is
+      // belt and braces; keeping every rank truthy is what actually removes the trap.
       const statusOrder: Record<string, number> = {
         PROCESSING: 1,
-        PENDING: 1,
-        COMPLETED: 1,
-        PAUSED: 2,
-        FAILED: 3,
+        PENDING: 2,
+        COMPLETED: 2,
+        PAUSED: 3,
+        FAILED: 4,
       };
 
       // Group first, so a job's status changing (e.g. pausing) can never
@@ -577,7 +588,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
       const rankGroup = (key: string) => {
         const groupJobs = groups.get(key)!;
         const bestStatus = Math.min(
-          ...groupJobs.map((j) => statusOrder[j.status] || 99),
+          ...groupJobs.map((j) => statusOrder[j.status] ?? 99),
         );
         const earliestCreated = Math.min(
           ...groupJobs.map((j) => new Date(j.createdAt).getTime()),
@@ -595,8 +606,8 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
 
       return sortedKeys.flatMap((key) =>
         [...groups.get(key)!].sort((a, b) => {
-          const orderA = statusOrder[a.status] || 99;
-          const orderB = statusOrder[b.status] || 99;
+          const orderA = statusOrder[a.status] ?? 99;
+          const orderB = statusOrder[b.status] ?? 99;
           if (orderA !== orderB) return orderA - orderB;
           return (
             new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()

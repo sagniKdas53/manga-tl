@@ -60,21 +60,59 @@ Where it stands, in leverage order:
 **QA does not close any of the geometry gaps above.** Tested 2026-08-12: QA rewrites text and
 touches nothing else, so none of D1/D6/D7/D8/D10/D14/D15/D16 are recoverable by the safety net.
 
-### 2. Backend audit backlog
+### 2. Audit backlog — re-oriented 2026-09-02
 
-~50 findings from a full-stack read-through, tracked as `AUDIT-*` in
-[docs/issues.md](docs/issues.md). **59 of 66 closed.** 7 open, none critical or high:
+Full detail in [docs/issues.md](docs/issues.md). **95 filed, 69 closed, 26 open.** The 2026-09-02
+field report added 27 items; `AUDIT-Q1`, `AUDIT-Q2` and `AUDIT-T3` closed as obsolete because they
+named Java files the Rust rewrite deleted. Six of the new items are already fixed.
 
-- [x] `AUDIT-B10` (medium) — `listPages` doesn't validate `?sort=`. Closed 2026-08-16 (`commit 94bd792`), using `sortDir` parameter and safe `Sort.by(direction, "pageNumber")`.
-- `AUDIT-W3` (medium) — provider cooldowns/lock waits block a worker slot instead of releasing it.
-- `AUDIT-F9`, `AUDIT-D5`, `AUDIT-Q2` (low) — responsive-layout tests, backend memory limits,
-  inline fully-qualified class names.
-- `AUDIT-T1`, `AUDIT-Q1`, `AUDIT-T3` (unranked) — the worker test suite over-mocks, ~253 dead
-  `Objects.requireNonNull` calls, and one `@WebMvcTest` can't prove a Spring Data sort composes
-  correctly.
+The report is not 24 independent bugs. It is **three seams**, and they have to close in order —
+each later one is wasted effort until the earlier one holds.
 
-The last three (`T1`, `D5`, `W3`) are deliberately last — each needs real experimentation
-(a wire-protocol test double, a measured memory peak, concurrency testing), not a quick pass.
+- [/] **Seam 1 — the editor and the renderer disagree about what an element is.**
+  - [x] `AUDIT-F14` — rotation 400'd every save: `maxWidth`/`maxHeight` were `i32` and a rotated
+    bounding box is fractional, so serde rejected the body before the handler ran.
+  - [ ] `AUDIT-R5` — it still would not *render*: `render.py` contains the string `rotation`
+    zero times, so every angled box flattens in the export. Next up; it is what makes F14 worth
+    having.
+  - [ ] `AUDIT-F16`/`AUDIT-R1` — padding is a constant in one renderer and absent in the other.
+    Fix them as one: make the inset an element field both renderers read.
+  - [ ] `AUDIT-R7` — a rectangle round-trips as a 40-vertex polygon (`epsilon = 0.002`).
+  - [ ] `AUDIT-F15` — hidden elements become unselectable.
+- [/] **Seam 2 — the canvas and the artifact are not connected.**
+  - [x] `AUDIT-B12` — QA runs *after* the only render, so no `direct_fix` or `reject_sfx` ever
+    reached `/rendered` or the chapter ZIP. QA now enqueues one `finalPass` render. Worth noting
+    what this was **not**: all three renderers already refuse to paint a plate for a hidden or
+    blank element. The seam was the pipeline order.
+  - [ ] `AUDIT-B15` — **corrected**: the debounced sweeper for human edits *does* exist and runs
+    every 5s. Its defect is that it stamps `last_rendered_at` when it *asks* for the render, not
+    when the render lands, and gates that on an `is_ok()` that is always true. A lost render job
+    therefore falsifies the sweeper's own predicate and strands that edit forever.
+- [/] **Seam 3 — the UI does not believe the backend.**
+  - [x] `AUDIT-F17` — the reader filtered SSE down to four job types on one page. Both halves
+    fixed; the allow-list was removed rather than extended, because it goes stale silently.
+  - [x] `AUDIT-F20` — `PROCESSING` shared a sort rank with `PENDING`, so active jobs never moved.
+  - [ ] `AUDIT-F19` — thumbnails and cards never re-poll.
+  - **The "SSE is ass, move to WS" proposal is declined for now** (`AUDIT-P10`) — every concrete
+    symptom was the client-side filter, now fixed, and a rewrite would re-lose the ticket
+    handshake, the Redis replay and the jittered reconnect for a client→server channel nothing
+    uses. Reopen it with a measurement (dropped events per session) if it still feels unreliable.
+
+Running alongside, on the pipeline side:
+
+- [ ] `AUDIT-W13` (high) — context injection is advertised as on and is effectively off: four
+  light slots translate four pages at once, so "previous page dialogue" is read before it exists.
+  Its fix needs a per-chapter serial lane, which makes `AUDIT-W3` (slot-blocking waits) a
+  prerequisite rather than the deferred item it has been.
+- [x] `AUDIT-B13` — a page with nothing translatable burned 3 LLM attempts and landed red. It
+  completes with a `WARNING` notification now, and the worker no longer raises.
+- [ ] `AUDIT-W14` (medium) — the dispatcher never decrements its per-cycle capacity snapshot.
+  The tier split itself is a measurement question; `AUDIT-W10` moved it deliberately, so re-run
+  the timing before touching the default.
+
+Still deliberately last, each needing real experimentation rather than a pass:
+`AUDIT-T1` (a wire-protocol test double), `AUDIT-D5` (a measured memory peak), `AUDIT-F9`
+(Playwright).
 
 ### 3. Logging & observability (audit of 2026-08-15)
 

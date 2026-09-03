@@ -162,11 +162,41 @@ pub async fn update_job_status(
                         )
                         .await;
                 }
+
+                // AUDIT-B12 follow-up. QA hands the "Page Processing Complete" notification to its
+                // final render, so if that render dies here nobody ever says anything — the page
+                // just stops, silently, with layers the export does not match. Say so instead.
+                if new_status == "FAILED" && job.job_type == "render" && completes_pipeline(&job) {
+                    let ctx = resolve_notification_context(&state, image_id, job.page_id).await;
+                    emit_qa_notification(
+                        &state,
+                        image_id,
+                        "ERROR",
+                        "Re-render Failed",
+                        "QA corrected this page, but re-rendering it failed. The exported image \
+                         still shows the uncorrected version.",
+                        &ctx,
+                    )
+                    .await;
+                }
             }
             StatusCode::OK.into_response()
         }
         Err(err) => internal_error_text(err),
     }
+}
+
+/// Whether a job's stored payload carries QA's `completesPipeline` marker.
+fn completes_pipeline(job: &Job) -> bool {
+    job.payload
+        .as_deref()
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .and_then(|value| {
+            value
+                .get("completesPipeline")
+                .and_then(serde_json::Value::as_bool)
+        })
+        .unwrap_or(false)
 }
 
 /// GET /api/internal/jobs/{jobId}
@@ -777,6 +807,9 @@ pub async fn qa_callback(
             .await;
             StatusCode::OK.into_response()
         }
+        // The final render will emit "Page Processing Complete" once it lands; saying it here
+        // would announce corrections the exported PNG does not carry yet.
+        Ok("COMPLETED_PENDING_RENDER") => StatusCode::OK.into_response(),
         Ok("COMPLETED_NO_QA") => {
             emit_qa_notification(
                 &state,
@@ -1154,11 +1187,27 @@ async fn render_callback_route(
     )
     .await
     {
-        Ok(()) => {
+        Ok(completes_pipeline) => {
             let _ = sqlx::query("UPDATE images SET last_rendered_at = now() WHERE id = $1")
                 .bind(image_id)
                 .execute(&state.pool)
                 .await;
+            // AUDIT-B12 follow-up: the QA callback used to say "Page Processing Complete" while
+            // its own re-render was still queued, so the user could export a PNG that did not yet
+            // carry the QA corrections the notification was announcing. When QA defers to a final
+            // render, that render makes the claim — here, once the artifact actually matches.
+            if completes_pipeline {
+                let ctx = resolve_notification_context(&state, image_id, page_id).await;
+                emit_qa_notification(
+                    &state,
+                    image_id,
+                    "SUCCESS",
+                    "Page Processing Complete",
+                    "All processing steps finished successfully.",
+                    &ctx,
+                )
+                .await;
+            }
             StatusCode::OK.into_response()
         }
         Err(err) => {

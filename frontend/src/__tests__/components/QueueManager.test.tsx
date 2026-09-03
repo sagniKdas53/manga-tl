@@ -135,6 +135,82 @@ describe("QueueManager", () => {
     expect(screen.getAllByLabelText("Delete").length).toBeGreaterThan(0);
   });
 
+  it("puts a running job at the top of its chapter, above pending and failed (AUDIT-F20)", async () => {
+    // The whole point of the issue: a job starting work must visibly move. Ranking PROCESSING at
+    // 0 is not enough on its own — both call sites read the table with `|| 99`, which turns a
+    // zero rank into the unknown-status fallback and sorts running jobs *below FAILED*.
+    const inChapter = (pageNumber: number) =>
+      JSON.stringify({
+        chapterNumber: 7,
+        pageNumber,
+        chapterTitle: "Sorting",
+        seriesTitle: "Rank Test",
+      });
+    const jobs = [
+      {
+        id: "rank-failed",
+        type: "ocr",
+        imageId: "img-rank-1",
+        status: "FAILED",
+        payload: inChapter(1),
+        error: "boom",
+        attempt: 3,
+        maxAttempts: 3,
+        createdAt: new Date(Date.now() - 3000).toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: "rank-pending",
+        type: "ocr",
+        imageId: "img-rank-2",
+        status: "PENDING",
+        payload: inChapter(2),
+        error: null,
+        attempt: 1,
+        maxAttempts: 3,
+        createdAt: new Date(Date.now() - 2000).toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: "rank-processing",
+        type: "ocr",
+        imageId: "img-rank-3",
+        status: "PROCESSING",
+        payload: inChapter(3),
+        error: null,
+        attempt: 1,
+        maxAttempts: 3,
+        createdAt: new Date(Date.now() - 1000).toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+
+    (safeFetch as Mock).mockImplementation((url: string) => {
+      if (url === "/api/jobs") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ isPaused: false, jobs }),
+        });
+      }
+      return Promise.reject(new Error("Unknown URL"));
+    });
+
+    render(<QueueManagerWrapper />);
+    fireEvent.click(screen.getByTitle("Queue Manager"));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Page 3/)).toBeInTheDocument();
+    });
+
+    // Read the rendered rows in document order. The page label is its own span ("· Page N"),
+    // so this reflects the order sortJobs actually produced.
+    const order = Array.from(document.querySelectorAll("span"))
+      .map((node) => node.textContent?.trim() ?? "")
+      .filter((text) => /^· Page [123]$/.test(text))
+      .map((text) => text.replace("· ", ""));
+    expect(order).toEqual(["Page 3", "Page 2", "Page 1"]);
+  });
+
   it("force kills/flushes the whole queue via /api/jobs/clear?force=true", async () => {
     (safeFetch as Mock).mockImplementation(
       (url: string, init?: RequestInit) => {

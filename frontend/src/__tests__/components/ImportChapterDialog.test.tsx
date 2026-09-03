@@ -1,4 +1,10 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ImportChapterDialog } from "../../components/ImportChapterDialog";
 
@@ -139,6 +145,64 @@ describe("ImportChapterDialog", () => {
       /Chapter Number/,
     )) as HTMLInputElement;
     expect(input.value).toBe("5");
+  });
+
+  it("adopts the server's highest chapter number over the paginated guess (AUDIT-F18)", async () => {
+    // `nextNum` is derived from one 15-row page of chapters, so on a longer series it is simply
+    // wrong. CreateChapterDialog already asked the server; this dialog did not.
+    mockSafeFetch.mockImplementation((url: string) => {
+      if (url.includes("/chapters?")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ content: [{ chapterNumber: 11 }] }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<ImportChapterDialog {...defaultProps} />);
+    const input = (await screen.findByLabelText(
+      /Chapter Number/,
+    )) as HTMLInputElement;
+
+    await waitFor(() => expect(input.value).toBe("12"));
+  });
+
+  it("does not overwrite a chapter number the user typed while the lookup was in flight", async () => {
+    // The lookup is async and `cancelled` only fires when the effect tears down — closing the
+    // dialog — never on typing. Without a touched flag, a slow response lands on top of a number
+    // the user deliberately chose.
+    let resolveChapters: (value: unknown) => void = () => {};
+    const chaptersResponse = new Promise((resolve) => {
+      resolveChapters = resolve;
+    });
+    mockSafeFetch.mockImplementation((url: string) => {
+      if (url.includes("/chapters?")) {
+        return chaptersResponse;
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<ImportChapterDialog {...defaultProps} />);
+    const input = (await screen.findByLabelText(
+      /Chapter Number/,
+    )) as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "42" } });
+    expect(input.value).toBe("42");
+
+    resolveChapters({
+      ok: true,
+      json: () => Promise.resolve({ content: [{ chapterNumber: 11 }] }),
+    });
+    // Drain the promise chain rather than waitFor-ing: the assertion below is already true on the
+    // first tick, so waitFor would return before the response could possibly have overwritten
+    // anything and the test would pass with or without the guard.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(input.value).toBe("42");
   });
 
   it("has a file input accepting zip and epub", async () => {
