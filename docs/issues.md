@@ -1,11 +1,12 @@
 # Issues & Technical Debt
 
-> **Standing: 98 filed, 78 closed, 20 open.** Re-audited 2026-09-02 against the field report in
+> **Standing: 98 filed, 79 closed, 19 open.** Re-audited 2026-09-02 against the field report in
 > `new issues.pdf`. Three previously-open items were closed as *obsolete* — they described Java
 > files the Rust rewrite deleted. Twenty-nine new items are filed (two, `AUDIT-B17` and
-> `AUDIT-F24`, found while fixing another), and fifteen are already fixed: `AUDIT-F14`,
+> `AUDIT-F24`, found while fixing another), and sixteen are already fixed: `AUDIT-F14`,
 > `AUDIT-F15`, `AUDIT-F16`, `AUDIT-F17`, `AUDIT-F18`, `AUDIT-F19`, `AUDIT-F20`, `AUDIT-F21`,
-> `AUDIT-B12`, `AUDIT-B13`, `AUDIT-B17`, `AUDIT-R1`, `AUDIT-R5`, `AUDIT-R7`, `AUDIT-W13`.
+> `AUDIT-B12`, `AUDIT-B13`, `AUDIT-B17`, `AUDIT-R1`, `AUDIT-R5`, `AUDIT-R7`, `AUDIT-T4`,
+> `AUDIT-W13`.
 >
 > *(The previous header read "68 filed, 61 closed, 7 open" while listing eight open items. The
 > table was right and the count was one short; these numbers are taken from the table.)*
@@ -194,7 +195,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-F9`](#audit-f9-low-responsive-layout-is-never-verified) | Low | Frontend | Responsive layout is never verified in tests | Blocked on Playwright |
 | [`AUDIT-D5`](#audit-d5-low-no-memory-limits-on-auxiliary-containers) | Low | Docker | No memory limits on db, redis, minio, backend | Needs measured peak |
 | [`AUDIT-T1`](#audit-t1-unranked-worker-e2e-test-suite-is-heavily-mocked) | Unranked | Testing | Worker "e2e" suite over-mocks with no real I/O assertions | Blocked on [mock_router.md](design/mock_router.md) |
-| [`AUDIT-T4`](#audit-t4-unranked-nothing-proves-pagination-and-sort-against-a-real-database) | Unranked | Testing | Successor to the closed `AUDIT-T3`, refiled against the Rust handlers | Ready |
+| [`AUDIT-T4`](#audit-t4-unranked-nothing-proves-pagination-and-sort-against-a-real-database) | Unranked | Testing | Successor to the closed `AUDIT-T3`; the tests found two live defects | **Fixed 2026-09-03** |
 
 ---
 ## 1. Seam 1 — the editor and the renderer disagree about what an element is
@@ -903,11 +904,34 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 
 ### `AUDIT-T4` (unranked): Nothing proves pagination and sort against a real database
 
-- **Successor to `AUDIT-T3`**, which named `@WebMvcTest` classes the Rust rewrite deleted. The gap it
-  described came back with the new handlers: `backend-rust/src/routes/page.rs:652-675` builds its
-  `ORDER BY` and `LIMIT/OFFSET` by string interpolation, and nothing exercises it against Postgres.
-- **Next Step:** cover it with a database-backed integration test, alongside the `max-page-size`
-  clamp that `AUDIT-B11` installed.
+- **Successor to `AUDIT-T3`**, which named `@WebMvcTest` classes the Rust rewrite deleted. The gap
+  it described came back with the new handlers: `list_pages`, `list_chapters` and `list_series` all
+  build their `ORDER BY` and `LIMIT/OFFSET` by string interpolation into a `format!`.
+- **The filing was half wrong, and the correction matters.** `series_endpoints.rs` *did* cover
+  `list_series` — the sort whitelist, the `sortDir` flip, the envelope shape. What had nothing at
+  all were the two endpoints the reader actually walks: `list_chapters` and `list_pages`.
+- **The interpolation is not the defect,** and the new tests do not pretend otherwise: the
+  direction is a literal, the column comes off a whitelist, and the sizes are clamped `i64`s. What
+  was unproven is that it *composes* — that a window is the window it claims to be, that the clamp
+  survives the round trip, and that the arithmetic holds at the edges.
+- **Fixed 2026-09-03.** `backend-rust/tests/pagination_sort.rs`, seven tests against a real
+  Postgres. Rows are seeded through SQL (uploads need MinIO, and none of this is about image
+  storage) and deliberately inserted **out of order**, so "sorted by page number" cannot pass by
+  accident on a small unindexed scan that happens to return insertion order.
+- **They found two live defects**, which is the argument for the whole item:
+  - **`page * size` overflowed.** Both are `i64` and only `page` was bounded — below, not above.
+    `?page=9223372036854775807&size=100` panicked into the catch-panic layer and answered **500**
+    in debug; in release it wraps to a *negative* `OFFSET`, Postgres rejects the query, and the
+    handler's `unwrap_or_default()` serves that rejection as an **empty list beside an honest
+    `totalElements`** — worse than an error, because it looks like an answer. `offset()` saturates
+    now, in both `Pagination` types.
+  - **`sortDir=DESC` sorted ascending.** The match was on the literal `"desc"`, but Spring's
+    `Sort.Direction.fromString` is case-insensitive, so the Java backend honoured it. A silent
+    parity break that answers 200 with plausible-looking data. Compared case-insensitively now.
+- **Not fixed, and deliberately:** `unwrap_or_default()` on the row queries still converts any
+  database error into an empty page. The overflow was the only known way to reach it, so this is
+  now unreachable rather than handled; making list handlers distinguish "no rows" from "the query
+  failed" is a wider change than this item, and is worth its own pass.
 
 ---
 ## Recently Closed Items (Reference)
@@ -923,6 +947,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | `AUDIT-F15` | A hidden element could not be reached again | 2026-09-03 | The `visible` toggle lived on the selected element's inspector and selecting meant clicking it on the canvas, so hiding was a one-way door. The layer panel lists elements now, each selectable with its own toggle. |
 | `AUDIT-F19` | Thumbnails and cards never re-polled | 2026-09-03 | Grids rendered whatever the first fetch returned; nothing subscribed to `job_update` and nothing polled, so a chapter that finished while its page was open kept showing untranslated thumbnails until a manual reload. One app-level watcher refreshes all three grids, debounced 4s so a finishing chapter's burst costs one refetch. |
 | `AUDIT-F21` | Dark mode was unpleasant to read | 2026-09-03 | Not short of contrast — it had far too much. Body text measured 19.0:1 against a 7:1 AAA threshold, which blooms glyph edges on a tablet at night, and every accent ran 84–100% saturation. Surfaces lifted, white pulled back to 13.7:1, accents desaturated at unchanged hue. Two side findings fixed with it: cards were 1.15:1 from the page behind them, and `primary` on `paper` was 3.99:1, below AA. |
+| `AUDIT-T4` | Nothing proved pagination and sort against a real database | 2026-09-03 | The filing was half wrong — `list_series` was covered; `list_chapters` and `list_pages`, the two the reader walks, had nothing. Seven tests against real Postgres, seeding rows out of order so a missing `ORDER BY` cannot pass. They found two live defects: `page * size` overflowed to a 500 (or, in release, a silent empty page), and `sortDir=DESC` sorted ascending. |
 | `AUDIT-R7` | A rectangle arrived as a 40-vertex polygon | 2026-09-03 | The simplification tolerance was `0.002 × perimeter`, which is 0.4px on a small caption plate — below one pixel, so nothing was removed. Smaller shapes got tighter tolerances. Now an absolute 2px everywhere, plus the synthesized cover plate (28 points by construction) and the merge hull (never simplified at all). |
 | `AUDIT-R5` | Rotation turned the plate and left the glyphs level | 2026-09-03 | `rotation` was effectively always 0: the handle wrote the angle into the mask polygon and the *bounding box of that polygon* into x/y/w/h instead. So the plate tilted, the text stayed level (in the reader too — the canvas skipped `ctx.rotate` exactly when a polygon existed), and the box inflated on every turn. `rotation` is the angle now and the box is left alone. |
 | `AUDIT-B17` | `jobs.page_id` was never written | 2026-09-03 | The column existed and `Job` deserialised it, but the INSERT omitted it, so every row read back had `pageId: null` and the obvious `WHERE page_id = …` matched nothing. Fixed because `AUDIT-W13`'s gate must attribute a blocker to one page. |

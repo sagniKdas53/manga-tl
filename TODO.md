@@ -62,9 +62,9 @@ touches nothing else, so none of D1/D6/D7/D8/D10/D14/D15/D16 are recoverable by 
 
 ### 2. Audit backlog — re-oriented 2026-09-02
 
-Full detail in [docs/issues.md](docs/issues.md). **98 filed, 78 closed, 20 open.** The 2026-09-02
+Full detail in [docs/issues.md](docs/issues.md). **98 filed, 79 closed, 19 open.** The 2026-09-02
 field report added 29 items; `AUDIT-Q1`, `AUDIT-Q2` and `AUDIT-T3` closed as obsolete because they
-named Java files the Rust rewrite deleted. Fifteen of the new items are already fixed.
+named Java files the Rust rewrite deleted. Sixteen of the new items are already fixed.
 
 The report is not 24 independent bugs. It is **three seams**, and they have to close in order —
 each later one is wasted effort until the earlier one holds.
@@ -133,6 +133,13 @@ Running alongside, on the pipeline side:
 - [ ] `AUDIT-W14` (medium) — the dispatcher never decrements its per-cycle capacity snapshot.
   The tier split itself is a measurement question; `AUDIT-W10` moved it deliberately, so re-run
   the timing before touching the default.
+
+- [x] `AUDIT-T4` — pagination and sort had no proof against a real database. The filing was half
+  wrong: `list_series` *was* covered, while `list_chapters` and `list_pages` — the two the reader
+  walks — had nothing. Seven tests now, seeding rows out of order so a missing `ORDER BY` cannot
+  pass by accident. They found two live defects: `page * size` overflowed (500 in debug, a silent
+  empty page in release), and `sortDir=DESC` sorted ascending because the match was on the literal
+  lowercase string while Spring's was case-insensitive.
 
 Still deliberately last, each needing real experimentation rather than a pass:
 `AUDIT-T1` (a wire-protocol test double), `AUDIT-D5` (a measured memory peak), `AUDIT-F9`

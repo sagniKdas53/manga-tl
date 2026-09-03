@@ -419,10 +419,22 @@ impl Pagination {
             .to_string()
     }
 
+    /// AUDIT-T4: `page * size` is an `i64` multiply on a client-supplied number, bounded below
+    /// but not above, so `?page=9223372036854775807&size=100` overflowed — 500 in a debug build,
+    /// and in release a wrapped *negative* OFFSET that Postgres rejects, which
+    /// `unwrap_or_default()` then served as an empty list beside an honest `totalElements`.
+    /// Saturating keeps the requested page in the envelope and reads as what it is: past the end.
+    fn offset(&self, size: i64) -> i64 {
+        self.page.unwrap_or(0).max(0).saturating_mul(size)
+    }
+
+    /// AUDIT-T4: matched `"desc"`/`"asc"` exactly, so `?sortDir=DESC` — which Spring's
+    /// `Sort.Direction.fromString` accepted, being case-insensitive — silently fell through to
+    /// the endpoint's default. The worst shape of parity break: 200, with plausible data.
     fn descending(&self, default_asc: bool) -> bool {
         match self.sortDir.as_deref() {
-            Some("desc") => true,
-            Some("asc") => false,
+            Some(d) if d.eq_ignore_ascii_case("desc") => true,
+            Some(d) if d.eq_ignore_ascii_case("asc") => false,
             _ => !default_asc,
         }
     }
@@ -507,7 +519,7 @@ pub async fn list_series(State(state): State<AppState>, Query(p): Query<Paginati
     };
     let rows: Vec<Series> = sqlx::query_as(&format!(
         "SELECT * FROM series ORDER BY {order_column} {direction} LIMIT {size} OFFSET {}",
-        page * size
+        p.offset(size)
     ))
     .fetch_all(&state.pool)
     .await
@@ -748,7 +760,7 @@ pub async fn list_chapters(
     let rows: Vec<Chapter> = sqlx::query_as(&format!(
         "SELECT * FROM chapters WHERE series_id = $1 \
          ORDER BY chapter_number {direction} LIMIT {size} OFFSET {}",
-        page * size
+        p.offset(size)
     ))
     .bind(series_id)
     .fetch_all(&state.pool)
