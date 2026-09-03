@@ -1,9 +1,10 @@
 # Issues & Technical Debt
 
-> **Standing: 95 filed, 69 closed, 26 open.** Re-audited 2026-09-02 against the field report in
+> **Standing: 96 filed, 71 closed, 25 open.** Re-audited 2026-09-02 against the field report in
 > `new issues.pdf`. Three previously-open items were closed as *obsolete* — they described Java
-> files the Rust rewrite deleted. Twenty-seven new items were filed, and six of them are already
-> fixed: `AUDIT-F14`, `AUDIT-F17`, `AUDIT-F18`, `AUDIT-F20`, `AUDIT-B12`, `AUDIT-B13`.
+> files the Rust rewrite deleted. Twenty-eight new items are filed (one, `AUDIT-B17`, found while
+> fixing another), and seven are already fixed: `AUDIT-F14`, `AUDIT-F17`, `AUDIT-F18`,
+> `AUDIT-F20`, `AUDIT-B12`, `AUDIT-B13`, `AUDIT-W13`.
 >
 > *(The previous header read "68 filed, 61 closed, 7 open" while listing eight open items. The
 > table was right and the count was one short; these numbers are taken from the table.)*
@@ -163,8 +164,9 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 
 | ID | Sev | Component | Summary | State |
 | :--- | :--- | :--- | :--- | :--- |
-| [`AUDIT-W13`](#audit-w13-high-context-injected-translation-runs-in-parallel) | High | Worker | "Previous page dialogue" is read while the previous page is still translating | **Root-caused, ready** |
+| [`AUDIT-W13`](#audit-w13-high-context-injected-translation-ran-in-parallel) | High | Worker/Backend | "Previous page dialogue" was read while the previous page was still translating — and `COALESCE` handed back its Japanese | **Fixed 2026-09-02** |
 | [`AUDIT-W14`](#audit-w14-medium-the-slot-policy-lets-slow-network-work-crowd-out-local-work) | Medium | Worker/Backend | Four light slots + a per-cycle capacity snapshot; OCR waits behind LLM calls | Needs measurement |
+| [`AUDIT-B17`](#audit-b17-low-jobspage_id-was-never-written) | Low | Backend | `jobs.page_id` existed, was deserialised, and was never populated by the INSERT | **Fixed 2026-09-03** |
 | [`AUDIT-B13`](#audit-b13-medium-a-page-with-no-translatable-text-fails-the-job) | Medium | Worker/Backend | An untranslatable page raises and burns 3 attempts; it should warn | **Fixed 2026-09-02** |
 | [`AUDIT-B14`](#audit-b14-medium-delete-then-re-add-leaves-a-chapter-inconsistent) | Medium | Backend/Frontend | Page count stale, old slot held, reader hangs on the loading screen | Needs repro |
 | [`AUDIT-W3`](#audit-w3-medium-cooldowns-and-lock-waits-burn-a-job-slot) | Medium | Worker | Cooldowns and lock waits block a concurrency slot doing nothing | Deprioritized; needs concurrency test harness |
@@ -480,22 +482,86 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 
 ## 4. Pipeline & scheduling
 
-### `AUDIT-W13` (high): Context-injected translation runs in parallel
+### `AUDIT-W13` (high): Context-injected translation ran in parallel
 
-- **Locations:** `worker/src/worker/services/translation.py:1074-1108` (`build_context_string`),
-  `worker/src/worker/concurrency.py:101-108` (`LIGHT_QUEUES` contains `queue:translation`),
-  `:78-79` (four light slots by default).
-- **Problem:** `build_context_string` injects `Previous Page Dialogue (in reading order)` — the
-  translated text of page N−1 — into page N's prompt. Translation is a *light* queue with four
-  slots, so pages N−1, N, N+1 and N+2 translate concurrently. Page N reads a previous page that has
-  not been written yet, so the context is empty or stale for every page but the first.
-- **Effect:** the feature the chapter header advertises as "Context Injection: Enabled" is, for most
-  pages, off. Character names and honorifics drift exactly where the context was meant to hold them.
-- **Next Step:** when a chapter has context injection enabled, its translation jobs need a chapter-
-  scoped serial lane — a per-chapter lock or a dedicated single-slot queue — while OCR, layout,
-  render and QA stay parallel. `utils/lock.py` already provides the primitive. **Watch out for
-  `AUDIT-W3`:** a per-chapter lock held during a 10-minute LLM call would burn a light slot, so
-  these two are now coupled and W3 stops being deferrable.
+- **Locations:** `backend-rust/src/routes/internal.rs:415-429` (the context query),
+  `worker/src/worker/services/translation.py:1074-1108` (`build_context_string`),
+  `worker/src/worker/concurrency.py:101-108` (`queue:translation` is a LIGHT queue), `:78-79`
+  (four light slots by default).
+- **Problem:** a chapter with `use_context_memory` on has every page's translation prompt prefixed
+  with the previous page's dialogue. Nothing made the previous page finish first. Four light slots
+  meant four consecutive pages translated at once, so for every page but the first the prefix was
+  read while its source was still in flight.
+- **It is worse than a missing prefix.** The context query is
+  `SELECT COALESCE(translated_text, text) FROM ocr_regions WHERE page_id = (… page_number = $2)`.
+  An untranslated predecessor therefore hands back its **Japanese source text**, and the prompt
+  labels it `Previous Page Dialogue (in reading order):`. The model is shown untranslated Japanese
+  presented as the established English. A feature the chapter header advertises as "Context
+  Injection: Enabled" was, for every page but the first, either inert or actively misleading —
+  which is the mechanism behind character names and honorifics drifting exactly where the context
+  was meant to hold them.
+- **Fixed 2026-09-02**, in the dispatcher (`jobs/dispatcher.rs`). Before handing a
+  `queue:translation` job to a worker, `earlier_page_is_still_translating` asks whether any earlier
+  page of the same chapter still has an outstanding job. If so the job goes back to the **back** of
+  its queue and that queue's drain stops for the cycle — the same shape, and the same reason, as
+  the existing undispatchable path (`AUDIT-P3`). Going to the back is what lets the queue sort
+  itself: a page that *is* ready surfaces next cycle instead of queueing behind a blocked one.
+- **Three decisions inside that, each of which looks arbitrary without the reason:**
+  1. **Gated in the dispatcher, not the worker.** A per-chapter lock taken inside the worker is
+     the obvious alternative and would have held a light slot for the entire wait — exactly the
+     failure `AUDIT-W3` describes. A job held here simply stays in Redis and costs nothing.
+     **This is why W13 did *not* end up depending on W3**, contrary to how it was first filed.
+  2. **Blocks on `panel-detection`, `ocr` and `layout` as well as `translation`.** Pages move
+     through the pipeline at different rates — that is why they were parallel in the first place —
+     so an earlier page still sitting in OCR has *no translation job to find*. Gating on
+     translation alone would wave the later page straight through, which is the common case rather
+     than an edge one. Guarded by
+     `a_context_injecting_chapter_translates_strictly_in_page_order`, which seeds exactly that
+     shape and fails without the wider predicate.
+  3. **Does not block on `render` or `qa`.** QA's `direct_fix` can still rewrite an earlier page's
+     `translated_text` after this page has read it, so the ordering is not absolute. Blocking on QA
+     would serialise every chapter's whole pipeline end to end for the sake of small text
+     corrections. The report asked for the TL phase to be sequential and the rest to stay parallel;
+     this is that line, drawn deliberately.
+- **Fails open, by design.** No row (context injection off, page gone) and any database error both
+  read as "not blocked" — a gate that cannot answer must not stall the pipeline. A predecessor
+  wedged in `PROCESSING` cannot deadlock a chapter either: the 5-minute stale sweep in
+  `recovery.rs` returns it to PENDING or fails it, and a FAILED job is neither PENDING nor
+  PROCESSING. A page that produced no OCR regions never enqueues a translation, so it never blocks
+  the pages after it.
+- **Two holes found in review** on [#116](https://github.com/sagniKdas53/manga-tl/pull/116):
+  1. **Joining blockers through `image_id` let a page block itself.** Uploading the same file twice
+     into one chapter is a supported path — `upload_page` appends a second page at `max+1` pointing
+     at the *existing* image row — so one `image_id` can belong to two pages of one chapter. The
+     later page's own job then matched the earlier page, satisfied `prev.page_number <
+     me.page_number`, and requeued itself forever: a hard deadlock on a shape duplicate and blank
+     pages produce routinely. Blockers are attributed by **page** now, which required fixing
+     [`AUDIT-B17`](#audit-b17-low-jobspage_id-was-never-written) first. Rows predating that have a
+     NULL `page_id` and simply do not block — the fail-open direction.
+  2. **A PENDING job that never reached Redis blocked the chapter forever.** The insert and the
+     Redis push are two steps; if the push fails, the row stays PENDING with nothing to pick it up,
+     because the stale sweep only looks at PROCESSING and `requeue_pending_jobs` only runs at
+     startup or on resume. That hole predates this gate, but the gate turned "one page never
+     finishes" into "every later page of the chapter waits behind it". A new 2-minute sweep,
+     `recovery::requeue_orphaned_pending_jobs`, puts such rows back on their queue.
+     `started_at IS NULL` is what separates orphaned from in-flight.
+
+### `AUDIT-B17` (low): `jobs.page_id` was never written
+
+- **Locations:** `backend-rust/src/jobs/coordinator.rs:558-570` (the INSERT),
+  `backend-rust/src/models.rs:314` (the field).
+- **Problem:** the column exists, `Job` deserialises it, and nothing populates it. Every row read
+  back from the database has `pageId: null`. Only the enqueue-time `JobRowSnapshot`
+  (`coordinator.rs:591`) carries a real page id, so the `job_update` SSE emitted on enqueue has one
+  and the identical-looking event emitted from `internal.rs` on every worker status change does
+  not.
+- **Consequence today:** consumers have to fall back to `imageId`, which is why the `AUDIT-F17`
+  fix resolves a page by either key. Nothing is broken by it, but it is a trap: the obvious code
+  (`WHERE page_id = …`) silently matches nothing.
+- **Fixed 2026-09-03.** `enqueue_job_directly` has already resolved `page_opt` by the time it
+  inserts, so the value was simply not being bound. Promoted from "ready" to done because
+  `AUDIT-W13`'s ordering gate needs to attribute a blocking job to one page, and image identity
+  cannot do that — see the deadlock recorded there.
 
 ### `AUDIT-W14` (medium): The slot policy lets slow network work crowd out local work
 
@@ -556,9 +622,10 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   - Local AI per-endpoint timeout: `worker/src/worker/services/translation.py` (up to 10 min total)
 - **Problem:** Three places block a worker thread while holding a concurrency slot. With
   `MAX_HEAVY_SLOTS=1`, a single provider cooldown or lock wait stalls all heavy pipeline work.
-- **Status change 2026-09-02:** was "deprioritized by user decision". `AUDIT-W13`'s fix installs a
-  per-chapter lock in the translation path, which is precisely the pattern this issue says is
-  unsafe today. **W3 is now a prerequisite for W13**, not an independent nice-to-have.
+- **Status 2026-09-02:** still deprioritized, and still independent. It was briefly filed as a
+  prerequisite for `AUDIT-W13` on the assumption that W13 needed a per-chapter lock inside the
+  worker. It did not — W13 gates in the dispatcher instead, so no slot is held while a job waits,
+  and the two issues stayed uncoupled.
 - **Next Step / Blocker:** still needs real concurrency testing to prove that releasing a slot during
   a wait does not deadlock.
 
@@ -693,6 +760,8 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | `AUDIT-B12` | QA's verdicts never reached the rendered output | 2026-09-02 | The pipeline renders before it runs QA, and nothing re-rendered. QA now enqueues one `finalPass` render, which does not re-enter QA. |
 | `AUDIT-B13` | A page with no translatable text failed the job | 2026-09-02 | Worker raised, costing three whole-job retries and a red queue row, for pages whose only region was an SFX or an OCR misfire. Completes with a `WARNING` notification now. |
 | `AUDIT-F20` | The Queue Manager never moved active jobs up | 2026-09-02 | `PROCESSING` shared sort rank 1 with `PENDING` and `COMPLETED`, so starting work did not move a row. |
+| `AUDIT-B17` | `jobs.page_id` was never written | 2026-09-03 | The column existed and `Job` deserialised it, but the INSERT omitted it, so every row read back had `pageId: null` and the obvious `WHERE page_id = …` matched nothing. Fixed because `AUDIT-W13`'s gate must attribute a blocker to one page. |
+| `AUDIT-W13` | Context-injected translation ran in parallel | 2026-09-02 | Four light slots translated four consecutive pages at once, so each read a predecessor still in flight — and because the context query is `COALESCE(translated_text, text)`, that predecessor handed back its Japanese source labelled as the previous page's dialogue. Gated in the dispatcher, so no slot is held while a job waits. |
 | `AUDIT-F18` | Import Chapter kept a stale chapter number | 2026-09-02 | `useState(nextNum)` only read its argument on first mount. Re-syncs on open and asks the server for the true maximum. |
 | `AUDIT-Q1` | ~253 redundant `Objects.requireNonNull` calls | 2026-09-02 | **Obsolete.** All four named files lived under `backend/src/main/java/`, deleted by the Rust rewrite. `docker-compose.yml` builds `backend-rust/Dockerfile`. Nothing to clean up. |
 | `AUDIT-Q2` | Inline fully-qualified class names in controllers | 2026-09-02 | **Obsolete.** Same cause as `AUDIT-Q1` — `SeriesController.java` and `PageController.java` no longer exist. |

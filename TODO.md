@@ -62,9 +62,9 @@ touches nothing else, so none of D1/D6/D7/D8/D10/D14/D15/D16 are recoverable by 
 
 ### 2. Audit backlog — re-oriented 2026-09-02
 
-Full detail in [docs/issues.md](docs/issues.md). **95 filed, 69 closed, 26 open.** The 2026-09-02
-field report added 27 items; `AUDIT-Q1`, `AUDIT-Q2` and `AUDIT-T3` closed as obsolete because they
-named Java files the Rust rewrite deleted. Six of the new items are already fixed.
+Full detail in [docs/issues.md](docs/issues.md). **96 filed, 71 closed, 25 open.** The 2026-09-02
+field report added 28 items; `AUDIT-Q1`, `AUDIT-Q2` and `AUDIT-T3` closed as obsolete because they
+named Java files the Rust rewrite deleted. Eight of the new items are already fixed.
 
 The report is not 24 independent bugs. It is **three seams**, and they have to close in order —
 each later one is wasted effort until the earlier one holds.
@@ -100,10 +100,15 @@ each later one is wasted effort until the earlier one holds.
 
 Running alongside, on the pipeline side:
 
-- [ ] `AUDIT-W13` (high) — context injection is advertised as on and is effectively off: four
-  light slots translate four pages at once, so "previous page dialogue" is read before it exists.
-  Its fix needs a per-chapter serial lane, which makes `AUDIT-W3` (slot-blocking waits) a
-  prerequisite rather than the deferred item it has been.
+- [x] `AUDIT-W13` — context injection was advertised as on and was effectively off: four light
+  slots translated four pages at once, so "previous page dialogue" was read before it existed, and
+  `COALESCE(translated_text, text)` handed back the predecessor's *Japanese* under an English
+  label. Gated in the dispatcher, not the worker, so a waiting job holds no slot — which is why
+  `AUDIT-W3` turned out **not** to be a prerequisite after all. Review then found two holes in it:
+  joining blockers by image let a page that shares an image with an earlier page (the duplicate-
+  upload shape) deadlock itself, and a PENDING job that never reached Redis stalled its whole
+  chapter. Blockers are attributed by page now (which meant fixing `AUDIT-B17`), and a 2-minute
+  sweep puts orphaned PENDING rows back on their queue.
 - [x] `AUDIT-B13` — a page with nothing translatable burned 3 LLM attempts and landed red. It
   completes with a `WARNING` notification now, and the worker no longer raises.
 - [ ] `AUDIT-W14` (medium) — the dispatcher never decrements its per-cycle capacity snapshot.

@@ -557,12 +557,17 @@ pub async fn enqueue_job_directly(
 
     let inserted: Result<(), sqlx::Error> = async {
         sqlx::query(
-            "INSERT INTO jobs (id, type, status, image_id, attempt, max_attempts, trace_id, payload, created_at, updated_at) \
-             VALUES ($1, $2, 'PENDING', $3, 1, 3, $4, $5, now(), now())",
+            "INSERT INTO jobs (id, type, status, image_id, page_id, attempt, max_attempts, trace_id, payload, created_at, updated_at) \
+             VALUES ($1, $2, 'PENDING', $3, $4, 1, 3, $5, $6, now(), now())",
         )
         .bind(&job_row_id)
         .bind(job_type)
         .bind(image_id)
+        // AUDIT-B17: the column has always existed and `Job` has always deserialised it, but the
+        // INSERT omitted it, so every row read back had `pageId: null`. Consumers had to fall back
+        // to imageId, and the obvious query (`WHERE page_id = …`) silently matched nothing — which
+        // is what the first cut of the W13 ordering gate walked into.
+        .bind(page_opt.as_ref().map(|p| p.id))
         .bind(&trace_id)
         .bind(&payload)
         .execute(&state.pool)

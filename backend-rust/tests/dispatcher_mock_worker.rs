@@ -21,6 +21,7 @@ use manga_backend::jobs::dispatcher::Dispatcher;
 use manga_backend::minio::MinioService;
 use manga_backend::redis_service::RedisService;
 use manga_backend::state::AppState;
+use uuid::Uuid;
 
 fn db_config_from_jobs_env() -> Option<DatabaseConfig> {
     let url = std::env::var("JOBS_E2E_DATABASE_URL").ok()?;
@@ -417,4 +418,466 @@ async fn dispatcher_end_to_end_against_mock_worker() {
     for q in ["queue:ocr", "queue:translation"] {
         while redis.pop_from_queue(q).await.unwrap_or(None).is_some() {}
     }
+}
+
+// ---------------------------------------------------------------------------
+// AUDIT-W13 — a context-injecting chapter translates strictly in page order.
+// ---------------------------------------------------------------------------
+
+/// Seeds a two-page chapter and returns `(page1_id, page1_image, page2_id)`.
+async fn seed_two_page_chapter(pool: &sqlx::PgPool, context_memory: bool) -> (Uuid, Uuid, Uuid) {
+    // Pre-clean, not just post-clean: a failing assertion panics before cleanup_w13 runs, and a
+    // leftover probe job would then fail the *next* run for the wrong reason.
+    cleanup_w13(pool).await;
+
+    let series_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO series (id, created_at, updated_at, title, reading_direction, original_language) \
+         VALUES ($1, now(), now(), '__w13-e2e-series__', 'rightToLeft', 'ja')",
+    )
+    .bind(series_id)
+    .execute(pool)
+    .await
+    .expect("series");
+
+    let chapter_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO chapters (id, chapter_number, created_at, updated_at, use_context_memory, series_id) \
+         VALUES ($1, 1, now(), now(), $2, $3)",
+    )
+    .bind(chapter_id)
+    .bind(context_memory)
+    .bind(series_id)
+    .execute(pool)
+    .await
+    .expect("chapter");
+
+    let mut images = Vec::new();
+    for page_number in 1..=2i32 {
+        let image_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO images (id, created_at, filename, storage_path, hash, width, height) \
+             VALUES ($1, now(), $2, $3, $4, 64, 64)",
+        )
+        .bind(image_id)
+        .bind(format!("w13-p{page_number}.png"))
+        .bind(format!("originals/w13-p{page_number}.png"))
+        .bind(format!("hash-w13-{page_number}"))
+        .execute(pool)
+        .await
+        .expect("image");
+
+        sqlx::query(
+            "INSERT INTO pages (id, page_number, chapter_id, image_id) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(Uuid::new_v4())
+        .bind(page_number)
+        .bind(chapter_id)
+        .bind(image_id)
+        .execute(pool)
+        .await
+        .expect("page");
+        images.push(image_id);
+    }
+
+    let page_id_at = async |number: i32| {
+        sqlx::query_scalar::<_, Uuid>(
+            "SELECT id FROM pages WHERE chapter_id = $1 AND page_number = $2",
+        )
+        .bind(chapter_id)
+        .bind(number)
+        .fetch_one(pool)
+        .await
+        .expect("page")
+    };
+
+    (page_id_at(1).await, images[0], page_id_at(2).await)
+}
+
+/// Puts page 2's translation job on the queue, in the DB, and nowhere else.
+async fn queue_page_two_translation(
+    redis: &RedisService,
+    pool: &sqlx::PgPool,
+    page2_id: Uuid,
+    page2_image: Uuid,
+) {
+    while redis
+        .pop_from_queue("queue:translation")
+        .await
+        .unwrap_or(None)
+        .is_some()
+    {}
+    sqlx::query("DELETE FROM jobs WHERE id = '__w13-tl-p2'")
+        .execute(pool)
+        .await
+        .expect("clear job");
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, image_id, page_id, payload, created_at, updated_at) \
+         VALUES ('__w13-tl-p2', 'translation', 'PENDING', $1, $2, $3, now(), now())",
+    )
+    .bind(page2_image)
+    .bind(page2_id)
+    .bind(json!({ "jobId": "__w13-tl-p2", "pageId": page2_id.to_string() }).to_string())
+    .execute(pool)
+    .await
+    .expect("seed translation job");
+    redis
+        .push_to_queue(
+            "queue:translation",
+            &json!({ "jobId": "__w13-tl-p2", "pageId": page2_id.to_string() }).to_string(),
+        )
+        .await
+        .expect("push");
+}
+
+/// How many times the mock was handed this specific job.
+fn submits_of(mock: &MockState, job_id: &str) -> usize {
+    mock.bodies
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|b| b["job_data"]["jobId"] == job_id)
+        .count()
+}
+
+async fn cleanup_w13(pool: &sqlx::PgPool) {
+    let _ = sqlx::query("DELETE FROM jobs WHERE id IN ('__w13-tl-p2', '__w13-ocr-p1')")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("DELETE FROM series WHERE title = '__w13-e2e-series__'")
+        .execute(pool)
+        .await;
+}
+
+/// AUDIT-W13. A chapter with context injection on prefixes every page's translation prompt with
+/// the previous page's dialogue. Four light slots used to translate four pages at once, so that
+/// prefix was read before it existed — and because the context query is
+/// `COALESCE(translated_text, text)`, an untranslated predecessor handed back its *Japanese
+/// source* labelled as "Previous Page Dialogue".
+///
+/// The gate blocks on the whole run-up to a translation, not just on translation itself: page 1
+/// sitting in OCR is the common case, and it has no translation job to find.
+#[tokio::test]
+async fn a_context_injecting_chapter_translates_strictly_in_page_order() {
+    let _guard = SERIAL.lock().await;
+    let mock = MockState::default();
+    *mock.capabilities_body.lock().unwrap() = json!({
+        "max_concurrent_jobs": 4,
+        "active_jobs": 0,
+        "max_heavy_slots": 2,
+        "active_heavy_jobs": 0,
+        "max_light_slots": 2,
+        "active_light_jobs": 0,
+    });
+    *mock.responses.lock().unwrap() = [("*".to_string(), 202u16)].into_iter().collect();
+    let url = mock_server(mock.clone()).await;
+    let Some((pool, redis, state)) = app_with_mock(&url).await else {
+        eprintln!("skipping: JOBS_E2E_DATABASE_URL / REDIS_TEST_ADDR not set");
+        return;
+    };
+    redis.set_queue_paused(false).await.expect("resume");
+
+    let (page1_id, page1_image, page2_id) = seed_two_page_chapter(&pool, true).await;
+    let page2_image: Uuid = sqlx::query_scalar("SELECT image_id FROM pages WHERE id = $1")
+        .bind(page2_id)
+        .fetch_one(&pool)
+        .await
+        .expect("page 2 image");
+
+    // Page 1 has not reached translation yet — it is still in OCR. That is the case an ordering
+    // gate keyed only on translation jobs would wave straight through.
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, image_id, page_id, payload, created_at, updated_at) \
+         VALUES ('__w13-ocr-p1', 'ocr', 'PENDING', $1, $2, '{}', now(), now())",
+    )
+    .bind(page1_image)
+    .bind(page1_id)
+    .execute(&pool)
+    .await
+    .expect("page 1 ocr job");
+
+    queue_page_two_translation(&redis, &pool, page2_id, page2_image).await;
+
+    let dispatcher = Dispatcher::new(state.clone());
+    dispatcher.run_cycle().await;
+
+    // Count this job's own submits, not every submit the mock saw: the test binaries share one
+    // Redis keyspace, so an unrelated suite's job can land on queue:translation and be dispatched
+    // to this mock in the same cycle.
+    assert_eq!(
+        submits_of(&mock, "__w13-tl-p2"),
+        0,
+        "page 2 must not translate while page 1 is still upstream of its own translation"
+    );
+
+    // Page 1 finishes. Nothing else changes.
+    sqlx::query("UPDATE jobs SET status = 'COMPLETED' WHERE id = '__w13-ocr-p1'")
+        .execute(&pool)
+        .await
+        .expect("complete page 1");
+
+    // Held, not dropped: it comes back off the queue on a later cycle. More than one cycle may be
+    // needed because a blocked pop stops that queue's drain for the cycle (AUDIT-P3).
+    for _ in 0..4 {
+        dispatcher.run_cycle().await;
+        if submits_of(&mock, "__w13-tl-p2") > 0 {
+            break;
+        }
+    }
+    assert_eq!(
+        submits_of(&mock, "__w13-tl-p2"),
+        1,
+        "with nothing outstanding before it, page 2 dispatches"
+    );
+
+    cleanup_w13(&pool).await;
+}
+
+/// The gate is scoped to chapters that actually inject context. Everything else keeps translating
+/// in parallel, which is the whole point of four light slots.
+#[tokio::test]
+async fn a_chapter_without_context_injection_is_not_serialised() {
+    let _guard = SERIAL.lock().await;
+    let mock = MockState::default();
+    *mock.capabilities_body.lock().unwrap() = json!({
+        "max_concurrent_jobs": 4,
+        "active_jobs": 0,
+        "max_heavy_slots": 2,
+        "active_heavy_jobs": 0,
+        "max_light_slots": 2,
+        "active_light_jobs": 0,
+    });
+    *mock.responses.lock().unwrap() = [("*".to_string(), 202u16)].into_iter().collect();
+    let url = mock_server(mock.clone()).await;
+    let Some((pool, redis, state)) = app_with_mock(&url).await else {
+        eprintln!("skipping: JOBS_E2E_DATABASE_URL / REDIS_TEST_ADDR not set");
+        return;
+    };
+    redis.set_queue_paused(false).await.expect("resume");
+
+    let (page1_id, page1_image, page2_id) = seed_two_page_chapter(&pool, false).await;
+    let page2_image: Uuid = sqlx::query_scalar("SELECT image_id FROM pages WHERE id = $1")
+        .bind(page2_id)
+        .fetch_one(&pool)
+        .await
+        .expect("page 2 image");
+
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, image_id, page_id, payload, created_at, updated_at) \
+         VALUES ('__w13-ocr-p1', 'ocr', 'PENDING', $1, $2, '{}', now(), now())",
+    )
+    .bind(page1_image)
+    .bind(page1_id)
+    .execute(&pool)
+    .await
+    .expect("page 1 ocr job");
+
+    queue_page_two_translation(&redis, &pool, page2_id, page2_image).await;
+
+    let dispatcher = Dispatcher::new(state.clone());
+    for _ in 0..4 {
+        dispatcher.run_cycle().await;
+        if submits_of(&mock, "__w13-tl-p2") > 0 {
+            break;
+        }
+    }
+
+    assert_eq!(
+        submits_of(&mock, "__w13-tl-p2"),
+        1,
+        "page 1 being unfinished is irrelevant when the chapter injects no context"
+    );
+
+    cleanup_w13(&pool).await;
+}
+
+/// AUDIT-W13 review. Uploading the same file twice into one chapter is a supported path:
+/// `upload_page` appends a second page at `max+1` pointing at the *existing* image row. So one
+/// `image_id` can belong to two pages of the same chapter — and the first cut of this gate joined
+/// blockers through `image_id`, which made the later page's own job match the earlier page,
+/// satisfy `prev.page_number < me.page_number`, and block itself forever.
+#[tokio::test]
+async fn a_page_sharing_its_image_with_an_earlier_page_does_not_block_itself() {
+    let _guard = SERIAL.lock().await;
+    let mock = MockState::default();
+    *mock.capabilities_body.lock().unwrap() = json!({
+        "max_concurrent_jobs": 4,
+        "active_jobs": 0,
+        "max_heavy_slots": 2,
+        "active_heavy_jobs": 0,
+        "max_light_slots": 2,
+        "active_light_jobs": 0,
+    });
+    *mock.responses.lock().unwrap() = [("*".to_string(), 202u16)].into_iter().collect();
+    let url = mock_server(mock.clone()).await;
+    let Some((pool, redis, state)) = app_with_mock(&url).await else {
+        eprintln!("skipping: JOBS_E2E_DATABASE_URL / REDIS_TEST_ADDR not set");
+        return;
+    };
+    redis.set_queue_paused(false).await.expect("resume");
+
+    cleanup_w13(&pool).await;
+    let series_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO series (id, created_at, updated_at, title, reading_direction, original_language) \
+         VALUES ($1, now(), now(), '__w13-e2e-series__', 'rightToLeft', 'ja')",
+    )
+    .bind(series_id)
+    .execute(&pool)
+    .await
+    .expect("series");
+
+    let chapter_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO chapters (id, chapter_number, created_at, updated_at, use_context_memory, series_id) \
+         VALUES ($1, 1, now(), now(), TRUE, $2)",
+    )
+    .bind(chapter_id)
+    .bind(series_id)
+    .execute(&pool)
+    .await
+    .expect("chapter");
+
+    // One image, two pages — exactly what the duplicate-upload path produces.
+    let shared_image = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO images (id, created_at, filename, storage_path, hash, width, height) \
+         VALUES ($1, now(), 'dupe.png', 'originals/dupe.png', 'hash-w13-dupe', 64, 64)",
+    )
+    .bind(shared_image)
+    .execute(&pool)
+    .await
+    .expect("image");
+
+    let mut page_ids = Vec::new();
+    for page_number in 1..=2i32 {
+        let page_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO pages (id, page_number, chapter_id, image_id) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(page_id)
+        .bind(page_number)
+        .bind(chapter_id)
+        .bind(shared_image)
+        .execute(&pool)
+        .await
+        .expect("page");
+        page_ids.push(page_id);
+    }
+
+    // Nothing is outstanding for page 1 — page 2's own job is the only row in play.
+    queue_page_two_translation(&redis, &pool, page_ids[1], shared_image).await;
+
+    let dispatcher = Dispatcher::new(state.clone());
+    for _ in 0..4 {
+        dispatcher.run_cycle().await;
+        if submits_of(&mock, "__w13-tl-p2") > 0 {
+            break;
+        }
+    }
+
+    assert_eq!(
+        submits_of(&mock, "__w13-tl-p2"),
+        1,
+        "a page must not count itself as its own predecessor just because it reuses an image"
+    );
+
+    cleanup_w13(&pool).await;
+}
+
+/// AUDIT-W13 review. A job is inserted PENDING and pushed onto its queue as two separate steps.
+/// If the push fails, the row stays PENDING with nothing to pick it up — `recover_stale_processing_jobs`
+/// only looks at PROCESSING, and `requeue_pending_jobs` only runs at startup or on resume. That hole
+/// predates the ordering gate, but the gate turns "one page never finishes" into "every later page
+/// of the chapter waits behind it, indefinitely".
+#[tokio::test]
+async fn a_pending_job_that_never_reached_redis_is_put_back_on_its_queue() {
+    let _guard = SERIAL.lock().await;
+    let Some((pool, redis, state)) = app_with_mock("http://127.0.0.1:1").await else {
+        eprintln!("skipping: JOBS_E2E_DATABASE_URL / REDIS_TEST_ADDR not set");
+        return;
+    };
+    redis.set_queue_paused(false).await.expect("resume");
+
+    let on_queue = async |id: &str| {
+        redis
+            .list_range("queue:ocr")
+            .await
+            .unwrap_or_default()
+            .iter()
+            .filter(|entry| {
+                serde_json::from_str::<Value>(entry)
+                    .ok()
+                    .and_then(|v| v.get("jobId").and_then(|j| j.as_str()).map(str::to_string))
+                    .as_deref()
+                    == Some(id)
+            })
+            .count()
+    };
+
+    for id in ["__orphan-lost", "__orphan-queued", "__orphan-inflight"] {
+        let _ = sqlx::query("DELETE FROM jobs WHERE id = $1")
+            .bind(id)
+            .execute(&pool)
+            .await;
+    }
+
+    // Three PENDING rows, all older than the grace period, differing only in what should happen.
+    for (id, started) in [
+        ("__orphan-lost", false),
+        ("__orphan-queued", false),
+        ("__orphan-inflight", true),
+    ] {
+        sqlx::query(
+            "INSERT INTO jobs (id, type, status, payload, started_at, created_at, updated_at) \
+             VALUES ($1, 'ocr', 'PENDING', $2, CASE WHEN $3 THEN now() ELSE NULL END, \
+                     now() - interval '10 minutes', now() - interval '10 minutes')",
+        )
+        .bind(id)
+        .bind(json!({ "jobId": id }).to_string())
+        .bind(started)
+        .execute(&pool)
+        .await
+        .expect("seed pending job");
+    }
+
+    // Only this one is actually on the queue.
+    redis
+        .push_to_queue(
+            "queue:ocr",
+            &json!({ "jobId": "__orphan-queued" }).to_string(),
+        )
+        .await
+        .expect("push");
+
+    manga_backend::jobs::recovery::requeue_orphaned_pending_jobs(&state).await;
+
+    assert_eq!(
+        on_queue("__orphan-lost").await,
+        1,
+        "a PENDING row on no queue is put back on one"
+    );
+    assert_eq!(
+        on_queue("__orphan-queued").await,
+        1,
+        "a row already queued is not duplicated"
+    );
+    assert_eq!(
+        on_queue("__orphan-inflight").await,
+        0,
+        "started_at means the dispatcher already handed it to a worker — not orphaned"
+    );
+
+    for id in ["__orphan-lost", "__orphan-queued", "__orphan-inflight"] {
+        let _ = sqlx::query("DELETE FROM jobs WHERE id = $1")
+            .bind(id)
+            .execute(&pool)
+            .await;
+    }
+    while redis
+        .pop_from_queue("queue:ocr")
+        .await
+        .unwrap_or(None)
+        .is_some()
+    {}
 }

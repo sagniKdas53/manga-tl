@@ -21,6 +21,9 @@ use crate::state::AppState;
 const COOLDOWN_BASE_SECS: u64 = 10;
 const COOLDOWN_MAX_SECS: u64 = 60;
 
+/// The one queue whose ordering matters within a chapter. See `earlier_page_is_still_translating`.
+const TRANSLATION_QUEUE: &str = "queue:translation";
+
 #[derive(Default)]
 struct WorkerState {
     cooldown_until: HashMap<String, Instant>,
@@ -142,6 +145,74 @@ impl Dispatcher {
         false
     }
 
+    /// AUDIT-W13: is an earlier page of this page's chapter still waiting to be translated?
+    ///
+    /// A chapter with `use_context_memory` on has every page's translation prompt prefixed with
+    /// the *previous* page's dialogue, assembled by `image_details` in `routes/internal.rs`. That
+    /// only means anything if the previous page has actually been translated by the time this one
+    /// starts — and nothing enforced it. `queue:translation` is a LIGHT queue with four slots by
+    /// default, so four consecutive pages translated at once and each read a predecessor that was
+    /// still in flight.
+    ///
+    /// The failure is worse than a missing prefix. The context query is
+    /// `COALESCE(translated_text, text)`, so an untranslated predecessor hands back its **Japanese
+    /// source**, which the prompt then labels "Previous Page Dialogue (in reading order)". The
+    /// model is shown untranslated text as though it were the established English. A feature the
+    /// chapter header advertises as "Context Injection: Enabled" was, for every page but the
+    /// first, either inert or actively misleading.
+    ///
+    /// Gating here rather than in the worker is deliberate: a blocked job simply stays in Redis,
+    /// so no concurrency slot is held while it waits. A per-chapter lock taken inside the worker
+    /// would have been the obvious alternative and would have burned a light slot for the whole
+    /// wait — the failure mode `AUDIT-W3` already describes. This keeps W13 independent of W3.
+    ///
+    /// Attributes a blocker to a **page**, not an image. A duplicate upload into the same chapter
+    /// is a supported path — `upload_page` appends a second page at `max+1` pointing at the
+    /// *existing* image row — so one `image_id` can belong to two pages of one chapter. Joining
+    /// through `image_id` made the later page's own job match the earlier page, satisfy
+    /// `prev.page_number < me.page_number`, and block itself forever. `jobs.page_id` is populated
+    /// as of AUDIT-B17; rows predating that have NULL and simply do not block, which is the
+    /// fail-open direction.
+    ///
+    /// It blocks on the whole run-up to a translation — `panel-detection`, `ocr`, `layout` as well
+    /// as `translation` — not just on translation itself. Pages move through the pipeline at
+    /// different rates (that is why they were parallel to begin with), so an earlier page still
+    /// sitting in OCR has no translation job to find, and gating on `translation` alone would wave
+    /// this page straight through to read a predecessor that has not been translated.
+    ///
+    /// It deliberately does **not** block on `render` or `qa`. QA's `direct_fix` can still rewrite
+    /// an earlier page's `translated_text` after this page has read it, so the ordering is not
+    /// absolute — but blocking on QA would serialise every chapter's entire pipeline end to end
+    /// for the sake of small text corrections. The report asked for the TL phase to be sequential
+    /// and the rest to stay parallel; this is that line.
+    ///
+    /// Fails **open**: no row (chapter has context injection off, or the page is gone) and any
+    /// database error both read as "not blocked". A gate that cannot answer must not stall the
+    /// pipeline. A predecessor wedged in PROCESSING cannot deadlock the chapter either — the
+    /// 5-minute stale sweep in `recovery.rs` returns it to PENDING or fails it, and a FAILED job
+    /// is neither PENDING nor PROCESSING, so it stops blocking. A page that produced no OCR
+    /// regions never enqueues a translation at all, so it never blocks the pages after it.
+    async fn earlier_page_is_still_translating(&self, page_id: uuid::Uuid) -> bool {
+        sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS ( \
+                 SELECT 1 FROM jobs j \
+                   JOIN pages prev ON prev.id = j.page_id \
+                  WHERE j.type IN ('panel-detection', 'ocr', 'layout', 'translation') \
+                    AND j.status IN ('PENDING', 'PROCESSING') \
+                    AND prev.chapter_id = me.chapter_id \
+                    AND prev.page_number < me.page_number \
+             ) \
+             FROM pages me \
+             JOIN chapters c ON c.id = me.chapter_id \
+             WHERE me.id = $1 AND c.use_context_memory",
+        )
+        .bind(page_id)
+        .fetch_optional(&self.state.pool)
+        .await
+        .unwrap_or(None)
+        .unwrap_or(false)
+    }
+
     async fn dispatch_slot(
         &self,
         queues: &[&str],
@@ -166,6 +237,22 @@ impl Dispatcher {
                     .ok()
                     .and_then(|v| v.get("jobId").and_then(|j| j.as_str()).map(str::to_string))
                     .unwrap_or_else(|| "unknown".into());
+
+                // AUDIT-W13: a context-injecting chapter translates strictly in page order.
+                // Re-pushed to the BACK and this queue's drain stopped for the cycle — the same
+                // shape as the undispatchable case below, and for the same reason (AUDIT-P3).
+                // Going to the back is what lets the queue sort itself out: the page that *is*
+                // ready surfaces on the next cycle instead of sitting behind a blocked one.
+                if *queue == TRANSLATION_QUEUE
+                    && let Some(page_id) = page_id_of(&job_json)
+                    && self.earlier_page_is_still_translating(page_id).await
+                {
+                    tracing::debug!(
+                        "Holding translation job {job_id}: an earlier page of its chapter is still                          translating and the chapter injects previous-page context"
+                    );
+                    let _ = redis.push_to_queue(queue, &job_json).await;
+                    break;
+                }
 
                 let mut sent = false;
                 for (worker_url, cap) in capacities {
@@ -256,6 +343,15 @@ impl Dispatcher {
             }
         }
     }
+}
+
+/// `pageId` out of a queued job payload, when it carries one.
+fn page_id_of(job_json: &str) -> Option<uuid::Uuid> {
+    serde_json::from_str::<serde_json::Value>(job_json)
+        .ok()?
+        .get("pageId")?
+        .as_str()
+        .and_then(|s| uuid::Uuid::parse_str(s).ok())
 }
 
 #[derive(Clone, Copy)]
