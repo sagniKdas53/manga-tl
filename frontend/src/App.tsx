@@ -32,6 +32,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Providers
 import { NotificationProvider } from "./components/NotificationContext";
+import PipelineRefreshWatcher from "./components/PipelineRefreshWatcher";
 import { ToastProvider, useToast } from "./components/ToastContext";
 import { UploadProvider } from "./components/UploadContext";
 
@@ -357,6 +358,18 @@ function AppContent() {
   const pages = pagesPagination.items;
   const setPages = pagesPagination.setItems;
 
+  // AUDIT-F19: the grids never asked again after their first fetch, so a chapter that finished
+  // translating while its page was open kept showing untranslated thumbnails and stale counts.
+  // Only the lists actually on screen are re-read — each hook is inert when its URL is null.
+  const refreshSeries = seriesPagination.refresh;
+  const refreshChapters = chaptersPagination.refresh;
+  const refreshPages = pagesPagination.refresh;
+  const handlePipelineActivity = useCallback(() => {
+    void refreshSeries();
+    void refreshChapters();
+    void refreshPages();
+  }, [refreshSeries, refreshChapters, refreshPages]);
+
   // The reader thinks in ascending page positions — "page 42" is the 42nd page of the
   // chapter regardless of how the gallery is sorted — but the batch that holds it depends on
   // the order the list was actually fetched in. Descending, the 42nd page lives in the batch
@@ -540,6 +553,9 @@ function AppContent() {
                 onSessionEnd={handleSessionEnd}
               />
               <TranslationToastWatcher />
+              <PipelineRefreshWatcher
+                onPipelineActivity={handlePipelineActivity}
+              />
               <div className="app-container">
                 {/*
                   The first focusable thing on the page: off-screen until focused, then
