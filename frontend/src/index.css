@@ -33,46 +33,61 @@ body,
   --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
   --font-display: "Outfit", sans-serif;
 
-  /* Color Palette - nHentai Dark Theme */
-  --bg-base: #111111;
-  --bg-surface: #1f1f1f;
-  --bg-card: rgba(31, 31, 31, 0.8);
-  --border-color: rgba(255, 255, 255, 0.1);
+  /* Dark palette.
+   *
+   * AUDIT-F21: this block and `colorSchemes.dark` in `theme.ts` are two hand-maintained copies
+   * of one palette, and they had already drifted — base was #111111 here against #0f0f0f there,
+   * body text #f3f4f6 against #fefefe. Neither is more correct; they were simply edited apart.
+   * The shared five (base, surface, text ×3, primary) are asserted equal in `theme.test.ts`, so
+   * a future edit to one file fails until the other follows. Collapsing the duplication for real
+   * means pointing these at MUI's generated `--mui-palette-*` variables, which is a bigger change
+   * than a contrast pass and is filed as AUDIT-F24.
+   *
+   * The values themselves: body text was 17.2:1 here and 19.0:1 in the theme, against a 7:1 AAA
+   * threshold, and every accent ran 84–100% saturation. Read the comment above `dark:` in
+   * `theme.ts` for why that is a defect and not a virtue. */
+  --bg-base: #16161a;
+  --bg-surface: #26262c;
+  --bg-card: rgba(38, 38, 44, 0.8);
+  --border-color: rgba(226, 224, 221, 0.13);
 
-  --primary: #ed2553;
-  --primary-hover: #ff416c;
-  --primary-glow: rgba(237, 37, 83, 0.15);
+  --primary: #df6d87;
+  --primary-hover: #ea8aa0;
+  --primary-glow: rgba(223, 109, 135, 0.15);
 
-  --success: #10b981;
-  --success-glow: rgba(16, 185, 129, 0.1);
-  --warning: #f59e0b;
-  --error: #ef4444;
+  --success: #2bc591;
+  --success-glow: rgba(43, 197, 145, 0.1);
+  --warning: #e3b782;
+  --error: #e07a7a;
 
-  --conversation: #3b82f6;
-  --conversation-glow: rgba(59, 130, 246, 0.12);
-  --conversation-glow-selected: rgba(59, 130, 246, 0.25);
-  --conversation-glow-approved: rgba(59, 130, 246, 0.08);
+  --conversation: #6797e4;
+  --conversation-glow: rgba(103, 151, 228, 0.12);
+  --conversation-glow-selected: rgba(103, 151, 228, 0.25);
+  --conversation-glow-approved: rgba(103, 151, 228, 0.08);
 
-  --text-main: #f3f4f6;
-  --text-muted: #b3b3b3;
-  --text-dim: #808080;
+  --text-main: #e2e0dd;
+  --text-muted: #a9a6a2;
+  --text-dim: #8a8681;
 
   /* Theme-dependent overlays & backgrounds */
   --bg-nav: var(--bg-base);
   --bg-overlay-glass: var(--bg-surface);
-  --bg-hover: rgba(255, 255, 255, 0.12);
-  --bg-hover-more: rgba(255, 255, 255, 0.18);
-  --bg-input: rgba(255, 255, 255, 0.03);
-  --bg-input-focus: rgba(255, 255, 255, 0.06);
-  --bg-card-content: rgba(31, 31, 31, 0.9);
-  --bg-chapter-info: rgba(31, 31, 31, 0.95);
+  /* Lowered with the surfaces: an overlay tuned against a #111 field is heavier than it needs
+   * to be against a #16161a one, and hover was reading as a jump rather than a highlight. */
+  --bg-hover: rgba(226, 224, 221, 0.1);
+  --bg-hover-more: rgba(226, 224, 221, 0.15);
+  --bg-input: rgba(226, 224, 221, 0.03);
+  --bg-input-focus: rgba(226, 224, 221, 0.06);
+  --bg-card-content: rgba(38, 38, 44, 0.9);
+  --bg-chapter-info: rgba(38, 38, 44, 0.95);
 
-  --primary-glow-selected: rgba(237, 37, 83, 0.25);
-  --primary-glow-approved: rgba(237, 37, 83, 0.08);
-  --success-glow: rgba(16, 185, 129, 0.12);
+  --primary-glow-selected: rgba(223, 109, 135, 0.22);
+  --primary-glow-approved: rgba(223, 109, 135, 0.08);
+  --success-glow: rgba(43, 197, 145, 0.12);
 
-  /* Reader canvas background — dark by default */
-  --bg-canvas: #1a1a1e;
+  /* Reader canvas background — dark by default. Kept a shade below `--bg-surface`: this sits
+   * directly behind a manga page, and the page has to be the brightest thing on screen. */
+  --bg-canvas: #1c1c21;
 
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;

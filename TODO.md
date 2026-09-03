@@ -62,9 +62,9 @@ touches nothing else, so none of D1/D6/D7/D8/D10/D14/D15/D16 are recoverable by 
 
 ### 2. Audit backlog — re-oriented 2026-09-02
 
-Full detail in [docs/issues.md](docs/issues.md). **97 filed, 77 closed, 20 open.** The 2026-09-02
-field report added 28 items; `AUDIT-Q1`, `AUDIT-Q2` and `AUDIT-T3` closed as obsolete because they
-named Java files the Rust rewrite deleted. Fourteen of the new items are already fixed.
+Full detail in [docs/issues.md](docs/issues.md). **98 filed, 78 closed, 20 open.** The 2026-09-02
+field report added 29 items; `AUDIT-Q1`, `AUDIT-Q2` and `AUDIT-T3` closed as obsolete because they
+named Java files the Rust rewrite deleted. Fifteen of the new items are already fixed.
 
 The report is not 24 independent bugs. It is **three seams**, and they have to close in order —
 each later one is wasted effort until the earlier one holds.
@@ -104,6 +104,14 @@ each later one is wasted effort until the earlier one holds.
     series, chapters and pages on `job_update`, debounced 4s so a finishing chapter's burst of
     per-page-per-stage events costs one refetch rather than dozens. The per-page completion
     marker the report also asked for is left open — it needs a rendered thumbnail variant.
+  - [x] `AUDIT-F21` — dark mode read as harsh because it had *too much* contrast, not too
+    little: 19:1 body text against a 7:1 AAA threshold, which blooms glyph edges on a tablet at
+    night, plus 84–100% saturated accents on a near-black field. Surfaces lifted, white pulled
+    back to 13.7:1, accents desaturated at unchanged hue. Guarded with a ceiling as well as a
+    floor, so it cannot be "improved" back. Two side findings: cards sat 1.15:1 from the page
+    behind them, and `primary` on `paper` was 3.99:1 — below AA. The palette turns out to be
+    maintained twice (`theme.ts` and `index.css`) and had already drifted; pinned together with a
+    parity test and filed as `AUDIT-F24`.
   - **The "SSE is ass, move to WS" proposal is declined for now** (`AUDIT-P10`) — every concrete
     symptom was the client-side filter, now fixed, and a rewrite would re-lose the ticket
     handshake, the Redis replay and the jittered reconnect for a client→server channel nothing
