@@ -85,8 +85,26 @@ impl Pagination {
         (page, size)
     }
 
+    /// AUDIT-T4: `page * size` is an `i64` multiply on a number the client supplies, and only
+    /// `page` was bounded — below, not above. `?page=9223372036854775807&size=100` overflowed:
+    /// a debug build panicked into the catch-panic layer and answered 500, and a release build
+    /// wrapped to a *negative* OFFSET, which Postgres rejects — and `unwrap_or_default()` on the
+    /// row query turned that rejection into an empty list sitting next to an honest
+    /// `totalElements`. That is worse than an error, because it looks like an answer.
+    ///
+    /// Saturating keeps the requested page number in the envelope and hands Postgres a valid
+    /// (if enormous) offset, so an absurd page reads as what it is: past the end, and empty.
+    fn offset(&self, size: i64) -> i64 {
+        self.page.unwrap_or(0).max(0).saturating_mul(size)
+    }
+
+    /// AUDIT-T4: matched `Some("desc")` exactly, so `?sortDir=DESC` — which Spring's
+    /// `Sort.Direction.fromString` accepted, because it is case-insensitive — silently returned
+    /// *ascending*. The worst shape of parity break: 200, with plausible-looking data.
     fn descending(&self) -> bool {
-        matches!(self.sortDir.as_deref(), Some("desc"))
+        self.sortDir
+            .as_deref()
+            .is_some_and(|d| d.eq_ignore_ascii_case("desc"))
     }
 }
 
@@ -658,7 +676,7 @@ pub async fn list_pages(
         "SELECT p.id, p.page_number, p.chapter_id, p.image_id, i.filename \
          FROM pages p JOIN images i ON i.id = p.image_id \
          WHERE p.chapter_id = $1 ORDER BY p.page_number {direction} LIMIT {size} OFFSET {}",
-        page * size
+        p.offset(size)
     );
     let rows: Vec<JoinedRow> = sqlx::query_as::<_, JoinedRow>(&sql)
         .bind(chapter_id)

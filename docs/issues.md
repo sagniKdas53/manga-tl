@@ -1,11 +1,17 @@
 # Issues & Technical Debt
 
-> **Standing: 98 filed, 78 closed, 20 open.** Re-audited 2026-09-02 against the field report in
+> **Standing: 104 filed, 79 closed, 25 open.** Six items were added 2026-09-03 from the Codex
+> review of the fix stack — `AUDIT-R13`, `AUDIT-R14`, `AUDIT-F25`, `AUDIT-F26`, `AUDIT-F27` and
+> `AUDIT-T5`, all in [Open Review Findings](#open-review-findings-prs-118-124-2026-09-03). Note
+> `AUDIT-F26` disputes the `AUDIT-F19` fix; verify it before trusting that row.
+>
+> Re-audited 2026-09-02 against the field report in
 > `new issues.pdf`. Three previously-open items were closed as *obsolete* — they described Java
 > files the Rust rewrite deleted. Twenty-nine new items are filed (two, `AUDIT-B17` and
-> `AUDIT-F24`, found while fixing another), and fifteen are already fixed: `AUDIT-F14`,
+> `AUDIT-F24`, found while fixing another), and sixteen are already fixed: `AUDIT-F14`,
 > `AUDIT-F15`, `AUDIT-F16`, `AUDIT-F17`, `AUDIT-F18`, `AUDIT-F19`, `AUDIT-F20`, `AUDIT-F21`,
-> `AUDIT-B12`, `AUDIT-B13`, `AUDIT-B17`, `AUDIT-R1`, `AUDIT-R5`, `AUDIT-R7`, `AUDIT-W13`.
+> `AUDIT-B12`, `AUDIT-B13`, `AUDIT-B17`, `AUDIT-R1`, `AUDIT-R5`, `AUDIT-R7`, `AUDIT-T4`,
+> `AUDIT-W13`.
 >
 > *(The previous header read "68 filed, 61 closed, 7 open" while listing eight open items. The
 > table was right and the count was one short; these numbers are taken from the table.)*
@@ -194,7 +200,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-F9`](#audit-f9-low-responsive-layout-is-never-verified) | Low | Frontend | Responsive layout is never verified in tests | Blocked on Playwright |
 | [`AUDIT-D5`](#audit-d5-low-no-memory-limits-on-auxiliary-containers) | Low | Docker | No memory limits on db, redis, minio, backend | Needs measured peak |
 | [`AUDIT-T1`](#audit-t1-unranked-worker-e2e-test-suite-is-heavily-mocked) | Unranked | Testing | Worker "e2e" suite over-mocks with no real I/O assertions | Blocked on [mock_router.md](design/mock_router.md) |
-| [`AUDIT-T4`](#audit-t4-unranked-nothing-proves-pagination-and-sort-against-a-real-database) | Unranked | Testing | Successor to the closed `AUDIT-T3`, refiled against the Rust handlers | Ready |
+| [`AUDIT-T4`](#audit-t4-unranked-nothing-proves-pagination-and-sort-against-a-real-database) | Unranked | Testing | Successor to the closed `AUDIT-T3`; the tests found two live defects | **Fixed 2026-09-03** |
 
 ---
 ## 1. Seam 1 — the editor and the renderer disagree about what an element is
@@ -263,6 +269,19 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
     cut to the box would crop exactly the overflow the halo exists to make readable. PIL turns
     counter-clockwise where SVG/canvas turn clockwise, so the angle is negated; guarded by
     `test_rotate_point_deg_turns_clockwise_like_the_editor`.
+- **The first attempt did not work, and shipped that way for a day.** Everything described above
+  landed, but `handleRotationDragStart` never initialised `rotationDrag.originalRotation` — the
+  initialiser was written into `setDraggedVertex`, which has no such field. Every drag therefore
+  computed `undefined + deltaAngle`, and `normalizeDegrees` mapped the NaN to 0. The polygon
+  turned; the angle persisted as zero; the defect was exactly as reported. Caught by the Codex
+  review of PR #118, fixed on 2026-09-03.
+
+  **The lesson is not "add a rotation test".** TypeScript already rejected both halves — a missing
+  required property on one setter, an excess one on the other — and nothing ran it, because
+  `npm run build` is `vite build` and `tsc` appeared nowhere in `package.json` or the workflows.
+  The unit tests this work added could not see it either: they test `normalizeDegrees` in
+  isolation, and `normalizeDegrees(NaN) === 0` made the NaN path read as deliberate. See
+  `AUDIT-T5`.
 - **Backward compatible.** Every existing row has `rotation` 0 or NULL, so nothing re-renders
   differently until something is actually rotated.
 - **Not covered here:** existing elements whose box was already inflated by the old handle keep
@@ -903,13 +922,98 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 
 ### `AUDIT-T4` (unranked): Nothing proves pagination and sort against a real database
 
-- **Successor to `AUDIT-T3`**, which named `@WebMvcTest` classes the Rust rewrite deleted. The gap it
-  described came back with the new handlers: `backend-rust/src/routes/page.rs:652-675` builds its
-  `ORDER BY` and `LIMIT/OFFSET` by string interpolation, and nothing exercises it against Postgres.
-- **Next Step:** cover it with a database-backed integration test, alongside the `max-page-size`
-  clamp that `AUDIT-B11` installed.
+- **Successor to `AUDIT-T3`**, which named `@WebMvcTest` classes the Rust rewrite deleted. The gap
+  it described came back with the new handlers: `list_pages`, `list_chapters` and `list_series` all
+  build their `ORDER BY` and `LIMIT/OFFSET` by string interpolation into a `format!`.
+- **The filing was half wrong, and the correction matters.** `series_endpoints.rs` *did* cover
+  `list_series` — the sort whitelist, the `sortDir` flip, the envelope shape. What had nothing at
+  all were the two endpoints the reader actually walks: `list_chapters` and `list_pages`.
+- **The interpolation is not the defect,** and the new tests do not pretend otherwise: the
+  direction is a literal, the column comes off a whitelist, and the sizes are clamped `i64`s. What
+  was unproven is that it *composes* — that a window is the window it claims to be, that the clamp
+  survives the round trip, and that the arithmetic holds at the edges.
+- **Fixed 2026-09-03.** `backend-rust/tests/pagination_sort.rs`, seven tests against a real
+  Postgres. Rows are seeded through SQL (uploads need MinIO, and none of this is about image
+  storage) and deliberately inserted **out of order**, so "sorted by page number" cannot pass by
+  accident on a small unindexed scan that happens to return insertion order.
+- **They found two live defects**, which is the argument for the whole item:
+  - **`page * size` overflowed.** Both are `i64` and only `page` was bounded — below, not above.
+    `?page=9223372036854775807&size=100` panicked into the catch-panic layer and answered **500**
+    in debug; in release it wraps to a *negative* `OFFSET`, Postgres rejects the query, and the
+    handler's `unwrap_or_default()` serves that rejection as an **empty list beside an honest
+    `totalElements`** — worse than an error, because it looks like an answer. `offset()` saturates
+    now, in both `Pagination` types.
+  - **`sortDir=DESC` sorted ascending.** The match was on the literal `"desc"`, but Spring's
+    `Sort.Direction.fromString` is case-insensitive, so the Java backend honoured it. A silent
+    parity break that answers 200 with plausible-looking data. Compared case-insensitively now.
+- **Not fixed, and deliberately:** `unwrap_or_default()` on the row queries still converts any
+  database error into an empty page. The overflow was the only known way to reach it, so this is
+  now unreachable rather than handled; making list handlers distinguish "no rows" from "the query
+  failed" is a wider change than this item, and is worth its own pass.
 
 ---
+## Open Review Findings (PRs #118-#124, 2026-09-03)
+
+The Codex review of the 2026-09-02 fix stack raised fifteen findings. The six on PRs #115 and #116
+were addressed on the branch. Four P1s were addressed on 2026-09-03 (the `AUDIT-R5` wiring above,
+and the three folded into `AUDIT-F16`/`AUDIT-R1`). **These five P2s are not fixed** and are
+recorded here because the PR threads close when the stack merges.
+
+Severities are the reviewer's. Where an entry is marked *unverified* the claim has been read but
+not reproduced.
+
+### `AUDIT-R13` (medium): Reshape controls are drawn at twice the rotation
+
+In reshape mode `currentPolygon`, its vertex circles and the rotation handle are already in
+absolute page coordinates, but the enclosing group transform rotates them again; only the backdrop
+polygon carries the inverse. Entering reshape on a 30°-rotated element is reported to draw its
+controls at 60°, so vertex and rotation drags act from misleading positions. Frontend,
+`Reader.tsx`. *Unverified.*
+
+### `AUDIT-R14` (medium): A vertex drag re-derives the box from an already-rotated polygon
+
+Once an element has both a nonzero `rotation` and a rotated page-space polygon, a vertex drag
+assigns `polygonBBox(newPoly)` to `x`/`y`/`maxWidth`/`maxHeight` while keeping the angle. That is
+the axis-aligned bounds of an already-rotated outline, which the renderer then rotates a second
+time — the box inflation `AUDIT-R5` removed, reintroduced through the reshape path. Undo
+reconstructs the same wrong box. Frontend, `Reader.tsx`. *Unverified.*
+
+### `AUDIT-F25` (low): A null `visible` is hidden on the canvas and visible in the sidebar
+
+`visible` is nullable in the database and `Option<bool>` in the model. The canvas and the new
+hidden-count treat `null` as hidden; the sidebar's toggle treats it as visible, so it offers "Hide
+element" and writes `false`, and the first click cannot restore the element. One falsy check, or
+normalise on read. Frontend, `ReaderRightSidebar.tsx`. *Unverified.*
+
+### `AUDIT-F26` (medium): The grid refresh re-fetches DTOs that cannot show pipeline state
+
+Successor to `AUDIT-F19`, which is marked fixed on the strength of the refetch firing. The reviewer
+argues the refetch cannot change anything: `/pages` returns the same original `/thumbnail` URL
+backed by `thumbnail_storage_path`, and the chapter and series DTOs carry no job status, so React
+receives identical props and image `src`. Pipeline output appears through `/rendered`. If that
+holds, the untranslated grid still does not update and `AUDIT-F19` is not closed — the refresh
+needs a pipeline-visible status or a rendered-thumbnail URL with a cache key. **Verify before
+trusting the `AUDIT-F19` fix.** Frontend/Backend, `App.tsx` + `page.rs`. *Unverified.*
+
+### `AUDIT-F27` (medium): The pipeline refresh debounce assumes events arrive close together
+
+`PipelineRefreshWatcher` debounces on a four-second timer. Completions spaced further apart than
+that — serialized context-aware translation, which `AUDIT-W13` deliberately made the norm — each
+fire their own timer, so a long chapter performs one full loaded-window refresh per page rather
+than one per burst, and `refresh()` requests every loaded pagination batch. Wants a bounded
+maximum cadence or a real pipeline-terminal signal. Frontend, `PipelineRefreshWatcher.tsx`.
+*Unverified.*
+
+### `AUDIT-T5` (medium): Nothing typechecks the frontend
+
+`npm run build` is `vite build`, which strips types without checking them, and `tsc` appears in
+neither `frontend/package.json` nor any workflow. The `AUDIT-R5` wiring defect was two hard
+TypeScript errors that reached `main`'s doorstep with every check green. `tsc -b --noEmit`
+currently reports 80 errors — 24 in application source, 56 in tests — which is why the gate could
+not simply be switched on with the fix.
+
+---
+
 ## Recently Closed Items (Reference)
 
 | ID | Summary | Closed Date | Resolution Details |
@@ -923,6 +1027,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | `AUDIT-F15` | A hidden element could not be reached again | 2026-09-03 | The `visible` toggle lived on the selected element's inspector and selecting meant clicking it on the canvas, so hiding was a one-way door. The layer panel lists elements now, each selectable with its own toggle. |
 | `AUDIT-F19` | Thumbnails and cards never re-polled | 2026-09-03 | Grids rendered whatever the first fetch returned; nothing subscribed to `job_update` and nothing polled, so a chapter that finished while its page was open kept showing untranslated thumbnails until a manual reload. One app-level watcher refreshes all three grids, debounced 4s so a finishing chapter's burst costs one refetch. |
 | `AUDIT-F21` | Dark mode was unpleasant to read | 2026-09-03 | Not short of contrast — it had far too much. Body text measured 19.0:1 against a 7:1 AAA threshold, which blooms glyph edges on a tablet at night, and every accent ran 84–100% saturation. Surfaces lifted, white pulled back to 13.7:1, accents desaturated at unchanged hue. Two side findings fixed with it: cards were 1.15:1 from the page behind them, and `primary` on `paper` was 3.99:1, below AA. |
+| `AUDIT-T4` | Nothing proved pagination and sort against a real database | 2026-09-03 | The filing was half wrong — `list_series` was covered; `list_chapters` and `list_pages`, the two the reader walks, had nothing. Seven tests against real Postgres, seeding rows out of order so a missing `ORDER BY` cannot pass. They found two live defects: `page * size` overflowed to a 500 (or, in release, a silent empty page), and `sortDir=DESC` sorted ascending. |
 | `AUDIT-R7` | A rectangle arrived as a 40-vertex polygon | 2026-09-03 | The simplification tolerance was `0.002 × perimeter`, which is 0.4px on a small caption plate — below one pixel, so nothing was removed. Smaller shapes got tighter tolerances. Now an absolute 2px everywhere, plus the synthesized cover plate (28 points by construction) and the merge hull (never simplified at all). |
 | `AUDIT-R5` | Rotation turned the plate and left the glyphs level | 2026-09-03 | `rotation` was effectively always 0: the handle wrote the angle into the mask polygon and the *bounding box of that polygon* into x/y/w/h instead. So the plate tilted, the text stayed level (in the reader too — the canvas skipped `ctx.rotate` exactly when a polygon existed), and the box inflated on every turn. `rotation` is the angle now and the box is left alone. |
 | `AUDIT-B17` | `jobs.page_id` was never written | 2026-09-03 | The column existed and `Job` deserialised it, but the INSERT omitted it, so every row read back had `pageId: null` and the obvious `WHERE page_id = …` matched nothing. Fixed because `AUDIT-W13`'s gate must attribute a blocker to one page. |
