@@ -62,9 +62,9 @@ touches nothing else, so none of D1/D6/D7/D8/D10/D14/D15/D16 are recoverable by 
 
 ### 2. Audit backlog — re-oriented 2026-09-02
 
-Full detail in [docs/issues.md](docs/issues.md). **96 filed, 71 closed, 25 open.** The 2026-09-02
+Full detail in [docs/issues.md](docs/issues.md). **96 filed, 72 closed, 24 open.** The 2026-09-02
 field report added 28 items; `AUDIT-Q1`, `AUDIT-Q2` and `AUDIT-T3` closed as obsolete because they
-named Java files the Rust rewrite deleted. Eight of the new items are already fixed.
+named Java files the Rust rewrite deleted. Nine of the new items are already fixed.
 
 The report is not 24 independent bugs. It is **three seams**, and they have to close in order —
 each later one is wasted effort until the earlier one holds.
@@ -72,9 +72,11 @@ each later one is wasted effort until the earlier one holds.
 - [/] **Seam 1 — the editor and the renderer disagree about what an element is.**
   - [x] `AUDIT-F14` — rotation 400'd every save: `maxWidth`/`maxHeight` were `i32` and a rotated
     bounding box is fractional, so serde rejected the body before the handler ran.
-  - [ ] `AUDIT-R5` — it still would not *render*: `render.py` contains the string `rotation`
-    zero times, so every angled box flattens in the export. Next up; it is what makes F14 worth
-    having.
+  - [x] `AUDIT-R5` — **corrected then fixed.** Not "render.py ignores rotation": `rotation` was
+    effectively always 0, because the handle wrote the angle into the mask polygon and the
+    *bounding box of that polygon* into x/y/w/h. The plate tilted, the glyphs stayed level (in the
+    reader too), and the box inflated on every turn. `rotation` is the angle now, the box is left
+    alone, and both renderers set glyphs along it.
   - [ ] `AUDIT-F16`/`AUDIT-R1` — padding is a constant in one renderer and absent in the other.
     Fix them as one: make the inset an element field both renderers read.
   - [ ] `AUDIT-R7` — a rectangle round-trips as a 40-vertex polygon (`epsilon = 0.002`).

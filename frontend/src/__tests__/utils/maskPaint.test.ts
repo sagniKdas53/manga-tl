@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { paintLayerMask } from "../../utils/maskPaint";
-import type { LayerElement } from "../../types";
+import type { LayerElement, OcrRegion } from "../../types";
 
 /**
  * The overlap rule for erasure masks.
@@ -23,6 +23,8 @@ interface FillCall {
   style: string;
   /** composite mode in force at the moment of the fill — this is the rule under test */
   op: string;
+  /** accumulated rotation in force at the moment of the fill (AUDIT-R5) */
+  rotation: number;
 }
 
 function recordingCtx() {
@@ -30,13 +32,20 @@ function recordingCtx() {
   const ctx = {
     globalCompositeOperation: "source-over",
     fillStyle: "",
-    _stack: [] as string[],
+    _rotation: 0,
+    _stack: [] as { op: string; rotation: number }[],
     save() {
-      this._stack.push(this.globalCompositeOperation);
+      this._stack.push({
+        op: this.globalCompositeOperation,
+        rotation: this._rotation,
+      });
     },
     restore() {
       const prev = this._stack.pop();
-      if (prev !== undefined) this.globalCompositeOperation = prev;
+      if (prev !== undefined) {
+        this.globalCompositeOperation = prev.op;
+        this._rotation = prev.rotation;
+      }
     },
     beginPath() {},
     closePath() {},
@@ -44,12 +53,15 @@ function recordingCtx() {
     lineTo() {},
     ellipse() {},
     translate() {},
-    rotate() {},
+    rotate(radians: number) {
+      this._rotation += (radians * 180) / Math.PI;
+    },
     fill() {
       calls.push({
         kind: "fill",
         style: this.fillStyle,
         op: this.globalCompositeOperation,
+        rotation: Math.round(this._rotation),
       });
     },
     fillRect() {
@@ -57,6 +69,7 @@ function recordingCtx() {
         kind: "fillRect",
         style: this.fillStyle,
         op: this.globalCompositeOperation,
+        rotation: Math.round(this._rotation),
       });
     },
   };
@@ -158,6 +171,48 @@ describe("paintLayerMask", () => {
       element({ id: "b", text: "kept", maskPolygon: square(5) }),
     ]);
     expect(calls).toHaveLength(1);
+  });
+
+  it("turns the box fill with the element but leaves the polygon alone (AUDIT-R5)", () => {
+    // `rotation` is the angle of the *box*, which is stored unrotated. A maskPolygon is the
+    // opposite: already in absolute page coordinates with the angle baked in. Turning both would
+    // double-rotate the plate; turning neither is what laid a straight white rectangle across
+    // artwork beside every rotated caption.
+    const region = {
+      id: "r1",
+      bboxW: 40,
+      bboxH: 40,
+      bubbleW: 40,
+      bubbleH: 40,
+    } as unknown as OcrRegion;
+    const { ctx, calls } = recordingCtx();
+    paintLayerMask(
+      ctx as unknown as CanvasRenderingContext2D,
+      [element({ regionId: "r1", maskPolygon: square(0), rotation: 30 })],
+      new Map([["r1", region]]),
+    );
+
+    expect(calls.map((c) => [c.kind, c.rotation])).toEqual([
+      ["fill", 0], // the polygon: page-space, never turned again
+      ["fillRect", 30], // the box: stored unrotated, so it turns here
+    ]);
+  });
+
+  it("turns a box-only element too, with no polygon in play", () => {
+    const { ctx, calls } = recordingCtx();
+    paintLayerMask(ctx as unknown as CanvasRenderingContext2D, [
+      element({ rotation: 45 }),
+    ]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].rotation).toBe(45);
+  });
+
+  it("leaves an unrotated element's transform untouched", () => {
+    const { ctx, calls } = recordingCtx();
+    paintLayerMask(ctx as unknown as CanvasRenderingContext2D, [
+      element({ rotation: 0 }),
+    ]);
+    expect(calls[0].rotation).toBe(0);
   });
 
   it("still erases a blank element an editor blanked on purpose", () => {

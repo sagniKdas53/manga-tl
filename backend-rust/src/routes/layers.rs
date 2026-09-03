@@ -345,6 +345,19 @@ mod tests {
         assert_eq!(dto.rotation, Some(12.5));
     }
 
+    /// The inspector panel on a rotated element, as reported: every field fractional, and the
+    /// save failing outright before AUDIT-F14. Kept with the real numbers because they are the
+    /// shape a rotated bounding box actually produces.
+    #[test]
+    fn takes_the_whole_inspector_payload_of_a_rotated_element() {
+        let body = r#"{"x":782.6109316,"y":135.0494769,"maxWidth":399.17451841,"maxHeight":828.5163351,"rotation":37.5,"text":"hi","maskPolygon":"[[1,2],[3,4],[5,6]]"}"#;
+        let dto: LayerElementInput = serde_json::from_str(body).expect("must parse");
+        assert_eq!(dto.maxWidth, Some(399));
+        assert_eq!(dto.maxHeight, Some(829));
+        assert_eq!(dto.x, Some(782.6109316));
+        assert_eq!(dto.rotation, Some(37.5));
+    }
+
     #[test]
     fn still_takes_a_plain_integer_box() {
         let dto: LayerElementInput =

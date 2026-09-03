@@ -28,6 +28,34 @@
 import type { LayerElement, OcrRegion } from "../types";
 
 /**
+ * Rotate `ctx` about an element's box centre, so what follows draws at the element's angle.
+ *
+ * AUDIT-R5: `rotation` is the angle of the *box*, and the box is stored unrotated. A mask polygon
+ * is different — it is already in absolute page coordinates, so it must never be rotated again.
+ * The two are drawn in the same pass, which is why this is a helper rather than one `save()` round
+ * the whole element.
+ */
+function withBoxRotation(
+  ctx: CanvasRenderingContext2D,
+  el: LayerElement,
+  width: number,
+  height: number,
+  draw: () => void,
+): void {
+  const angle = el.rotation || 0;
+  ctx.save();
+  if (angle !== 0) {
+    const cx = el.x + width / 2;
+    const cy = el.y + height / 2;
+    ctx.translate(cx, cy);
+    ctx.rotate((angle * Math.PI) / 180);
+    ctx.translate(-cx, -cy);
+  }
+  draw();
+  ctx.restore();
+}
+
+/**
  * True when the bubble detector put this region inside a balloon, rather than echoing the bbox
  * back because it matched none. Mirrors `has_detected_bubble` in the backend's `coordinator.rs`
  * and `render.py`; all three have to agree or the erased area and the text box disagree.
@@ -111,31 +139,38 @@ export function paintLayerMask(
       // free-floating text the box is `free_text_box`'s padded -- and for a very narrow column,
       // widened -- rectangle, and the difference between the two was being drawn onto bare
       // artwork. Filling both costs nothing where they overlap.
+      //
+      // The box turns with the element (AUDIT-R5) while the polygon above does not: the polygon is
+      // page-space and already carries the rotation, the box is stored unrotated. Filling this one
+      // axis-aligned next to a turned mask is what put a straight white rectangle across artwork
+      // on every rotated caption.
       const region = el.regionId ? regionsById?.get(el.regionId) : undefined;
       if (region && !hasDetectedBubble(region)) {
-        ctx.save();
-        ctx.fillStyle = el.backgroundColor || "#ffffff";
-        ctx.fillRect(el.x, el.y, width, height);
-        ctx.restore();
+        withBoxRotation(ctx, el, width, height, () => {
+          ctx.fillStyle = el.backgroundColor || "#ffffff";
+          ctx.fillRect(el.x, el.y, width, height);
+        });
       }
     } else {
-      // No polygon: fall back to the element's box. Rotation applies only here, because a
-      // maskPolygon is already in absolute page coordinates.
-      ctx.save();
-      const cx = el.x + width / 2;
-      const cy = el.y + height / 2;
-      ctx.translate(cx, cy);
-      ctx.rotate(((el.rotation || 0) * Math.PI) / 180);
-      ctx.translate(-cx, -cy);
-      ctx.fillStyle = el.backgroundColor || "#ffffff";
-      if (el.boxShape === "elliptical") {
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, width / 2, height / 2, 0, 0, 2 * Math.PI);
-        ctx.fill();
-      } else {
-        ctx.fillRect(el.x, el.y, width, height);
-      }
-      ctx.restore();
+      // No polygon: fall back to the element's box, turned to the element's angle.
+      withBoxRotation(ctx, el, width, height, () => {
+        ctx.fillStyle = el.backgroundColor || "#ffffff";
+        if (el.boxShape === "elliptical") {
+          ctx.beginPath();
+          ctx.ellipse(
+            el.x + width / 2,
+            el.y + height / 2,
+            width / 2,
+            height / 2,
+            0,
+            0,
+            2 * Math.PI,
+          );
+          ctx.fill();
+        } else {
+          ctx.fillRect(el.x, el.y, width, height);
+        }
+      });
     }
   }
 

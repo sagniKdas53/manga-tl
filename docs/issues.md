@@ -1,6 +1,6 @@
 # Issues & Technical Debt
 
-> **Standing: 96 filed, 71 closed, 25 open.** Re-audited 2026-09-02 against the field report in
+> **Standing: 96 filed, 72 closed, 24 open.** Re-audited 2026-09-02 against the field report in
 > `new issues.pdf`. Three previously-open items were closed as *obsolete* — they described Java
 > files the Rust rewrite deleted. Twenty-eight new items are filed (one, `AUDIT-B17`, found while
 > fixing another), and seven are already fixed: `AUDIT-F14`, `AUDIT-F17`, `AUDIT-F18`,
@@ -135,7 +135,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | ID | Sev | Component | Summary | State |
 | :--- | :--- | :--- | :--- | :--- |
 | [`AUDIT-F14`](#audit-f14-high-rotating-a-box-makes-every-save-fail) | High | Frontend/Backend | Rotating a text box 400s the save | **Fixed 2026-09-02** |
-| [`AUDIT-R5`](#audit-r5-high-the-worker-renderer-has-no-concept-of-rotation) | High | Render | `render.py` never reads `rotation`; angled boxes flatten in every export | **Root-caused, ready** |
+| [`AUDIT-R5`](#audit-r5-high-rotation-turned-the-plate-and-left-the-glyphs-level) | High | Render/Frontend | The plate turned, the glyphs stayed level, and the box inflated on every turn — in the reader as well as the export | **Fixed 2026-09-03** |
 | [`AUDIT-R6`](#audit-r6-medium-there-is-no-vertical-text-mode) | Medium | Render | No vertical setting; rotation is the only workaround and it does not render | Design needed |
 | [`AUDIT-F16`](#audit-f16-medium-text-padding-is-a-hardcoded-constant) | Medium | Render/Frontend | Padding is `(ew - 8) * 0.95`, hardcoded, unexposed, and differs from the reader | Ready (folds into `AUDIT-R1`) |
 | [`AUDIT-R7`](#audit-r7-medium-a-rectangle-arrives-as-a-40-vertex-polygon) | Medium | Worker | `epsilon = 0.002 * arcLength` keeps every pixel of contour jitter | **Root-caused, ready** |
@@ -216,18 +216,55 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   `accepts_the_fractional_box_a_rotation_produces` and
   `absent_and_null_box_dimensions_both_stay_none` in `layers.rs`.
 
-### `AUDIT-R5` (high): The worker renderer has no concept of rotation
+### `AUDIT-R5` (high): Rotation turned the plate and left the glyphs level
 
-- **Locations:** `worker/src/worker/handlers/render.py` (the whole file),
-  `frontend/src/components/Reader.tsx:1461-1485`.
-- **Problem:** `grep -c rotation worker/src/worker/handlers/render.py` is **0**. The column exists in
-  the schema, the reader draws it, the API round-trips it, and the renderer that produces every
-  export ignores it. The frontend even bakes rotation into the mask polygon and resets the field to
-  0 (`Reader.tsx:1475-1485`), so the *mask* rotates and the *text* does not.
-- **Effect:** every angled box in a deliverable is axis-aligned — "translation flattens every image".
-- **Next Step:** render the text into a transparent RGBA scratch layer, rotate it about the box
-  centre, and composite. The erase plate already follows the mask polygon, so only the glyph pass
-  needs the transform. Pair with `AUDIT-F14`, which is what makes the value reach the database.
+- **Corrected 2026-09-03.** First filed as "`render.py` never reads `rotation`". Literally true —
+  `grep -c rotation` was 0 — but not the cause, and acting on it would have fixed nothing.
+- **What is actually going on.** `layer_elements.rotation` is, in practice, **always 0**:
+  - the pipeline's element INSERT (`coordinator.rs`) omits the column entirely;
+  - OCR emits `"rotation": 0.0` at every one of its five call sites;
+  - `handleEnterReshapeMode` explicitly wrote `rotation: 0`, on the reasoning that the angle had
+    been "baked into the polygon";
+  - the rotation handle never wrote the field at all.
+
+  What the handle *did* write was the rotated `maskPolygon` **and the bounding box of that rotated
+  polygon** into `x`/`y`/`maxWidth`/`maxHeight`. Two consequences, both visible on a page:
+  1. **The plate turns and the text does not.** The mask polygon is page-space, so the erase plate
+     tilts correctly. The glyphs are typeset into the axis-aligned box. And the frontend canvas
+     skipped `ctx.rotate` under `if (!el.maskPolygon)` — precisely when the user *had* rotated
+     something, because the rotation handle only exists in reshape mode and reshape mode requires a
+     polygon. So this was broken in the reader too, not just the export. That is why the report says
+     "we **can't** place our text at an angle" rather than "the export loses my angle".
+  2. **The box inflates every time you turn it.** A 45°-rotated 100×20 box has an 85×85 bounding
+     box. The fitter then sized text for a rectangle that no longer matched the plate, and because a
+     rotated bbox is fractional, every field in the inspector filled with values like
+     `828.5163351` — which is also what made the save 400 before
+     [`AUDIT-F14`](#audit-f14-high-rotating-a-box-makes-every-save-fail).
+- **Fixed 2026-09-03.** `rotation` becomes what it always claimed to be — the element's angle:
+  - `x`/`y`/`maxWidth`/`maxHeight` describe the **unrotated** box and the rotation handle no longer
+    touches them; it accumulates the angle into `rotation` (folded into `[0, 360)`) and rotates only
+    the mask polygon.
+  - `handleEnterReshapeMode` stops zeroing the field. Only the *outline* was ever baked; the text
+    has no polygon, so zeroing it silently straightened every rotated element the moment it was
+    reshaped.
+  - Both canvas paths and the SVG overlay rotate the glyphs whether or not a polygon exists. In the
+    SVG the whole group turns and the polygon carries a counter-rotation about the same centre, so
+    it nets to identity — everything else in that group (backdrop rect, editor borders, drag handle,
+    text) is in unrotated box space and should turn.
+  - `paintLayerMask` and `render.py` turn the **box** fill with the element and leave the **polygon**
+    fill alone. Filling the box axis-aligned beside a turned mask is what laid a straight white
+    rectangle across artwork on every rotated caption.
+  - `render.py` draws the lines level onto a transparent tile and rotates the tile, rather than
+    rotating coordinates — so the glyphs themselves turn. The tile is sized from the actual line
+    placements unioned with the box, because `fit` may produce a line wider than the box and a tile
+    cut to the box would crop exactly the overflow the halo exists to make readable. PIL turns
+    counter-clockwise where SVG/canvas turn clockwise, so the angle is negated; guarded by
+    `test_rotate_point_deg_turns_clockwise_like_the_editor`.
+- **Backward compatible.** Every existing row has `rotation` 0 or NULL, so nothing re-renders
+  differently until something is actually rotated.
+- **Not covered here:** existing elements whose box was already inflated by the old handle keep
+  that box. Re-rotating them does not shrink it back — the original box is not recoverable from
+  what was stored. Nudging a vertex in reshape mode re-derives it.
 
 ### `AUDIT-R6` (medium): There is no vertical text mode
 
@@ -760,6 +797,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | `AUDIT-B12` | QA's verdicts never reached the rendered output | 2026-09-02 | The pipeline renders before it runs QA, and nothing re-rendered. QA now enqueues one `finalPass` render, which does not re-enter QA. |
 | `AUDIT-B13` | A page with no translatable text failed the job | 2026-09-02 | Worker raised, costing three whole-job retries and a red queue row, for pages whose only region was an SFX or an OCR misfire. Completes with a `WARNING` notification now. |
 | `AUDIT-F20` | The Queue Manager never moved active jobs up | 2026-09-02 | `PROCESSING` shared sort rank 1 with `PENDING` and `COMPLETED`, so starting work did not move a row. |
+| `AUDIT-R5` | Rotation turned the plate and left the glyphs level | 2026-09-03 | `rotation` was effectively always 0: the handle wrote the angle into the mask polygon and the *bounding box of that polygon* into x/y/w/h instead. So the plate tilted, the text stayed level (in the reader too — the canvas skipped `ctx.rotate` exactly when a polygon existed), and the box inflated on every turn. `rotation` is the angle now and the box is left alone. |
 | `AUDIT-B17` | `jobs.page_id` was never written | 2026-09-03 | The column existed and `Job` deserialised it, but the INSERT omitted it, so every row read back had `pageId: null` and the obvious `WHERE page_id = …` matched nothing. Fixed because `AUDIT-W13`'s gate must attribute a blocker to one page. |
 | `AUDIT-W13` | Context-injected translation ran in parallel | 2026-09-02 | Four light slots translated four consecutive pages at once, so each read a predecessor still in flight — and because the context query is `COALESCE(translated_text, text)`, that predecessor handed back its Japanese source labelled as the previous page's dialogue. Gated in the dispatcher, so no slot is held while a job waits. |
 | `AUDIT-F18` | Import Chapter kept a stale chapter number | 2026-09-02 | `useState(nextNum)` only read its argument on first mount. Re-syncs on open and asks the server for the true maximum. |
