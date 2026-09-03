@@ -41,26 +41,42 @@ export const theme = createTheme({
         conversation: { main: "#2563eb" },
       },
     },
+    // AUDIT-F21: the dark scheme was reported as harsh to read on a tablet at night, and it
+    // measured that way. `#fefefe` on `#0f0f0f` is **19.0:1** — WCAG AA asks 4.5:1 and AAA asks
+    // 7:1, so body text was at nearly triple the strictest legibility threshold. Past a point
+    // more contrast stops helping and starts hurting: glyph edges bloom on an emissive panel,
+    // which is what "harsh" describes. Every accent also sat at 84–100% saturation, and a
+    // saturated hue on a near-black field is the combination that appears to vibrate.
+    //
+    // So: lift the floor off pure black, pull white back to a warm off-white, and desaturate the
+    // accents ~20 points without moving their hue, so nothing changes identity. Body text lands
+    // at 13.7:1 — still above AAA with room, but out of the bloom range. Every pair below is
+    // asserted in `theme.test.ts`, with both an AA floor and a halation ceiling, so this cannot
+    // drift back by accident in either direction.
+    //
+    // Surfaces move together: `default` and `paper` were 1.15:1 apart, so a card barely read as
+    // a card. They are 1.20:1 apart now — Material's own dark baseline is 1.24:1, and going
+    // further starts making `paper` look grey rather than raised.
     dark: {
       palette: {
         mode: "dark",
-        primary: { main: "#ee2553" },
-        secondary: { main: "#f1af5f" },
-        error: { main: "#ee2553" },
-        warning: { main: "#f1af5f" },
-        success: { main: "#10b981" },
-        info: { main: "#6ac2fd" },
+        primary: { main: "#df6d87" },
+        secondary: { main: "#e3b782" },
+        error: { main: "#df6d87" },
+        warning: { main: "#e3b782" },
+        success: { main: "#2bc591" },
+        info: { main: "#86c2ea" },
         background: {
-          default: "#0f0f0f",
-          paper: "#1e1e1e",
+          default: "#16161a",
+          paper: "#26262c",
         },
         text: {
-          primary: "#fefefe",
-          secondary: "#afafaf",
-          disabled: "#6c6c6c",
+          primary: "#e2e0dd",
+          secondary: "#a9a6a2",
+          disabled: "#8a8681",
         },
-        divider: "rgba(254,254,254,0.12)",
-        conversation: { main: "#3b82f6" },
+        divider: "rgba(226,224,221,0.14)",
+        conversation: { main: "#6797e4" },
       },
     },
   },
@@ -108,20 +124,23 @@ export const theme = createTheme({
           backgroundImage: "none",
           boxShadow:
             "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)",
+          // AUDIT-F21: 0.4 black under a surface that is itself near-black mostly reads as
+          // grime rather than elevation. The surfaces carry the depth now (see the dark
+          // palette above); the shadow only has to soften the edge.
           ...t.applyStyles("dark", {
             boxShadow:
-              "0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4)",
+              "0 1px 3px 0 rgb(0 0 0 / 0.28), 0 1px 2px -1px rgb(0 0 0 / 0.28)",
           }),
         }),
       },
     },
     MuiTableCell: {
       styleOverrides: {
+        // AUDIT-F21: these were two hardcoded greys, so the one place the dark scheme is meant
+        // to be tunable did not reach the densest text in the app — the queue and job tables.
+        // Both now follow `palette.divider`, which is a token and moves with the scheme.
         root: ({ theme: t }) => ({
-          borderBottom: "1px solid #e0e0e0",
-          ...t.applyStyles("dark", {
-            borderBottom: "1px solid #333333",
-          }),
+          borderBottom: `1px solid ${t.palette.divider}`,
         }),
       },
     },

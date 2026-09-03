@@ -1,11 +1,11 @@
 # Issues & Technical Debt
 
-> **Standing: 97 filed, 77 closed, 20 open.** Re-audited 2026-09-02 against the field report in
+> **Standing: 98 filed, 78 closed, 20 open.** Re-audited 2026-09-02 against the field report in
 > `new issues.pdf`. Three previously-open items were closed as *obsolete* — they described Java
-> files the Rust rewrite deleted. Twenty-eight new items are filed (one, `AUDIT-B17`, found while
-> fixing another), and fourteen are already fixed: `AUDIT-F14`, `AUDIT-F15`,
-> `AUDIT-F16`, `AUDIT-F17`, `AUDIT-F18`, `AUDIT-F19`, `AUDIT-F20`, `AUDIT-B12`, `AUDIT-B13`,
-> `AUDIT-B17`, `AUDIT-R1`, `AUDIT-R5`, `AUDIT-R7`, `AUDIT-W13`.
+> files the Rust rewrite deleted. Twenty-nine new items are filed (two, `AUDIT-B17` and
+> `AUDIT-F24`, found while fixing another), and fifteen are already fixed: `AUDIT-F14`,
+> `AUDIT-F15`, `AUDIT-F16`, `AUDIT-F17`, `AUDIT-F18`, `AUDIT-F19`, `AUDIT-F20`, `AUDIT-F21`,
+> `AUDIT-B12`, `AUDIT-B13`, `AUDIT-B17`, `AUDIT-R1`, `AUDIT-R5`, `AUDIT-R7`, `AUDIT-W13`.
 >
 > *(The previous header read "68 filed, 61 closed, 7 open" while listing eight open items. The
 > table was right and the count was one short; these numbers are taken from the table.)*
@@ -189,7 +189,8 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | ID | Sev | Component | Summary | State |
 | :--- | :--- | :--- | :--- | :--- |
 | [`AUDIT-F18`](#audit-f18-low-import-chapter-keeps-a-stale-chapter-number) | Low | Frontend | `useState(nextNum)` never re-syncs when the dialog reopens | **Fixed 2026-09-02** |
-| [`AUDIT-F21`](#audit-f21-low-dark-mode-is-unpleasant-to-read) | Low | Frontend | Dark mode contrast is harsh | Ready |
+| [`AUDIT-F21`](#audit-f21-low-dark-mode-is-unpleasant-to-read) | Low | Frontend | Dark mode measured at 19:1 body contrast with 84–100% saturated accents | **Fixed 2026-09-03** |
+| [`AUDIT-F24`](#audit-f24-low-the-dark-palette-is-maintained-twice) | Low | Frontend | `theme.ts` and `index.css` are two hand-kept copies of one palette | Ready |
 | [`AUDIT-F9`](#audit-f9-low-responsive-layout-is-never-verified) | Low | Frontend | Responsive layout is never verified in tests | Blocked on Playwright |
 | [`AUDIT-D5`](#audit-d5-low-no-memory-limits-on-auxiliary-containers) | Low | Docker | No memory limits on db, redis, minio, backend | Needs measured peak |
 | [`AUDIT-T1`](#audit-t1-unranked-worker-e2e-test-suite-is-heavily-mocked) | Unranked | Testing | Worker "e2e" suite over-mocks with no real I/O assertions | Blocked on [mock_router.md](design/mock_router.md) |
@@ -833,11 +834,48 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 
 ### `AUDIT-F21` (low): Dark mode is unpleasant to read
 
-- **Locations:** `frontend/src/hooks/useColorMode.ts` and the theme definition.
-- **Problem:** reported as harsh. The primary reading device is a tablet, often at night.
-- **Next Step:** soften surface contrast and desaturate accents in the dark scheme. Cosmetic, no
-  blocker, low risk — but it is *not* free of judgement, so change tokens rather than component
-  styles so it can be reverted in one place.
+- **Locations:** `frontend/src/theme.ts` (`colorSchemes.dark`), `frontend/src/index.css` (`:root`).
+- **Problem:** reported as harsh; the primary reading device is a tablet, often at night. It
+  measured that way, and the numbers point at the opposite of the obvious diagnosis — the scheme
+  was not short of contrast, it had far too much. Body text was `#fefefe` on `#0f0f0f`:
+  **19.0:1**, against 4.5:1 for WCAG AA and 7:1 for AAA. Past roughly 15:1 on an emissive panel
+  the extra ratio stops buying legibility and starts blooming the glyph edges, which is what
+  "harsh" describes. Every accent also ran **84–100% saturation**, and a saturated hue on a
+  near-black field is the pairing that appears to vibrate.
+- **Two smaller defects fell out of measuring it.** `background.paper` and `background.default`
+  were **1.15:1** apart, so a card had almost no edge of its own and the whole page read as one
+  black field — nothing for the eye to rest on, which makes glare worse, not better. And
+  `primary` (`#ee2553`) on `paper` was **3.99:1**, *below* AA: the link and button colour was the
+  least legible text in the scheme while everything around it was over-bright.
+- **Fixed 2026-09-03.** The floor comes off pure black (`#16161a`), white pulls back to a warm
+  off-white (`#e2e0dd`, **13.7:1** — still clear of AAA), surfaces separate to 1.20:1, and every
+  accent drops ~20 saturation points with its **hue unchanged**, so nothing changes identity.
+  `primary` lands at 4.78:1 on paper, above AA for the first time.
+- **Guarded in both directions**, which is the unusual part: `theme.test.ts` asserts an AA floor
+  *and* a halation ceiling, so the failure it prevents is someone "improving" contrast back to
+  white-on-black. Ten tests, all of which fail against the old palette.
+- **Two hardcoded component colours folded back into tokens** — `MuiTableCell` had literal
+  `#e0e0e0`/`#333333` borders, so the one place the scheme is meant to be tunable did not reach
+  the densest tables in the app; both follow `palette.divider` now. The dark `MuiPaper` shadow
+  came down from 0.4 to 0.28 black, since a black shadow under a near-black surface reads as
+  grime rather than elevation.
+
+### `AUDIT-F24` (low): The dark palette is maintained twice
+
+- **Locations:** `frontend/src/theme.ts` (`colorSchemes.dark`), `frontend/src/index.css` (`:root`).
+- **Problem:** found while fixing `AUDIT-F21`. Parts of the app are styled through MUI's `sx` and
+  read `theme.palette.*`; other parts are plain CSS reading `--bg-base`, `--text-main` and
+  friends. Those are two hand-maintained copies of one palette with nothing tying them together,
+  and they **had already drifted**: base was `#111111` in the CSS against `#0f0f0f` in the theme,
+  body text `#f3f4f6` against `#fefefe`. Neither file is wrong read on its own, which is exactly
+  why it survived — each looks self-consistent.
+- **Contained for now, not closed.** `AUDIT-F21` set the two files equal and added a parity test
+  over the six shared tokens, so an edit to one now fails until the other follows. That stops the
+  drift; it does not remove the duplication.
+- **Next Step:** point the CSS variables at MUI's generated `--mui-palette-*` custom properties,
+  which `cssVariables: true` already emits, and delete the hand-written values. The care needed is
+  in the tokens that have *no* MUI equivalent (`--bg-canvas`, the `*-glow` overlays) and in the
+  `:root.light` block, which would become mostly redundant.
 
 ### `AUDIT-F9` (low): Responsive layout is never verified
 
@@ -884,6 +922,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | `AUDIT-R1` + `AUDIT-F16` | Four answers to "what rectangle does text go in?" | 2026-09-03 | The live reader used the raw box, the frontend's exports insetted 4px, and `render.py` insetted 4px then took 95%. One definition per language now, both driven by the same two settings and asserted against the same parity table. |
 | `AUDIT-F15` | A hidden element could not be reached again | 2026-09-03 | The `visible` toggle lived on the selected element's inspector and selecting meant clicking it on the canvas, so hiding was a one-way door. The layer panel lists elements now, each selectable with its own toggle. |
 | `AUDIT-F19` | Thumbnails and cards never re-polled | 2026-09-03 | Grids rendered whatever the first fetch returned; nothing subscribed to `job_update` and nothing polled, so a chapter that finished while its page was open kept showing untranslated thumbnails until a manual reload. One app-level watcher refreshes all three grids, debounced 4s so a finishing chapter's burst costs one refetch. |
+| `AUDIT-F21` | Dark mode was unpleasant to read | 2026-09-03 | Not short of contrast — it had far too much. Body text measured 19.0:1 against a 7:1 AAA threshold, which blooms glyph edges on a tablet at night, and every accent ran 84–100% saturation. Surfaces lifted, white pulled back to 13.7:1, accents desaturated at unchanged hue. Two side findings fixed with it: cards were 1.15:1 from the page behind them, and `primary` on `paper` was 3.99:1, below AA. |
 | `AUDIT-R7` | A rectangle arrived as a 40-vertex polygon | 2026-09-03 | The simplification tolerance was `0.002 × perimeter`, which is 0.4px on a small caption plate — below one pixel, so nothing was removed. Smaller shapes got tighter tolerances. Now an absolute 2px everywhere, plus the synthesized cover plate (28 points by construction) and the merge hull (never simplified at all). |
 | `AUDIT-R5` | Rotation turned the plate and left the glyphs level | 2026-09-03 | `rotation` was effectively always 0: the handle wrote the angle into the mask polygon and the *bounding box of that polygon* into x/y/w/h instead. So the plate tilted, the text stayed level (in the reader too — the canvas skipped `ctx.rotate` exactly when a polygon existed), and the box inflated on every turn. `rotation` is the angle now and the box is left alone. |
 | `AUDIT-B17` | `jobs.page_id` was never written | 2026-09-03 | The column existed and `Job` deserialised it, but the INSERT omitted it, so every row read back had `pageId: null` and the obvious `WHERE page_id = …` matched nothing. Fixed because `AUDIT-W13`'s gate must attribute a blocker to one page. |
