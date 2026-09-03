@@ -62,9 +62,9 @@ touches nothing else, so none of D1/D6/D7/D8/D10/D14/D15/D16 are recoverable by 
 
 ### 2. Audit backlog — re-oriented 2026-09-02
 
-Full detail in [docs/issues.md](docs/issues.md). **97 filed, 76 closed, 21 open.** The 2026-09-02
+Full detail in [docs/issues.md](docs/issues.md). **97 filed, 77 closed, 20 open.** The 2026-09-02
 field report added 28 items; `AUDIT-Q1`, `AUDIT-Q2` and `AUDIT-T3` closed as obsolete because they
-named Java files the Rust rewrite deleted. Thirteen of the new items are already fixed.
+named Java files the Rust rewrite deleted. Fourteen of the new items are already fixed.
 
 The report is not 24 independent bugs. It is **three seams**, and they have to close in order —
 each later one is wasted effort until the earlier one holds.
@@ -100,7 +100,10 @@ each later one is wasted effort until the earlier one holds.
   - [x] `AUDIT-F17` — the reader filtered SSE down to four job types on one page. Both halves
     fixed; the allow-list was removed rather than extended, because it goes stale silently.
   - [x] `AUDIT-F20` — `PROCESSING` shared a sort rank with `PENDING`, so active jobs never moved.
-  - [ ] `AUDIT-F19` — thumbnails and cards never re-poll.
+  - [x] `AUDIT-F19` — thumbnails and cards never re-polled. One app-level watcher refreshes
+    series, chapters and pages on `job_update`, debounced 4s so a finishing chapter's burst of
+    per-page-per-stage events costs one refetch rather than dozens. The per-page completion
+    marker the report also asked for is left open — it needs a rendered thumbnail variant.
   - **The "SSE is ass, move to WS" proposal is declined for now** (`AUDIT-P10`) — every concrete
     symptom was the client-side filter, now fixed, and a rewrite would re-lose the ticket
     handshake, the Redis replay and the jittered reconnect for a client→server channel nothing

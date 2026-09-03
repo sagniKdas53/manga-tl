@@ -1,10 +1,11 @@
 # Issues & Technical Debt
 
-> **Standing: 97 filed, 76 closed, 21 open.** Re-audited 2026-09-02 against the field report in
+> **Standing: 97 filed, 77 closed, 20 open.** Re-audited 2026-09-02 against the field report in
 > `new issues.pdf`. Three previously-open items were closed as *obsolete* — they described Java
 > files the Rust rewrite deleted. Twenty-eight new items are filed (one, `AUDIT-B17`, found while
-> fixing another), and seven are already fixed: `AUDIT-F14`, `AUDIT-F17`, `AUDIT-F18`,
-> `AUDIT-F20`, `AUDIT-B12`, `AUDIT-B13`, `AUDIT-W13`.
+> fixing another), and fourteen are already fixed: `AUDIT-F14`, `AUDIT-F15`,
+> `AUDIT-F16`, `AUDIT-F17`, `AUDIT-F18`, `AUDIT-F19`, `AUDIT-F20`, `AUDIT-B12`, `AUDIT-B13`,
+> `AUDIT-B17`, `AUDIT-R1`, `AUDIT-R5`, `AUDIT-R7`, `AUDIT-W13`.
 >
 > *(The previous header read "68 filed, 61 closed, 7 open" while listing eight open items. The
 > table was right and the count was one short; these numbers are taken from the table.)*
@@ -156,7 +157,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | ID | Sev | Component | Summary | State |
 | :--- | :--- | :--- | :--- | :--- |
 | [`AUDIT-F17`](#audit-f17-high-the-reader-refreshes-for-four-job-types-on-one-page) | High | Frontend | SSE arrives; the reader discards it for QA/render, and for every page but the open one | **Fixed 2026-09-02** |
-| [`AUDIT-F19`](#audit-f19-medium-thumbnails-and-cards-never-re-poll) | Medium | Frontend | Thumbnails, chapter cards and series cards never refresh after work completes | Ready |
+| [`AUDIT-F19`](#audit-f19-medium-thumbnails-and-cards-never-re-poll) | Medium | Frontend | Thumbnails, chapter cards and series cards never refresh after work completes | **Fixed 2026-09-03** |
 | [`AUDIT-F20`](#audit-f20-low-the-queue-manager-sorts-by-chapter-before-status) | Low | Frontend | `PROCESSING` shared a sort rank with `PENDING`, so active jobs never moved | **Fixed 2026-09-02** |
 | [`AUDIT-P10`](#audit-p10-unranked-sse--websocket) | Unranked | Platform | Proposal to replace SSE with a WebSocket | Not accepted; see the entry |
 
@@ -549,9 +550,22 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Problem:** Grids render whatever the initial fetch returned. Nothing subscribes to `job_update`,
   and there is no background poll, so a chapter that finishes translating while its page is open
   keeps showing untranslated thumbnails until a manual reload.
-- **Next Step:** the same subscription `AUDIT-F17` needs. The report also asks for a per-page
-  completion marker — a tick, or a small translated WebP — which is a separate, larger piece of work
-  (it needs a rendered thumbnail variant); file the marker separately once the refresh works.
+- **Fixed 2026-09-03.** One `PipelineRefreshWatcher` subscribes to `job_update` for the whole app
+  and refetches the three paginated resources — series, chapters, pages — when work lands. It sits
+  in `App.tsx` next to `TranslationToastWatcher` rather than in the grids, because all three grids
+  read from `usePaginatedResource` hooks that already live at that level, and one subscription that
+  fans out cannot go stale the way three independent ones would.
+- **Coalesced, deliberately.** A finishing chapter emits a `job_update` per page per stage, so a
+  naive refetch would fire dozens of times in a few seconds and each one is three HTTP round trips.
+  The watcher debounces on a 4s trailing timer, so a burst of any size costs exactly one refresh
+  after the burst goes quiet. It also filters to `COMPLETED` and `FAILED` — `PENDING` and
+  `PROCESSING` change no row a grid renders, and a failure has to reach the grid so a red page does
+  not read as still-working.
+- **Still open, filed separately:** the report also asks for a per-page completion marker — a tick,
+  or a small translated WebP thumbnail. That is a larger piece of work needing a rendered thumbnail
+  variant the backend does not produce, and it is not blocked by anything here now that the refresh
+  is honest. Guarded by five tests in `PipelineRefreshWatcher.test.tsx`, including the burst that
+  must collapse to one call and the unmount that must not fire afterwards.
 
 ### `AUDIT-F20` (low): The Queue Manager sorts by chapter before status
 
@@ -869,6 +883,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | `AUDIT-F20` | The Queue Manager never moved active jobs up | 2026-09-02 | `PROCESSING` shared sort rank 1 with `PENDING` and `COMPLETED`, so starting work did not move a row. |
 | `AUDIT-R1` + `AUDIT-F16` | Four answers to "what rectangle does text go in?" | 2026-09-03 | The live reader used the raw box, the frontend's exports insetted 4px, and `render.py` insetted 4px then took 95%. One definition per language now, both driven by the same two settings and asserted against the same parity table. |
 | `AUDIT-F15` | A hidden element could not be reached again | 2026-09-03 | The `visible` toggle lived on the selected element's inspector and selecting meant clicking it on the canvas, so hiding was a one-way door. The layer panel lists elements now, each selectable with its own toggle. |
+| `AUDIT-F19` | Thumbnails and cards never re-polled | 2026-09-03 | Grids rendered whatever the first fetch returned; nothing subscribed to `job_update` and nothing polled, so a chapter that finished while its page was open kept showing untranslated thumbnails until a manual reload. One app-level watcher refreshes all three grids, debounced 4s so a finishing chapter's burst costs one refetch. |
 | `AUDIT-R7` | A rectangle arrived as a 40-vertex polygon | 2026-09-03 | The simplification tolerance was `0.002 × perimeter`, which is 0.4px on a small caption plate — below one pixel, so nothing was removed. Smaller shapes got tighter tolerances. Now an absolute 2px everywhere, plus the synthesized cover plate (28 points by construction) and the merge hull (never simplified at all). |
 | `AUDIT-R5` | Rotation turned the plate and left the glyphs level | 2026-09-03 | `rotation` was effectively always 0: the handle wrote the angle into the mask polygon and the *bounding box of that polygon* into x/y/w/h instead. So the plate tilted, the text stayed level (in the reader too — the canvas skipped `ctx.rotate` exactly when a polygon existed), and the box inflated on every turn. `rotation` is the angle now and the box is left alone. |
 | `AUDIT-B17` | `jobs.page_id` was never written | 2026-09-03 | The column existed and `Job` deserialised it, but the INSERT omitted it, so every row read back had `pageId: null` and the obvious `WHERE page_id = …` matched nothing. Fixed because `AUDIT-W13`'s gate must attribute a blocker to one page. |
