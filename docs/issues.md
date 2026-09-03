@@ -1,6 +1,11 @@
 # Issues & Technical Debt
 
-> **Standing: 98 filed, 79 closed, 19 open.** Re-audited 2026-09-02 against the field report in
+> **Standing: 104 filed, 79 closed, 25 open.** Six items were added 2026-09-03 from the Codex
+> review of the fix stack — `AUDIT-R13`, `AUDIT-R14`, `AUDIT-F25`, `AUDIT-F26`, `AUDIT-F27` and
+> `AUDIT-T5`, all in [Open Review Findings](#open-review-findings-prs-118-124-2026-09-03). Note
+> `AUDIT-F26` disputes the `AUDIT-F19` fix; verify it before trusting that row.
+>
+> Re-audited 2026-09-02 against the field report in
 > `new issues.pdf`. Three previously-open items were closed as *obsolete* — they described Java
 > files the Rust rewrite deleted. Twenty-nine new items are filed (two, `AUDIT-B17` and
 > `AUDIT-F24`, found while fixing another), and sixteen are already fixed: `AUDIT-F14`,
@@ -264,6 +269,19 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
     cut to the box would crop exactly the overflow the halo exists to make readable. PIL turns
     counter-clockwise where SVG/canvas turn clockwise, so the angle is negated; guarded by
     `test_rotate_point_deg_turns_clockwise_like_the_editor`.
+- **The first attempt did not work, and shipped that way for a day.** Everything described above
+  landed, but `handleRotationDragStart` never initialised `rotationDrag.originalRotation` — the
+  initialiser was written into `setDraggedVertex`, which has no such field. Every drag therefore
+  computed `undefined + deltaAngle`, and `normalizeDegrees` mapped the NaN to 0. The polygon
+  turned; the angle persisted as zero; the defect was exactly as reported. Caught by the Codex
+  review of PR #118, fixed on 2026-09-03.
+
+  **The lesson is not "add a rotation test".** TypeScript already rejected both halves — a missing
+  required property on one setter, an excess one on the other — and nothing ran it, because
+  `npm run build` is `vite build` and `tsc` appeared nowhere in `package.json` or the workflows.
+  The unit tests this work added could not see it either: they test `normalizeDegrees` in
+  isolation, and `normalizeDegrees(NaN) === 0` made the NaN path read as deliberate. See
+  `AUDIT-T5`.
 - **Backward compatible.** Every existing row has `rotation` 0 or NULL, so nothing re-renders
   differently until something is actually rotated.
 - **Not covered here:** existing elements whose box was already inflated by the old handle keep
@@ -934,6 +952,68 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   failed" is a wider change than this item, and is worth its own pass.
 
 ---
+## Open Review Findings (PRs #118-#124, 2026-09-03)
+
+The Codex review of the 2026-09-02 fix stack raised fifteen findings. The six on PRs #115 and #116
+were addressed on the branch. Four P1s were addressed on 2026-09-03 (the `AUDIT-R5` wiring above,
+and the three folded into `AUDIT-F16`/`AUDIT-R1`). **These five P2s are not fixed** and are
+recorded here because the PR threads close when the stack merges.
+
+Severities are the reviewer's. Where an entry is marked *unverified* the claim has been read but
+not reproduced.
+
+### `AUDIT-R13` (medium): Reshape controls are drawn at twice the rotation
+
+In reshape mode `currentPolygon`, its vertex circles and the rotation handle are already in
+absolute page coordinates, but the enclosing group transform rotates them again; only the backdrop
+polygon carries the inverse. Entering reshape on a 30°-rotated element is reported to draw its
+controls at 60°, so vertex and rotation drags act from misleading positions. Frontend,
+`Reader.tsx`. *Unverified.*
+
+### `AUDIT-R14` (medium): A vertex drag re-derives the box from an already-rotated polygon
+
+Once an element has both a nonzero `rotation` and a rotated page-space polygon, a vertex drag
+assigns `polygonBBox(newPoly)` to `x`/`y`/`maxWidth`/`maxHeight` while keeping the angle. That is
+the axis-aligned bounds of an already-rotated outline, which the renderer then rotates a second
+time — the box inflation `AUDIT-R5` removed, reintroduced through the reshape path. Undo
+reconstructs the same wrong box. Frontend, `Reader.tsx`. *Unverified.*
+
+### `AUDIT-F25` (low): A null `visible` is hidden on the canvas and visible in the sidebar
+
+`visible` is nullable in the database and `Option<bool>` in the model. The canvas and the new
+hidden-count treat `null` as hidden; the sidebar's toggle treats it as visible, so it offers "Hide
+element" and writes `false`, and the first click cannot restore the element. One falsy check, or
+normalise on read. Frontend, `ReaderRightSidebar.tsx`. *Unverified.*
+
+### `AUDIT-F26` (medium): The grid refresh re-fetches DTOs that cannot show pipeline state
+
+Successor to `AUDIT-F19`, which is marked fixed on the strength of the refetch firing. The reviewer
+argues the refetch cannot change anything: `/pages` returns the same original `/thumbnail` URL
+backed by `thumbnail_storage_path`, and the chapter and series DTOs carry no job status, so React
+receives identical props and image `src`. Pipeline output appears through `/rendered`. If that
+holds, the untranslated grid still does not update and `AUDIT-F19` is not closed — the refresh
+needs a pipeline-visible status or a rendered-thumbnail URL with a cache key. **Verify before
+trusting the `AUDIT-F19` fix.** Frontend/Backend, `App.tsx` + `page.rs`. *Unverified.*
+
+### `AUDIT-F27` (medium): The pipeline refresh debounce assumes events arrive close together
+
+`PipelineRefreshWatcher` debounces on a four-second timer. Completions spaced further apart than
+that — serialized context-aware translation, which `AUDIT-W13` deliberately made the norm — each
+fire their own timer, so a long chapter performs one full loaded-window refresh per page rather
+than one per burst, and `refresh()` requests every loaded pagination batch. Wants a bounded
+maximum cadence or a real pipeline-terminal signal. Frontend, `PipelineRefreshWatcher.tsx`.
+*Unverified.*
+
+### `AUDIT-T5` (medium): Nothing typechecks the frontend
+
+`npm run build` is `vite build`, which strips types without checking them, and `tsc` appears in
+neither `frontend/package.json` nor any workflow. The `AUDIT-R5` wiring defect was two hard
+TypeScript errors that reached `main`'s doorstep with every check green. `tsc -b --noEmit`
+currently reports 80 errors — 24 in application source, 56 in tests — which is why the gate could
+not simply be switched on with the fix.
+
+---
+
 ## Recently Closed Items (Reference)
 
 | ID | Summary | Closed Date | Resolution Details |
