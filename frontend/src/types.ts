@@ -77,6 +77,16 @@ export interface Page {
   url: string;
   thumbnailUrl?: string;
   chapterId?: string;
+  /**
+   * AUDIT-F26. When the pipeline last rendered this page, or null if it never has.
+   *
+   * Every other field here is fixed at upload, which is why re-fetching `/pages` after a
+   * translation used to return identical JSON and the grid could not update. This is the one
+   * field a pipeline run changes.
+   */
+  lastRenderedAt?: string | null;
+  /** Thumbnail of the *rendered* page, cache-keyed by `lastRenderedAt`; null until one exists. */
+  renderedThumbnailUrl?: string | null;
 }
 
 export interface Panel {

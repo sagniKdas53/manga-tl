@@ -268,6 +268,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/images/{imageId}/thumbnail/rendered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getImageRenderedThumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/internal/images/{imageId}": {
         parameters: {
             query?: never;
@@ -1173,8 +1189,11 @@ export interface components {
             id?: string;
             /** Format: uuid */
             imageId?: string;
+            /** Format: date-time */
+            lastRenderedAt?: string | null;
             /** Format: int32 */
             pageNumber?: number;
+            renderedThumbnailUrl?: string | null;
             thumbnailUrl?: string;
             url?: string;
         };
@@ -1775,6 +1794,37 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["StreamingResponseBody"];
                 };
+            };
+        };
+    };
+    getImageRenderedThumbnail: {
+        parameters: {
+            query?: {
+                v?: string;
+            };
+            header?: never;
+            path: {
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StreamingResponseBody"];
+                };
+            };
+            /** @description No rendered output for this image */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

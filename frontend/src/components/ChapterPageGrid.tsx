@@ -105,7 +105,12 @@ const ChapterPageGrid: React.FC<ChapterPageGridProps> = ({
               }}
             >
               <LazyImage
-                src={p.thumbnailUrl}
+                // AUDIT-F26. Prefer the render. `thumbnailUrl` is a fixed path to the *original*'s
+                // thumbnail, so a grid built from it shows untranslated pages forever however
+                // often it re-fetches — the AUDIT-F19 refresh had nothing it could change.
+                // `renderedThumbnailUrl` appears once the pipeline has rendered the page and
+                // carries `lastRenderedAt` as a cache key, so a re-render changes the `src`.
+                src={p.renderedThumbnailUrl ?? p.thumbnailUrl}
                 alt={`Page ${p.pageNumber}`}
                 sx={{
                   width: "100%",

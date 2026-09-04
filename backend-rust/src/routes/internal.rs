@@ -1192,6 +1192,11 @@ async fn render_callback_route(
                 .bind(image_id)
                 .execute(&state.pool)
                 .await;
+            // AUDIT-F26. Derive the grid's thumbnail from the render we were just told about.
+            // Eagerly, and always overwriting: the endpoint can generate this lazily too, but only
+            // doing it there would leave a re-rendered page serving the *previous* translation's
+            // thumbnail, since the object would already exist and the miss path would not run.
+            crate::routes::page::generate_rendered_thumbnail(&state.storage, image_id).await;
             // AUDIT-B12 follow-up: the QA callback used to say "Page Processing Complete" while
             // its own re-render was still queued, so the user could export a PNG that did not yet
             // carry the QA corrections the notification was announcing. When QA defers to a final
