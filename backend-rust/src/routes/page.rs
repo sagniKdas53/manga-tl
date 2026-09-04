@@ -1281,44 +1281,76 @@ pub async fn update_page_number(
         return StatusCode::OK.into_response();
     }
 
-    // Temporarily park the moving page beyond the constraint range.
+    // Same scan-order hazard as the re-sequence in delete_page: parking only the moving page
+    // leaves the *other* pages to shuffle with a single `page_number -/+ 1`, and Postgres checks
+    // UNIQUE (chapter_id, page_number) per row in whatever order the scan hands them over. Moving
+    // page 1 to slot 3 of 1..4 shifts pages 2 and 3 down; take page 3 first and `3 -> 2` lands on
+    // the 2 that has not moved yet, and the statement dies with 23505.
+    //
+    // So park the whole shifting range too, then bring it back into slots that are provably free.
+    // The bulk park uses +20000, not +10000, because the moving page is already sitting at
+    // 10000 + new_number and the page currently holding new_number would park onto exactly that
+    // slot. Both offsets assume a chapter has well under 10000 pages -- the same assumption
+    // reorder_pages already makes.
+    let mut tx = state.pool.begin().await.expect("page move transaction");
     sqlx::query("UPDATE pages SET page_number = $2 WHERE id = $1")
         .bind(page_id)
         .bind(10000 + new_number)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await
         .expect("park page");
     if new_number > old_number {
         sqlx::query(
-            "UPDATE pages SET page_number = page_number - 1 \
+            "UPDATE pages SET page_number = page_number + 20000 \
              WHERE chapter_id = $1 AND id <> $2 AND page_number > $3 AND page_number <= $4",
         )
         .bind(page.chapter_id)
         .bind(page_id)
         .bind(old_number)
         .bind(new_number)
-        .execute(&state.pool)
+        .execute(&mut *tx)
+        .await
+        .expect("park shift-down range");
+        sqlx::query(
+            "UPDATE pages SET page_number = page_number - 20001 \
+             WHERE chapter_id = $1 AND id <> $2 AND page_number > 20000",
+        )
+        .bind(page.chapter_id)
+        .bind(page_id)
+        .execute(&mut *tx)
         .await
         .expect("shift down");
     } else {
         sqlx::query(
-            "UPDATE pages SET page_number = page_number + 1 \
+            "UPDATE pages SET page_number = page_number + 20000 \
              WHERE chapter_id = $1 AND id <> $2 AND page_number >= $3 AND page_number < $4",
         )
         .bind(page.chapter_id)
         .bind(page_id)
         .bind(new_number)
         .bind(old_number)
-        .execute(&state.pool)
+        .execute(&mut *tx)
+        .await
+        .expect("park shift-up range");
+        sqlx::query(
+            "UPDATE pages SET page_number = page_number - 19999 \
+             WHERE chapter_id = $1 AND id <> $2 AND page_number > 20000",
+        )
+        .bind(page.chapter_id)
+        .bind(page_id)
+        .execute(&mut *tx)
         .await
         .expect("shift up");
     }
     sqlx::query("UPDATE pages SET page_number = $2 WHERE id = $1")
         .bind(page_id)
         .bind(new_number)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await
         .expect("final page number");
+    // One transaction for the whole move: a failure partway used to leave the moving page parked
+    // at 10000 + n, i.e. outside its own chapter's numbering, with no way back but manual repair.
+    tx.commit().await.expect("page move commit");
 
     if old_number == 1 || new_number == 1 {
         recalculate_chapter_cover(&state.pool, page.chapter_id).await;
