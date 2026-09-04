@@ -24,6 +24,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sqlx::AssertSqlSafe;
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
@@ -517,10 +518,14 @@ pub async fn list_series(State(state): State<AppState>, Query(p): Query<Paginati
     } else {
         "updated_at"
     };
-    let rows: Vec<Series> = sqlx::query_as(&format!(
+    // AssertSqlSafe audit (sqlx 0.9): no client text reaches this statement.
+    // `order_column` and `direction` are `&'static str` literals picked by the
+    // branches above; `size` is clamped to 1..=100 by `bounds`, and `offset` is a
+    // saturating, non-negative i64.
+    let rows: Vec<Series> = sqlx::query_as(AssertSqlSafe(format!(
         "SELECT * FROM series ORDER BY {order_column} {direction} LIMIT {size} OFFSET {}",
         p.offset(size)
-    ))
+    )))
     .fetch_all(&state.pool)
     .await
     .unwrap_or_default();
@@ -757,11 +762,14 @@ pub async fn list_chapters(
         .await
         .unwrap_or(0);
 
-    let rows: Vec<Chapter> = sqlx::query_as(&format!(
+    // AssertSqlSafe audit (sqlx 0.9): no client text reaches this statement.
+    // `direction` is a `&'static str` literal picked by the branch above; `size` is
+    // clamped to 1..=100 by `bounds`, and `offset` is a saturating, non-negative i64.
+    let rows: Vec<Chapter> = sqlx::query_as(AssertSqlSafe(format!(
         "SELECT * FROM chapters WHERE series_id = $1 \
          ORDER BY chapter_number {direction} LIMIT {size} OFFSET {}",
         p.offset(size)
-    ))
+    )))
     .bind(series_id)
     .fetch_all(&state.pool)
     .await
