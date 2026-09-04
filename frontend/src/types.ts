@@ -136,7 +136,13 @@ export interface Layer {
   id: string;
   type: string; // translation | ocr | notes | mask | sfx
   targetLanguage?: string | null;
-  visible: boolean;
+  // AUDIT-F25. Nullable in the database and `Option<bool>` in the model, so the API really can
+  // send `null` and this used to lie about it. A null is *hidden*: that is what the canvas does,
+  // what the hidden-count does, and — decisively — what the worker's renderer does
+  // (`el.get("visible", True)` returns None for an explicit null, which is falsy), so a null-
+  // visible element is absent from the rendered PNG. Read it with a falsy check or `=== true`;
+  // never `!== false`.
+  visible: boolean | null;
   zOrder: number;
   metadataJson?: Record<string, unknown> | null;
   createdAt: string;
@@ -157,7 +163,8 @@ export interface LayerElement {
   rotation: number;
   x: number;
   y: number;
-  visible: boolean;
+  /** Nullable, and a null is hidden — see the note on {@link Layer.visible}. */
+  visible: boolean | null;
   overflow: boolean;
   isManuallyEdited: boolean;
   editedAt?: string | null;
