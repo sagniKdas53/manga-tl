@@ -95,8 +95,8 @@ async fn app() -> Option<(Router, sqlx::PgPool)> {
     Some((manga_backend::routes::build_router(state), pool))
 }
 
-async fn probe_user(pool: &sqlx::PgPool, jwt: &JwtUtils) -> String {
-    let email = format!("__page-e2e-{}@example.invalid", Uuid::new_v4());
+async fn probe_user(pool: &sqlx::PgPool, jwt: &JwtUtils, ns: &str) -> String {
+    let email = format!("{ns}-{}@example.invalid", Uuid::new_v4());
     sqlx::query(
         "INSERT INTO users (id, created_at, display_name, email, password_hash, role) \
          VALUES (uuid_generate_v4(), now(), 'Probe', $1, 'x', 'translator')",
@@ -106,14 +106,6 @@ async fn probe_user(pool: &sqlx::PgPool, jwt: &JwtUtils) -> String {
     .await
     .expect("probe user");
     jwt.generate_token(&email).unwrap()
-}
-
-/// Minimal valid PNG built in-process (64x64 solid colour).
-fn png_bytes() -> Vec<u8> {
-    let img = image::RgbaImage::from_fn(64, 64, |_, _| image::Rgba([120, 40, 40, 255]));
-    let mut cursor = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut cursor, image::ImageFormat::Png).unwrap();
-    cursor.into_inner()
 }
 
 /// Builds a multipart/form-data body for the upload endpoint.
@@ -149,10 +141,12 @@ async fn upload_stream_delete_lifecycle() {
         eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
         return;
     };
-    cleanup(&pool).await;
+    const NS: &str = "__page-e2e-upload";
+    cleanup(&pool, NS).await;
     let token = probe_user(
         &pool,
         &manga_backend::jwt::JwtUtils::new(SECRET.into(), 3_600_000),
+        NS,
     )
     .await;
 
@@ -180,7 +174,11 @@ async fn upload_stream_delete_lifecycle() {
     let chapter_id = json_field(&response.2, "id");
 
     // --- upload ---
-    let body = multipart_body(&chapter_id, 1, "probe.png", &png_bytes());
+    // Seeded per run, not a shared fixture: uploads are de-duplicated by content hash, so any
+    // other test uploading the same bytes would make this one answer "duplicate" instead of
+    // "processing" -- and a run that died before its teardown would do the same to the next run.
+    let probe_png = seeded_png(Uuid::new_v4().as_u128() as u32);
+    let body = multipart_body(&chapter_id, 1, "probe.png", &probe_png);
     let response = send_multipart(app.clone(), "/tlhub/api/images", &token, body).await;
     assert_eq!(response.0, StatusCode::OK, "{}", response.2);
     let uploaded: serde_json::Value = serde_json::from_str(&response.2).unwrap();
@@ -189,7 +187,7 @@ async fn upload_stream_delete_lifecycle() {
     let image_id = uploaded["imageId"].as_str().unwrap().to_string();
 
     // --- idempotent re-upload into same slot ---
-    let body = multipart_body(&chapter_id, 1, "probe.png", &png_bytes());
+    let body = multipart_body(&chapter_id, 1, "probe.png", &probe_png);
     let response = send_multipart(app.clone(), "/tlhub/api/images", &token, body).await;
     let again: serde_json::Value = serde_json::from_str(&response.2).unwrap();
     assert_eq!(again["status"], "already_exists", "{}", response.2);
@@ -231,7 +229,7 @@ async fn upload_stream_delete_lifecycle() {
     )
     .await;
     assert_eq!(response.0, StatusCode::OK);
-    assert_eq!(response.3 as usize, png_bytes().len());
+    assert_eq!(response.3 as usize, probe_png.len());
 
     // --- rendered absent -> 404 (nothing rendered yet) ---
     let response = send_get(
@@ -259,7 +257,7 @@ async fn upload_stream_delete_lifecycle() {
     }
 
     // --- teardown cascades chapters/pages/images with the series ---
-    cleanup(&pool).await;
+    cleanup(&pool, NS).await;
 }
 
 /// keep the unused-var lint quiet for ids consumed implicitly above.
@@ -347,21 +345,31 @@ fn json_field(body: &str, field: &str) -> String {
 
 /// Sweeps ALL probe-owned series then users — safe against leftovers from earlier
 /// runs that died mid-test (the FK blocks user deletion while any series remains).
-async fn cleanup(pool: &sqlx::PgPool) {
+/// Wipe one namespace's probe data.
+///
+/// Scoped to `ns` rather than to every `__page-e2e-` user, because these tests run concurrently
+/// and each one calls this on the way in and on the way out. While the pattern was shared, the
+/// first test to finish deleted the series the other was still working on, and the victim saw an
+/// empty page list rather than its own row -- an assertion failure with nothing wrong in the code
+/// under test, which surfaced or hid depending on how the rest of the file happened to be timed.
+async fn cleanup(pool: &sqlx::PgPool, ns: &str) {
     sqlx::query(
-        "DELETE FROM series WHERE created_by IN (SELECT id FROM users WHERE email LIKE '__page-e2e-%')",
+        "DELETE FROM series WHERE created_by IN (SELECT id FROM users WHERE email LIKE $1 || '-%')",
     )
+    .bind(ns)
     .execute(pool)
     .await
     .expect("series cleanup");
     // images.created_by also references users; pages already cascaded with series above.
     sqlx::query(
-        "DELETE FROM images WHERE created_by IN (SELECT id FROM users WHERE email LIKE '__page-e2e-%')",
+        "DELETE FROM images WHERE created_by IN (SELECT id FROM users WHERE email LIKE $1 || '-%')",
     )
+    .bind(ns)
     .execute(pool)
     .await
     .expect("image cleanup");
-    sqlx::query("DELETE FROM users WHERE email LIKE '__page-e2e-%'")
+    sqlx::query("DELETE FROM users WHERE email LIKE $1 || '-%'")
+        .bind(ns)
         .execute(pool)
         .await
         .expect("user cleanup");
@@ -385,10 +393,12 @@ async fn rendered_output_reaches_the_page_grid() {
         eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
         return;
     };
-    cleanup(&pool).await;
+    const NS: &str = "__page-e2e-render";
+    cleanup(&pool, NS).await;
     let token = probe_user(
         &pool,
         &manga_backend::jwt::JwtUtils::new(SECRET.into(), 3_600_000),
+        NS,
     )
     .await;
 
@@ -414,7 +424,12 @@ async fn rendered_output_reaches_the_page_grid() {
     assert_eq!(response.0, StatusCode::OK);
     let chapter_id = json_field(&response.2, "id");
 
-    let body = multipart_body(&chapter_id, 1, "f26.png", &png_bytes());
+    let body = multipart_body(
+        &chapter_id,
+        1,
+        "f26.png",
+        &seeded_png(Uuid::new_v4().as_u128() as u32),
+    );
     let response = send_multipart(app.clone(), "/tlhub/api/images", &token, body).await;
     let uploaded: serde_json::Value = serde_json::from_str(&response.2).unwrap();
     let page_id = uploaded["pageId"].as_str().unwrap().to_string();
@@ -553,7 +568,7 @@ async fn rendered_output_reaches_the_page_grid() {
     storage
         .delete_quietly(&format!("thumbnails/rendered/{image_id}.webp"))
         .await;
-    cleanup(&pool).await;
+    cleanup(&pool, NS).await;
 }
 
 /// PageControllerTest addition: PATCH /api/ocr-regions/{id} with translatedText must
@@ -806,7 +821,7 @@ async fn chapter_with_pages(
     }
     assert_eq!(
         numbers(pool, &chapter_id).await,
-        vec![1, 2, 3, 4, 5][..count as usize].to_vec()
+        (1..=count as i32).collect::<Vec<i32>>()
     );
     (chapter_id, page_ids)
 }
@@ -1005,6 +1020,241 @@ async fn reorder_pages_applies_the_requested_order() {
     assert_eq!(number_of(&pool, &page_ids[2]).await, 2);
     assert_eq!(number_of(&pool, &page_ids[1]).await, 3);
     assert_eq!(number_of(&pool, &page_ids[0]).await, 4);
+
+    order_cleanup(&pool, NS, TITLE).await;
+}
+
+#[tokio::test]
+async fn move_repairs_a_chapter_left_with_a_stranded_page_number() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    const NS: &str = "__pgstrand-e2e";
+    const TITLE: &str = "PageOrder Strand Probe";
+    let token = order_probe(&pool, NS, TITLE).await;
+    let (chapter_id, page_ids) = chapter_with_pages(&app, &pool, &token, TITLE, 9).await;
+
+    // Reproduce what a move that died part-way used to leave behind: the moving page parked at
+    // 10000 + the slot it was headed for, outside the chapter's own numbering. Page 3 of 9,
+    // aimed at 6.
+    sqlx::query("UPDATE pages SET page_number = 10006 WHERE id = $1::uuid")
+        .bind(&page_ids[2])
+        .execute(&pool)
+        .await
+        .expect("strand the moving page");
+
+    // Re-issuing the move used to read 10006 as the page's current position, take the shift-up
+    // branch off the back of it, shift a range unrelated to the request, and answer 200 OK --
+    // leaving a 9-page chapter numbered 1,2,4,5,6,7,8,9,10.
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "PATCH",
+        &format!("/tlhub/api/pages/{}/number", page_ids[2]),
+        &token,
+        r#"{"newNumber":6}"#.to_string(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    assert_eq!(
+        numbers(&pool, &chapter_id).await,
+        (1..=9).collect::<Vec<i32>>(),
+        "the move must leave 1..9 -- no hole, and nothing past the end of the chapter"
+    );
+    // And it must be the move that was asked for, not just any contiguous numbering: the stranded
+    // page lands on 6 and the pages it passed close up behind it.
+    assert_eq!(
+        number_of(&pool, &page_ids[2]).await,
+        6,
+        "moved page lands 6th"
+    );
+    for (slot, original) in [0usize, 1, 3, 4, 5].iter().enumerate() {
+        assert_eq!(
+            number_of(&pool, &page_ids[*original]).await,
+            (slot as i32) + 1,
+            "page {original} sits ahead of the moved one"
+        );
+    }
+    for (offset, original) in [6usize, 7, 8].iter().enumerate() {
+        assert_eq!(
+            number_of(&pool, &page_ids[*original]).await,
+            (offset as i32) + 7,
+            "page {original} keeps its place behind the moved one"
+        );
+    }
+
+    order_cleanup(&pool, NS, TITLE).await;
+}
+
+#[tokio::test]
+async fn move_to_the_current_slot_repairs_a_gap() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    const NS: &str = "__pggap-e2e";
+    const TITLE: &str = "PageOrder Gap Probe";
+    let token = order_probe(&pool, NS, TITLE).await;
+    let (chapter_id, page_ids) = chapter_with_pages(&app, &pool, &token, TITLE, 5).await;
+
+    // A chapter that drifted: 1,2,3,4,7. The last page is now out of range of its own count, so
+    // it cannot be moved anywhere -- the count check rejects every slot it could go to.
+    sqlx::query("UPDATE pages SET page_number = 7 WHERE id = $1::uuid")
+        .bind(&page_ids[4])
+        .execute(&pool)
+        .await
+        .expect("open a gap");
+
+    // Asking a page to go where it already is used to short-circuit on `old_number == new_number`
+    // and change nothing, which left the user no way out of this state from the UI. The renumber
+    // now runs regardless, so the no-op move is the repair.
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "PATCH",
+        &format!("/tlhub/api/pages/{}/number", page_ids[0]),
+        &token,
+        r#"{"newNumber":1}"#.to_string(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    assert_eq!(
+        numbers(&pool, &chapter_id).await,
+        vec![1, 2, 3, 4, 5],
+        "the gap is closed"
+    );
+    // Repair, not reshuffle: the reading order the chapter already had is preserved.
+    for (slot, id) in page_ids.iter().enumerate() {
+        assert_eq!(number_of(&pool, id).await, (slot as i32) + 1);
+    }
+
+    order_cleanup(&pool, NS, TITLE).await;
+}
+
+/// The endpoint is the guard, not the number input in the reader. Anything the UI would never
+/// send -- a negative slot, a slot past the end, a value too big for the column -- has to come
+/// back 400 with the chapter untouched, because callers other than the UI exist.
+#[tokio::test]
+async fn page_number_rejects_out_of_range_requests() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    const NS: &str = "__pgrange-e2e";
+    const TITLE: &str = "PageOrder Range Probe";
+    let token = order_probe(&pool, NS, TITLE).await;
+    let (chapter_id, page_ids) = chapter_with_pages(&app, &pool, &token, TITLE, 4).await;
+
+    for (payload, why) in [
+        (r#"{"newNumber":-5}"#, "a negative slot"),
+        (r#"{"newNumber":5}"#, "one past the last slot"),
+        (r#"{"newNumber":99999}"#, "far past the last slot"),
+        // Wrapped to 2 by the old `as i32` cast and moved the page there, reporting success.
+        (
+            r#"{"newNumber":4294967298}"#,
+            "past i32, wrapping to a valid slot",
+        ),
+        (r#"{"newNumber":2147483648}"#, "i32::MAX + 1"),
+        (r#"{"newNumber":-2147483649}"#, "i32::MIN - 1"),
+        (r#"{"newNumber":"abc"}"#, "a non-numeric string"),
+        (r#"{"newNumber":1.5}"#, "a fraction"),
+        (r#"{"newNumber":null}"#, "null"),
+        (r#"{"pageNumber":2}"#, "the wrong field name"),
+    ] {
+        let (status, _, body, _) = send_json(
+            app.clone(),
+            "PATCH",
+            &format!("/tlhub/api/pages/{}/number", page_ids[0]),
+            &token,
+            payload.to_string(),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::BAD_REQUEST,
+            "{why} must be rejected, got {status}: {body}"
+        );
+        assert_eq!(
+            numbers(&pool, &chapter_id).await,
+            vec![1, 2, 3, 4],
+            "{why} must leave the chapter alone"
+        );
+        assert_eq!(
+            number_of(&pool, &page_ids[0]).await,
+            1,
+            "{why} must not move the page"
+        );
+    }
+
+    // 0 and -1 stay meaningful: both are the documented "send it to the end" spelling.
+    for payload in [r#"{"newNumber":0}"#, r#"{"newNumber":-1}"#] {
+        let (status, _, body, _) = send_json(
+            app.clone(),
+            "PATCH",
+            &format!("/tlhub/api/pages/{}/number", page_ids[1]),
+            &token,
+            payload.to_string(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{payload}: {body}");
+        assert_eq!(
+            number_of(&pool, &page_ids[1]).await,
+            4,
+            "{payload} sends it last"
+        );
+        assert_eq!(numbers(&pool, &chapter_id).await, vec![1, 2, 3, 4]);
+        // Put it back for the next spelling.
+        send_json(
+            app.clone(),
+            "PATCH",
+            &format!("/tlhub/api/pages/{}/number", page_ids[1]),
+            &token,
+            r#"{"newNumber":2}"#.to_string(),
+        )
+        .await;
+    }
+
+    order_cleanup(&pool, NS, TITLE).await;
+}
+
+#[tokio::test]
+async fn reorder_rejects_a_list_that_is_not_a_permutation() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    const NS: &str = "__pgperm-e2e";
+    const TITLE: &str = "PageOrder Permutation Probe";
+    let token = order_probe(&pool, NS, TITLE).await;
+    let (chapter_id, page_ids) = chapter_with_pages(&app, &pool, &token, TITLE, 3).await;
+
+    // Right length, every id real, but page_ids[0] twice and page_ids[2] missing. The count and
+    // membership checks both pass; only a uniqueness check catches it. Left through, the renumber
+    // writes the repeated id and never touches the omitted one, so it keeps page number 3 --
+    // either colliding with the slot the repeat lands on or leaving a hole.
+    let payload = serde_json::to_string(&[&page_ids[0], &page_ids[1], &page_ids[0]]).unwrap();
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "PUT",
+        &format!("/tlhub/api/chapters/{chapter_id}/pages/reorder"),
+        &token,
+        payload,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "a list with a duplicate is not a reordering: {body}"
+    );
+    assert_eq!(
+        numbers(&pool, &chapter_id).await,
+        vec![1, 2, 3],
+        "the rejected reorder must not have touched the chapter"
+    );
+    for (slot, id) in page_ids.iter().enumerate() {
+        assert_eq!(number_of(&pool, id).await, (slot as i32) + 1);
+    }
 
     order_cleanup(&pool, NS, TITLE).await;
 }
