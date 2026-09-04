@@ -50,7 +50,7 @@ impl RedisService {
         .await
         .map_err(|_| {
             redis::RedisError::from((
-                redis::ErrorKind::IoError,
+                redis::ErrorKind::Io,
                 "Redis connection not established within 15s",
             ))
         })??;
