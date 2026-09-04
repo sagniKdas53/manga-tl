@@ -233,12 +233,28 @@ pub async fn element_history(
     Json(history).into_response()
 }
 
+/// Narrows a client-supplied integer to the column width without wrapping.
+///
+/// `as i32` on an `i64` discards the high bits, so `4294967296` arrives as `0` -- an absurd
+/// request silently becomes a plausible one, which is the shape of bug that let a page move to
+/// the wrong slot and report success. Saturating instead keeps the one property ordering
+/// actually depends on: a larger request never produces a smaller stored value.
+pub(crate) fn saturating_i32(value: i64) -> i32 {
+    value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+}
+
 /// Jackson `((Number) raw).intValue()` parity: fractional zOrder values coerce
 /// (2.5 → 2) instead of silently falling back to the default.
+///
+/// Deliberate divergence on one point: Jackson's `intValue()` is a narrowing conversion, so it
+/// wraps on anything past `i32`, and `as i32` matched that exactly. Parity is worth keeping for
+/// behaviour a caller could sensibly depend on, and nothing depends on `zOrder: 4294967296`
+/// sorting to the bottom. It saturates now. (The `as_f64` branch already saturates -- Rust's
+/// float-to-int casts are saturating, with NaN mapping to 0.)
 pub(crate) fn z_order_of(value: Option<&serde_json::Value>) -> Option<i32> {
     value.and_then(|v| {
         v.as_i64()
-            .map(|i| i as i32)
+            .map(saturating_i32)
             .or_else(|| v.as_f64().map(|f| f as i32))
     })
 }
@@ -356,6 +372,50 @@ mod tests {
         assert_eq!(dto.maxHeight, Some(829));
         assert_eq!(dto.x, Some(782.6109316));
         assert_eq!(dto.rotation, Some(37.5));
+    }
+
+    /// `as i32` discarded the high bits, so these all landed on plausible small numbers --
+    /// `4294967296` became 0, i.e. "bottom of the stack" for a request asking for the top.
+    /// Saturating keeps the property ordering depends on: bigger in, never smaller out.
+    #[test]
+    fn an_out_of_range_z_order_saturates_instead_of_wrapping() {
+        for (raw, expected, why) in [
+            (4294967296i64, i32::MAX, "2^32 wrapped to 0"),
+            (4294967298, i32::MAX, "2^32+2 wrapped to 2"),
+            (i64::from(i32::MAX) + 1, i32::MAX, "one past the top"),
+            (i64::from(i32::MIN) - 1, i32::MIN, "one past the bottom"),
+            (i64::MAX, i32::MAX, "the largest integer JSON can carry"),
+            (i64::MIN, i32::MIN, "the smallest"),
+        ] {
+            let value = serde_json::json!(raw);
+            assert_eq!(
+                z_order_of(Some(&value)),
+                Some(expected),
+                "zOrder {raw}: {why}"
+            );
+        }
+    }
+
+    /// The clamp must not disturb the values that were always fine, including the Jackson
+    /// fractional-coercion parity this helper exists for.
+    #[test]
+    fn in_range_z_orders_are_untouched() {
+        for (body, expected) in [
+            ("0", 0),
+            ("2", 2),
+            ("-7", -7),
+            ("2.5", 2),
+            ("2147483647", i32::MAX),
+        ] {
+            let value: serde_json::Value = serde_json::from_str(body).unwrap();
+            assert_eq!(z_order_of(Some(&value)), Some(expected), "zOrder {body}");
+        }
+        assert_eq!(z_order_of(None), None, "absent stays absent");
+        assert_eq!(
+            z_order_of(Some(&serde_json::json!("nonsense"))),
+            None,
+            "a non-number is not a zOrder"
+        );
     }
 
     #[test]

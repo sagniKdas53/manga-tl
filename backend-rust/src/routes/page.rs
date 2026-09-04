@@ -1897,7 +1897,8 @@ async fn restore_project_layers(
         let z_order = layer_node
             .get("zOrder")
             .and_then(|v| v.as_i64())
-            .unwrap_or(0) as i32;
+            .map(crate::routes::layers::saturating_i32)
+            .unwrap_or(0);
         let metadata_json = layer_node
             .get("metadataJson")
             .filter(|v| !v.is_null())
@@ -1941,8 +1942,19 @@ async fn restore_project_layers(
                 .get("autoSize")
                 .map(|v| v.as_bool() == Some(false))
                 .unwrap_or(false));
-            let max_width = el.get("maxWidth").and_then(|v| v.as_i64()).unwrap_or(150) as i32;
-            let max_height = el.get("maxHeight").and_then(|v| v.as_i64()).unwrap_or(80) as i32;
+            // Saturating, not `as i32`: the cast wrapped, so an oversized maxWidth arrived as a
+            // small positive number -- or 0 -- and the element silently laid out at that width
+            // instead of the one the project asked for.
+            let max_width = el
+                .get("maxWidth")
+                .and_then(|v| v.as_i64())
+                .map(crate::routes::layers::saturating_i32)
+                .unwrap_or(150);
+            let max_height = el
+                .get("maxHeight")
+                .and_then(|v| v.as_i64())
+                .map(crate::routes::layers::saturating_i32)
+                .unwrap_or(80);
             let word_wrap = !(el
                 .get("wordWrap")
                 .map(|v| v.as_bool() == Some(false))

@@ -459,6 +459,42 @@ async fn layer_and_element_lifecycle_with_gating() {
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 
+    // --- an out-of-range zOrder saturates instead of wrapping ---
+    //
+    // The wrapping-cast family the page-move fix closed for `newNumber`, at the layer surface.
+    // `as i32` on an `i64` discards the high bits, so a caller asking for the top of the stack
+    // with `zOrder: 4294967296` got 0 -- the bottom -- and a 200 saying it worked. Saturating
+    // keeps the only property stacking depends on: a larger request never stores a smaller value.
+    //
+    // Lives in this test rather than its own because `seed_page`/`cleanup` wipe the whole
+    // `__layers-e2e-` namespace, so a second test holding them would race this one.
+    for (raw, expected, why) in [
+        ("4294967296", i64::from(i32::MAX), "2^32 used to wrap to 0"),
+        (
+            "4294967298",
+            i64::from(i32::MAX),
+            "2^32+2 used to wrap to 2",
+        ),
+        ("9223372036854775807", i64::from(i32::MAX), "i64::MAX"),
+        ("-9223372036854775808", i64::from(i32::MIN), "i64::MIN"),
+    ] {
+        let (status, _, body) = send(
+            app.clone(),
+            "POST",
+            &format!("/tlhub/api/pages/{page_id}/layers"),
+            Some(&translator),
+            Some(format!(r#"{{"type":"translation","zOrder":{raw}}}"#)),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "zOrder {raw}: {body}");
+        let saturated: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(
+            saturated["zOrder"].as_i64(),
+            Some(expected),
+            "zOrder {raw} ({why}) must saturate, not wrap"
+        );
+    }
+
     // ocr layer still present until its page goes away with cleanup.
     let _ = ocr_layer;
     cleanup(&pool).await;
