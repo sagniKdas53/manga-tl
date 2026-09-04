@@ -78,6 +78,56 @@ describe("PipelineRefreshWatcher", () => {
     expect(onPipelineActivity).not.toHaveBeenCalled();
   });
 
+  // AUDIT-F27. The 4s window only coalesces events that arrive inside it. AUDIT-W13 made a
+  // context-injecting chapter translate strictly in page order, so completions now land tens of
+  // seconds apart — each settling its own timer and firing its own full loaded-window refresh.
+  describe("a slow drip is bounded too, not just a burst", () => {
+    it("does not re-read once per page when completions are further apart than the window", () => {
+      const onPipelineActivity = vi.fn();
+      render(<PipelineRefreshWatcher onPipelineActivity={onPipelineActivity} />);
+
+      // Ten pages, each finishing 10s after the last — a serialized chapter. Without a floor this
+      // is ten refreshes, each re-requesting every loaded pagination batch.
+      for (let i = 0; i < 10; i++) {
+        emit(jobUpdate("COMPLETED"));
+        vi.advanceTimersByTime(10000);
+      }
+
+      // The first is prompt; the rest collapse onto the 30s cadence rather than one per page.
+      expect(onPipelineActivity.mock.calls.length).toBeLessThanOrEqual(4);
+      expect(onPipelineActivity).toHaveBeenCalled();
+    });
+
+    it("still re-reads promptly for the first completion after mount", () => {
+      const onPipelineActivity = vi.fn();
+      render(<PipelineRefreshWatcher onPipelineActivity={onPipelineActivity} />);
+
+      emit(jobUpdate("COMPLETED"));
+      vi.advanceTimersByTime(4000);
+      expect(onPipelineActivity).toHaveBeenCalledTimes(1);
+    });
+
+    it("holds a completion that lands inside the cooldown until the cooldown ends", () => {
+      const onPipelineActivity = vi.fn();
+      render(<PipelineRefreshWatcher onPipelineActivity={onPipelineActivity} />);
+
+      emit(jobUpdate("COMPLETED"));
+      vi.advanceTimersByTime(4000);
+      expect(onPipelineActivity).toHaveBeenCalledTimes(1);
+
+      // A second page finishes 5s later. It must not refresh now...
+      vi.advanceTimersByTime(5000);
+      emit(jobUpdate("COMPLETED"));
+      vi.advanceTimersByTime(4000);
+      expect(onPipelineActivity).toHaveBeenCalledTimes(1);
+
+      // ...but it must not be dropped either: the last page of a chapter is always followed by a
+      // re-read, once the floor allows one.
+      vi.advanceTimersByTime(30000);
+      expect(onPipelineActivity).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it("does not fire after unmount", () => {
     const onPipelineActivity = vi.fn();
     const { unmount } = render(
