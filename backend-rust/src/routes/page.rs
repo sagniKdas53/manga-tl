@@ -1069,51 +1069,30 @@ pub async fn delete_page(
     let image = find_image(&state.pool, page.image_id).await;
 
     // DB deletes rely on schema cascades for layers/elements/regions (same as Java's FKs).
+    //
+    // Delete and re-sequence share one transaction. Java's deletePageDb ends with an explicit
+    // "Re-sequence remaining pages in chapter to maintain sequence 1..N" loop; the port dropped
+    // it, so deleting page 2 of 5 left 1, 3, 4, 5 and every later page kept its old number. That
+    // is not only cosmetic: update_page_number validates the requested position against the page
+    // count, so a hole puts the last page out of range and moving anything there is rejected.
+    //
+    // The re-sequence used to run after the DELETE had already committed, so a failure in it left
+    // open exactly the gap it exists to close. Now the page only goes away if the numbering that
+    // follows it lands too. Renumbering the whole remainder rather than shifting the tail also
+    // repairs a chapter that was already uneven, instead of carrying the unevenness forward.
+    let mut tx = state.pool.begin().await.expect("page delete transaction");
     sqlx::query("DELETE FROM pages WHERE id = $1")
         .bind(page_id)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await
         .expect("page delete");
-
-    // Close the gap the delete just opened. Java's deletePageDb ends with an explicit
-    // "Re-sequence remaining pages in chapter to maintain sequence 1..N" loop; the port dropped
-    // it, so deleting page 2 of 5 left 1, 3, 4, 5 and every later page kept its old number.
-    //
-    // That is not only cosmetic. update_page_number validates the requested number against
-    // COUNT(*), so with a hole in the sequence the highest real page number is out of range and
-    // moving a page there is rejected as "greater than total pages" -- one delete quietly breaks
-    // page reordering for the whole chapter.
-    //
-    // This needs reorder_pages' two-phase parking trick after all. A single
-    // `page_number = page_number - 1` looks safe -- every page above the hole moves into a slot
-    // whose previous occupant is also moving -- but that argument assumes Postgres updates the
-    // rows in ascending page_number order. It makes no such guarantee: the row order follows the
-    // scan, and UNIQUE (chapter_id, page_number) is checked per row, not at statement end. When
-    // the scan happened to reach page 5 before page 4, `5 -> 4` collided with the 4 still sitting
-    // there and the whole statement failed with 23505 -- a 500 on DELETE, and the gap left open
-    // again because the page row was already committed by the DELETE above.
-    //
-    // Parking above the live range first makes the outcome independent of scan order: after
-    // phase 1 the only occupied slots are 1..(deleted - 1), so every phase-2 target is free.
-    let mut tx = state.pool.begin().await.expect("resequence transaction");
-    sqlx::query(
-        "UPDATE pages SET page_number = page_number + 10000 WHERE chapter_id = $1 AND page_number > $2",
-    )
-    .bind(page.chapter_id)
-    .bind(page.page_number)
-    .execute(&mut *tx)
-    .await
-    .expect("resequence phase 1");
-    sqlx::query(
-        "UPDATE pages SET page_number = page_number - 10001 WHERE chapter_id = $1 AND page_number > 10000",
-    )
-    .bind(page.chapter_id)
-    .execute(&mut *tx)
-    .await
-    .expect("resequence phase 2");
-    // Both phases commit together: a failure between them would strand the tail of the chapter
-    // at page_number + 10000, which is worse than the gap this is here to close.
-    tx.commit().await.expect("resequence commit");
+    let ordered = locked_page_order(&mut tx, page.chapter_id)
+        .await
+        .expect("chapter page order");
+    renumber_pages(&mut tx, &ordered)
+        .await
+        .expect("resequence renumber");
+    tx.commit().await.expect("page delete commit");
     if let Some(image) = &image {
         // Only remove the image when no other page references it (Java deletes via pageService;
         // its deletePageDb collects paths from the page's own image only).
@@ -1144,6 +1123,55 @@ pub async fn delete_page(
     StatusCode::OK.into_response()
 }
 
+/// Renumber a chapter's pages to 1..N in the order given, inside `tx`.
+///
+/// Every renumber in this file has to survive two hazards. Postgres checks
+/// UNIQUE (chapter_id, page_number) per row, in whatever order the scan hands the rows over, so
+/// any single-statement shuffle can land on a row that has not moved yet and die with 23505. And
+/// the numbers already in the table cannot be assumed to be a clean 1..N: a chapter that an
+/// earlier failure left with a gap, or with a page stranded above the live range, still has to
+/// come out of this correct.
+///
+/// Parking in the negatives answers both. Real page numbers are >= 1 and strays are positive, so
+/// phase 1 cannot collide with anything the table currently holds, whatever shape it is in; and
+/// because `ordered` names every page in the chapter, phase 1 empties the whole positive range,
+/// leaving every phase-2 target free no matter what order the rows come back in.
+///
+/// Passing the ids as an array keeps this to two statements rather than two per page.
+async fn renumber_pages(tx: &mut sqlx::PgConnection, ordered: &[Uuid]) -> Result<(), sqlx::Error> {
+    let ids: Vec<Uuid> = ordered.to_vec();
+    for sign in [-1i32, 1i32] {
+        let targets: Vec<i32> = (1..=ordered.len() as i32).map(|pos| pos * sign).collect();
+        sqlx::query(
+            "UPDATE pages SET page_number = t.pos \
+             FROM unnest($1::uuid[], $2::int[]) AS t(id, pos) \
+             WHERE pages.id = t.id",
+        )
+        .bind(&ids)
+        .bind(&targets)
+        .execute(&mut *tx)
+        .await?;
+    }
+    Ok(())
+}
+
+/// The chapter's pages in the order they are currently displayed in, locked for update.
+///
+/// Order, not number: everything downstream works in positions, so a chapter whose numbering has
+/// drifted still yields the sequence the reader shows. `FOR UPDATE` serialises concurrent moves
+/// on the same chapter, which used to be able to interleave into a mess.
+async fn locked_page_order(
+    tx: &mut sqlx::PgConnection,
+    chapter_id: Uuid,
+) -> Result<Vec<Uuid>, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT id FROM pages WHERE chapter_id = $1 ORDER BY page_number ASC, id ASC FOR UPDATE",
+    )
+    .bind(chapter_id)
+    .fetch_all(&mut *tx)
+    .await
+}
+
 /// PUT /api/chapters/{chapterId}/pages/reorder — full list of ids in desired order.
 pub async fn reorder_pages(
     State(state): State<AppState>,
@@ -1172,7 +1200,13 @@ pub async fn reorder_pages(
             .await
             .unwrap_or_default();
 
+    // Count, membership *and* uniqueness. Checking only the first two let a caller send the same
+    // id twice in place of another -- ["A", "A"] against [A, B] passes both -- and the renumber
+    // would then write A twice and never touch B, leaving B on its old number: a collision or a
+    // hole, from a request the endpoint had called valid.
+    let unique: std::collections::HashSet<&Uuid> = page_ids.iter().collect();
     let valid = page_ids.len() == existing.len()
+        && unique.len() == page_ids.len()
         && page_ids
             .iter()
             .all(|id| existing.iter().any(|p| &p.id == id));
@@ -1184,23 +1218,14 @@ pub async fn reorder_pages(
             .into_response();
     }
 
-    // Two-phase renumber avoids unique-constraint violations (same trick as Java).
-    for (index, id) in page_ids.iter().enumerate() {
-        sqlx::query("UPDATE pages SET page_number = $2 WHERE id = $1")
-            .bind(id)
-            .bind((index as i32) + 1 + 10000)
-            .execute(&state.pool)
-            .await
-            .expect("reorder phase 1");
-    }
-    for (index, id) in page_ids.iter().enumerate() {
-        sqlx::query("UPDATE pages SET page_number = $2 WHERE id = $1")
-            .bind(id)
-            .bind((index as i32) + 1)
-            .execute(&state.pool)
-            .await
-            .expect("reorder phase 2");
-    }
+    // The two-phase renumber avoids unique-constraint violations (same trick as Java). It runs in
+    // one transaction: the phases used to be independent statements, so a failure between them
+    // left the whole chapter parked outside its own numbering.
+    let mut tx = state.pool.begin().await.expect("reorder transaction");
+    renumber_pages(&mut tx, &page_ids)
+        .await
+        .expect("reorder renumber");
+    tx.commit().await.expect("reorder commit");
     recalculate_chapter_cover(&state.pool, chapter_id).await;
     StatusCode::OK.into_response()
 }
@@ -1233,8 +1258,23 @@ pub async fn update_page_number(
             .into_response();
     };
     // Java accepts any JSON number or numeric string; invalid -> IllegalArgumentException -> 400.
+    //
+    // `try_from`, not `as i32`. The cast here used to wrap, which is worse than accepting the
+    // value: `newNumber: 4294967298` came out as 2, so a request that is nonsense on its face got
+    // silently rewritten into a perfectly plausible different move, past every range check below
+    // (both of which only ever saw the wrapped number). Anything that does not fit an i32 is now
+    // rejected the same way an unparseable string is -- which is also what Java's Integer parse
+    // did with it.
     let new_number: i32 = match raw_new.as_i64() {
-        Some(v) => v as i32,
+        Some(v) => match i32::try_from(v) {
+            Ok(v) => v,
+            Err(_) => {
+                return error::bad_request(
+                    "Page number cannot be parsed",
+                    "/api/pages/{pageId}/number",
+                );
+            }
+        },
         None => match raw_new.as_str().and_then(|v| v.parse::<i32>().ok()) {
             Some(v) => v,
             None => {
@@ -1253,106 +1293,70 @@ pub async fn update_page_number(
             "/api/pages/{pageId}/number",
         );
     };
-    let old_number = page.page_number;
-    if old_number == new_number {
-        return StatusCode::OK.into_response();
-    }
-
-    let total_pages: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM pages WHERE chapter_id = $1")
-        .bind(page.chapter_id)
-        .fetch_one(&state.pool)
+    // Work in positions, not in the numbers the rows happen to carry.
+    //
+    // This handler used to read `page.page_number` as the page's position, branch on
+    // `new_number > old_number`, and slide the half-open interval between the two by one. Every
+    // step of that is only correct while the chapter is numbered exactly 1..N, and it returned
+    // 200 OK when it was not -- so a chapter that had drifted got quietly corrupted further on
+    // each move instead of being rejected or repaired.
+    //
+    // That is how a single transient failure became permanent damage in the field. A move that
+    // died mid-way (the 23505 fixed one commit earlier, on a build that still had it) left the
+    // moving page stranded at 10000 + n. The next move read 10006 as its "old number", so
+    // `new < old` took the shift-up branch, shifted a range that had nothing to do with the
+    // requested move, and reported success: a 9-page chapter came out numbered 1,2,4,5,6,7,8,9,10
+    // -- a hole where the page had been and a number past the end of the chapter.
+    //
+    // Reading the order out of the table instead removes the assumption. There is no branch left
+    // to take the wrong way, the current numbers only have to sort correctly rather than be
+    // perfect, and rewriting the full 1..N sequence means any chapter that is already damaged is
+    // repaired by the next move over it -- including a move that changes nothing, which is the
+    // one recovery a user can reach from the UI.
+    let mut tx = state.pool.begin().await.expect("page move transaction");
+    let ordered = locked_page_order(&mut tx, page.chapter_id)
         .await
-        .unwrap_or(0);
+        .expect("chapter page order");
+    let total_pages = ordered.len() as i32;
+
     let mut new_number = new_number;
     if new_number == 0 || new_number == -1 {
-        new_number = total_pages as i32; // map 0/-1 to end
+        new_number = total_pages; // map 0/-1 to end
     } else if new_number < 0 {
         return error::bad_request(
             "Page number cannot be negative",
             "/api/pages/{pageId}/number",
         );
-    } else if new_number as i64 > total_pages {
+    } else if new_number > total_pages {
         return error::bad_request(
             "Page number cannot be greater than total pages",
             "/api/pages/{pageId}/number",
         );
     }
-    if old_number == new_number {
-        return StatusCode::OK.into_response();
-    }
 
-    // Same scan-order hazard as the re-sequence in delete_page: parking only the moving page
-    // leaves the *other* pages to shuffle with a single `page_number -/+ 1`, and Postgres checks
-    // UNIQUE (chapter_id, page_number) per row in whatever order the scan hands them over. Moving
-    // page 1 to slot 3 of 1..4 shifts pages 2 and 3 down; take page 3 first and `3 -> 2` lands on
-    // the 2 that has not moved yet, and the statement dies with 23505.
-    //
-    // So park the whole shifting range too, then bring it back into slots that are provably free.
-    // The bulk park uses +20000, not +10000, because the moving page is already sitting at
-    // 10000 + new_number and the page currently holding new_number would park onto exactly that
-    // slot. Both offsets assume a chapter has well under 10000 pages -- the same assumption
-    // reorder_pages already makes.
-    let mut tx = state.pool.begin().await.expect("page move transaction");
-    sqlx::query("UPDATE pages SET page_number = $2 WHERE id = $1")
-        .bind(page_id)
-        .bind(10000 + new_number)
-        .execute(&mut *tx)
+    let Some(from) = ordered.iter().position(|id| *id == page_id) else {
+        // find_page found it, so its chapter must list it; a miss means the row moved underneath us.
+        return error::bad_request(
+            &format!("Page not found: {page_id}"),
+            "/api/pages/{pageId}/number",
+        );
+    };
+    let to = (new_number - 1).clamp(0, total_pages - 1) as usize;
+
+    let mut ordered = ordered;
+    let cover_before = ordered[0];
+    let moving = ordered.remove(from);
+    ordered.insert(to, moving);
+    // Deliberately unconditional, including when from == to: the renumber is what repairs a
+    // chapter whose numbering has drifted, and skipping it for a no-op move would skip the repair.
+    renumber_pages(&mut tx, &ordered)
         .await
-        .expect("park page");
-    if new_number > old_number {
-        sqlx::query(
-            "UPDATE pages SET page_number = page_number + 20000 \
-             WHERE chapter_id = $1 AND id <> $2 AND page_number > $3 AND page_number <= $4",
-        )
-        .bind(page.chapter_id)
-        .bind(page_id)
-        .bind(old_number)
-        .bind(new_number)
-        .execute(&mut *tx)
-        .await
-        .expect("park shift-down range");
-        sqlx::query(
-            "UPDATE pages SET page_number = page_number - 20001 \
-             WHERE chapter_id = $1 AND id <> $2 AND page_number > 20000",
-        )
-        .bind(page.chapter_id)
-        .bind(page_id)
-        .execute(&mut *tx)
-        .await
-        .expect("shift down");
-    } else {
-        sqlx::query(
-            "UPDATE pages SET page_number = page_number + 20000 \
-             WHERE chapter_id = $1 AND id <> $2 AND page_number >= $3 AND page_number < $4",
-        )
-        .bind(page.chapter_id)
-        .bind(page_id)
-        .bind(new_number)
-        .bind(old_number)
-        .execute(&mut *tx)
-        .await
-        .expect("park shift-up range");
-        sqlx::query(
-            "UPDATE pages SET page_number = page_number - 19999 \
-             WHERE chapter_id = $1 AND id <> $2 AND page_number > 20000",
-        )
-        .bind(page.chapter_id)
-        .bind(page_id)
-        .execute(&mut *tx)
-        .await
-        .expect("shift up");
-    }
-    sqlx::query("UPDATE pages SET page_number = $2 WHERE id = $1")
-        .bind(page_id)
-        .bind(new_number)
-        .execute(&mut *tx)
-        .await
-        .expect("final page number");
-    // One transaction for the whole move: a failure partway used to leave the moving page parked
-    // at 10000 + n, i.e. outside its own chapter's numbering, with no way back but manual repair.
+        .expect("page move renumber");
     tx.commit().await.expect("page move commit");
 
-    if old_number == 1 || new_number == 1 {
+    // The cover follows whichever page is first, so recalculate exactly when that identity changed
+    // -- the old `old_number == 1 || new_number == 1` test read numbers that could be wrong.
+    if ordered[0] != cover_before {
         recalculate_chapter_cover(&state.pool, page.chapter_id).await;
     }
     StatusCode::OK.into_response()
@@ -1893,7 +1897,8 @@ async fn restore_project_layers(
         let z_order = layer_node
             .get("zOrder")
             .and_then(|v| v.as_i64())
-            .unwrap_or(0) as i32;
+            .map(crate::routes::layers::saturating_i32)
+            .unwrap_or(0);
         let metadata_json = layer_node
             .get("metadataJson")
             .filter(|v| !v.is_null())
@@ -1937,8 +1942,19 @@ async fn restore_project_layers(
                 .get("autoSize")
                 .map(|v| v.as_bool() == Some(false))
                 .unwrap_or(false));
-            let max_width = el.get("maxWidth").and_then(|v| v.as_i64()).unwrap_or(150) as i32;
-            let max_height = el.get("maxHeight").and_then(|v| v.as_i64()).unwrap_or(80) as i32;
+            // Saturating, not `as i32`: the cast wrapped, so an oversized maxWidth arrived as a
+            // small positive number -- or 0 -- and the element silently laid out at that width
+            // instead of the one the project asked for.
+            let max_width = el
+                .get("maxWidth")
+                .and_then(|v| v.as_i64())
+                .map(crate::routes::layers::saturating_i32)
+                .unwrap_or(150);
+            let max_height = el
+                .get("maxHeight")
+                .and_then(|v| v.as_i64())
+                .map(crate::routes::layers::saturating_i32)
+                .unwrap_or(80);
             let word_wrap = !(el
                 .get("wordWrap")
                 .map(|v| v.as_bool() == Some(false))
