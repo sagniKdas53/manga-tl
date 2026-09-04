@@ -63,7 +63,7 @@ jsonwebtoken = { version = "11", default-features = false, features = ["aws_lc_r
 # Nothing here uses the legacy client -- `default-https-client` gives us rustls 0.23 +
 # aws-lc-rs, which is what the SDK actually dials with.
 aws-sdk-s3 = { version = "1", default-features = false, features = ["sigv4a", "http-1x", "default-https-client", "rt-tokio"] }
-redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+redis = { version = "1.6", features = ["tokio-comp", "connection-manager"] }
 futures-util = { version = "0.3", features = ["std"] }
 webp = "0.3"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "bmp"] }
