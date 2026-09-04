@@ -59,6 +59,8 @@ PORTED = {
     "GET /api/images/{imageId}/file",
     "GET /api/images/{imageId}/reader",
     "GET /api/images/{imageId}/thumbnail",
+    # AUDIT-F26: the render's own thumbnail, so the page grid can show pipeline output.
+    "GET /api/images/{imageId}/thumbnail/rendered",
     "GET /api/pages/{pageId}/rendered",
     "PATCH /api/ocr-regions/{id}",
     # layers + settings + jobs (Phase 2 completion)

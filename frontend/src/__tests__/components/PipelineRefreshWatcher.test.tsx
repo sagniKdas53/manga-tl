@@ -84,7 +84,9 @@ describe("PipelineRefreshWatcher", () => {
   describe("a slow drip is bounded too, not just a burst", () => {
     it("does not re-read once per page when completions are further apart than the window", () => {
       const onPipelineActivity = vi.fn();
-      render(<PipelineRefreshWatcher onPipelineActivity={onPipelineActivity} />);
+      render(
+        <PipelineRefreshWatcher onPipelineActivity={onPipelineActivity} />,
+      );
 
       // Ten pages, each finishing 10s after the last — a serialized chapter. Without a floor this
       // is ten refreshes, each re-requesting every loaded pagination batch.
@@ -100,7 +102,9 @@ describe("PipelineRefreshWatcher", () => {
 
     it("still re-reads promptly for the first completion after mount", () => {
       const onPipelineActivity = vi.fn();
-      render(<PipelineRefreshWatcher onPipelineActivity={onPipelineActivity} />);
+      render(
+        <PipelineRefreshWatcher onPipelineActivity={onPipelineActivity} />,
+      );
 
       emit(jobUpdate("COMPLETED"));
       vi.advanceTimersByTime(4000);
@@ -109,7 +113,9 @@ describe("PipelineRefreshWatcher", () => {
 
     it("holds a completion that lands inside the cooldown until the cooldown ends", () => {
       const onPipelineActivity = vi.fn();
-      render(<PipelineRefreshWatcher onPipelineActivity={onPipelineActivity} />);
+      render(
+        <PipelineRefreshWatcher onPipelineActivity={onPipelineActivity} />,
+      );
 
       emit(jobUpdate("COMPLETED"));
       vi.advanceTimersByTime(4000);
