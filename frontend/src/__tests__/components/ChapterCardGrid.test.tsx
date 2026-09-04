@@ -36,6 +36,7 @@ describe("ChapterCardGrid", () => {
   const mockOnEditChapter = vi.fn();
   const mockOnDeleteChapter = vi.fn();
   const mockOnNavigate = vi.fn();
+  const mockOnLoadMore = vi.fn();
 
   it("renders chapter cards and controls", () => {
     render(
@@ -48,6 +49,9 @@ describe("ChapterCardGrid", () => {
         onEditChapter={mockOnEditChapter}
         onDeleteChapter={mockOnDeleteChapter}
         onNavigate={mockOnNavigate}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
       />,
     );
 
@@ -67,6 +71,9 @@ describe("ChapterCardGrid", () => {
         onEditChapter={mockOnEditChapter}
         onDeleteChapter={mockOnDeleteChapter}
         onNavigate={mockOnNavigate}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
       />,
     );
 
@@ -86,6 +93,9 @@ describe("ChapterCardGrid", () => {
         onEditChapter={mockOnEditChapter}
         onDeleteChapter={mockOnDeleteChapter}
         onNavigate={mockOnNavigate}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
       />,
     );
 
@@ -107,6 +117,9 @@ describe("ChapterCardGrid", () => {
         onEditChapter={mockOnEditChapter}
         onDeleteChapter={mockOnDeleteChapter}
         onNavigate={mockOnNavigate}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
       />,
     );
 

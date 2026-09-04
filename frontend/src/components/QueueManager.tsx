@@ -400,10 +400,7 @@ interface JobLocation {
   pageLabel: string | null;
 }
 
-const renderJobLocation = (
-  job: Job,
-  parsed: ParsedPayload | null,
-): JobLocation => {
+const renderJobLocation = (parsed: ParsedPayload | null): JobLocation => {
   if (!parsed) return { chapterPath: null, pageLabel: null };
   const parts: string[] = [];
   if (parsed.seriesTitle) parts.push(parsed.seriesTitle);
@@ -577,7 +574,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
       jobsList.forEach((job) => {
         const parsed = getParsed(job);
         const key =
-          renderJobLocation(job, parsed).chapterPath || `__solo__${job.id}`;
+          renderJobLocation(parsed).chapterPath || `__solo__${job.id}`;
         if (!groups.has(key)) {
           groups.set(key, []);
           groupOrder.push(key);
@@ -1011,7 +1008,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     }[] = [];
     jobs.forEach((job) => {
       const parsed = getParsed(job);
-      const { chapterPath } = renderJobLocation(job, parsed);
+      const { chapterPath } = renderJobLocation(parsed);
       const key = chapterPath || `__solo__${job.id}`;
       const last = result[result.length - 1];
       if (last && last.key === key) {
@@ -1213,7 +1210,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                         group.groupJobs.map((job) => {
                           const color = getJobStatusColor(job);
                           const parsed = getParsed(job);
-                          const { pageLabel } = renderJobLocation(job, parsed);
+                          const { pageLabel } = renderJobLocation(parsed);
                           const providerModel = renderProviderModel(
                             job,
                             parsed,

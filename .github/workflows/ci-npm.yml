@@ -54,6 +54,14 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
+      # `vite build` strips types without checking them, so for the life of this project the
+      # frontend was never typechecked at all: AUDIT-R5 reached main as two hard type errors with
+      # every check green. This runs before the tests so a type error reports as a type error
+      # rather than as a confusing runtime failure.
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
       - name: Test
         working-directory: frontend
         run: npm run test:coverage

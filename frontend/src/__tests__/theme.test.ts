@@ -4,6 +4,17 @@ import { resolve } from "node:path";
 import { describe, it, expect } from "vitest";
 import { theme } from "../theme";
 
+/**
+ * `colorSchemes` is typed `Partial<Record<SupportedColorScheme, ...>>` because a theme may define
+ * only one scheme. This one defines both, and a test that silently skipped a missing scheme would
+ * be worse than one that fails loudly.
+ */
+const paletteFor = (mode: "light" | "dark") => {
+  const scheme = theme.colorSchemes[mode];
+  if (!scheme) throw new Error(`theme defines no ${mode} colour scheme`);
+  return scheme.palette;
+};
+
 /** Relative luminance of an #rrggbb colour, per WCAG 2.1. */
 const luminance = (hex: string) => {
   const m = /^#([0-9a-f]{6})$/i.exec(hex);
@@ -58,7 +69,7 @@ describe("theme colour contrast (AUDIT-F4)", () => {
 
   (["light", "dark"] as const).forEach((mode) => {
     describe(`${mode} mode`, () => {
-      const palette = theme.colorSchemes[mode].palette;
+      const palette = paletteFor(mode);
 
       it.each(["primary", "secondary"] as const)(
         "text.%s meets WCAG AA against both background surfaces",
@@ -89,7 +100,7 @@ describe("theme colour contrast (AUDIT-F4)", () => {
 });
 
 describe("dark mode is readable rather than merely high-contrast (AUDIT-F21)", () => {
-  const palette = theme.colorSchemes.dark.palette;
+  const palette = paletteFor("dark");
 
   it("keeps body text inside the comfortable band, not above it", () => {
     for (const surface of [
@@ -179,7 +190,7 @@ describe("the two dark palettes agree (AUDIT-F21)", () => {
     return m[1].trim();
   };
 
-  const palette = theme.colorSchemes.dark.palette;
+  const palette = paletteFor("dark");
 
   it.each([
     ["bg-base", palette.background.default],

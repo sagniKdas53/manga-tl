@@ -56,6 +56,8 @@ describe("SeriesDetails", () => {
   const mockSetSelectedSeries = vi.fn();
   const mockSetChapters = vi.fn();
   const mockOnSelectChapter = vi.fn();
+  const mockSetSortAsc = vi.fn();
+  const mockOnLoadMoreChapters = vi.fn();
 
   it("renders loading spinner when loading or no selected series", () => {
     render(
@@ -67,6 +69,11 @@ describe("SeriesDetails", () => {
         setChapters={mockSetChapters}
         onSelectChapter={mockOnSelectChapter}
         isLoadingDetails={true}
+        sortAsc={true}
+        setSortAsc={mockSetSortAsc}
+        hasMoreChapters={false}
+        isLoadingMoreChapters={false}
+        onLoadMoreChapters={mockOnLoadMoreChapters}
       />,
     );
 
@@ -83,6 +90,11 @@ describe("SeriesDetails", () => {
         setChapters={mockSetChapters}
         onSelectChapter={mockOnSelectChapter}
         isLoadingDetails={false}
+        sortAsc={true}
+        setSortAsc={mockSetSortAsc}
+        hasMoreChapters={false}
+        isLoadingMoreChapters={false}
+        onLoadMoreChapters={mockOnLoadMoreChapters}
       />,
     );
 
@@ -100,6 +112,11 @@ describe("SeriesDetails", () => {
         setChapters={mockSetChapters}
         onSelectChapter={mockOnSelectChapter}
         isLoadingDetails={false}
+        sortAsc={true}
+        setSortAsc={mockSetSortAsc}
+        hasMoreChapters={false}
+        isLoadingMoreChapters={false}
+        onLoadMoreChapters={mockOnLoadMoreChapters}
       />,
     );
 
@@ -117,6 +134,11 @@ describe("SeriesDetails", () => {
         setChapters={mockSetChapters}
         onSelectChapter={mockOnSelectChapter}
         isLoadingDetails={false}
+        sortAsc={true}
+        setSortAsc={mockSetSortAsc}
+        hasMoreChapters={false}
+        isLoadingMoreChapters={false}
+        onLoadMoreChapters={mockOnLoadMoreChapters}
       />,
     );
 
@@ -136,6 +158,11 @@ describe("SeriesDetails", () => {
         setChapters={mockSetChapters}
         onSelectChapter={mockOnSelectChapter}
         isLoadingDetails={false}
+        sortAsc={true}
+        setSortAsc={mockSetSortAsc}
+        hasMoreChapters={false}
+        isLoadingMoreChapters={false}
+        onLoadMoreChapters={mockOnLoadMoreChapters}
       />,
     );
 
@@ -155,6 +182,11 @@ describe("SeriesDetails", () => {
         setChapters={mockSetChapters}
         onSelectChapter={mockOnSelectChapter}
         isLoadingDetails={false}
+        sortAsc={true}
+        setSortAsc={mockSetSortAsc}
+        hasMoreChapters={false}
+        isLoadingMoreChapters={false}
+        onLoadMoreChapters={mockOnLoadMoreChapters}
       />,
     );
 
@@ -174,6 +206,11 @@ describe("SeriesDetails", () => {
         setChapters={mockSetChapters}
         onSelectChapter={mockOnSelectChapter}
         isLoadingDetails={false}
+        sortAsc={true}
+        setSortAsc={mockSetSortAsc}
+        hasMoreChapters={false}
+        isLoadingMoreChapters={false}
+        onLoadMoreChapters={mockOnLoadMoreChapters}
       />,
     );
 

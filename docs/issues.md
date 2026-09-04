@@ -1,6 +1,6 @@
 # Issues & Technical Debt
 
-> **Standing: 104 filed, 79 closed, 25 open.** Six items were added 2026-09-03 from the Codex
+> **Standing: 104 filed, 80 closed, 24 open.** Six items were added 2026-09-03 from the Codex
 > review of the fix stack — `AUDIT-R13`, `AUDIT-R14`, `AUDIT-F25`, `AUDIT-F26`, `AUDIT-F27` and
 > `AUDIT-T5`, all in [Open Review Findings](#open-review-findings-prs-118-124-2026-09-03). Note
 > `AUDIT-F26` disputes the `AUDIT-F19` fix; verify it before trusting that row.
@@ -1004,13 +1004,35 @@ than one per burst, and `refresh()` requests every loaded pagination batch. Want
 maximum cadence or a real pipeline-terminal signal. Frontend, `PipelineRefreshWatcher.tsx`.
 *Unverified.*
 
-### `AUDIT-T5` (medium): Nothing typechecks the frontend
+### `AUDIT-T5` (medium): Nothing typechecks the frontend — **Fixed 2026-09-04**
 
-`npm run build` is `vite build`, which strips types without checking them, and `tsc` appears in
+`npm run build` was `vite build`, which strips types without checking them, and `tsc` appeared in
 neither `frontend/package.json` nor any workflow. The `AUDIT-R5` wiring defect was two hard
-TypeScript errors that reached `main`'s doorstep with every check green. `tsc -b --noEmit`
-currently reports 80 errors — 24 in application source, 56 in tests — which is why the gate could
-not simply be switched on with the fix.
+TypeScript errors that reached `main` with every check green.
+
+`tsc -b --noEmit` reported 80 errors — 24 in application source, 56 in tests. All 80 are cleared,
+a `typecheck` script now gates CI ahead of the tests, and `build` runs it too so a local build
+cannot skip it. Reintroducing the `AUDIT-R5` defect fails the gate on both halves.
+
+**Note `tsc -p tsconfig.json` checks nothing here.** That file is a solution-style config —
+`"files": []` plus references — so it type-checks an empty program and exits 0. It has to be
+`tsc -b`.
+
+**What the 24 application errors turned out to be.** Most were not stylistic. MUI v9 removed the
+deprecated system props from `Box`, `Stack`, `Typography` and `Grid`
+([#48072](https://github.com/mui/material-ui/pull/48072),
+[#47846](https://github.com/mui/material-ui/pull/47846)), and this project upgraded without
+running the codemod. Props like `justifyContent`, `alignItems`, `color` and `fontWeight` were
+still written on those components across 11 files and had been **silently inert at runtime** ever
+since — passed to the DOM and dropped. The official `v9.0.0/system-props` codemod moved them into
+`sx`, which changes what those screens render. Two more were the same class of defect:
+`theme.colorSchemeSelector` also moved under `cssVariables` in v9, so the setting the comment
+above it says is essential was being ignored and the selector had silently fallen back to
+`"media"`; and `vite.config.ts` declared `test` on vite's own config type, which does not have it.
+
+**Not verified visually.** The layout changes are mechanical and came from MUI's own codemod, but
+nothing here confirms what the affected screens now look like. `AUDIT-F9` (responsive layout is
+never verified) covers that gap and is still open.
 
 ---
 

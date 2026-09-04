@@ -149,7 +149,9 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                 ) : (
                   <Typography
                     variant="body1"
-                    color="text.secondary"
+                    sx={{
+                      color: "text.secondary",
+                    }}
                   >
                     Chapter {selectedChapter.chapterNumber}
                   </Typography>
@@ -196,8 +198,10 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                 </Box>
                 <Typography
                   variant="body1"
-                  color="text.secondary"
                   gutterBottom
+                  sx={{
+                    color: "text.secondary",
+                  }}
                 >
                   {selectedSeries.title}{" "}
                   {selectedChapter.title ? `/ ${selectedChapter.title}` : ""}
@@ -211,8 +215,10 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                   <Grid>
                     <Typography
                       variant="body2"
-                      color="text.secondary"
                       gutterBottom
+                      sx={{
+                        color: "text.secondary",
+                      }}
                     >
                       Pages
                     </Typography>
@@ -226,8 +232,10 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                   <Grid>
                     <Typography
                       variant="body2"
-                      color="text.secondary"
                       gutterBottom
+                      sx={{
+                        color: "text.secondary",
+                      }}
                     >
                       Context Injection
                     </Typography>
@@ -246,8 +254,10 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                   <Grid>
                     <Typography
                       variant="body2"
-                      color="text.secondary"
                       gutterBottom
+                      sx={{
+                        color: "text.secondary",
+                      }}
                     >
                       Fallback Models
                     </Typography>
@@ -275,8 +285,10 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                     <Grid>
                       <Typography
                         variant="body2"
-                        color="text.secondary"
                         gutterBottom
+                        sx={{
+                          color: "text.secondary",
+                        }}
                       >
                         Strategy
                       </Typography>
@@ -289,7 +301,9 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                       ) : (
                         <Typography
                           variant="body2"
-                          color="text.secondary"
+                          sx={{
+                            color: "text.secondary",
+                          }}
                         >
                           N/A
                         </Typography>
@@ -299,8 +313,10 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                   <Grid>
                     <Typography
                       variant="body2"
-                      color="text.secondary"
                       gutterBottom
+                      sx={{
+                        color: "text.secondary",
+                      }}
                     >
                       QA Mode
                     </Typography>
@@ -312,7 +328,9 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                     ) : (
                       <Typography
                         variant="body2"
-                        color="text.secondary"
+                        sx={{
+                          color: "text.secondary",
+                        }}
                       >
                         N/A
                       </Typography>
@@ -324,8 +342,10 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                 <Box sx={{ mb: 3 }}>
                   <Typography
                     variant="subtitle2"
-                    color="text.secondary"
                     gutterBottom
+                    sx={{
+                      color: "text.secondary",
+                    }}
                   >
                     Configured Models
                   </Typography>
@@ -449,8 +469,8 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                     anchorEl={overflowAnchorEl}
                     open={openOverflow}
                     onClose={() => setOverflowAnchorEl(null)}
-                    MenuListProps={{
-                      "aria-labelledby": "basic-button",
+                    slotProps={{
+                      list: { "aria-labelledby": "basic-button" },
                     }}
                   >
                     <MenuItem

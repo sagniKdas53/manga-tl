@@ -5,7 +5,10 @@
     "target": "ES2022",
     "lib": ["ES2022", "DOM"],
     "module": "esnext",
-    "types": ["vite/client"],
+    // `vitest/globals` because vite.config.ts sets `test.globals: true`, so the suites call
+    // describe/it/expect/beforeEach without importing them. Without this the typechecker sees
+    // every one of them as an undefined name.
+    "types": ["vite/client", "vitest/globals"],
     "skipLibCheck": true,
     /* Bundler mode */
     "moduleResolution": "bundler",

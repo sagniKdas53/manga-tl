@@ -283,7 +283,7 @@ describe("Reader project ZIP export", () => {
     expect(contexts.length).toBeGreaterThan(0);
     const renderedText = vi
       .mocked(contexts[0]!.fillText)
-      .mock.calls.map(([text]) => String(text))
+      .mock.calls.map((call: unknown[]) => String(call[0]))
       .join(" ");
     expect(renderedText).toContain("Am I");
     expect(renderedText).not.toContain("\u79c1\u306f");

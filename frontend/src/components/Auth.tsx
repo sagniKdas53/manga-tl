@@ -110,8 +110,10 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
             </Typography>
             <Typography
               variant="body2"
-              color="text.secondary"
-              sx={{ mb: 3 }}
+              sx={{
+                color: "text.secondary",
+                mb: 3,
+              }}
             >
               {isLogin
                 ? "Access your translation workspace"

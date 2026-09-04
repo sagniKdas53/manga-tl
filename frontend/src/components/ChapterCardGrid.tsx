@@ -49,10 +49,12 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
     <>
       <Stack
         direction={{ xs: "column", sm: "row" }}
-        justifyContent="space-between"
-        alignItems={{ xs: "stretch", sm: "center" }}
         spacing={1}
-        sx={{ mb: 2 }}
+        sx={{
+          justifyContent: "space-between",
+          alignItems: { xs: "stretch", sm: "center" },
+          mb: 2,
+        }}
       >
         <Typography
           variant="h5"

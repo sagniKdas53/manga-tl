@@ -131,10 +131,7 @@ async function saveElementChanges(
   element: LayerElement,
   showAlert: boolean = true,
   token: string,
-  showToast: (
-    message: string,
-    type?: "success" | "error" | "info" | "warning",
-  ) => void,
+  showToast: (message: string, type?: "success" | "error" | "info") => void,
   showError: (
     message: string,
     options?: { action?: { label: string; onClick: () => void } },
