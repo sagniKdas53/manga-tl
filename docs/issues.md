@@ -1,9 +1,14 @@
 # Issues & Technical Debt
 
-> **Standing: 104 filed, 80 closed, 24 open.** Six items were added 2026-09-03 from the Codex
+> **Standing: 104 filed, 83 closed, 21 open.** Six items were added 2026-09-03 from the Codex
 > review of the fix stack — `AUDIT-R13`, `AUDIT-R14`, `AUDIT-F25`, `AUDIT-F26`, `AUDIT-F27` and
-> `AUDIT-T5`, all in [Open Review Findings](#open-review-findings-prs-118-124-2026-09-03). Note
-> `AUDIT-F26` disputes the `AUDIT-F19` fix; verify it before trusting that row.
+> `AUDIT-T5`, all in [Open Review Findings](#open-review-findings-prs-118-124-2026-09-03).
+> `AUDIT-T5`, `AUDIT-F25`, `AUDIT-F26` and `AUDIT-F27` are now fixed; `AUDIT-R13` and
+> `AUDIT-R14`, the two reshape/rotation findings, remain open and remain unverified.
+>
+> **`AUDIT-F26` was upheld, and it reopened `AUDIT-F19`.** The refetch fired correctly and could
+> not change anything: the page DTO carried no field a pipeline run touches. Both are fixed
+> together 2026-09-04 — see `AUDIT-F26`.
 >
 > Re-audited 2026-09-02 against the field report in
 > `new issues.pdf`. Three previously-open items were closed as *obsolete* — they described Java
@@ -163,7 +168,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | ID | Sev | Component | Summary | State |
 | :--- | :--- | :--- | :--- | :--- |
 | [`AUDIT-F17`](#audit-f17-high-the-reader-refreshes-for-four-job-types-on-one-page) | High | Frontend | SSE arrives; the reader discards it for QA/render, and for every page but the open one | **Fixed 2026-09-02** |
-| [`AUDIT-F19`](#audit-f19-medium-thumbnails-and-cards-never-re-poll) | Medium | Frontend | Thumbnails, chapter cards and series cards never refresh after work completes | **Fixed 2026-09-03** |
+| [`AUDIT-F19`](#audit-f19-medium-thumbnails-and-cards-never-re-poll) | Medium | Frontend | Thumbnails, chapter cards and series cards never refresh after work completes | **Fixed 2026-09-04** (reopened by `AUDIT-F26`; the 09-03 fix refetched DTOs that could not change) |
 | [`AUDIT-F20`](#audit-f20-low-the-queue-manager-sorts-by-chapter-before-status) | Low | Frontend | `PROCESSING` shared a sort rank with `PENDING`, so active jobs never moved | **Fixed 2026-09-02** |
 | [`AUDIT-P10`](#audit-p10-unranked-sse--websocket) | Unranked | Platform | Proposal to replace SSE with a WebSocket | Not accepted; see the entry |
 
@@ -581,11 +586,21 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   after the burst goes quiet. It also filters to `COMPLETED` and `FAILED` — `PENDING` and
   `PROCESSING` change no row a grid renders, and a failure has to reach the grid so a red page does
   not read as still-working.
-- **Still open, filed separately:** the report also asks for a per-page completion marker — a tick,
-  or a small translated WebP thumbnail. That is a larger piece of work needing a rendered thumbnail
-  variant the backend does not produce, and it is not blocked by anything here now that the refresh
-  is honest. Guarded by five tests in `PipelineRefreshWatcher.test.tsx`, including the burst that
-  must collapse to one call and the unmount that must not fire afterwards.
+- **Reopened by `AUDIT-F26`, and re-fixed 2026-09-04.** The 2026-09-03 fix was closed on the
+  strength of the refetch firing, and the refetch did fire — but it re-read DTOs that carried no
+  field a pipeline run touches, so React saw identical props and an identical image `src` every
+  time. The refresh was real and the grid still could not change. The bullet below turned out to
+  be the missing half rather than a separate nicety: the rendered thumbnail variant it describes
+  is what `AUDIT-F26` builds, and the page DTO now carries `lastRenderedAt` and
+  `renderedThumbnailUrl` so there is something for a refetch to show.
+- **Cadence bounded 2026-09-04 by `AUDIT-F27`.** The 4s debounce below only ever collapses events
+  arriving inside its window; serialized translation puts them further apart than that, so each one
+  fired its own refresh. A 30s floor now caps the cadence on top of the burst window.
+- **The per-page completion marker** the report also asked for — a tick, or a small translated WebP
+  thumbnail — needed a rendered thumbnail variant the backend did not produce. `AUDIT-F26` produces
+  it now. Guarded by five tests in `PipelineRefreshWatcher.test.tsx`, including the burst that must
+  collapse to one call and the unmount that must not fire afterwards, plus three more for the
+  bounded cadence.
 
 ### `AUDIT-F20` (low): The Queue Manager sorts by chapter before status
 
@@ -978,14 +993,28 @@ the axis-aligned bounds of an already-rotated outline, which the renderer then r
 time — the box inflation `AUDIT-R5` removed, reintroduced through the reshape path. Undo
 reconstructs the same wrong box. Frontend, `Reader.tsx`. *Unverified.*
 
-### `AUDIT-F25` (low): A null `visible` is hidden on the canvas and visible in the sidebar
+### `AUDIT-F25` (low): A null `visible` is hidden on the canvas and visible in the sidebar — **Fixed 2026-09-04**
 
 `visible` is nullable in the database and `Option<bool>` in the model. The canvas and the new
 hidden-count treat `null` as hidden; the sidebar's toggle treats it as visible, so it offers "Hide
 element" and writes `false`, and the first click cannot restore the element. One falsy check, or
-normalise on read. Frontend, `ReaderRightSidebar.tsx`. *Unverified.*
+normalise on read. Frontend, `ReaderRightSidebar.tsx`.
 
-### `AUDIT-F26` (medium): The grid refresh re-fetches DTOs that cannot show pipeline state
+**Confirmed, and the direction was not a coin toss.** `types.ts` declared `visible: boolean`, so
+nothing had to guard a null and the four readers each guessed. Three agreed a null is hidden — the
+canvas, the layer's hidden-count, and decisively the worker's renderer, where
+`el.get("visible", True)` returns `None` for an explicit null and skips the element, so a
+null-visible element is genuinely absent from the rendered PNG. Only the sidebar's element row
+(`!== false`) disagreed with the artifact.
+
+Fixed by making the type honest (`boolean | null`) and moving the row and the checkbox to
+`=== true`. A forced `tsc -b` over all 17 read sites is clean: the other fifteen were already
+falsy checks, so this is two lines rather than a sweep. The checkbox change also stops React
+warning about a `checked={null}` uncontrolled input. Guarded by three tests under
+`a null \`visible\` is hidden, the same as everywhere else` in `ReaderRightSidebar.test.tsx`, all
+of which fail against the old `!== false`.
+
+### `AUDIT-F26` (medium): The grid refresh re-fetches DTOs that cannot show pipeline state — **Fixed 2026-09-04**
 
 Successor to `AUDIT-F19`, which is marked fixed on the strength of the refetch firing. The reviewer
 argues the refetch cannot change anything: `/pages` returns the same original `/thumbnail` URL
@@ -993,16 +1022,54 @@ backed by `thumbnail_storage_path`, and the chapter and series DTOs carry no job
 receives identical props and image `src`. Pipeline output appears through `/rendered`. If that
 holds, the untranslated grid still does not update and `AUDIT-F19` is not closed — the refresh
 needs a pipeline-visible status or a rendered-thumbnail URL with a cache key. **Verify before
-trusting the `AUDIT-F19` fix.** Frontend/Backend, `App.tsx` + `page.rs`. *Unverified.*
+trusting the `AUDIT-F19` fix.** Frontend/Backend, `App.tsx` + `page.rs`.
 
-### `AUDIT-F27` (medium): The pipeline refresh debounce assumes events arrive close together
+**Upheld in full, and `AUDIT-F19` is reopened and re-fixed with it.** Verified against the code:
+`PageDto` had seven fields, all set at upload, and `thumbnailUrl` is a fixed path to the
+*original*'s thumbnail via `thumbnail_storage_path`. `ChapterDto` carries `pageCount`, which only
+changes on upload, and `SeriesDto` carries nothing pipeline-related. `/pages` therefore returned
+byte-identical JSON across a translation.
+
+The grid could not simply point at `/rendered`: measured on this machine those PNGs average
+~1.7 MB (280 MB across 165 pages), so one screen of twenty would be ~34 MB. The render gets its
+own 512px WebP thumbnail instead, served from a new `/api/images/{imageId}/thumbnail/rendered`.
+
+- `PageDto` gains `lastRenderedAt` — the one field a pipeline run changes — and
+  `renderedThumbnailUrl`, null until something has been rendered.
+- The URL carries `last_rendered_at` as a `?v=` cache key, because `stream_cached_image` marks
+  these `immutable, max-age=1y`; without it a re-render would keep serving the previous
+  translation out of the browser cache.
+- The thumbnail is generated twice on purpose: eagerly in the render callback, always overwriting,
+  so a re-render after an edit never leaves the old translation behind; and lazily on a miss in the
+  endpoint, which backfills every page rendered before this existed without a migration.
+- `pages.last_rendered_at` already existed and was already maintained by the coordinator and the
+  recovery sweep, so nothing new has to be tracked.
+
+Guarded by `rendered_output_reaches_the_page_grid` in `pages_endpoints.rs`, which asserts both
+halves against a real Postgres and MinIO: on the pre-F26 field set the two responses are still
+byte-identical — the defect itself, kept as an assertion — while the full DTO now differs and the
+endpoint serves the render's pixels rather than the original's. Three tests in
+`ChapterPageGrid.test.tsx` cover the tile's preference and the cache key. The frozen OpenAPI
+contract and the generated frontend types are updated; the byte-for-byte spec test passes.
+
+### `AUDIT-F27` (medium): The pipeline refresh debounce assumes events arrive close together — **Fixed 2026-09-04**
 
 `PipelineRefreshWatcher` debounces on a four-second timer. Completions spaced further apart than
 that — serialized context-aware translation, which `AUDIT-W13` deliberately made the norm — each
 fire their own timer, so a long chapter performs one full loaded-window refresh per page rather
 than one per burst, and `refresh()` requests every loaded pagination batch. Wants a bounded
 maximum cadence or a real pipeline-terminal signal. Frontend, `PipelineRefreshWatcher.tsx`.
-*Unverified.*
+
+**Confirmed and fixed with a bounded cadence.** A longer debounce cannot solve this: no single
+settle window is both short enough to feel live during a burst and longer than the gap between
+serialized pages. The two limits are now separate — the burst still collapses on the 4s window, and
+a 30s floor caps how often a re-read may actually follow another, whatever the spacing.
+
+Nothing is dropped: a completion arriving inside the cooldown re-arms the timer for the remainder
+rather than being discarded, so the last page of a chapter is still followed by a re-read. Measured
+by the new tests in `PipelineRefreshWatcher.test.tsx` — ten pages finishing 10s apart produced ten
+full refreshes before the change and at most four after, while the first completion after mount
+still refreshes on the original 4s window.
 
 ### `AUDIT-T5` (medium): Nothing typechecks the frontend — **Fixed 2026-09-04**
 
@@ -1047,9 +1114,12 @@ never verified) covers that gap and is still open.
 | `AUDIT-F20` | The Queue Manager never moved active jobs up | 2026-09-02 | `PROCESSING` shared sort rank 1 with `PENDING` and `COMPLETED`, so starting work did not move a row. |
 | `AUDIT-R1` + `AUDIT-F16` | Four answers to "what rectangle does text go in?" | 2026-09-03 | The live reader used the raw box, the frontend's exports insetted 4px, and `render.py` insetted 4px then took 95%. One definition per language now, both driven by the same two settings and asserted against the same parity table. |
 | `AUDIT-F15` | A hidden element could not be reached again | 2026-09-03 | The `visible` toggle lived on the selected element's inspector and selecting meant clicking it on the canvas, so hiding was a one-way door. The layer panel lists elements now, each selectable with its own toggle. |
-| `AUDIT-F19` | Thumbnails and cards never re-polled | 2026-09-03 | Grids rendered whatever the first fetch returned; nothing subscribed to `job_update` and nothing polled, so a chapter that finished while its page was open kept showing untranslated thumbnails until a manual reload. One app-level watcher refreshes all three grids, debounced 4s so a finishing chapter's burst costs one refetch. |
+| `AUDIT-F19` | Thumbnails and cards never re-polled | 2026-09-04 | Grids rendered whatever the first fetch returned; nothing subscribed to `job_update` and nothing polled, so a chapter that finished while its page was open kept showing untranslated thumbnails until a manual reload. One app-level watcher refreshes all three grids, debounced 4s so a finishing chapter's burst costs one refetch. **Closed 09-03 and reopened by `AUDIT-F26`:** the refetch fired but re-read DTOs that carried no field a pipeline run touches, so the grid still could not change. Closed again 09-04 once `PageDto` carried `lastRenderedAt` and a cache-keyed rendered thumbnail. |
 | `AUDIT-F21` | Dark mode was unpleasant to read | 2026-09-03 | Not short of contrast — it had far too much. Body text measured 19.0:1 against a 7:1 AAA threshold, which blooms glyph edges on a tablet at night, and every accent ran 84–100% saturation. Surfaces lifted, white pulled back to 13.7:1, accents desaturated at unchanged hue. Two side findings fixed with it: cards were 1.15:1 from the page behind them, and `primary` on `paper` was 3.99:1, below AA. |
 | `AUDIT-T4` | Nothing proved pagination and sort against a real database | 2026-09-03 | The filing was half wrong — `list_series` was covered; `list_chapters` and `list_pages`, the two the reader walks, had nothing. Seven tests against real Postgres, seeding rows out of order so a missing `ORDER BY` cannot pass. They found two live defects: `page * size` overflowed to a 500 (or, in release, a silent empty page), and `sortDir=DESC` sorted ascending. |
+| `AUDIT-F25` | A null `visible` was hidden on the canvas and visible in the sidebar | 2026-09-04 | `types.ts` said `boolean` for a column that is nullable, so nothing guarded a null and the four readers disagreed. The canvas, the hidden-count and the worker's renderer all treat null as hidden — the renderer decisively, since such an element is absent from the rendered PNG. Only the sidebar's row read `!== false`, so it offered "Hide element" for something already invisible and the first click did nothing. Type made honest; two readers moved to `=== true`. |
+| `AUDIT-F26` | The grid refresh re-fetched DTOs that could not show pipeline state | 2026-09-04 | Upheld, and it reopened `AUDIT-F19`. `PageDto`'s seven fields were all set at upload and `thumbnailUrl` pointed at the *original*'s thumbnail, so `/pages` returned byte-identical JSON across a translation. Rendered PNGs average ~1.7 MB so the grid could not show them directly; the render gets its own 512px WebP behind a new endpoint, and the DTO gained `lastRenderedAt` plus a `?v=`-keyed `renderedThumbnailUrl`. Generated eagerly on the render callback and lazily on a miss, which backfills the existing pages without a migration. |
+| `AUDIT-F27` | The refresh debounce assumed events arrive close together | 2026-09-04 | The 4s window only collapses events inside it, and `AUDIT-W13` made serialized translation the norm, so completions landed further apart and each fired its own full loaded-window refresh. No single window can be both live during a burst and longer than the gap between serialized pages, so the limits are now separate: the burst window plus a 30s floor on cadence. Ten pages 10s apart went from ten refreshes to at most four. |
 | `AUDIT-R7` | A rectangle arrived as a 40-vertex polygon | 2026-09-03 | The simplification tolerance was `0.002 × perimeter`, which is 0.4px on a small caption plate — below one pixel, so nothing was removed. Smaller shapes got tighter tolerances. Now an absolute 2px everywhere, plus the synthesized cover plate (28 points by construction) and the merge hull (never simplified at all). |
 | `AUDIT-R5` | Rotation turned the plate and left the glyphs level | 2026-09-03 | `rotation` was effectively always 0: the handle wrote the angle into the mask polygon and the *bounding box of that polygon* into x/y/w/h instead. So the plate tilted, the text stayed level (in the reader too — the canvas skipped `ctx.rotate` exactly when a polygon existed), and the box inflated on every turn. `rotation` is the angle now and the box is left alone. |
 | `AUDIT-B17` | `jobs.page_id` was never written | 2026-09-03 | The column existed and `Job` deserialised it, but the INSERT omitted it, so every row read back had `pageId: null` and the obvious `WHERE page_id = …` matched nothing. Fixed because `AUDIT-W13`'s gate must attribute a blocker to one page. |
