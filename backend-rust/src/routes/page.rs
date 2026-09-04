@@ -63,6 +63,20 @@ pub struct PageDto {
     pub filename: String,
     pub url: String,
     pub thumbnailUrl: String,
+    /// AUDIT-F26. When the pipeline last produced a rendered page, or null if it never has.
+    ///
+    /// This DTO previously carried nothing a pipeline run could change. `thumbnailUrl` is a fixed
+    /// path to the *original*'s thumbnail, and every other field is set at upload. Re-fetching
+    /// `/pages` after a translation finished therefore returned byte-identical JSON — React saw
+    /// identical props and an identical image `src`, so the grid could not update no matter how
+    /// often it asked. That is what made the AUDIT-F19 refresh a no-op.
+    pub lastRenderedAt: Option<chrono::DateTime<chrono::Utc>>,
+    /// A thumbnail of the *rendered* page, or null when nothing has been rendered yet.
+    ///
+    /// Carries `last_rendered_at` as a cache key because `stream_cached_image` marks these
+    /// `immutable` for a year: without the key a re-render would keep serving the previous
+    /// translation out of the browser cache.
+    pub renderedThumbnailUrl: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -116,6 +130,20 @@ fn thumbnail_url(state: &AppState, image_id: Uuid) -> String {
     format!(
         "{}/api/images/{image_id}/thumbnail",
         state.config.context_path
+    )
+}
+
+/// AUDIT-F26. `?v=` is the whole point: these responses are `immutable, max-age=1y`, so a page
+/// that gets re-rendered after an edit needs a different URL or the browser never re-asks.
+fn rendered_thumbnail_url(
+    state: &AppState,
+    image_id: Uuid,
+    last_rendered_at: chrono::DateTime<chrono::Utc>,
+) -> String {
+    format!(
+        "{}/api/images/{image_id}/thumbnail/rendered?v={}",
+        state.config.context_path,
+        last_rendered_at.timestamp_millis()
     )
 }
 
@@ -671,9 +699,11 @@ pub async fn list_pages(
         chapter_id: Uuid,
         image_id: Uuid,
         filename: String,
+        // AUDIT-F26. The one column here that a pipeline run changes.
+        last_rendered_at: Option<chrono::DateTime<chrono::Utc>>,
     }
     let sql = format!(
-        "SELECT p.id, p.page_number, p.chapter_id, p.image_id, i.filename \
+        "SELECT p.id, p.page_number, p.chapter_id, p.image_id, p.last_rendered_at, i.filename \
          FROM pages p JOIN images i ON i.id = p.image_id \
          WHERE p.chapter_id = $1 ORDER BY p.page_number {direction} LIMIT {size} OFFSET {}",
         p.offset(size)
@@ -694,6 +724,10 @@ pub async fn list_pages(
             filename: r.filename,
             url: image_url(&state, r.image_id),
             thumbnailUrl: thumbnail_url(&state, r.image_id),
+            lastRenderedAt: r.last_rendered_at,
+            renderedThumbnailUrl: r
+                .last_rendered_at
+                .map(|at| rendered_thumbnail_url(&state, r.image_id, at)),
         })
         .collect();
 
@@ -953,6 +987,63 @@ pub async fn get_image_thumbnail(
         },
         None => StatusCode::NOT_FOUND.into_response(),
     }
+}
+
+/// The object holding a thumbnail of the rendered page, as opposed to the original.
+pub fn rendered_thumbnail_path(image_id: Uuid) -> String {
+    format!("thumbnails/rendered/{image_id}.webp")
+}
+
+/// AUDIT-F26. Derives the rendered page's thumbnail and stores it, replacing any previous one.
+///
+/// Called from the render callback so the object always matches the newest render — a re-render
+/// after an edit overwrites it rather than leaving the old translation behind.
+pub async fn generate_rendered_thumbnail(storage: &MinioService, image_id: Uuid) -> bool {
+    let Some(bytes) = storage
+        .download_bytes(&format!("rendered/{image_id}.png"))
+        .await
+    else {
+        return false;
+    };
+    let Ok(output) = crate::thumbnails::generate_thumbnail(&bytes) else {
+        tracing::warn!("rendered thumbnail generation failed for image {image_id}");
+        return false;
+    };
+    if let Err(err) = storage
+        .upload_bytes(
+            &rendered_thumbnail_path(image_id),
+            output.webp_bytes,
+            "image/webp",
+        )
+        .await
+    {
+        tracing::error!("rendered thumbnail upload failed for image {image_id}: {err}");
+        return false;
+    }
+    true
+}
+
+/// GET /api/images/{imageId}/thumbnail/rendered — a thumbnail of the pipeline's output.
+///
+/// AUDIT-F26. The page grid cannot show the rendered PNGs directly: they average ~1.7 MB, so a
+/// single screen of twenty would be ~34 MB. It needs a thumbnail of the render, which is what this
+/// serves — the same 512px WebP treatment the original gets.
+///
+/// Generates on a miss rather than 404ing. Every page rendered before this endpoint existed has a
+/// `last_rendered_at` and a `rendered/` object but no thumbnail, and that backlog would otherwise
+/// need a migration; here the first request for each page fills it in and every later request is
+/// served from storage.
+pub async fn get_image_rendered_thumbnail(
+    State(state): State<AppState>,
+    Path(image_id): Path<Uuid>,
+) -> Response {
+    let path = rendered_thumbnail_path(image_id);
+    if !state.storage.exists(&path).await
+        && !generate_rendered_thumbnail(&state.storage, image_id).await
+    {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    stream_cached_image(&state.storage, &path, "rthumb").await
 }
 
 // ---------------------------------------------------------------------------
@@ -1358,6 +1449,10 @@ pub fn router() -> Router<AppState> {
         .route("/images/{imageId}/file", get(get_image_file))
         .route("/images/{imageId}/reader", get(get_image_reader))
         .route("/images/{imageId}/thumbnail", get(get_image_thumbnail))
+        .route(
+            "/images/{imageId}/thumbnail/rendered",
+            get(get_image_rendered_thumbnail),
+        )
         .route("/pages/{pageId}", get(get_page).delete(delete_page))
         .route(
             "/pages/{pageId}/number",

@@ -531,9 +531,18 @@
             "format": "uuid",
             "type": "string"
           },
+          "lastRenderedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
           "pageNumber": {
             "format": "int32",
             "type": "integer"
+          },
+          "renderedThumbnailUrl": {
+            "nullable": true,
+            "type": "string"
           },
           "thumbnailUrl": {
             "type": "string"
@@ -1591,6 +1600,48 @@
               }
             },
             "description": "OK"
+          }
+        },
+        "tags": [
+          "Page Controller"
+        ]
+      }
+    },
+    "/api/images/{imageId}/thumbnail/rendered": {
+      "get": {
+        "operationId": "getImageRenderedThumbnail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "imageId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "v",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamingResponseBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "description": "No rendered output for this image"
           }
         },
         "tags": [

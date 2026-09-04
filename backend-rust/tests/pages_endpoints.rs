@@ -33,6 +33,20 @@ fn db_config_from_env() -> Option<DatabaseConfig> {
     })
 }
 
+/// The same MinIO wiring `app()` uses, so a test can place an object where the pipeline would.
+fn minio_config_from_env() -> Option<MinioConfig> {
+    Some(MinioConfig {
+        endpoint: std::env::var("MINIO_TEST_ENDPOINT").ok()?,
+        external_url: None,
+        access_key: Some(
+            std::env::var("MINIO_TEST_ACCESS_KEY").unwrap_or_else(|_| "minioadmin".into()),
+        ),
+        secret_key: Some(
+            std::env::var("MINIO_TEST_SECRET_KEY").unwrap_or_else(|_| "minioadmin".into()),
+        ),
+    })
+}
+
 async fn app() -> Option<(Router, sqlx::PgPool)> {
     let pool = db::connect(&db_config_from_env()?).await.ok()?;
     let minio = MinioConfig {
@@ -351,6 +365,195 @@ async fn cleanup(pool: &sqlx::PgPool) {
         .execute(pool)
         .await
         .expect("user cleanup");
+}
+
+/// AUDIT-F26: a page grid re-fetch has to be able to show pipeline output.
+///
+/// AUDIT-F19 gave the grids a refresh on job completion and was closed on the strength of the
+/// refetch firing. The reviewer's objection was that the refetch could not change anything:
+/// `PageDto` carried nothing a pipeline run touches. `thumbnailUrl` is a fixed path to the
+/// *original*'s thumbnail, every other field is set at upload, so `/pages` returned identical
+/// JSON, React saw identical props and an identical image `src`, and the untranslated grid stayed
+/// untranslated however often it asked. That objection was correct.
+///
+/// This proves the DTO now carries the render: null before, populated after, with a cache key that
+/// changes when the render changes, and a thumbnail endpoint that serves the *rendered* pixels
+/// rather than the original's.
+#[tokio::test]
+async fn rendered_output_reaches_the_page_grid() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    cleanup(&pool).await;
+    let token = probe_user(
+        &pool,
+        &manga_backend::jwt::JwtUtils::new(SECRET.into(), 3_600_000),
+    )
+    .await;
+
+    let response = send_json(
+        app.clone(),
+        "POST",
+        "/tlhub/api/series",
+        &token,
+        r#"{"title":"F26 probe","readingDirection":"rightToLeft"}"#.to_string(),
+    )
+    .await;
+    assert_eq!(response.0, StatusCode::OK);
+    let series_id = json_field(&response.2, "id");
+
+    let response = send_json(
+        app.clone(),
+        "POST",
+        &format!("/tlhub/api/series/{series_id}/chapters"),
+        &token,
+        r#"{"chapterNumber":1}"#.to_string(),
+    )
+    .await;
+    assert_eq!(response.0, StatusCode::OK);
+    let chapter_id = json_field(&response.2, "id");
+
+    let body = multipart_body(&chapter_id, 1, "f26.png", &png_bytes());
+    let response = send_multipart(app.clone(), "/tlhub/api/images", &token, body).await;
+    let uploaded: serde_json::Value = serde_json::from_str(&response.2).unwrap();
+    let page_id = uploaded["pageId"].as_str().unwrap().to_string();
+    let image_id = uploaded["imageId"].as_str().unwrap().to_string();
+
+    // --- nothing rendered yet: the grid has no render to show, and says so ---
+    let list_pages = |app: Router, token: String, chapter_id: String| async move {
+        let response = send_get(
+            app,
+            &format!("/tlhub/api/chapters/{chapter_id}/pages"),
+            &token,
+        )
+        .await;
+        assert_eq!(response.0, StatusCode::OK);
+        serde_json::from_str::<serde_json::Value>(&response.2).unwrap()
+    };
+
+    let before = list_pages(app.clone(), token.clone(), chapter_id.clone()).await;
+    assert!(
+        before["content"][0]["lastRenderedAt"].is_null(),
+        "an unrendered page must not claim a render: {}",
+        before["content"][0]
+    );
+    assert!(
+        before["content"][0]["renderedThumbnailUrl"].is_null(),
+        "no rendered thumbnail before a render: {}",
+        before["content"][0]
+    );
+
+    // --- the pipeline renders the page: object in MinIO, last_rendered_at stamped ---
+    let storage = MinioService::new(&minio_config_from_env().expect("minio env"));
+    let rendered = image::RgbaImage::from_fn(64, 64, |_, _| image::Rgba([10, 200, 90, 255]));
+    let mut cursor = std::io::Cursor::new(Vec::new());
+    rendered
+        .write_to(&mut cursor, image::ImageFormat::Png)
+        .unwrap();
+    storage
+        .upload_bytes(
+            &format!("rendered/{image_id}.png"),
+            cursor.into_inner(),
+            "image/png",
+        )
+        .await
+        .expect("stage rendered object");
+    sqlx::query("UPDATE pages SET last_rendered_at = now() WHERE id = $1")
+        .bind(Uuid::parse_str(&page_id).unwrap())
+        .execute(&pool)
+        .await
+        .expect("stamp last_rendered_at");
+
+    // --- the same re-fetch the AUDIT-F19 watcher performs now returns different JSON ---
+    let after = list_pages(app.clone(), token.clone(), chapter_id.clone()).await;
+    assert!(
+        !after["content"][0]["lastRenderedAt"].is_null(),
+        "the refetch must surface the render: {}",
+        after["content"][0]
+    );
+    let rendered_url = after["content"][0]["renderedThumbnailUrl"]
+        .as_str()
+        .expect("rendered thumbnail url")
+        .to_string();
+    assert!(
+        rendered_url.contains("/thumbnail/rendered?v="),
+        "the url must carry a cache key, got {rendered_url}"
+    );
+    assert_ne!(
+        before["content"][0], after["content"][0],
+        "AUDIT-F26: if the DTO is identical across a render the grid cannot update"
+    );
+
+    // And this is the reviewer's claim itself, kept as an assertion rather than a comment: on the
+    // fields the DTO carried *before* this fix, the two responses are byte-identical. Re-fetching
+    // could not have changed a single prop or image `src`, which is why AUDIT-F19's refresh fired
+    // correctly and still left the grid untranslated. If someone later drops the new fields, the
+    // assertion above fails and this one explains what was lost.
+    let legacy_only = |page: &serde_json::Value| {
+        serde_json::json!({
+            "id": page["id"],
+            "pageNumber": page["pageNumber"],
+            "imageId": page["imageId"],
+            "chapterId": page["chapterId"],
+            "filename": page["filename"],
+            "url": page["url"],
+            "thumbnailUrl": page["thumbnailUrl"],
+        })
+    };
+    assert_eq!(
+        legacy_only(&before["content"][0]),
+        legacy_only(&after["content"][0]),
+        "the pre-F26 fields cannot express a render — that was the whole defect"
+    );
+
+    // --- and it serves a real WebP, generated on demand for pages rendered before this existed ---
+    let response = send_get(
+        app.clone(),
+        &format!("/tlhub/api/images/{image_id}/thumbnail/rendered"),
+        &token,
+    )
+    .await;
+    assert_eq!(response.0, StatusCode::OK, "{}", response.2);
+    assert_eq!(response.1, "image/webp");
+    assert!(response.3 > 100, "rendered thumbnail must have real bytes");
+
+    // --- it is the *render*, not the original ---
+    //
+    // Both fixtures are 64x64 solid colours, so they encode to the same *number* of bytes; only
+    // the pixels distinguish them. The original is red, the staged render is green, and the whole
+    // point of AUDIT-F26 is that the grid stops showing the former once the latter exists.
+    let stored = storage
+        .download_bytes(&format!("thumbnails/rendered/{image_id}.webp"))
+        .await
+        .expect("rendered thumbnail object");
+    let decoded = image::load_from_memory(&stored)
+        .expect("rendered thumbnail decodes")
+        .to_rgba8();
+    let pixel = decoded
+        .get_pixel(decoded.width() / 2, decoded.height() / 2)
+        .0;
+    assert!(
+        pixel[1] > pixel[0] && pixel[1] > pixel[2],
+        "the thumbnail must carry the render's pixels (green), got {pixel:?}"
+    );
+
+    let original_stored = storage
+        .download_bytes(&format!("thumbnails/{image_id}.webp"))
+        .await
+        .expect("original thumbnail object");
+    assert_ne!(
+        stored, original_stored,
+        "the rendered thumbnail must not be a copy of the original's"
+    );
+
+    storage
+        .delete_quietly(&format!("rendered/{image_id}.png"))
+        .await;
+    storage
+        .delete_quietly(&format!("thumbnails/rendered/{image_id}.webp"))
+        .await;
+    cleanup(&pool).await;
 }
 
 /// PageControllerTest addition: PATCH /api/ocr-regions/{id} with translatedText must

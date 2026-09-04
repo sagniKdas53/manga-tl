@@ -77,6 +77,16 @@ export interface Page {
   url: string;
   thumbnailUrl?: string;
   chapterId?: string;
+  /**
+   * AUDIT-F26. When the pipeline last rendered this page, or null if it never has.
+   *
+   * Every other field here is fixed at upload, which is why re-fetching `/pages` after a
+   * translation used to return identical JSON and the grid could not update. This is the one
+   * field a pipeline run changes.
+   */
+  lastRenderedAt?: string | null;
+  /** Thumbnail of the *rendered* page, cache-keyed by `lastRenderedAt`; null until one exists. */
+  renderedThumbnailUrl?: string | null;
 }
 
 export interface Panel {
@@ -136,7 +146,13 @@ export interface Layer {
   id: string;
   type: string; // translation | ocr | notes | mask | sfx
   targetLanguage?: string | null;
-  visible: boolean;
+  // AUDIT-F25. Nullable in the database and `Option<bool>` in the model, so the API really can
+  // send `null` and this used to lie about it. A null is *hidden*: that is what the canvas does,
+  // what the hidden-count does, and — decisively — what the worker's renderer does
+  // (`el.get("visible", True)` returns None for an explicit null, which is falsy), so a null-
+  // visible element is absent from the rendered PNG. Read it with a falsy check or `=== true`;
+  // never `!== false`.
+  visible: boolean | null;
   zOrder: number;
   metadataJson?: Record<string, unknown> | null;
   createdAt: string;
@@ -157,7 +173,8 @@ export interface LayerElement {
   rotation: number;
   x: number;
   y: number;
-  visible: boolean;
+  /** Nullable, and a null is hidden — see the note on {@link Layer.visible}. */
+  visible: boolean | null;
   overflow: boolean;
   isManuallyEdited: boolean;
   editedAt?: string | null;

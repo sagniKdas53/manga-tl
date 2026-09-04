@@ -721,7 +721,13 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     {isExpanded && (
                       <Box sx={elementListSx}>
                         {lData.elements.map((element) => {
-                          const elementVisible = element.visible !== false;
+                          // AUDIT-F25. This was `!== false`, which made a null-visible element
+                          // read as visible here while the canvas, the hidden-count above and the
+                          // worker's renderer all treated it as hidden. The row then offered
+                          // "Hide element" for something already invisible, wrote `false`, and the
+                          // first click changed nothing on screen. `=== true` is the same rule the
+                          // other three readers use.
+                          const elementVisible = element.visible === true;
                           const isSelectedElement =
                             selectedItem?.id === element.id &&
                             selectedItem?.isLayerElement;
@@ -1512,7 +1518,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 control={
                   <Checkbox
                     size="small"
-                    checked={selectedItem.visible}
+                    checked={selectedItem.visible === true}
                     onChange={(e) =>
                       handleUpdateSelectedElement({
                         visible: e.target.checked,

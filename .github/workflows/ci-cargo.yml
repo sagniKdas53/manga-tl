@@ -8,10 +8,16 @@ on:
     paths:
       - "backend-rust/**"
       - ".github/workflows/ci-cargo.yml"
+      # The route-drift step reads this, and it is the only gate that does. Without it here a
+      # commit that edits the route manifest alone never re-runs the check that validates it.
+      - "scripts/diff_routes.py"
   pull_request:
     paths:
       - "backend-rust/**"
       - ".github/workflows/ci-cargo.yml"
+      # The route-drift step reads this, and it is the only gate that does. Without it here a
+      # commit that edits the route manifest alone never re-runs the check that validates it.
+      - "scripts/diff_routes.py"
 
 permissions:
   contents: read

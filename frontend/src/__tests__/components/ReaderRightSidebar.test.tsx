@@ -673,5 +673,56 @@ describe("ReaderRightSidebar", () => {
         true,
       );
     });
+
+    // AUDIT-F25. `visible` is nullable in the database and `Option<bool>` in the model, so a null
+    // reaches the sidebar. The canvas, the hidden-count and the worker's renderer all treat a null
+    // as hidden; this row alone read `!== false` and called it visible, so the first click on an
+    // already-invisible element wrote `false` and appeared to do nothing.
+    describe("a null `visible` is hidden, the same as everywhere else", () => {
+      const nullElement = {
+        id: "e-null",
+        text: "never had a flag",
+        layerId: "l1",
+        visible: null,
+      } as unknown as import("../../types").LayerElement;
+
+      const renderWithNull = () =>
+        renderSidebar({
+          sortedLayers: [
+            {
+              layer: {
+                id: "l1",
+                type: "translation",
+                visible: true,
+                metadataJson: { layer_name: "Test TL Layer" },
+              } as unknown as import("../../types").Layer,
+              elements: [nullElement],
+            },
+          ],
+        });
+
+      it("counts it among the layer's hidden elements", () => {
+        renderWithNull();
+        expect(screen.getByText(/1 hidden/)).toBeInTheDocument();
+      });
+
+      it("offers to show it, not to hide it", () => {
+        renderWithNull();
+        fireEvent.click(screen.getByText(/1 element/));
+        expect(screen.getByLabelText("Show element")).toBeInTheDocument();
+        expect(screen.queryByLabelText("Hide element")).not.toBeInTheDocument();
+      });
+
+      it("makes the first click restore the element", () => {
+        const props = renderWithNull();
+        fireEvent.click(screen.getByText(/1 element/));
+
+        fireEvent.click(screen.getByLabelText("Show element"));
+        expect(props.handleSetElementVisibility).toHaveBeenCalledWith(
+          expect.objectContaining({ id: "e-null" }),
+          true,
+        );
+      });
+    });
   });
 });

@@ -51,6 +51,75 @@ describe("ChapterPageGrid", () => {
     expect(screen.getByAltText("Page 2")).not.toHaveAttribute("src");
   });
 
+  // AUDIT-F26. `thumbnailUrl` is a fixed path to the *original*'s thumbnail, so a grid built from
+  // it shows untranslated pages forever however often it re-fetches — which is why the AUDIT-F19
+  // refresh fired correctly and changed nothing. Once the pipeline has rendered a page the DTO
+  // carries `renderedThumbnailUrl`, and that is what the tile must show.
+  describe("showing pipeline output (AUDIT-F26)", () => {
+    const renderGrid = (pages: unknown[]) =>
+      render(
+        <ChapterPageGrid
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          pages={pages as any}
+          onDeletePage={mockOnDeletePage}
+          onMovePage={mockOnMovePage}
+          onSelectPage={mockOnSelectPage}
+          totalCount={pages.length}
+          hasMore={false}
+          isLoadingMore={false}
+          onLoadMore={mockOnLoadMore}
+          sortAsc={true}
+          onToggleSort={mockOnToggleSort}
+        />,
+      );
+
+    it("prefers the rendered thumbnail once one exists", () => {
+      renderGrid([
+        {
+          ...mockPages[0],
+          lastRenderedAt: "2026-09-04T00:00:00Z",
+          renderedThumbnailUrl:
+            "http://example.com/rendered1.webp?v=1772582400000",
+        },
+      ]);
+
+      expect(screen.getByAltText("Page 1")).toHaveAttribute(
+        "src",
+        "http://example.com/rendered1.webp?v=1772582400000",
+      );
+    });
+
+    it("falls back to the original's thumbnail while nothing is rendered", () => {
+      renderGrid([
+        { ...mockPages[0], lastRenderedAt: null, renderedThumbnailUrl: null },
+      ]);
+
+      expect(screen.getByAltText("Page 1")).toHaveAttribute(
+        "src",
+        "http://example.com/thumb1.jpg",
+      );
+    });
+
+    it("changes the src when a page is re-rendered, so the cache cannot win", () => {
+      const { unmount } = renderGrid([
+        {
+          ...mockPages[0],
+          renderedThumbnailUrl: "http://example.com/rendered1.webp?v=1000",
+        },
+      ]);
+      const first = screen.getByAltText("Page 1").getAttribute("src");
+      unmount();
+
+      renderGrid([
+        {
+          ...mockPages[0],
+          renderedThumbnailUrl: "http://example.com/rendered1.webp?v=2000",
+        },
+      ]);
+      expect(screen.getByAltText("Page 1").getAttribute("src")).not.toBe(first);
+    });
+  });
+
   it("triggers page selection on thumbnail container click", () => {
     render(
       <ChapterPageGrid

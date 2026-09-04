@@ -16,6 +16,7 @@ POST    /api/images/{imageId}/layers  [imageId] body
 GET     /api/images/{imageId}/reader  [imageId] 
 POST    /api/images/{imageId}/redo  [imageId] 
 GET     /api/images/{imageId}/thumbnail  [imageId] 
+GET     /api/images/{imageId}/thumbnail/rendered  [imageId] 
 GET     /api/internal/images/{imageId}  [imageId] 
 HEAD    /api/internal/images/{imageId}  [imageId] 
 POST    /api/internal/images/{imageId}/qa-hybrid-prepare  [imageId] body

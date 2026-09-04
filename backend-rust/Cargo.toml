@@ -69,7 +69,7 @@ webp = "0.3"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "bmp"] }
 bcrypt = "0.15"
 getrandom = "0.4"
-sha2 = "0.10"
+sha2 = "0.11"
 # URL-safe encoding of single-use SSE tickets (Java used Base64.getUrlEncoder()).
 base64 = "0.23"
 # HTTP client for the worker dispatcher (Java used java.net.http.HttpClient).
