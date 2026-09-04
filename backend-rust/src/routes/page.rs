@@ -30,6 +30,7 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use sqlx::AssertSqlSafe;
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
@@ -708,7 +709,10 @@ pub async fn list_pages(
          WHERE p.chapter_id = $1 ORDER BY p.page_number {direction} LIMIT {size} OFFSET {}",
         p.offset(size)
     );
-    let rows: Vec<JoinedRow> = sqlx::query_as::<_, JoinedRow>(&sql)
+    // AssertSqlSafe audit (sqlx 0.9): no client text reaches this statement.
+    // `direction` is a `&'static str` literal picked by the branch above; `size` is
+    // clamped to 1..=100 by `bounds`, and `offset` is a saturating, non-negative i64.
+    let rows: Vec<JoinedRow> = sqlx::query_as::<_, JoinedRow>(AssertSqlSafe(sql))
         .bind(chapter_id)
         .fetch_all(&state.pool)
         .await
