@@ -1084,17 +1084,36 @@ pub async fn delete_page(
     // moving a page there is rejected as "greater than total pages" -- one delete quietly breaks
     // page reordering for the whole chapter.
     //
-    // A single decrement is safe where reorder_pages needs its two-phase parking trick: every
-    // page above the hole moves down one, into a slot whose previous occupant has already moved
-    // or is the deleted page itself, so no unique (chapter_id, page_number) pair ever collides.
+    // This needs reorder_pages' two-phase parking trick after all. A single
+    // `page_number = page_number - 1` looks safe -- every page above the hole moves into a slot
+    // whose previous occupant is also moving -- but that argument assumes Postgres updates the
+    // rows in ascending page_number order. It makes no such guarantee: the row order follows the
+    // scan, and UNIQUE (chapter_id, page_number) is checked per row, not at statement end. When
+    // the scan happened to reach page 5 before page 4, `5 -> 4` collided with the 4 still sitting
+    // there and the whole statement failed with 23505 -- a 500 on DELETE, and the gap left open
+    // again because the page row was already committed by the DELETE above.
+    //
+    // Parking above the live range first makes the outcome independent of scan order: after
+    // phase 1 the only occupied slots are 1..(deleted - 1), so every phase-2 target is free.
+    let mut tx = state.pool.begin().await.expect("resequence transaction");
     sqlx::query(
-        "UPDATE pages SET page_number = page_number - 1 WHERE chapter_id = $1 AND page_number > $2",
+        "UPDATE pages SET page_number = page_number + 10000 WHERE chapter_id = $1 AND page_number > $2",
     )
     .bind(page.chapter_id)
     .bind(page.page_number)
-    .execute(&state.pool)
+    .execute(&mut *tx)
     .await
-    .expect("resequence pages after delete");
+    .expect("resequence phase 1");
+    sqlx::query(
+        "UPDATE pages SET page_number = page_number - 10001 WHERE chapter_id = $1 AND page_number > 10000",
+    )
+    .bind(page.chapter_id)
+    .execute(&mut *tx)
+    .await
+    .expect("resequence phase 2");
+    // Both phases commit together: a failure between them would strand the tail of the chapter
+    // at page_number + 10000, which is worse than the gap this is here to close.
+    tx.commit().await.expect("resequence commit");
     if let Some(image) = &image {
         // Only remove the image when no other page references it (Java deletes via pageService;
         // its deletePageDb collects paths from the page's own image only).
