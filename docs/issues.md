@@ -1,9 +1,12 @@
 # Issues & Technical Debt
 
-> **Standing: 110 filed, 85 closed, 25 open.** Six review items were added 2026-09-03
+> **Standing: 113 filed, 85 closed, 28 open.** Six review items were added 2026-09-03
 > (`AUDIT-R13`, `AUDIT-R14`, `AUDIT-F25`..`F27`, `AUDIT-T5`). Three renderer items were added 2026-09-05
 > (`AUDIT-R15`..`R17`). Three hardening items are folded in from backlog notes: `AUDIT-B19` (JWT signing error
 > masking), `AUDIT-B20` (systemic DB `unwrap_or_default`), and `AUDIT-F28` (settings catalog retry gate).
+> The PR #115–#138 review adds `AUDIT-R18` (export geometry), `AUDIT-B21` (translation retry callback),
+> and `AUDIT-B22` (concurrent page ordering); it also confirms and raises the priority of `AUDIT-B15`
+> and `AUDIT-B18`.
 >
 > `AUDIT-B14` (chapter page delete renumbering/parking) was closed 2026-09-04 in PR #136 and PR #137.
 > `AUDIT-F26` was upheld, and it reopened `AUDIT-F19`; both were closed together 2026-09-04 once `PageDto`
@@ -143,12 +146,13 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R7`](#audit-r7-medium-a-rectangle-arrived-as-a-40-vertex-polygon) | Medium | Worker | The simplification tolerance was a fraction of the *perimeter*, so small shapes got a sub-pixel tolerance and kept every vertex | **Fixed 2026-09-03** |
 | [`AUDIT-F15`](#audit-f15-medium-a-hidden-element-could-not-be-reached-again) | Medium | Frontend | Hiding an element removed the only way to select it | **Fixed 2026-09-03** |
 | [`AUDIT-R1`](#audit-r1-medium-four-answers-to-what-rectangle-does-text-go-in) | Medium | Render | Four different fitted rectangles — the live reader used none at all | **Fixed 2026-09-03** |
+| [`AUDIT-R18`](#audit-r18-high-export-lines-are-centred-in-the-raw-box-not-the-fitted-box) | High | Frontend/Render | PNG and ZIP exports fit text in the shared inset box, then centre it in the raw box | Ready |
 
 ### Seam 2 — the canvas and the artifact are not connected
 
 | ID | Sev | Component | Summary | State |
 | :--- | :--- | :--- | :--- | :--- |
-| [`AUDIT-B15`](#audit-b15-medium-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently) | Medium | Backend | The 5s re-render sweeper marks a page rendered when it *asks* for the render, so a lost render job strands that edit forever | Root-caused; needs repro to confirm it is the reported symptom |
+| [`AUDIT-B15`](#audit-b15-high-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently) | High | Backend | The 5s re-render sweeper marks a page rendered when it *asks* for the render, so a lost render job strands that edit forever | Ready; confirmed in PR #115–#138 review |
 | [`AUDIT-B12`](#audit-b12-medium-qas-verdicts-never-reach-the-rendered-output) | Medium | Backend/Render | QA runs *after* the only render, so no `direct_fix` or `reject_sfx` reaches the export | **Fixed 2026-09-02** |
 | [`AUDIT-B16`](#audit-b16-low-region-redo-layer-provenance) | Low | Backend | A region redo's new layer is not always what the reader ends up showing | Needs repro |
 | [`AUDIT-R11`](#audit-r11-high-no-texture-aware-erasure-d1) | High | Render | Flat-fill erasure only; complex backgrounds are destroyed | = [D1](render_quality_gap_2026-08-05.md), roadmap item |
@@ -170,11 +174,13 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-W13`](#audit-w13-high-context-injected-translation-ran-in-parallel) | High | Worker/Backend | "Previous page dialogue" was read while the previous page was still translating — and `COALESCE` handed back its Japanese | **Fixed 2026-09-02** |
 | [`AUDIT-W14`](#audit-w14-medium-the-slot-policy-lets-slow-network-work-crowd-out-local-work) | Medium | Worker/Backend | Four light slots + a per-cycle capacity snapshot; OCR waits behind LLM calls | Needs measurement |
 | [`AUDIT-B17`](#audit-b17-low-jobspage_id-was-never-written) | Low | Backend | `jobs.page_id` existed, was deserialised, and was never populated by the INSERT | **Fixed 2026-09-03** |
-| [`AUDIT-B18`](#audit-b18-low-there-is-no-schema-migration-runner) | Low | Backend | `init.sql` only runs on a fresh volume, so no column can ever be added to a live deployment | Ready |
+| [`AUDIT-B18`](#audit-b18-medium-there-is-no-schema-migration-runner) | Medium | Backend | `init.sql` only runs on a fresh volume, so no column can ever be added to a live deployment | Ready |
+| [`AUDIT-B21`](#audit-b21-high-a-retryable-translation-callback-consumes-the-exactly-once-claim) | High | Worker/Backend | A retryable outage posts and claims a callback before retrying, so a later successful result is dropped | Ready |
 | [`AUDIT-B19`](#audit-b19-low-jwt-signing-failure-reported-as-successful-login) | Low | Backend | `unwrap_or_default()` yields empty token answered as 200 OK on signing error | Ready |
 | [`AUDIT-B20`](#audit-b20-low-database-query-errors-converted-to-empty-results) | Low | Backend | 53 sites convert query errors into empty lists/options disguised as 200 OK | Backlog |
 | [`AUDIT-B13`](#audit-b13-medium-a-page-with-no-translatable-text-fails-the-job) | Medium | Worker/Backend | An untranslatable page raises and burns 3 attempts; it should warn | **Fixed 2026-09-02** |
 | [`AUDIT-B14`](#audit-b14-medium-delete-then-re-add-leaves-a-chapter-inconsistent) | Medium | Backend/Frontend | Page count stale, old slot held, reader hangs on the loading screen | **Fixed 2026-09-04** |
+| [`AUDIT-B22`](#audit-b22-medium-page-ordering-is-validated-before-the-chapter-is-locked) | Medium | Backend | Reorder and move validate outside their transaction, so concurrent page changes can invalidate the result | Ready |
 | [`AUDIT-W3`](#audit-w3-medium-cooldowns-and-lock-waits-burn-a-job-slot) | Medium | Worker | Cooldowns and lock waits block a concurrency slot doing nothing | Deprioritized; needs concurrency test harness |
 | [`AUDIT-F23`](#audit-f23-medium-no-paint-region-redo-and-no-batch-redo) | Medium | Frontend | Redo is per-region and free-form only; no painted region, no batch | Feature |
 | [`AUDIT-F22`](#audit-f22-medium-no-re-run-entire-chapter-action) | Medium | Frontend/Backend | Only "Force Re-export" / "Clear Exports"; no pipeline re-run | Feature |
@@ -319,9 +325,9 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   rather than getting a 400 for omitting a field it has never heard of.
 - **Not done:** *per-element* padding. That needs a column on `layer_elements`, and there is no
   migration runner — `init.sql` only runs on a fresh volume, so a new column would break every
-  existing deployment until one exists. Filed as [`AUDIT-B18`](#audit-b18-low-there-is-no-schema-migration-runner).
+  existing deployment until one exists. Filed as [`AUDIT-B18`](#audit-b18-medium-there-is-no-schema-migration-runner).
 
-### `AUDIT-B18` (low): There is no schema migration runner
+### `AUDIT-B18` (medium): There is no schema migration runner
 
 - **Locations:** `database/init.sql` (a `pg_dump`, mounted at `docker-entrypoint-initdb.d`),
   `backend-rust/src/db.rs:48` (`build_postgres_url`, marked "consumed by migration tooling in an
@@ -434,9 +440,28 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 
 ---
 
+### `AUDIT-R18` (high): Export lines are centred in the raw box, not the fitted box
+
+- **Locations:** `frontend/src/components/Reader.tsx` (the PNG export at `:2498-2514` and ZIP
+  export at `:2697-2714`), and `worker/src/worker/handlers/render.py:1254-1289`.
+- **Problem:** PR #121 correctly passes the shared `textFitBox` rectangle to `fitTextInBox`, so the
+  font size and wrapping honour `textBoxPaddingPx` and `textBoxSafetyPercent`. Both export paths
+  then discard that rectangle for vertical placement: `startY` is calculated from
+  `el.y + height / 2`. The worker calculates its `start_y` from `text_box_y` and `text_box_h`.
+  Safety scaling begins at the inset box's top-left, so these centres are not generally the same.
+  A multiline PNG/ZIP export can therefore be vertically shifted from the worker-rendered page
+  even though both claim to use the same fitted box.
+- **Reproduction:** create a multiline element in a non-square bubble with non-default padding or
+  safety percentage; compare the frontend PNG or ZIP layer raster with `/rendered`.
+- **Fix:** calculate each export's `startY` from `fitBox.y` and `fitBox.height`, and test PNG and
+  ZIP line positions against the worker's fitted-box geometry. Do not change the fitting helper or
+  the configured margin as part of this fix.
+
+---
+
 ## 2. Seam 2 — the canvas and the artifact are not connected
 
-### `AUDIT-B15` (medium): The debounced re-render is one-shot and can lose an edit permanently
+### `AUDIT-B15` (high): The debounced re-render is one-shot and can lose an edit permanently
 
 - **Correction, 2026-09-02.** This was first filed as "no edit anywhere enqueues a render job". That
   is **wrong** — I missed the sweeper. `recovery::process_pending_renders`
@@ -463,9 +488,10 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   (`internal.rs:1157-1161` for the image, `coordinator.rs:2077-2082` for the page) — and give the
   sweeper a separate "render requested at" marker so it debounces without claiming completion.
   Make `trigger_page_redo` propagate the enqueue failure rather than returning `Ok(())` regardless.
-- **Still needs a repro to confirm** this is the reported symptom and not a second cause. Capture a
-  page where an edit did not reach `/rendered`, and compare its `last_edited_at`,
-  `last_rendered_at`, and the status of its most recent `render` job.
+- **Confirmed in the PR #115–#138 review.** This is not only a plausible explanation: an enqueue
+  insert or Redis push failure is swallowed, and a worker failure after the timestamp update leaves
+  the same permanently false predicate. The remediation must be guarded by failures at each of
+  those points, not only by a successful-render test.
 
 ### `AUDIT-B12` (medium): QA's verdicts never reach the rendered output
 
@@ -511,7 +537,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
      nothing.
 - **Note:** human edits have their own path to a re-render (the 5s debounced sweeper), which is why
   this needed a fix of its own. QA is not an editor and never went through it. See
-  [`AUDIT-B15`](#audit-b15-medium-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently)
+  [`AUDIT-B15`](#audit-b15-high-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently)
   for the defect in that sweeper.
 
 ### `AUDIT-B16` (low): Region-redo layer provenance
@@ -773,6 +799,23 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   so a whole-job retry cannot help either case. The warning names the symptom, which is actionable
   for both.
 
+### `AUDIT-B21` (high): A retryable translation callback consumes the exactly-once claim
+
+- **Locations:** `worker/src/worker/handlers/translation.py:416-455`,
+  `worker/src/worker/rq_tasks.py:182-200`, and
+  `backend-rust/src/jobs/coordinator.rs:102-141,1693-1708`.
+- **Problem:** the worker posts its translation callback *before* raising for an all-unavailable
+  provider result. The backend's pool-scoped `claim_callback` immediately writes
+  `callback_applied_at`, before it writes the callback result. RQ then marks the same job PENDING
+  for retry. If the retry receives real translations, its callback is ignored as a duplicate, so
+  the page remains untranslated despite a successful retry.
+- **Reproduction:** make all providers return no result on attempt one and a valid translation on
+  attempt two. The first callback claims the row; the second is dropped.
+- **Fix:** determine whether the result is retryable before posting a terminal callback. For a
+  retryable outage, raise without posting; on a terminal callback, use `claim_callback_tx` in the
+  same transaction as every layer/job write so a failed application releases the claim. Test the
+  outage-then-success path and a database write failure after claiming.
+
 ### `AUDIT-B14` (medium): Delete then re-add leaves a chapter inconsistent — **Fixed 2026-09-04**
 
 - **Locations:** `backend-rust/src/routes/page.rs:945-985` (`delete_page`), `:238-320`
@@ -783,6 +826,19 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Fixed 2026-09-04 in PR #136 and PR #137.** Resolved page delete renumbering, parking of replaced slots,
   and saturating integer casts on client JSON (`maxWidth`/`maxHeight`/`zOrder`). Page count and navigation
   remain synchronized across deletions and re-uploads.
+
+### `AUDIT-B22` (medium): Page ordering is validated before the chapter is locked
+
+- **Locations:** `backend-rust/src/routes/page.rs:1196-1228` (`reorder_pages`) and
+  `:1289-1355` (`update_page_number`).
+- **Problem:** `reorder_pages` fetches and validates the submitted page IDs before opening its
+  transaction; `update_page_number` fetches the target page before it locks the current ordered
+  rows. A concurrent insert, delete, or reorder can therefore change the chapter between
+  validation and renumbering. The endpoint can return success while leaving the new page outside
+  the requested order, or calculate a move against an order that has already changed.
+- **Fix:** begin one transaction before reading either page set, lock all pages in that chapter with
+  `FOR UPDATE`, validate under that lock, then renumber and recalculate the cover before commit.
+  Cover reorder-vs-insert and move-vs-delete with two independent database connections.
 
 ### `AUDIT-B19` (low): JWT signing failure reported as successful login
 
@@ -1143,8 +1199,10 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 
 The Codex review of the 2026-09-02 fix stack raised fifteen findings. The six on PRs #115 and #116
 were addressed on the branch. Four P1s were addressed on 2026-09-03 (the `AUDIT-R5` wiring above,
-and the three folded into `AUDIT-F16`/`AUDIT-R1`). **These five P2s are not fixed** and are
-recorded here because the PR threads close when the stack merges.
+and the three folded into `AUDIT-F16`/`AUDIT-R1`). Of the five retained P2s, **`AUDIT-R13` and
+`AUDIT-R14` remain unverified; `AUDIT-F26`, `AUDIT-F27`, and `AUDIT-T5` were fixed 2026-09-04.**
+`AUDIT-F25`, the associated low-severity finding, was also fixed that day. The records remain here
+because the PR threads close when the stack merges.
 
 Severities are the reviewer's. Where an entry is marked *unverified* the claim has been read but
 not reproduced.
