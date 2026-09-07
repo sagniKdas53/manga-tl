@@ -9,7 +9,7 @@ The Rust rewrite replaced the JVM ImageIO + `webp-imageio` stack with native Rus
 ### Key Characteristics
 
 1. **Native libwebp compilation**: The `webp` crate compiles and statically links libwebp via Cargo. The multi-stage Docker build for Alpine musl JNI libraries is eliminated.
-2. **Concurrent generation**: Unlike the Java service, which serialized WebP writes behind a global lock, Rust's `thumbnails::generate_thumbnail` is thread-safe and executes across Tokio `spawn_blocking` pools without serialization bottlenecks.
+2. **Inline generation**: `thumbnails::generate_thumbnail` is synchronous and is currently called directly by async route handlers. It is thread-safe, but decode, resize, and WebP encoding still run inline until the upload path explicitly moves that work to `spawn_blocking`.
 3. **Dimensions and Quality**:
    - Target width: 512px (`THUMBNAIL_WIDTH = 512`), preserving aspect ratio for height.
    - Quality: 85.0 (`THUMBNAIL_QUALITY = 85.0`, equivalent to 0.85 lossy compression).
@@ -20,12 +20,12 @@ The Rust rewrite replaced the JVM ImageIO + `webp-imageio` stack with native Rus
 ### 1. Source Page Thumbnails
 
 - **Route**: `GET /api/images/{id}/thumbnail`
-- **Storage**: Generated asynchronously during image upload and stored in MinIO (`thumbnails/{hash}.webp`).
+- **Storage**: Generated during image upload and stored in MinIO (`thumbnails/{hash}.webp`).
 - **Response**: Passthrough streaming from object storage with `Content-Type: image/webp`.
 
 ### 2. Rendered Page Thumbnails (`AUDIT-F26`)
 
-- **Route**: `GET /api/pages/{id}/rendered/thumbnail`
+- **Route**: `GET /api/images/{imageId}/thumbnail/rendered`
 - **Purpose**: Provides a lightweight 512px thumbnail of the final rendered translation PNG (~1.7MB full-size vs ~30KB WebP).
 - **Generation**:
   - Eager: Generated on worker completion callback when `status == COMPLETED` for a render stage.

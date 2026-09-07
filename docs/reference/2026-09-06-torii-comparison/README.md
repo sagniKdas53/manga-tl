@@ -4,7 +4,7 @@ Captured to settle what Torii actually does, after a handoff document mis-framed
 problems as worker-side text fitting. **Untracked on purpose** (~29MB, adult source material) — do
 not `git add` this directory. It backs `docs/canvas_render_fixes_2026-09-06.md`.
 
-This is the "Torii screenshots still to come" that `docs/mask_precision_2026-08-27.md` was waiting
+This is the "Torii screenshots still to come" that `docs/archive/mask_precision_2026-08-27.md` was waiting
 on. That doc opened with the same complaint being made again today — *"our current masks are too
 big… they even overlap each other"* — and could not close because there was nothing to compare
 against. These files are the comparison.

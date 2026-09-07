@@ -106,7 +106,7 @@ cannot help: Douglas–Peucker measures deviation from the *retained chord*, and
 ~31px from its own chord, so every sample survives. `AUDIT-R7` fixed the tolerance from relative to
 absolute; it did not anticipate a radius this large.
 
-This is the same complaint `docs/mask_precision_2026-08-27.md` opens with — *"our current masks are
+This is the same complaint `docs/archive/mask_precision_2026-08-27.md` opens with — *"our current masks are
 too big… they even overlap each other"* — which stalled pending Torii screenshots. Those now exist.
 
 ---
@@ -291,15 +291,15 @@ Prior art to read first, in order:
 
 | Doc | Why |
 | :--- | :--- |
-| `docs/erasure_overhaul_plan_2026-08-26.md` | The plan this continues; §7, §9 Phase 1, §10, §11 |
-| `docs/ctd_mask_validation_2026-08-26.md` | The 21-page CTD test — a learned model *does* give glyph-shaped masks on our corpus |
-| `docs/erasure_method_history_2026-08-27.md` | What the current method replaced, and why |
-| `docs/mask_precision_2026-08-27.md` | Masks-vs-inpainting measured; was waiting on the Torii screenshots that now exist |
-| `docs/RESUME_2026-08-28.md` | Where the thread was dropped |
+| `docs/archive/erasure_overhaul_plan_2026-08-26.md` | The plan this continues; §7, §9 Phase 1, §10, §11 |
+| `docs/archive/ctd_mask_validation_2026-08-26.md` | The 21-page CTD test — a learned model *does* give glyph-shaped masks on our corpus |
+| `docs/archive/erasure_method_history_2026-08-27.md` | What the current method replaced, and why |
+| `docs/archive/mask_precision_2026-08-27.md` | Masks-vs-inpainting measured; was waiting on the Torii screenshots that now exist |
+| `docs/archive/resume_2026-08-28.md` | Where the thread was dropped |
 
 Work:
 
-1. **Fold the Torii comparison into `mask_precision_2026-08-27.md`.** It has a "Torii screenshots
+1. **Fold the Torii comparison into `archive/mask_precision_2026-08-27.md`.** It has a "Torii screenshots
    still to come" placeholder and `docs/reference/2026-09-06-torii-comparison/` closes it. Torii's
    inpainted base is the reference target: tight to the glyphs, SFX untouched.
 2. **Build the measurement harness before choosing a model.** Metrics that already have precedent

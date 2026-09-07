@@ -10,8 +10,8 @@ This document records the access control boundary for the backend API (`backend-
 | :--- | :--- | :--- |
 | `/api/images/{id}/thumbnail` | **Public** | 512px WebP gallery thumbnail |
 | `/api/images/{id}/reader` | **Public** | Downscaled WebP reading variant |
-| `/api/pages/{id}/rendered/thumbnail` | **Public** | 512px WebP rendered page thumbnail (`AUDIT-F26`) |
-| `/health`, `/v3/api-docs` | **Public** | Container health checks and OpenAPI specification |
+| `/api/images/{id}/thumbnail/rendered` | **Public** | 512px WebP rendered page thumbnail (`AUDIT-F26`) |
+| `/actuator/health`, `/v3/api-docs` | **Public** | Container health checks and OpenAPI specification |
 | `/api/auth/login`, `/register`, `/refresh` | **Public** | User authentication |
 | `/api/images/{id}/file` | **Authenticated** (`AuthUser`) | Full-resolution original source image |
 | `/api/series/**`, `/api/chapters/**`, `/api/pages/**` | **Authenticated** (`AuthUser`) | Catalog, metadata, and write operations |
