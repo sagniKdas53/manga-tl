@@ -1,25 +1,13 @@
 # Issues & Technical Debt
 
-> **Standing: 104 filed, 83 closed, 21 open.** Six items were added 2026-09-03 from the Codex
-> review of the fix stack — `AUDIT-R13`, `AUDIT-R14`, `AUDIT-F25`, `AUDIT-F26`, `AUDIT-F27` and
-> `AUDIT-T5`, all in [Open Review Findings](#open-review-findings-prs-118-124-2026-09-03).
-> `AUDIT-T5`, `AUDIT-F25`, `AUDIT-F26` and `AUDIT-F27` are now fixed; `AUDIT-R13` and
-> `AUDIT-R14`, the two reshape/rotation findings, remain open and remain unverified.
+> **Standing: 110 filed, 85 closed, 25 open.** Six review items were added 2026-09-03
+> (`AUDIT-R13`, `AUDIT-R14`, `AUDIT-F25`..`F27`, `AUDIT-T5`). Three renderer items were added 2026-09-05
+> (`AUDIT-R15`..`R17`). Three hardening items are folded in from backlog notes: `AUDIT-B19` (JWT signing error
+> masking), `AUDIT-B20` (systemic DB `unwrap_or_default`), and `AUDIT-F28` (settings catalog retry gate).
 >
-> **`AUDIT-F26` was upheld, and it reopened `AUDIT-F19`.** The refetch fired correctly and could
-> not change anything: the page DTO carried no field a pipeline run touches. Both are fixed
-> together 2026-09-04 — see `AUDIT-F26`.
->
-> Re-audited 2026-09-02 against the field report in
-> `new issues.pdf`. Three previously-open items were closed as *obsolete* — they described Java
-> files the Rust rewrite deleted. Twenty-nine new items are filed (two, `AUDIT-B17` and
-> `AUDIT-F24`, found while fixing another), and sixteen are already fixed: `AUDIT-F14`,
-> `AUDIT-F15`, `AUDIT-F16`, `AUDIT-F17`, `AUDIT-F18`, `AUDIT-F19`, `AUDIT-F20`, `AUDIT-F21`,
-> `AUDIT-B12`, `AUDIT-B13`, `AUDIT-B17`, `AUDIT-R1`, `AUDIT-R5`, `AUDIT-R7`, `AUDIT-T4`,
-> `AUDIT-W13`.
->
-> *(The previous header read "68 filed, 61 closed, 7 open" while listing eight open items. The
-> table was right and the count was one short; these numbers are taken from the table.)*
+> `AUDIT-B14` (chapter page delete renumbering/parking) was closed 2026-09-04 in PR #136 and PR #137.
+> `AUDIT-F26` was upheld, and it reopened `AUDIT-F19`; both were closed together 2026-09-04 once `PageDto`
+> carried `lastRenderedAt` and `renderedThumbnailUrl`. `AUDIT-R13` and `AUDIT-R14` remain open and unverified.
 >
 > - **Resolved items** move to [docs/archive/history.md](archive/history.md) with root cause, fix details, and measurements.
 > - **Feature roadmap & active milestones** are tracked in [TODO.md](../TODO.md).
@@ -66,6 +54,7 @@ fill the bubble" partly overlaps `AUDIT-R1`, the 9.5% renderer disagreement.
 That is the re-orientation: **stop treating these as twenty-four bugs and close the three seams.**
 
 ---
+
 ## Locked Decisions
 
 Choices taken deliberately, against a plausible-looking alternative, with the measurement that
@@ -73,7 +62,7 @@ decided them. **Each one has been reverted or nearly reverted at least once beca
 wrong without this context.** If you are about to change something here, the burden is a new
 measurement, not a tidier-looking implementation.
 
-### `LOCK-1` — Free-standing text keeps its column's height. It is never squared into a box.
+### `LOCK-1` — Free-standing text keeps its column's height. It is never squared into a box
 
 **Decided 2026-08-29 (Sagnik). Do not revert without re-measuring.**
 
@@ -119,7 +108,7 @@ Guarded by `keeps_the_column_height_instead_of_squaring_it_away`,
 `does_not_widen_a_column_that_clears_the_readable_floor` and
 `caps_the_widening_of_an_extremely_narrow_column` in `coordinator.rs`.
 
-### `LOCK-2` — An OCR layer never reaches an export, whatever the reader is showing.
+### `LOCK-2` — An OCR layer never reaches an export, whatever the reader is showing
 
 **Decided 2026-08-29 (Sagnik).**
 
@@ -138,6 +127,7 @@ clean and only the frontend's own exports disagreed.
 Guarded by the OCR-layer assertions in `ReaderExportZip.test.tsx`.
 
 ---
+
 ## Open Issues Summary
 
 Severity is "how much does this cost the output", not "how hard is it to fix".
@@ -170,6 +160,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-F17`](#audit-f17-high-the-reader-refreshes-for-four-job-types-on-one-page) | High | Frontend | SSE arrives; the reader discards it for QA/render, and for every page but the open one | **Fixed 2026-09-02** |
 | [`AUDIT-F19`](#audit-f19-medium-thumbnails-and-cards-never-re-poll) | Medium | Frontend | Thumbnails, chapter cards and series cards never refresh after work completes | **Fixed 2026-09-04** (reopened by `AUDIT-F26`; the 09-03 fix refetched DTOs that could not change) |
 | [`AUDIT-F20`](#audit-f20-low-the-queue-manager-sorts-by-chapter-before-status) | Low | Frontend | `PROCESSING` shared a sort rank with `PENDING`, so active jobs never moved | **Fixed 2026-09-02** |
+| [`AUDIT-F28`](#audit-f28-medium-settings-modal-deadlocks-on-unpopulated-provider-catalog) | Medium | Frontend | Settings modal aborts refetch immediately when Redis catalog is empty, leaving permanent N/A | Ready |
 | [`AUDIT-P10`](#audit-p10-unranked-sse--websocket) | Unranked | Platform | Proposal to replace SSE with a WebSocket | Not accepted; see the entry |
 
 ### Pipeline & scheduling
@@ -180,8 +171,10 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-W14`](#audit-w14-medium-the-slot-policy-lets-slow-network-work-crowd-out-local-work) | Medium | Worker/Backend | Four light slots + a per-cycle capacity snapshot; OCR waits behind LLM calls | Needs measurement |
 | [`AUDIT-B17`](#audit-b17-low-jobspage_id-was-never-written) | Low | Backend | `jobs.page_id` existed, was deserialised, and was never populated by the INSERT | **Fixed 2026-09-03** |
 | [`AUDIT-B18`](#audit-b18-low-there-is-no-schema-migration-runner) | Low | Backend | `init.sql` only runs on a fresh volume, so no column can ever be added to a live deployment | Ready |
+| [`AUDIT-B19`](#audit-b19-low-jwt-signing-failure-reported-as-successful-login) | Low | Backend | `unwrap_or_default()` yields empty token answered as 200 OK on signing error | Ready |
+| [`AUDIT-B20`](#audit-b20-low-database-query-errors-converted-to-empty-results) | Low | Backend | 53 sites convert query errors into empty lists/options disguised as 200 OK | Backlog |
 | [`AUDIT-B13`](#audit-b13-medium-a-page-with-no-translatable-text-fails-the-job) | Medium | Worker/Backend | An untranslatable page raises and burns 3 attempts; it should warn | **Fixed 2026-09-02** |
-| [`AUDIT-B14`](#audit-b14-medium-delete-then-re-add-leaves-a-chapter-inconsistent) | Medium | Backend/Frontend | Page count stale, old slot held, reader hangs on the loading screen | Needs repro |
+| [`AUDIT-B14`](#audit-b14-medium-delete-then-re-add-leaves-a-chapter-inconsistent) | Medium | Backend/Frontend | Page count stale, old slot held, reader hangs on the loading screen | **Fixed 2026-09-04** |
 | [`AUDIT-W3`](#audit-w3-medium-cooldowns-and-lock-waits-burn-a-job-slot) | Medium | Worker | Cooldowns and lock waits block a concurrency slot doing nothing | Deprioritized; needs concurrency test harness |
 | [`AUDIT-F23`](#audit-f23-medium-no-paint-region-redo-and-no-batch-redo) | Medium | Frontend | Redo is per-region and free-form only; no painted region, no batch | Feature |
 | [`AUDIT-F22`](#audit-f22-medium-no-re-run-entire-chapter-action) | Medium | Frontend/Backend | Only "Force Re-export" / "Clear Exports"; no pipeline re-run | Feature |
@@ -194,6 +187,9 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R9`](#audit-r9-medium-neighbouring-text-boxes-are-allowed-to-overlap) | Medium | Render | Nothing checks box-vs-box collision at layout time | Design needed |
 | [`AUDIT-R10`](#audit-r10-medium-overlapping-bubbles-are-erased-as-one) | Medium | Worker | Two touching balloons merge into one plate | Design needed |
 | [`AUDIT-R12`](#audit-r12-medium-sfx-appear-to-shrink-neighbouring-balloons) | Medium | Worker | Hypothesis: an SFX overlapping a balloon truncates its mask | Needs measurement |
+| [`AUDIT-R15`](#audit-r15-high-the-typeset-size-depends-on-which-fonts-the-host-happens-to-have) | High | Render/Testing | The same call returns 48, 56 or 75px depending on which font files the host has | Ready |
+| [`AUDIT-R16`](#audit-r16-medium-a-narrow-box-is-capped-by-its-widest-unbreakable-token) | Medium | Render | Portrait balloons: the type is width-bound and the spare height cannot be spent | Measured; needs a decision |
+| [`AUDIT-R17`](#audit-r17-unranked-shaperectangular-is-not-ignored) | Unranked | Render | Reported as an ignored API parameter; the branch exists and the contract holds end to end | **Closed on assessment 2026-09-05** |
 
 ### Cosmetic & long tail
 
@@ -208,6 +204,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-T4`](#audit-t4-unranked-nothing-proves-pagination-and-sort-against-a-real-database) | Unranked | Testing | Successor to the closed `AUDIT-T3`; the tests found two live defects | **Fixed 2026-09-03** |
 
 ---
+
 ## 1. Seam 1 — the editor and the renderer disagree about what an element is
 
 ### `AUDIT-F14` (high): Rotating a box makes every save fail
@@ -540,6 +537,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   closed — a better fill on a page whose edits never render is wasted.
 
 ---
+
 ## 3. Seam 3 — the UI does not believe the backend
 
 ### `AUDIT-F17` (high): The reader refreshes for four job types, on one page
@@ -633,6 +631,23 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   the UI writes over REST.
 - **Next Step:** fix `AUDIT-F17` first. If events still feel unreliable after that, reopen this with
   a measurement — dropped events per session, or reconnect frequency — not a preference.
+
+### `AUDIT-F28` (medium): Settings modal deadlocks on unpopulated provider catalog
+
+- **Locations:** `frontend/src/components/SettingsModal.tsx:29-33` (`isProviderUnavailable`),
+  `:135-204` (the refetch loop).
+- **Problem:** When Redis has not received `system:providers:config` yet (e.g. cold start or worker still
+  booting), the backend serves `activeProviders: []` and `providerModelsMap: {}`.
+  `isProviderUnavailable` evaluates to false when `activeProviders` is empty, so `isAnyProviderUnavailable`
+  returns false. The background refetch loop terminates immediately on first fetch and leaves every
+  provider and model selector rendered as `N/A (Capability Missing)` indefinitely. The user must close
+  and reopen the modal to see providers once the worker finishes publishing.
+- **Fix:**
+  1. Treat an empty catalog as unavailable: `activeProviders.length === 0` counts as unavailable so the
+     refetch loop continues polling until the worker publishes.
+  2. Cap the loop (e.g. 30 attempts × 2s) to prevent infinite polling in keyless environments.
+  3. Render an explicit non-blocking alert ("Waiting for worker to publish provider configuration...")
+     while the catalog is empty rather than confusing `N/A` dropdowns.
 
 ---
 
@@ -758,17 +773,35 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   so a whole-job retry cannot help either case. The warning names the symptom, which is actionable
   for both.
 
-### `AUDIT-B14` (medium): Delete then re-add leaves a chapter inconsistent
+### `AUDIT-B14` (medium): Delete then re-add leaves a chapter inconsistent — **Fixed 2026-09-04**
 
 - **Locations:** `backend-rust/src/routes/page.rs:945-985` (`delete_page`), `:238-320`
   (`insert_page`, the two-phase renumber).
 - **Problem:** the report describes three symptoms after deleting a page and re-uploading it: the
   chapter's page count does not update, the page is not reachable from the reader, and the old
   slot is still held so navigating there shows the loading screen forever.
-- **Next Step:** needs a repro before a fix — the three symptoms could be one backend renumbering
-  bug or one stale frontend list, and guessing between them wastes the fix. Reproduce with the page
-  grid and the reader both open, and capture `GET /api/chapters/{id}/pages` alongside the reader's
-  cache state.
+- **Fixed 2026-09-04 in PR #136 and PR #137.** Resolved page delete renumbering, parking of replaced slots,
+  and saturating integer casts on client JSON (`maxWidth`/`maxHeight`/`zOrder`). Page count and navigation
+  remain synchronized across deletions and re-uploads.
+
+### `AUDIT-B19` (low): JWT signing failure reported as successful login
+
+- **Locations:** `backend-rust/src/routes/auth.rs:298` (register), `:326` (login), `:346` (refresh).
+- **Problem:** `let token = state.jwt.generate_token(&user.email).unwrap_or_default();`
+  `generate_token` returns `Result`. On `Err`, `unwrap_or_default()` yields an empty string `""`, and all
+  three endpoints answer `200 OK` with `token: ""`. An empty token fails subsequent decode, so while not
+  an auth bypass, it produces silent session failure on the client with 401s rather than a legible error.
+- **Fix:** Map `Err` to a 500 error response at all three sites.
+
+### `AUDIT-B20` (low): Database query errors converted to empty results
+
+- **Locations:** 53 sites across `backend-rust/src/routes/`.
+- **Problem:** A failed query becomes an empty `Vec` or `None` via `unwrap_or_default()`, and the handler
+  serves it as a normal `200 OK`. A broken listing is indistinguishable from an empty one for callers
+  and in logs. As noted in `routes/page.rs:108`: *"totalElements. That is worse than an error, because it
+  looks like an answer."*
+- **Fix:** Target list endpoints first where empty and failed are ambiguous. Standardize on honest 500
+  responses instead of silent suppression, aligned with the `.expect()` panic strategy pass.
 
 ### `AUDIT-W3` (medium): Cooldowns and lock waits burn a job slot
 
@@ -843,6 +876,144 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   a narrow `safe_rect` from `YOLO_MASK_EROSION` (`bubble_detector.py:210-218`).
 - **Next Step:** measure before fixing. On the corpus, compare balloon mask area with and without an
   overlapping SFX region present. Two hypotheses, one cheap query.
+
+### `AUDIT-R15` (high): The typeset size depends on which fonts the host happens to have
+
+- **Locations:** `worker/src/worker/handlers/render.py:88-163` (`load_font`), `:21` (`FONT_REGISTRY`),
+  `:78` (`DEFAULT_FONT_FALLBACK_ORDER`), `worker/Dockerfile:17` (`fonts-comic-neue`),
+  `backend-rust/src/jobs/coordinator.rs:2002` (the pipeline hardcodes `'Comic Neue'`).
+- **How it surfaced.** A handoff dated 2026-09-05 reported
+  `test_grows_past_the_old_width_over_three_cap_in_a_narrow_tall_box` failing on `main` at
+  `worker@a148136`, the fitter returning 48px where the test asserts `> 48`. **It does not fail
+  here.** The same commit, the same tree, the same call — `fit_text_in_box_py("Big bro...",
+  max_width=145, max_height=259, font_name="Comic Neue")`:
+
+  | environment | font actually loaded | returns |
+  | :--- | :--- | :--- |
+  | worker container (`fonts-comic-neue` present) | `ComicNeue-Regular.otf` | **75px** |
+  | this laptop (no Comic Neue) | `DejaVuSans.ttf` | **56px** |
+  | the handoff's container | neither; unidentified | **48px** |
+
+  `pytest -q` is 473 passed, 0 failed in-tree, and 473 is the handoff's own total. The tree is not
+  in dispute; the fonts are.
+- **The cause is `load_font`'s silent fallback.** It tries the registry entry for the requested
+  family, then every family in `DEFAULT_FONT_FALLBACK_ORDER`, then DejaVu and Liberation by absolute
+  path, then a suffix search — and returns the first file that exists, telling no one which tier
+  answered. `FONT_REGISTRY["Comic Neue"]` points at
+  `/usr/share/fonts/opentype/comic-neue/ComicNeue-Regular.otf`, which the Dockerfile installs and a
+  dev box does not have.
+- **The metrics are not close enough for that to be harmless.** `"bro..."` measures **91.0px** at
+  48px in Comic Neue and **123.5px** in DejaVu Sans — 36% wider. The size search is bounded by
+  `widest_line(res, f_size) <= max_width` (`render.py:878`), so that one difference is the whole of
+  the 75-vs-56 spread. Every element the pipeline creates asks for `'Comic Neue'` by name, so this
+  is not an exotic path — it is the only path.
+- **What breaks in production, not in the test.** A deployment whose image did not get
+  `fonts-comic-neue`, or a base-image bump that moves the path, keeps rendering: silently, at a
+  different typeface, at a different size, with no error and no log line. The only signal is that
+  the lettering looks wrong, which is indistinguishable from every other complaint in this file.
+- **And the local gate is a false green.** The typesetting suite passes here *because* the laptop
+  lacks the production font. Every absolute-pixel assertion in `test_typesetting.py` measures DejaVu
+  locally and Comic Neue in the container, so a metric regression cannot be caught where it is
+  introduced. This is the same shape as [`AUDIT-T5`](#audit-t5-medium-nothing-typechecks-the-frontend):
+  a check that exists and cannot see the thing it is for.
+- **The handoff's stated mechanism is not the one.** It attributes the 48 to the elliptical wrap
+  being applied to a rectangular box — see [`AUDIT-R17`](#audit-r17-unranked-shaperectangular-is-not-ignored) —
+  and reports `"bro..."` at 48px Comic Neue as 144.0px. Comic Neue gives 91.0px. 144.0px is what
+  DejaVu Sans gives at **56**px, which is a good indication that the measurement was taken through
+  the same fallback that produced the failure.
+- **Next Step**, in order:
+  1. **Make the fallback loud.** `load_font` returns which path it resolved; the render handler logs
+     once per job when the family it asked for was not the family it got. A miss on the pipeline's
+     own hardcoded default is a deployment fault, not a styling preference.
+  2. **Give the tests a font they own.** Vendor one OFL face into `tests/fixtures/` and have the
+     typesetting tests request it by path, so the pixel assertions pin metrics instead of pinning
+     the host. Keep one separate test that asserts `FONT_REGISTRY["Comic Neue"]` resolves to a real
+     file — skipped outside the container — because that is the check that protects production, and
+     it is a different check from the fitter's arithmetic.
+  3. **Then** revisit the handoff's failing assertion. There is nothing to fix in the fitter for it.
+
+### `AUDIT-R16` (medium): A narrow box is capped by its widest unbreakable token
+
+- **Report:** "some text bubbles are designed for vertical jp ... when putting in the horizontal en
+  text it's have wide gaps in top and bottom but the text is adjusted to be of the same width and
+  thus very small."
+- **Confirmed, and it is not the size search giving up.** Measured in the worker container against
+  real Comic Neue, at constant box area (~37,500px²) so only the aspect changes:
+
+  | text | box | aspect | size | height used | width used |
+  | :--- | :--- | ---: | ---: | ---: | ---: |
+  | `Big bro...` | 100×375 | 0.27 | **51px** | **33%** | 98% |
+  | `Big bro...` | 145×259 | 0.56 | 75px | 69% | 99% |
+  | `Big bro...` | 190×197 | 0.96 | 82px | 100% | 84% |
+  | `Big bro...` | 375×100 | 3.75 | **83px** | 100% | 81% |
+
+  The portrait extreme sets the same words **39% smaller** than the landscape extreme and leaves
+  two-thirds of the balloon empty. That is the screenshot.
+- **It is a short-text problem, which is why it reads as random.** The same sweep with a full line of
+  dialogue is flat across every aspect — 32 / 32 / 31 / 32 / 30px — because once there are enough
+  tokens to pack, the narrow box just uses more lines and the height it has. The loss appears only
+  when one long token has to fit a width that no wrapping can help with.
+- **The fitter is already at the ceiling.** The size it picks equals, exactly, the largest size at
+  which the longest single token still fits `max_width`:
+
+  | case | fitter picks | widest-token ceiling |
+  | :--- | ---: | ---: |
+  | `Big bro...` in 100×375 | 51px | 51px |
+  | `Big bro...` in 145×259 | 75px | 75px |
+  | `I can't believe you did that!` in 100×375 | 44px | 43px — hyphenation beat it by one |
+
+  So there is no slack to recover in the search, and the idle height is not convertible: horizontal
+  text can only spend height by growing, and growing spends width it does not have. **The remedy is
+  geometric, and two of the three geometric moves are already closed:** widening a free-standing
+  column is [`LOCK-1`](#lock-1--free-standing-text-keeps-its-columns-height-it-is-never-squared-into-a-box),
+  decided against with a corpus measurement, and widening a balloon past its own outline is what the
+  mask exists to prevent.
+- **The one lever that is open is the token itself.** `"bro..."` is unbreakable because the ellipsis
+  is glued to the word and `hyphen_positions` has no legal point inside it. Allowing a break between
+  a word and its trailing punctuation — a leading `...` on the next line, which comics set routinely:
+
+  | text | width | now | with a punctuation break | gain |
+  | :--- | ---: | ---: | ---: | ---: |
+  | `Big bro...` | 100 | 51px | 68px | **+33%** |
+  | `Big bro...` | 145 | 75px | 99px | **+32%** |
+  | `What?! No way!!` | 120 | 40px | 54px | **+35%** |
+  | `Stop it...!` | 110 | 57px | 57px | +0% |
+
+  A third larger on the cases that hurt, and correctly inert on the case where the punctuation is not
+  the binding token. It is a change to `break_word_to_width`/`hyphen_positions`, not to the search.
+- **Next Step:** decide between the punctuation break above (small, measured, bounded) and doing
+  nothing. Do **not** reach for widening the box; that argument has been had. If the punctuation
+  break lands, `broke_a_word` must keep treating a punctuation split as clean — it currently
+  compares against `clean_text.split()`, so a split token would read as mangled and the tier would
+  reject the very layout it just enabled.
+- **Relationship:** this is the same family as [`AUDIT-R8`](#audit-r8-medium-text-under-fills-and-over-runs-its-balloon)
+  (under-filled balloons) and does not overlap [`AUDIT-R6`](#audit-r6-medium-there-is-no-vertical-text-mode);
+  setting the English vertically would remove the problem and is a different feature.
+
+### `AUDIT-R17` (unranked): `shape="rectangular"` is not ignored
+
+- **Reported** in the 2026-09-05 handoff as a broken API contract: `fit_text_in_box_py` allegedly has
+  no `rectangular` branch, so the parameter is silently treated as an ellipse.
+- **It has one, and it runs first.** `render.py:649` — `if shape != "elliptical":` — is the plain
+  word-wrap path, ahead of the elliptical wrap at `:680`. A caller passing `"rectangular"` gets
+  wrapped to `max_width` with no narrowing. Measured over 150 text/box combinations in the worker
+  container, **36 diverge** — always with the elliptical result smaller, which is the narrowing doing
+  its job (`Big bro...` in 145×375: 75px rectangular, 71px elliptical). A dead branch cannot produce
+  that.
+- **The contract holds end to end, and the vocabulary matches at every hop.** The pipeline's element
+  INSERT writes `"elliptical"` for a `speech` region and `"rectangular"` otherwise
+  (`coordinator.rs:2013-2017`); the column is `layer_elements.box_shape` (`database/init.sql:214`);
+  the DTO is `boxShape` (`models.rs:250`, `schema.d.ts:1038`); the editor's selector and both canvas
+  paths compare against `"elliptical"`; and `render.py:1265` maps it through unchanged. There is no
+  `"ellipse"`/`"elliptical"` mismatch anywhere in the stack.
+- **What is true, and is worth knowing** — for a real balloon neither shape branch runs at all. The
+  polygon-aware wrap at `:520` takes priority whenever a mask spans the box, which is every detected
+  balloon. `shape` decides the wrap only for elements with no usable mask. That is the correct
+  precedence — the outline is better information than an ellipse fitted to its bounding box — but it
+  does mean the elliptical branch is close to dead code in production, and anyone measuring its
+  behaviour on real pages will find it never fired.
+- **Closed on assessment 2026-09-05.** Filed so the claim is not re-opened from the handoff. The
+  failure that motivated it is [`AUDIT-R15`](#audit-r15-high-the-typeset-size-depends-on-which-fonts-the-host-happens-to-have).
 
 ---
 
@@ -967,6 +1138,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   failed" is a wider change than this item, and is worth its own pass.
 
 ---
+
 ## Open Review Findings (PRs #118-#124, 2026-09-03)
 
 The Codex review of the 2026-09-02 fix stack raised fifteen findings. The six on PRs #115 and #116
@@ -1012,7 +1184,7 @@ Fixed by making the type honest (`boolean | null`) and moving the row and the ch
 falsy checks, so this is two lines rather than a sweep. The checkbox change also stops React
 warning about a `checked={null}` uncontrolled input. Guarded by three tests under
 `a null \`visible\` is hidden, the same as everywhere else` in `ReaderRightSidebar.test.tsx`, all
-of which fail against the old `!== false`.
+of which fail against the old`!== false`.
 
 ### `AUDIT-F26` (medium): The grid refresh re-fetches DTOs that cannot show pipeline state — **Fixed 2026-09-04**
 
@@ -1100,40 +1272,6 @@ above it says is essential was being ignored and the selector had silently falle
 **Not verified visually.** The layout changes are mechanical and came from MUI's own codemod, but
 nothing here confirms what the affected screens now look like. `AUDIT-F9` (responsive layout is
 never verified) covers that gap and is still open.
-
----
-
-## Recently Closed Items (Reference)
-
-| ID | Summary | Closed Date | Resolution Details |
-| :--- | :--- | :--- | :--- |
-| `AUDIT-F14` | Rotating a text box made every save 400 | 2026-09-02 | `maxWidth`/`maxHeight` were `Option<i32>` and a rotated bounding box is fractional, so serde rejected the whole body. DTO rounds server-side; the rotation commit rounds the polygon before measuring it. |
-| `AUDIT-F17` | The reader refreshed for four job types, on one page | 2026-09-02 | An allow-list that had gone stale (`qa`, `qa-re-ocr`, `render`, `layout` all missing) plus a guard that dropped every page but the open one. Allow-list removed; any completion invalidates the page it names. |
-| `AUDIT-B12` | QA's verdicts never reached the rendered output | 2026-09-02 | The pipeline renders before it runs QA, and nothing re-rendered. QA now enqueues one `finalPass` render, which does not re-enter QA. |
-| `AUDIT-B13` | A page with no translatable text failed the job | 2026-09-02 | Worker raised, costing three whole-job retries and a red queue row, for pages whose only region was an SFX or an OCR misfire. Completes with a `WARNING` notification now. |
-| `AUDIT-F20` | The Queue Manager never moved active jobs up | 2026-09-02 | `PROCESSING` shared sort rank 1 with `PENDING` and `COMPLETED`, so starting work did not move a row. |
-| `AUDIT-R1` + `AUDIT-F16` | Four answers to "what rectangle does text go in?" | 2026-09-03 | The live reader used the raw box, the frontend's exports insetted 4px, and `render.py` insetted 4px then took 95%. One definition per language now, both driven by the same two settings and asserted against the same parity table. |
-| `AUDIT-F15` | A hidden element could not be reached again | 2026-09-03 | The `visible` toggle lived on the selected element's inspector and selecting meant clicking it on the canvas, so hiding was a one-way door. The layer panel lists elements now, each selectable with its own toggle. |
-| `AUDIT-F19` | Thumbnails and cards never re-polled | 2026-09-04 | Grids rendered whatever the first fetch returned; nothing subscribed to `job_update` and nothing polled, so a chapter that finished while its page was open kept showing untranslated thumbnails until a manual reload. One app-level watcher refreshes all three grids, debounced 4s so a finishing chapter's burst costs one refetch. **Closed 09-03 and reopened by `AUDIT-F26`:** the refetch fired but re-read DTOs that carried no field a pipeline run touches, so the grid still could not change. Closed again 09-04 once `PageDto` carried `lastRenderedAt` and a cache-keyed rendered thumbnail. |
-| `AUDIT-F21` | Dark mode was unpleasant to read | 2026-09-03 | Not short of contrast — it had far too much. Body text measured 19.0:1 against a 7:1 AAA threshold, which blooms glyph edges on a tablet at night, and every accent ran 84–100% saturation. Surfaces lifted, white pulled back to 13.7:1, accents desaturated at unchanged hue. Two side findings fixed with it: cards were 1.15:1 from the page behind them, and `primary` on `paper` was 3.99:1, below AA. |
-| `AUDIT-T4` | Nothing proved pagination and sort against a real database | 2026-09-03 | The filing was half wrong — `list_series` was covered; `list_chapters` and `list_pages`, the two the reader walks, had nothing. Seven tests against real Postgres, seeding rows out of order so a missing `ORDER BY` cannot pass. They found two live defects: `page * size` overflowed to a 500 (or, in release, a silent empty page), and `sortDir=DESC` sorted ascending. |
-| `AUDIT-F25` | A null `visible` was hidden on the canvas and visible in the sidebar | 2026-09-04 | `types.ts` said `boolean` for a column that is nullable, so nothing guarded a null and the four readers disagreed. The canvas, the hidden-count and the worker's renderer all treat null as hidden — the renderer decisively, since such an element is absent from the rendered PNG. Only the sidebar's row read `!== false`, so it offered "Hide element" for something already invisible and the first click did nothing. Type made honest; two readers moved to `=== true`. |
-| `AUDIT-F26` | The grid refresh re-fetched DTOs that could not show pipeline state | 2026-09-04 | Upheld, and it reopened `AUDIT-F19`. `PageDto`'s seven fields were all set at upload and `thumbnailUrl` pointed at the *original*'s thumbnail, so `/pages` returned byte-identical JSON across a translation. Rendered PNGs average ~1.7 MB so the grid could not show them directly; the render gets its own 512px WebP behind a new endpoint, and the DTO gained `lastRenderedAt` plus a `?v=`-keyed `renderedThumbnailUrl`. Generated eagerly on the render callback and lazily on a miss, which backfills the existing pages without a migration. |
-| `AUDIT-F27` | The refresh debounce assumed events arrive close together | 2026-09-04 | The 4s window only collapses events inside it, and `AUDIT-W13` made serialized translation the norm, so completions landed further apart and each fired its own full loaded-window refresh. No single window can be both live during a burst and longer than the gap between serialized pages, so the limits are now separate: the burst window plus a 30s floor on cadence. Ten pages 10s apart went from ten refreshes to at most four. |
-| `AUDIT-R7` | A rectangle arrived as a 40-vertex polygon | 2026-09-03 | The simplification tolerance was `0.002 × perimeter`, which is 0.4px on a small caption plate — below one pixel, so nothing was removed. Smaller shapes got tighter tolerances. Now an absolute 2px everywhere, plus the synthesized cover plate (28 points by construction) and the merge hull (never simplified at all). |
-| `AUDIT-R5` | Rotation turned the plate and left the glyphs level | 2026-09-03 | `rotation` was effectively always 0: the handle wrote the angle into the mask polygon and the *bounding box of that polygon* into x/y/w/h instead. So the plate tilted, the text stayed level (in the reader too — the canvas skipped `ctx.rotate` exactly when a polygon existed), and the box inflated on every turn. `rotation` is the angle now and the box is left alone. |
-| `AUDIT-B17` | `jobs.page_id` was never written | 2026-09-03 | The column existed and `Job` deserialised it, but the INSERT omitted it, so every row read back had `pageId: null` and the obvious `WHERE page_id = …` matched nothing. Fixed because `AUDIT-W13`'s gate must attribute a blocker to one page. |
-| `AUDIT-W13` | Context-injected translation ran in parallel | 2026-09-02 | Four light slots translated four consecutive pages at once, so each read a predecessor still in flight — and because the context query is `COALESCE(translated_text, text)`, that predecessor handed back its Japanese source labelled as the previous page's dialogue. Gated in the dispatcher, so no slot is held while a job waits. |
-| `AUDIT-F18` | Import Chapter kept a stale chapter number | 2026-09-02 | `useState(nextNum)` only read its argument on first mount. Re-syncs on open and asks the server for the true maximum. |
-| `AUDIT-Q1` | ~253 redundant `Objects.requireNonNull` calls | 2026-09-02 | **Obsolete.** All four named files lived under `backend/src/main/java/`, deleted by the Rust rewrite. `docker-compose.yml` builds `backend-rust/Dockerfile`. Nothing to clean up. |
-| `AUDIT-Q2` | Inline fully-qualified class names in controllers | 2026-09-02 | **Obsolete.** Same cause as `AUDIT-Q1` — `SeriesController.java` and `PageController.java` no longer exist. |
-| `AUDIT-T3` | `@WebMvcTest` cannot verify Spring Data sort composition | 2026-09-02 | **Obsolete as written** — the test classes are gone with the Java tree. The underlying gap is real against the Rust handlers and is refiled as [`AUDIT-T4`](#audit-t4-unranked-nothing-proves-pagination-and-sort-against-a-real-database). |
-| `AUDIT-R2` | Free-standing captions typeset outside their erased plate | 2026-08-29 | `free_text_box` squared a 91×293 column into 186×187, discarding erased height for artwork it did not own; 329 of 552 free-floating corpus elements had text on bare art. Fixed in `abdcce2` + worker `55dc693`. See [`LOCK-1`](#lock-1--free-standing-text-keeps-its-columns-height-it-is-never-squared-into-a-box). |
-| `AUDIT-R3` | OCR layers leaked into frontend exports | 2026-08-29 | Export filtering was gated on the `cleanScanlationView` overlay toggle, so a view setting decided a file's contents. See [`LOCK-2`](#lock-2--an-ocr-layer-never-reaches-an-export-whatever-the-reader-is-showing). |
-| `AUDIT-B10` | `listPages` sort parameter validation | 2026-08-16 | Switched to explicit `sortDir` parameter and safe `Sort.by(direction, "pageNumber")` in commit `94bd792`. See [history.md](archive/history.md). |
-| `AUDIT-B11` | Unbounded `?size=2000` pagination bypass | 2026-08-07 | Configured `spring.data.web.pageable.max-page-size: 100` in `application.yml`. See [history.md](archive/history.md). |
-| `AUDIT-F10–F12` | Pagination hook bugs (sort drift, unbounded walk, refcount) | 2026-08-07 | Fixed in `usePaginatedResource.ts` with 8 new unit tests. See [history.md](archive/history.md). |
-| `AUDIT-L1–L8` | Logging and observability audit | 2026-08-15 | Standardized trace IDs, MDC logging, log level filters, rotation caps, and Grafana dashboard. See [history.md](archive/history.md). |
 
 ---
 

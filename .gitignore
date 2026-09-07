@@ -32,6 +32,10 @@ docs/*.pdf
 corpus/.claude
 scripts/corpus
 docs/reference/mask-eval-candidates-2026-08-26.png
+docs/reference/2026-09-06-torii-comparison/*.png
+docs/reference/2026-09-06-torii-comparison/*.jpg
+docs/reference/2026-09-06-torii-comparison/*.jpeg
+docs/reference/2026-09-06-torii-comparison/*.torii
 backend/*
 
 # There is now a package.json at the repo root, holding exactly one dependency: playwright, for

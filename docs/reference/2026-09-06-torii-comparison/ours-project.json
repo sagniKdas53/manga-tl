@@ -1,0 +1,269 @@
+{
+  "pageNumber": 1,
+  "imageId": "ae4426aa-cef3-43b4-aa01-f675420b9da4",
+  "dimensions": {
+    "width": 3541,
+    "height": 2508
+  },
+  "totalCost": {
+    "estimated_cost": 0.002157,
+    "display": "$0.002157",
+    "currency": "USD",
+    "unpricedCalls": 0,
+    "complete": true
+  },
+  "exportedAt": "2026-09-06T06:45:57.910Z",
+  "layers": [
+    {
+      "id": "68eeddd7-839d-4fc2-bd00-d1e4dd5a60b2",
+      "type": "ocr",
+      "targetLanguage": null,
+      "visible": false,
+      "zOrder": 1,
+      "metadataJson": {
+        "time": "2026-09-06T06:39:17.181976297+00:00",
+        "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+        "provider": "OCR Worker",
+        "confidence": 0.4744374377605242,
+        "layer_name": "OCR",
+        "layer_order": 1,
+        "last_modified": "2026-09-06T06:39:17.182151644+00:00"
+      },
+      "elements": [
+        {
+          "id": "81a60fbd-f265-4ab3-abb2-74aef189fa00",
+          "text": "W20246858033368ょっと臭すぎない？先性つ切射礼OMOMちゃんと洗ってる～？OM~んらふo小ふふっSth",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": null,
+          "x": 1704,
+          "y": 55,
+          "maxWidth": 1798,
+          "maxHeight": 2445,
+          "rotation": null,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "isManuallyEdited": false,
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "5d1cc351-369a-412f-a9c3-d28803caff40"
+        },
+        {
+          "id": "f0413a8d-263a-4bdc-bff2-75486c7f8516",
+          "text": "心彼ーっ",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": null,
+          "x": 0,
+          "y": 55,
+          "maxWidth": 408,
+          "maxHeight": 657,
+          "rotation": null,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "isManuallyEdited": false,
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "ff2c7d09-25dc-46ab-a6cd-e401a01555dc"
+        },
+        {
+          "id": "17bcebe3-5f53-46a2-9eb0-94d367d82fba",
+          "text": "ヒv场slちyDaxys",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": null,
+          "x": 6,
+          "y": 933,
+          "maxWidth": 903,
+          "maxHeight": 1359,
+          "rotation": null,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "isManuallyEdited": false,
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "28ffbc42-8035-4964-89bd-bd4c09621210"
+        }
+      ]
+    },
+    {
+      "id": "a3e72e68-fa98-48f1-a3ee-2e0113463143",
+      "type": "translation",
+      "targetLanguage": "en",
+      "visible": true,
+      "zOrder": 2,
+      "metadataJson": {
+        "qa": {
+          "cost": {
+            "currency": "USD",
+            "breakdown": [
+              {
+                "model": "google/gemini-3.7-flash",
+                "stage": "qa",
+                "currency": "USD",
+                "provider": "openrouter",
+                "cost_source": "authoritative",
+                "duration_ms": 10726,
+                "total_tokens": 0,
+                "cached_tokens": 0,
+                "generation_id": "gen-1788676771-ah9DMoKnSVAPXtCdHJg0",
+                "prompt_tokens": 0,
+                "estimated_cost": 0,
+                "model_resolved": "google/gemini-3.7-flash",
+                "completion_tokens": 0,
+                "upstream_provider": "Google AI Studio",
+                "cache_write_tokens": 0
+              }
+            ],
+            "priced_calls": 1,
+            "cached_tokens": 0,
+            "prompt_tokens": 0,
+            "unknown_calls": 0,
+            "estimated_cost": 0,
+            "completion_tokens": 0
+          },
+          "failed": 0,
+          "passed": 0,
+          "status": "partial_pass",
+          "avg_score": 0.6,
+          "direct_fix": 1,
+          "last_qa_at": "2026-09-06T06:39:42.282861689+00:00",
+          "retries_used": 0,
+          "manual_review": 0,
+          "total_regions": 1,
+          "failed_regions": [
+            {
+              "qaScore": 0.6,
+              "qaStatus": "fixed",
+              "regionId": "5d1cc351-369a-412f-a9c3-d28803caff40",
+              "escalation": {
+                "ocrBad": true,
+                "needsReO": null,
+                "correctedSourceText": "先生のアナル ちょっと臭すぎない？ ちゃんと洗ってる〜？"
+              },
+              "qaFeedback": "The OCR missed '先生のアナル' ('Sensei's anus/asshole'), resulting in an incomplete translation that omits the subject. Furthermore, the typesetting mask is excessively large and covers the entire right half of the illustration.",
+              "bubbleReadingOrder": 1
+            }
+          ]
+        },
+        "tl": {
+          "cost": {
+            "currency": "USD",
+            "breakdown": [
+              {
+                "model": "google/gemini-3.7-flash",
+                "stage": "translation",
+                "currency": "USD",
+                "provider": "openrouter",
+                "cost_source": "authoritative",
+                "duration_ms": 3865,
+                "total_tokens": 1660,
+                "cached_tokens": 0,
+                "generation_id": "gen-1788676761-lHyuG1oMNk9m4GqEpkoh",
+                "prompt_tokens": 1356,
+                "estimated_cost": 0.002157,
+                "model_resolved": "google/gemini-3.7-flash",
+                "completion_tokens": 304,
+                "upstream_provider": "Google AI Studio",
+                "cache_write_tokens": 0
+              }
+            ],
+            "priced_calls": 1,
+            "cached_tokens": 0,
+            "prompt_tokens": 1356,
+            "unknown_calls": 0,
+            "estimated_cost": 0.002157,
+            "completion_tokens": 304
+          }
+        },
+        "time": "2026-09-06T06:39:24.494471928+00:00",
+        "model": "google/gemini-3.7-flash",
+        "provider": "openrouter",
+        "confidence": 0.85,
+        "layer_name": "Translation",
+        "layer_order": 2,
+        "last_modified": "2026-09-06 06:44:44.604925+00"
+      },
+      "elements": [
+        {
+          "id": "6c774e46-03d5-4b87-8adf-171ae09e498e",
+          "text": "Sensei, isn't your asshole a bit too smelly? Did you wash it properly~?",
+          "font": "Comic Neue",
+          "size": 24,
+          "autoSize": true,
+          "x": 1723,
+          "y": 43,
+          "maxWidth": 1818,
+          "maxHeight": 2465,
+          "rotation": null,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#b04a54",
+          "textColor": "#ffffff",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "isManuallyEdited": false,
+          "boxShape": "elliptical",
+          "maskPolygon": "[[3332,62],[3431,137],[3506,236],[3554,350],[3570,473],[3570,2031],[3554,2154],[3506,2268],[3431,2367],[3332,2442],[3218,2490],[3095,2506],[1884,2506],[1761,2490],[1647,2442],[1548,2367],[1473,2268],[1425,2154],[1409,2031],[1409,473],[1425,350],[1473,236],[1548,137],[1647,62],[1761,14],[1884,-2],[3095,-2],[3218,14]]",
+          "regionId": "5d1cc351-369a-412f-a9c3-d28803caff40"
+        },
+        {
+          "id": "2582075e-a828-433a-bbb4-e25093e4a92f",
+          "text": "",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 0,
+          "y": 45,
+          "maxWidth": 428,
+          "maxHeight": 677,
+          "rotation": null,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#555674",
+          "textColor": "#ffffff",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "isManuallyEdited": true,
+          "boxShape": "rectangular",
+          "maskPolygon": "[[428,14],[450,31],[467,53],[477,78],[481,106],[481,679],[477,707],[467,732],[450,754],[428,771],[403,781],[375,785],[106,785],[78,781],[53,771],[31,754],[14,732],[4,707],[0,679],[0,106],[4,78],[14,53],[31,31],[53,14],[78,4],[106,0],[375,0],[403,4]]",
+          "regionId": "ff2c7d09-25dc-46ab-a6cd-e401a01555dc"
+        },
+        {
+          "id": "c5f0e258-21b1-44f8-8929-911985430181",
+          "text": "",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 0,
+          "y": 923,
+          "maxWidth": 923,
+          "maxHeight": 1379,
+          "rotation": null,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#b04a54",
+          "textColor": "#ffffff",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "isManuallyEdited": true,
+          "boxShape": "elliptical",
+          "maskPolygon": "[[954,802],[1003,839],[1040,888],[1064,945],[1072,1006],[1072,2219],[1064,2280],[1040,2337],[1003,2386],[954,2423],[897,2447],[836,2455],[236,2455],[175,2447],[118,2423],[69,2386],[32,2337],[8,2280],[0,2219],[0,1006],[8,945],[32,888],[69,839],[118,802],[175,778],[236,770],[836,770],[897,778]]",
+          "regionId": "28ffbc42-8035-4964-89bd-bd4c09621210"
+        }
+      ]
+    }
+  ]
+}
