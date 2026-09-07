@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **manga-library** (11167 symbols, 17169 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **manga-library** (11848 symbols, 18514 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -58,3 +58,34 @@ Whenever you modify the backend API (e.g. creating/updating Controllers, DTOs, o
 1. Ensure the backend Docker container is running (`docker compose up backend`).
 2. Run `npm run generate-api` from the `frontend` directory.
 3. This will pull the live OpenAPI JSON spec from `http://localhost:8080/tlhub/v3/api-docs` and automatically regenerate `frontend/src/api/schema.d.ts`.
+
+## Python Environment & Package Management Standard
+
+The `worker/` service is built on Python. To prevent host environment contamination, dependency conflicts, and disk bloat, all agents and sub-agents **MUST** adhere to the following rules:
+
+### Never Do
+- **NEVER** run `pip install` or `python -m pip install` globally, with `sudo`, or with `--user`.
+- **NEVER** install packages into system Python (`/usr/lib/python*`) or user directories (`~/.local/lib/python*`).
+- **NEVER** invoke `pipx`, `pipenv`, or `virtualenv` — `uv` is the standard across this machine.
+
+### Always Do
+- **Dedicated Root Virtual Environment**: All worker development, linting, type-checking, and testing MUST run inside the project root `.venv` (`./.venv`, Python 3.13.12).
+- **Dependency Management**:
+  - Always update `worker/requirements.txt` (or `pyproject.toml`) first.
+  - Install dependencies into the `.venv` using `uv`:
+    ```bash
+    uv pip install -r worker/requirements.txt --python ./.venv/bin/python
+    ```
+- **CLI Tools & Linters**:
+  - Use `uvx` for ephemeral, sandboxed tool runs (`uvx ruff check worker/`).
+  - Or use the binaries installed inside the root venv (`./.venv/bin/ruff`, `./.venv/bin/pytest`).
+- **Gates**:
+  - From the `worker/` directory:
+    ```bash
+    cd worker
+    ../.venv/bin/python -m ruff check --fix . && ../.venv/bin/python -m ruff format .
+    ../.venv/bin/python -m ruff check .
+    ../.venv/bin/python -m ruff format --check .
+    ../.venv/bin/python -m pyright .
+    ../.venv/bin/python -m pytest -q
+    ```

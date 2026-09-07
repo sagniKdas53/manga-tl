@@ -7,47 +7,11 @@
       "skillPath": "cursor-team-kit/skills/deslop/SKILL.md",
       "computedHash": "8883a7d459c07a0b2ee06972e79baa634009aa3bab969a6650acbefac394ad41"
     },
-    "docker-compose-orchestration": {
-      "source": "manutej/luxor-claude-marketplace",
-      "sourceType": "github",
-      "skillPath": "plugins/luxor-devops-suite/skills/docker-compose-orchestration/SKILL.md",
-      "computedHash": "f61af99ed5390638b98d40124bcb47837a6a2d8adcb17343a5be525989494eef"
-    },
-    "find-skills": {
-      "source": "vercel-labs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/find-skills/SKILL.md",
-      "computedHash": "b146008599c31057cef1c145774cea5d5afb30e8f43fa802e47a4b461419aaaf"
-    },
-    "java-springboot": {
-      "source": "github/awesome-copilot",
-      "sourceType": "github",
-      "skillPath": "skills/java-springboot/SKILL.md",
-      "computedHash": "f1b9c6b1277178fc33e5a612761c1cd1cf6ab5f946d05d69d52026d142c0a0c1"
-    },
     "material-ui-theming": {
       "source": "mui/material-ui",
       "sourceType": "github",
       "skillPath": "skills/material-ui-theming/SKILL.md",
       "computedHash": "06f09d0152bf43a8f64d170a67418e7f33ac265bc995e2fed47adb5bcc979a54"
-    },
-    "multi-stage-dockerfile": {
-      "source": "github/awesome-copilot",
-      "sourceType": "github",
-      "skillPath": "skills/multi-stage-dockerfile/SKILL.md",
-      "computedHash": "698bf93a84dae18fd7bd0b1d35c21427307fde78fbdf4624be9726f5f98189ca"
-    },
-    "thermo-nuclear-code-quality-review": {
-      "source": "cursor/plugins",
-      "sourceType": "github",
-      "skillPath": "cursor-team-kit/skills/thermo-nuclear-code-quality-review/SKILL.md",
-      "computedHash": "9052b01b46b1d8dbf94c45f9313ec1983443f9a460e83d49cdc7fe0f640ca476"
-    },
-    "unslop": {
-      "source": "cursor/plugins",
-      "sourceType": "github",
-      "skillPath": "pstack/skills/unslop/SKILL.md",
-      "computedHash": "3dfc2afeda677e12c6065497a40df7d895859de1c7d1cffb899b1559d129fe4f"
     },
     "webapp-testing": {
       "source": "anthropics/skills",

@@ -1,6 +1,6 @@
 # Issues & Technical Debt
 
-> **Standing: 104 filed, 83 closed, 21 open.** Six items were added 2026-09-03 from the Codex
+> **Standing: 107 filed, 84 closed, 23 open.** Six items were added 2026-09-03 from the Codex
 > review of the fix stack — `AUDIT-R13`, `AUDIT-R14`, `AUDIT-F25`, `AUDIT-F26`, `AUDIT-F27` and
 > `AUDIT-T5`, all in [Open Review Findings](#open-review-findings-prs-118-124-2026-09-03).
 > `AUDIT-T5`, `AUDIT-F25`, `AUDIT-F26` and `AUDIT-F27` are now fixed; `AUDIT-R13` and
@@ -9,6 +9,13 @@
 > **`AUDIT-F26` was upheld, and it reopened `AUDIT-F19`.** The refetch fired correctly and could
 > not change anything: the page DTO carried no field a pipeline run touches. Both are fixed
 > together 2026-09-04 — see `AUDIT-F26`.
+>
+> **Three items were added 2026-09-05** from the renderer text-fitting handoff, all in
+> [Layout quality](#5-layout-quality): `AUDIT-R15`, `AUDIT-R16` and `AUDIT-R17`. The handoff's
+> headline — a typesetting test failing on `main` — **did not reproduce**, and neither did two of
+> its three bugs. `AUDIT-R15` is what was actually underneath the failure, and it is the more
+> serious finding: the same call returns 48, 56 or 75px depending on which font files the host
+> happens to have. `AUDIT-R17` records the rejected claim so it is not re-filed.
 >
 > Re-audited 2026-09-02 against the field report in
 > `new issues.pdf`. Three previously-open items were closed as *obsolete* — they described Java
@@ -66,6 +73,7 @@ fill the bubble" partly overlaps `AUDIT-R1`, the 9.5% renderer disagreement.
 That is the re-orientation: **stop treating these as twenty-four bugs and close the three seams.**
 
 ---
+
 ## Locked Decisions
 
 Choices taken deliberately, against a plausible-looking alternative, with the measurement that
@@ -73,7 +81,7 @@ decided them. **Each one has been reverted or nearly reverted at least once beca
 wrong without this context.** If you are about to change something here, the burden is a new
 measurement, not a tidier-looking implementation.
 
-### `LOCK-1` — Free-standing text keeps its column's height. It is never squared into a box.
+### `LOCK-1` — Free-standing text keeps its column's height. It is never squared into a box
 
 **Decided 2026-08-29 (Sagnik). Do not revert without re-measuring.**
 
@@ -119,7 +127,7 @@ Guarded by `keeps_the_column_height_instead_of_squaring_it_away`,
 `does_not_widen_a_column_that_clears_the_readable_floor` and
 `caps_the_widening_of_an_extremely_narrow_column` in `coordinator.rs`.
 
-### `LOCK-2` — An OCR layer never reaches an export, whatever the reader is showing.
+### `LOCK-2` — An OCR layer never reaches an export, whatever the reader is showing
 
 **Decided 2026-08-29 (Sagnik).**
 
@@ -138,6 +146,7 @@ clean and only the frontend's own exports disagreed.
 Guarded by the OCR-layer assertions in `ReaderExportZip.test.tsx`.
 
 ---
+
 ## Open Issues Summary
 
 Severity is "how much does this cost the output", not "how hard is it to fix".
@@ -194,6 +203,9 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R9`](#audit-r9-medium-neighbouring-text-boxes-are-allowed-to-overlap) | Medium | Render | Nothing checks box-vs-box collision at layout time | Design needed |
 | [`AUDIT-R10`](#audit-r10-medium-overlapping-bubbles-are-erased-as-one) | Medium | Worker | Two touching balloons merge into one plate | Design needed |
 | [`AUDIT-R12`](#audit-r12-medium-sfx-appear-to-shrink-neighbouring-balloons) | Medium | Worker | Hypothesis: an SFX overlapping a balloon truncates its mask | Needs measurement |
+| [`AUDIT-R15`](#audit-r15-high-the-typeset-size-depends-on-which-fonts-the-host-happens-to-have) | High | Render/Testing | The same call returns 48, 56 or 75px depending on which font files the host has | Ready |
+| [`AUDIT-R16`](#audit-r16-medium-a-narrow-box-is-capped-by-its-widest-unbreakable-token) | Medium | Render | Portrait balloons: the type is width-bound and the spare height cannot be spent | Measured; needs a decision |
+| [`AUDIT-R17`](#audit-r17-unranked-shaperectangular-is-not-ignored) | Unranked | Render | Reported as an ignored API parameter; the branch exists and the contract holds end to end | **Closed on assessment 2026-09-05** |
 
 ### Cosmetic & long tail
 
@@ -208,6 +220,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-T4`](#audit-t4-unranked-nothing-proves-pagination-and-sort-against-a-real-database) | Unranked | Testing | Successor to the closed `AUDIT-T3`; the tests found two live defects | **Fixed 2026-09-03** |
 
 ---
+
 ## 1. Seam 1 — the editor and the renderer disagree about what an element is
 
 ### `AUDIT-F14` (high): Rotating a box makes every save fail
@@ -540,6 +553,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   closed — a better fill on a page whose edits never render is wasted.
 
 ---
+
 ## 3. Seam 3 — the UI does not believe the backend
 
 ### `AUDIT-F17` (high): The reader refreshes for four job types, on one page
@@ -844,6 +858,144 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Next Step:** measure before fixing. On the corpus, compare balloon mask area with and without an
   overlapping SFX region present. Two hypotheses, one cheap query.
 
+### `AUDIT-R15` (high): The typeset size depends on which fonts the host happens to have
+
+- **Locations:** `worker/src/worker/handlers/render.py:88-163` (`load_font`), `:21` (`FONT_REGISTRY`),
+  `:78` (`DEFAULT_FONT_FALLBACK_ORDER`), `worker/Dockerfile:17` (`fonts-comic-neue`),
+  `backend-rust/src/jobs/coordinator.rs:2002` (the pipeline hardcodes `'Comic Neue'`).
+- **How it surfaced.** A handoff dated 2026-09-05 reported
+  `test_grows_past_the_old_width_over_three_cap_in_a_narrow_tall_box` failing on `main` at
+  `worker@a148136`, the fitter returning 48px where the test asserts `> 48`. **It does not fail
+  here.** The same commit, the same tree, the same call — `fit_text_in_box_py("Big bro...",
+  max_width=145, max_height=259, font_name="Comic Neue")`:
+
+  | environment | font actually loaded | returns |
+  | :--- | :--- | :--- |
+  | worker container (`fonts-comic-neue` present) | `ComicNeue-Regular.otf` | **75px** |
+  | this laptop (no Comic Neue) | `DejaVuSans.ttf` | **56px** |
+  | the handoff's container | neither; unidentified | **48px** |
+
+  `pytest -q` is 473 passed, 0 failed in-tree, and 473 is the handoff's own total. The tree is not
+  in dispute; the fonts are.
+- **The cause is `load_font`'s silent fallback.** It tries the registry entry for the requested
+  family, then every family in `DEFAULT_FONT_FALLBACK_ORDER`, then DejaVu and Liberation by absolute
+  path, then a suffix search — and returns the first file that exists, telling no one which tier
+  answered. `FONT_REGISTRY["Comic Neue"]` points at
+  `/usr/share/fonts/opentype/comic-neue/ComicNeue-Regular.otf`, which the Dockerfile installs and a
+  dev box does not have.
+- **The metrics are not close enough for that to be harmless.** `"bro..."` measures **91.0px** at
+  48px in Comic Neue and **123.5px** in DejaVu Sans — 36% wider. The size search is bounded by
+  `widest_line(res, f_size) <= max_width` (`render.py:878`), so that one difference is the whole of
+  the 75-vs-56 spread. Every element the pipeline creates asks for `'Comic Neue'` by name, so this
+  is not an exotic path — it is the only path.
+- **What breaks in production, not in the test.** A deployment whose image did not get
+  `fonts-comic-neue`, or a base-image bump that moves the path, keeps rendering: silently, at a
+  different typeface, at a different size, with no error and no log line. The only signal is that
+  the lettering looks wrong, which is indistinguishable from every other complaint in this file.
+- **And the local gate is a false green.** The typesetting suite passes here *because* the laptop
+  lacks the production font. Every absolute-pixel assertion in `test_typesetting.py` measures DejaVu
+  locally and Comic Neue in the container, so a metric regression cannot be caught where it is
+  introduced. This is the same shape as [`AUDIT-T5`](#audit-t5-medium-nothing-typechecks-the-frontend):
+  a check that exists and cannot see the thing it is for.
+- **The handoff's stated mechanism is not the one.** It attributes the 48 to the elliptical wrap
+  being applied to a rectangular box — see [`AUDIT-R17`](#audit-r17-unranked-shaperectangular-is-not-ignored) —
+  and reports `"bro..."` at 48px Comic Neue as 144.0px. Comic Neue gives 91.0px. 144.0px is what
+  DejaVu Sans gives at **56**px, which is a good indication that the measurement was taken through
+  the same fallback that produced the failure.
+- **Next Step**, in order:
+  1. **Make the fallback loud.** `load_font` returns which path it resolved; the render handler logs
+     once per job when the family it asked for was not the family it got. A miss on the pipeline's
+     own hardcoded default is a deployment fault, not a styling preference.
+  2. **Give the tests a font they own.** Vendor one OFL face into `tests/fixtures/` and have the
+     typesetting tests request it by path, so the pixel assertions pin metrics instead of pinning
+     the host. Keep one separate test that asserts `FONT_REGISTRY["Comic Neue"]` resolves to a real
+     file — skipped outside the container — because that is the check that protects production, and
+     it is a different check from the fitter's arithmetic.
+  3. **Then** revisit the handoff's failing assertion. There is nothing to fix in the fitter for it.
+
+### `AUDIT-R16` (medium): A narrow box is capped by its widest unbreakable token
+
+- **Report:** "some text bubbles are designed for vertical jp ... when putting in the horizontal en
+  text it's have wide gaps in top and bottom but the text is adjusted to be of the same width and
+  thus very small."
+- **Confirmed, and it is not the size search giving up.** Measured in the worker container against
+  real Comic Neue, at constant box area (~37,500px²) so only the aspect changes:
+
+  | text | box | aspect | size | height used | width used |
+  | :--- | :--- | ---: | ---: | ---: | ---: |
+  | `Big bro...` | 100×375 | 0.27 | **51px** | **33%** | 98% |
+  | `Big bro...` | 145×259 | 0.56 | 75px | 69% | 99% |
+  | `Big bro...` | 190×197 | 0.96 | 82px | 100% | 84% |
+  | `Big bro...` | 375×100 | 3.75 | **83px** | 100% | 81% |
+
+  The portrait extreme sets the same words **39% smaller** than the landscape extreme and leaves
+  two-thirds of the balloon empty. That is the screenshot.
+- **It is a short-text problem, which is why it reads as random.** The same sweep with a full line of
+  dialogue is flat across every aspect — 32 / 32 / 31 / 32 / 30px — because once there are enough
+  tokens to pack, the narrow box just uses more lines and the height it has. The loss appears only
+  when one long token has to fit a width that no wrapping can help with.
+- **The fitter is already at the ceiling.** The size it picks equals, exactly, the largest size at
+  which the longest single token still fits `max_width`:
+
+  | case | fitter picks | widest-token ceiling |
+  | :--- | ---: | ---: |
+  | `Big bro...` in 100×375 | 51px | 51px |
+  | `Big bro...` in 145×259 | 75px | 75px |
+  | `I can't believe you did that!` in 100×375 | 44px | 43px — hyphenation beat it by one |
+
+  So there is no slack to recover in the search, and the idle height is not convertible: horizontal
+  text can only spend height by growing, and growing spends width it does not have. **The remedy is
+  geometric, and two of the three geometric moves are already closed:** widening a free-standing
+  column is [`LOCK-1`](#lock-1--free-standing-text-keeps-its-columns-height-it-is-never-squared-into-a-box),
+  decided against with a corpus measurement, and widening a balloon past its own outline is what the
+  mask exists to prevent.
+- **The one lever that is open is the token itself.** `"bro..."` is unbreakable because the ellipsis
+  is glued to the word and `hyphen_positions` has no legal point inside it. Allowing a break between
+  a word and its trailing punctuation — a leading `...` on the next line, which comics set routinely:
+
+  | text | width | now | with a punctuation break | gain |
+  | :--- | ---: | ---: | ---: | ---: |
+  | `Big bro...` | 100 | 51px | 68px | **+33%** |
+  | `Big bro...` | 145 | 75px | 99px | **+32%** |
+  | `What?! No way!!` | 120 | 40px | 54px | **+35%** |
+  | `Stop it...!` | 110 | 57px | 57px | +0% |
+
+  A third larger on the cases that hurt, and correctly inert on the case where the punctuation is not
+  the binding token. It is a change to `break_word_to_width`/`hyphen_positions`, not to the search.
+- **Next Step:** decide between the punctuation break above (small, measured, bounded) and doing
+  nothing. Do **not** reach for widening the box; that argument has been had. If the punctuation
+  break lands, `broke_a_word` must keep treating a punctuation split as clean — it currently
+  compares against `clean_text.split()`, so a split token would read as mangled and the tier would
+  reject the very layout it just enabled.
+- **Relationship:** this is the same family as [`AUDIT-R8`](#audit-r8-medium-text-under-fills-and-over-runs-its-balloon)
+  (under-filled balloons) and does not overlap [`AUDIT-R6`](#audit-r6-medium-there-is-no-vertical-text-mode);
+  setting the English vertically would remove the problem and is a different feature.
+
+### `AUDIT-R17` (unranked): `shape="rectangular"` is not ignored
+
+- **Reported** in the 2026-09-05 handoff as a broken API contract: `fit_text_in_box_py` allegedly has
+  no `rectangular` branch, so the parameter is silently treated as an ellipse.
+- **It has one, and it runs first.** `render.py:649` — `if shape != "elliptical":` — is the plain
+  word-wrap path, ahead of the elliptical wrap at `:680`. A caller passing `"rectangular"` gets
+  wrapped to `max_width` with no narrowing. Measured over 150 text/box combinations in the worker
+  container, **36 diverge** — always with the elliptical result smaller, which is the narrowing doing
+  its job (`Big bro...` in 145×375: 75px rectangular, 71px elliptical). A dead branch cannot produce
+  that.
+- **The contract holds end to end, and the vocabulary matches at every hop.** The pipeline's element
+  INSERT writes `"elliptical"` for a `speech` region and `"rectangular"` otherwise
+  (`coordinator.rs:2013-2017`); the column is `layer_elements.box_shape` (`database/init.sql:214`);
+  the DTO is `boxShape` (`models.rs:250`, `schema.d.ts:1038`); the editor's selector and both canvas
+  paths compare against `"elliptical"`; and `render.py:1265` maps it through unchanged. There is no
+  `"ellipse"`/`"elliptical"` mismatch anywhere in the stack.
+- **What is true, and is worth knowing** — for a real balloon neither shape branch runs at all. The
+  polygon-aware wrap at `:520` takes priority whenever a mask spans the box, which is every detected
+  balloon. `shape` decides the wrap only for elements with no usable mask. That is the correct
+  precedence — the outline is better information than an ellipse fitted to its bounding box — but it
+  does mean the elliptical branch is close to dead code in production, and anyone measuring its
+  behaviour on real pages will find it never fired.
+- **Closed on assessment 2026-09-05.** Filed so the claim is not re-opened from the handoff. The
+  failure that motivated it is [`AUDIT-R15`](#audit-r15-high-the-typeset-size-depends-on-which-fonts-the-host-happens-to-have).
+
 ---
 
 ## 6. Cosmetic & long tail
@@ -967,6 +1119,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   failed" is a wider change than this item, and is worth its own pass.
 
 ---
+
 ## Open Review Findings (PRs #118-#124, 2026-09-03)
 
 The Codex review of the 2026-09-02 fix stack raised fifteen findings. The six on PRs #115 and #116
@@ -1012,7 +1165,7 @@ Fixed by making the type honest (`boolean | null`) and moving the row and the ch
 falsy checks, so this is two lines rather than a sweep. The checkbox change also stops React
 warning about a `checked={null}` uncontrolled input. Guarded by three tests under
 `a null \`visible\` is hidden, the same as everywhere else` in `ReaderRightSidebar.test.tsx`, all
-of which fail against the old `!== false`.
+of which fail against the old`!== false`.
 
 ### `AUDIT-F26` (medium): The grid refresh re-fetches DTOs that cannot show pipeline state — **Fixed 2026-09-04**
 
