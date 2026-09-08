@@ -1,12 +1,12 @@
 # Issues & Technical Debt
 
-> **Standing: 113 filed, 85 closed, 28 open.** Six review items were added 2026-09-03
+> **Standing: 114 filed, 85 closed, 29 open.** Six review items were added 2026-09-03
 > (`AUDIT-R13`, `AUDIT-R14`, `AUDIT-F25`..`F27`, `AUDIT-T5`). Three renderer items were added 2026-09-05
 > (`AUDIT-R15`..`R17`). Three hardening items are folded in from backlog notes: `AUDIT-B19` (JWT signing error
 > masking), `AUDIT-B20` (systemic DB `unwrap_or_default`), and `AUDIT-F28` (settings catalog retry gate).
 > The PR #115–#138 review adds `AUDIT-R18` (export geometry), `AUDIT-B21` (translation retry callback),
-> and `AUDIT-B22` (concurrent page ordering); it also confirms and raises the priority of `AUDIT-B15`
-> and `AUDIT-B18`.
+> `AUDIT-B22` (concurrent page ordering), and `AUDIT-B23` (dispatcher 429 cooldown never escalates); it
+> also confirms and raises the priority of `AUDIT-B15` and `AUDIT-B18`.
 >
 > `AUDIT-B14` (chapter page delete renumbering/parking) was closed 2026-09-04 in PR #136 and PR #137.
 > `AUDIT-F26` was upheld, and it reopened `AUDIT-F19`; both were closed together 2026-09-04 once `PageDto`
@@ -181,6 +181,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-B13`](#audit-b13-medium-a-page-with-no-translatable-text-fails-the-job) | Medium | Worker/Backend | An untranslatable page raises and burns 3 attempts; it should warn | **Fixed 2026-09-02** |
 | [`AUDIT-B14`](#audit-b14-medium-delete-then-re-add-leaves-a-chapter-inconsistent) | Medium | Backend/Frontend | Page count stale, old slot held, reader hangs on the loading screen | **Fixed 2026-09-04** |
 | [`AUDIT-B22`](#audit-b22-medium-page-ordering-is-validated-before-the-chapter-is-locked) | Medium | Backend | Reorder and move validate outside their transaction, so concurrent page changes can invalidate the result | Ready |
+| [`AUDIT-B23`](#audit-b23-medium-the-dispatcher-429-cooldown-never-escalates-under-sustained-saturation) | Medium | Backend | `consecutive_429s` is cleared on every healthy `/capabilities` probe, so the exponential cooldown never advances past its 10s base | Ready |
 | [`AUDIT-W3`](#audit-w3-medium-cooldowns-and-lock-waits-burn-a-job-slot) | Medium | Worker | Cooldowns and lock waits block a concurrency slot doing nothing | Deprioritized; needs concurrency test harness |
 | [`AUDIT-F23`](#audit-f23-medium-no-paint-region-redo-and-no-batch-redo) | Medium | Frontend | Redo is per-region and free-form only; no painted region, no batch | Feature |
 | [`AUDIT-F22`](#audit-f22-medium-no-re-run-entire-chapter-action) | Medium | Frontend/Backend | Only "Force Re-export" / "Clear Exports"; no pipeline re-run | Feature |
@@ -503,8 +504,8 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   because each looks like the obvious culprit:
   1. `render.py:1055-1057` skips an element with no text *before* it draws anything, so the worker
      never paints a plate with nothing on it.
-  2. `paintLayerMask` (`frontend/src/utils/maskPaint.ts:60-72`) already refuses both an invisible
-     element and a blank-text one, with a corpus measurement in the comment.
+  2. `paintLayerMask` (`frontend/src/utils/maskPaint.ts:104`) already refuses an invisible element
+     and — unless `isManuallyEdited` — a blank-text one, with a corpus measurement in the comment.
   3. The reader's SVG overlay filters on `element.visible` too.
 
   The renderers were right. **The pipeline order was wrong:** `translation → render → qa`. QA is
@@ -839,6 +840,26 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Fix:** begin one transaction before reading either page set, lock all pages in that chapter with
   `FOR UPDATE`, validate under that lock, then renumber and recalculate the cover before commit.
   Cover reorder-vs-insert and move-vs-delete with two independent database connections.
+
+### `AUDIT-B23` (medium): The dispatcher 429 cooldown never escalates under sustained saturation
+
+- **Locations:** `backend-rust/src/jobs/dispatcher.rs` — `run_cycle` capabilities probe (the
+  `consecutive_429s.remove(url)` on a 200 response) and the `429` arm of `dispatch_slot`
+  (`cooldown_secs = COOLDOWN_BASE_SECS << (consecutive - 1).min(6)`).
+- **Problem:** the 429 arm is meant to back off exponentially — 10s base, doubling to a 60s cap —
+  keyed on a per-worker `consecutive_429s` streak. But `run_cycle` clears that streak for any
+  worker whose `/capabilities` probe returns 200, and a saturated worker (all job slots full)
+  still answers `/capabilities` fine. After each cooldown expires the next cycle probes
+  `/capabilities`, gets a 200, and resets the count to zero, so the following job submission that
+  draws another 429 is always counted as `consecutive = 1` and gets only the 10s base. The
+  doubling path is reachable only when `/capabilities` itself keeps failing, which is a
+  worker-down case, not saturation.
+- **Reproduction:** hold a worker at capacity so every `POST /jobs` returns 429 while
+  `/capabilities` stays 200. Observe the log line `returned 429 (consecutive=1). Cooling down for
+  10s.` on every cycle — it never reads `consecutive=2` or `20s`.
+- **Fix:** reset `consecutive_429s` only when a job submission actually succeeds, not on a
+  capabilities probe. The probe may still clear `cooldown_until`; the streak should persist until
+  the worker accepts work.
 
 ### `AUDIT-B19` (low): JWT signing failure reported as successful login
 

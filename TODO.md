@@ -62,7 +62,7 @@ touches nothing else, so none of D1/D6/D7/D8/D10/D14/D15/D16 are recoverable by 
 
 ### 2. Audit backlog — re-oriented 2026-09-02
 
-Full detail in [docs/issues.md](docs/issues.md). **110 filed, 85 closed, 25 open.** The 2026-09-02
+Full detail in [docs/issues.md](docs/issues.md). **114 filed, 85 closed, 29 open.** The 2026-09-02
 field report added 29 items; `AUDIT-Q1`, `AUDIT-Q2` and `AUDIT-T3` closed as obsolete because they
 named Java files the Rust rewrite deleted. Review and hardening passes added `AUDIT-R13`..`R17`,
 `AUDIT-F25`..`F28`, `AUDIT-T5`, and `AUDIT-B19`..`B20`.

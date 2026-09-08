@@ -10,7 +10,7 @@ numbers are intentionally omitted because this orchestration file changes freque
 The pipeline executes as an asynchronous callback chain over Redis job queues. When a worker completes a phase and sends its status callback to `/api/internal/jobs/{id}/status`, the coordinator persists the output and enqueues the subsequent phase.
 
 1. **panel-detection** (`start_pipeline`): Identifies panel boundaries on the manga page. If panels already exist in the database, this step is skipped and the pipeline begins at `ocr`.
-2. **ocr** (`handle_panel_detection_callback`): Extracts text regions, polygon contours, and raw source text.
+2. **ocr** (`handle_panel_callback`): Extracts text regions, polygon contours, and raw source text.
 3. **layout** (`handle_ocr_callback`): Classifies region types (`speech`, `narration`, `thought`, `sfx`) and groups related dialogue bubbles.
 4. **translation** (`handle_layout_callback`): Translates text regions via configured LLMs. Dispatcher enforces sequential translation when `use_context_memory` is enabled (`AUDIT-W13`).
 5. **render** (`handle_translation_callback`): Typesets and inpaints translated text into speech bubbles and caption plates on the page image.
@@ -25,7 +25,7 @@ The pipeline executes as an asynchronous callback chain over Redis job queues. W
 
 QA evaluates the rendered output and can request targeted retries.
 
-### Modes (`worker/src/worker/handlers/qa.py:70`)
+### Modes (`worker/src/worker/handlers/qa.py`)
 
 - **llm**: Text-only semantic review.
 - **vlm**: Visual inspection of the rendered image.

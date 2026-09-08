@@ -31,7 +31,7 @@ If documentation contradicts the code, the code is authoritative. File discrepan
 
 ## Live Work & Tracking
 
-- [`issues.md`](issues.md): Defect register and audit tracker. 110 filed, 85 closed, 25 open.
+- [`issues.md`](issues.md): Defect register and audit tracker. 114 filed, 85 closed, 29 open.
 - [`render_quality_gap_2026-08-05.md`](render_quality_gap_2026-08-05.md): Benchmark gap analysis against human scanlation and commercial tools (defects `D1`–`D16`).
 - [`canvas_render_fixes_2026-09-06.md`](canvas_render_fixes_2026-09-06.md): Editor and renderer geometry fixes.
 - [`PLAN_ocr-provenance_2026-08-30.md`](PLAN_ocr-provenance_2026-08-30.md): Region model provenance tracking plan.

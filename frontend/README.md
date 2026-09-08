@@ -13,7 +13,7 @@ Web application for Manga Library, providing the interactive manga reader, canva
 
 ## Architecture & Key Components
 
-1. **Reader & Canvas Editor** (`src/components/Reader.tsx`, `Canvas.tsx`):
+1. **Reader & Canvas Editor** (`src/components/Reader.tsx`):
    - SVG/HTML5 canvas rendering of manga pages, masks, OCR bounding polygons, and translated text.
    - Interactive editing: text-box dragging, rotation, vertex reshaping, font sizing, and visibility toggling.
    - Layer inspection and hierarchy panel (`ReaderRightSidebar.tsx`).
@@ -28,7 +28,7 @@ Web application for Manga Library, providing the interactive manga reader, canva
 ## Development Workflow
 
 ### Requirements
-- Node.js 20+
+- Node.js 20.19+ or 22.12+ (Vite 8 engine requirement)
 - Running backend instance (default `http://localhost:8080`)
 
 ### Running Locally
@@ -55,6 +55,9 @@ npm run generate-api
 ### Verification & Gates
 
 ```bash
+# Prettier formatting (CI runs this first)
+npm run format:check
+
 # Typecheck project references (tsconfig.app.json + tsconfig.node.json)
 npm run typecheck
 

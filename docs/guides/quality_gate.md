@@ -38,21 +38,25 @@ python3 ../scripts/diff_routes.py
 ## 2. Frontend (React / TypeScript) — `cd frontend`
 
 ```bash
-# 1. Typecheck project references (AUDIT-T5)
+# 1. Verify formatting (Prettier) — CI runs this first
+npm run format:check
+
+# 2. Typecheck project references (AUDIT-T5)
 npm run typecheck
 
-# 2. Linting (ESLint)
+# 3. Linting (ESLint)
 npm run lint
 
-# 3. Unit test suite
+# 4. Unit test suite
 npm run test:coverage
 
-# 4. Production bundle build
+# 5. Production bundle build
 npm run build
 ```
 
 | Tool | Detection Scope | Command |
 |---|---|---|
+| **prettier** | Formatting drift | `npm run format:check` |
 | **tsc** | TypeScript compiler check across project references | `npm run typecheck` |
 | **eslint** | Code style, React hook dependencies, syntax | `npm run lint` |
 | **vitest** | Component and utility unit tests with coverage | `npm run test:coverage` |
