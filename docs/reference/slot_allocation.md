@@ -49,7 +49,7 @@ graph TD
     CheckPause -->|No| ProbeCap[GET /capabilities on workers]
     ProbeCap --> CheckHeavy{Heavy slots available?}
     CheckHeavy -->|Yes| PopHeavy[Pop from HEAVY_QUEUES]
-    PopHeavy --> PostHeavy[POST /jobs to worker]
+    PopHeavy --> PostHeavy[POST /api/v1/jobs/submit]
     PostHeavy --> Check429H{429?}
     Check429H -->|Yes| CooldownH[Apply backoff cooldown]
     Check429H -->|No| NextStep[Continue]
@@ -59,7 +59,7 @@ graph TD
     CheckLight -->|Yes| CheckSeq{Translating? Check AUDIT-W13}
     CheckSeq -->|Blocker in flight| Repush[Re-push to back of queue]
     CheckSeq -->|Clear| PopLight[Pop from LIGHT_QUEUES]
-    PopLight --> PostLight[POST /jobs to worker]
+    PopLight --> PostLight[POST /api/v1/jobs/submit]
     PostLight --> Check429L{429?}
     Check429L -->|Yes| CooldownL[Apply backoff cooldown]
     Check429L -->|No| End
@@ -71,4 +71,4 @@ graph TD
 1. **Independent Slot Checks**: The dispatcher queries worker capacity via `GET /capabilities` and checks heavy and light slot counts independently.
 2. **Context Serialization (`AUDIT-W13`)**: Before dispatching a job from `queue:translation`, `earlier_page_is_still_translating` verifies whether an earlier page in the same chapter is currently in-flight. If so, the job is pushed to the back of the queue and dispatch pauses for that queue to avoid polluting translation context.
 3. **Queue Re-push on Delay (`AUDIT-P3`)**: Undispatchable jobs are pushed back to their originating queue without blocking independent queues.
-4. **429 Backoff**: When a worker answers `POST /jobs` with HTTP 429, the dispatcher sets a per-worker cooldown starting at `COOLDOWN_BASE_SECS` (10s). Consecutive 429s *without an intervening successful `/capabilities` probe* double the cooldown toward a 60s cap (`10 << (consecutive - 1).min(6)`). In practice a saturated worker whose `/capabilities` still returns 200 has its `consecutive_429s` streak cleared by `run_cycle` each cycle, so sustained saturation currently yields a flat 10s cooldown — tracked as `AUDIT-B23`.
+4. **429 Backoff**: When a worker answers `POST /api/v1/jobs/submit` with HTTP 429, the dispatcher sets a per-worker cooldown starting at `COOLDOWN_BASE_SECS` (10s). Consecutive 429s *without an intervening successful `/capabilities` probe* double the cooldown toward a 60s cap (`10 << (consecutive - 1).min(6)`). In practice a saturated worker whose `/capabilities` still returns 200 has its `consecutive_429s` streak cleared by `run_cycle` each cycle, so sustained saturation currently yields a flat 10s cooldown — tracked as `AUDIT-B23`.

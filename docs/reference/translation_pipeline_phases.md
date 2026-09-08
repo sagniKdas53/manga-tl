@@ -17,7 +17,7 @@ The pipeline executes as an asynchronous callback chain over Redis job queues. W
 6. **qa** (`handle_render_callback`): Quality assurance evaluation.
 7. **render (finalPass)** (`handle_qa_callback`): Enqueued when QA makes direct text edits or rejects false SFX regions (`AUDIT-B12`). Flagged with `finalPass: true` so the subsequent render completion terminates the pipeline rather than re-entering QA.
 
-> **Same-Language Passthrough**: If a series source language matches target language, translation, render, and QA phases are skipped by `start_pipeline`.
+> **Same-Language Passthrough**: `start_pipeline` always queues panel detection / OCR. If a series' source language matches its target, `handle_layout_callback` short-circuits after layout — it completes the layout job and ends the pipeline, so translation, render, and QA never run.
 
 ---
 
@@ -35,7 +35,7 @@ QA evaluates the rendered output and can request targeted retries.
 ### Callback Handling & Retries (`handle_qa_callback`)
 
 - **direct_fix / fixed**: Applies text/font corrections inline and enqueues a `finalPass` render.
-- **needsManualIntervention**: Halts the pipeline and sets page status to `MANUAL_REVIEW`.
+- **needsManualIntervention**: Halts the pipeline; marks the affected regions and the QA layer's metadata `manual_review` and returns the `MANUAL_REVIEW` verdict. Accepted edits in the same callback still get a `finalPass` render.
 - **needsReOcr**: Enqueues high-priority `qa-re-ocr`, which loops back through translation and render.
 - **needsRetry (translatable error)**: Re-enqueues `translation` with reason `qa-re-translate`.
 - **Retry budget**: Capped at 2 retries. When the retry limit is reached, remaining errors are logged and the pipeline finishes.
