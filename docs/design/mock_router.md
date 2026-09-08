@@ -420,8 +420,6 @@ Keep the provider *named* `openrouter` (§3.3).
 - [worker_provider_integration.md](../reference/worker_provider_integration.md) — the provider/registry
   architecture Mode B plugs into.
 - [ollama.md](../guides/ollama.md) — the real local-runtime setup this mode impersonates.
-- [testing_isolation_guide.md](../guides/testing_isolation_guide.md) — environment isolation for the
-  existing unit suites.
 - [models_and_prompts.md](../reference/models_and_prompts.md) — prompt and schema definitions the fixtures
   must satisfy.
 - `yt-diff` `validation/mock-tube` — prior art.

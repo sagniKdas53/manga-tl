@@ -18,7 +18,7 @@ Web application for Manga Library, providing the interactive manga reader, canva
    - Interactive editing: text-box dragging, rotation, vertex reshaping, font sizing, and visibility toggling.
    - Layer inspection and hierarchy panel (`ReaderRightSidebar.tsx`).
 2. **Real-time Pipeline Synchronization**:
-   - `useSSE` (`src/hooks/useSSE.ts`): Server-Sent Events listener receiving `job_update` events from the backend.
+   - `useSSE` (`src/utils/useSSE.ts`): Server-Sent Events listener receiving `job_update` events from the backend.
    - `PipelineRefreshWatcher` (`src/components/PipelineRefreshWatcher.tsx`): Coordinates automatic background refetching of series, chapter, and page metadata across completed jobs with a 4s debounce and 30s cadence floor (`AUDIT-F27`).
 3. **Queue Manager** (`src/components/QueueManager.tsx`):
    - Real-time display and prioritization of active, pending, and completed pipeline jobs.

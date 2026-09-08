@@ -47,8 +47,8 @@ We consume only `seg`, thresholded at 0.5. Preprocessing: pad to square bottom-r
 **Masks compared, on identical pixels:**
 
 - **OURS** — `project/layer-<translation>-mask.png`, which the exporter builds by filling each
-  element's `maskPolygon` ([Reader.tsx:2510](../frontend/src/components/Reader.tsx#L2510)). This is
-  exactly what `cover_fill_for_region` ([ocr.py:315](../worker/src/worker/handlers/ocr.py#L315))
+  element's `maskPolygon` ([Reader.tsx:2510](../../frontend/src/components/Reader.tsx#L2510)). This is
+  exactly what `cover_fill_for_region` ([ocr.py:315](../../worker/src/worker/handlers/ocr.py#L315))
   paints — not a reconstruction of it.
 - **CTD** — the `seg` head at 0.5.
 
@@ -73,7 +73,7 @@ the comparison page (toriitranslate.com 1.2 %, mangatranslator.ai 4.9 %, ours 21
    vertices (which come from `bubble_detector`'s `mask_polygon`).
 
 The `flattened` metric follows the repo's own definition
-([render_quality_metrics.py:71](../scripts/render_quality_metrics.py#L71)) — percentage of
+([render_quality_metrics.py:71](../../scripts/render_quality_metrics.py#L71)) — percentage of
 *whole-page* pixels — so numbers stay comparable to the existing 6.85 % / 1.92 % baseline.
 
 ## Results (all 21 pages)
@@ -202,7 +202,7 @@ after QA when the region set is final, so the ordering is right; the intersectio
 ## Finding 5 — whole-page inference at a fixed 1024² is the wrong shape of the problem
 
 **Cost.** 128 s/page on this box (4 cores). The worker is capped at `cpus: "2.0"`
-([docker-compose.yml:415](../docker-compose.yml#L415)), so production is roughly double. The plan's
+([docker-compose.yml:415](../../docker-compose.yml#L415)), so production is roughly double. The plan's
 latency gate is *inpaint stage ≤ 10 s on 2 cores* — an order of magnitude out.
 
 **The published model is needlessly expensive for us.** We use one of three outputs, and the `det`
