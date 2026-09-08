@@ -66,8 +66,10 @@ in both directions. This is the `AUDIT-T5` shape: a check that exists and cannot
 ### 2.2 The canvas paints elements that have no text
 
 `frontend/src/components/Reader.tsx:3624` filters on `!element.visible` and nothing else. The worker
-has `if not text: continue`; `frontend/src/utils/maskPaint.ts:60-72` also refuses blank text — so the
-*export canvas* path is guarded and the *live SVG overlay* is not.
+has `if not text: continue`; `frontend/src/utils/maskPaint.ts:104` skips blank text too, with one
+carve-out — `!el.isManuallyEdited && !el.text?.trim()`, so a hand-blanked element is still treated as
+a deliberate clean plate. Either way the *export canvas* path applies a rule and the *live SVG
+overlay* applies none.
 
 In `ours-project.json` two of three translation elements are `"text": ""` with
 `"isManuallyEdited": true` — cleared by hand, still painting page-scale blobs.
@@ -106,7 +108,7 @@ cannot help: Douglas–Peucker measures deviation from the *retained chord*, and
 ~31px from its own chord, so every sample survives. `AUDIT-R7` fixed the tolerance from relative to
 absolute; it did not anticipate a radius this large.
 
-This is the same complaint `docs/mask_precision_2026-08-27.md` opens with — *"our current masks are
+This is the same complaint `docs/archive/mask_precision_2026-08-27.md` opens with — *"our current masks are
 too big… they even overlap each other"* — which stalled pending Torii screenshots. Those now exist.
 
 ---
@@ -180,9 +182,11 @@ Smallest diff, largest visible win, no schema change.
    expectation it invalidates. Until this lands, nothing in this phase is verifiable.
 2. `frontend/src/utils/fitText.ts:483` — `Math.min(Math.floor(maxHeight/2), 72)` → `maxHeight`,
    matching `render.py:799`. Correct the comment that claims parity.
-3. `frontend/src/components/Reader.tsx:3624` — skip elements whose trimmed text is empty, the rule
-   `render.py` and `maskPaint.ts:60-72` already use. **This must cover the backdrop, not only the
-   glyphs** — the plate is the damage.
+3. `frontend/src/components/Reader.tsx:3624` — skip elements with no typesettable text using the
+   exact predicate `paintLayerMask` already uses (`maskPaint.ts:104`:
+   `!el.isManuallyEdited && !el.text?.trim()`), so the live overlay and the PNG/ZIP export agree. A
+   hand-blanked element stays a deliberate clean plate; a pipeline-produced blank stops painting.
+   **This must cover the backdrop, not only the glyphs** — the plate is the damage.
 
 **Verify:** re-export the page and diff against `ours-canvas-export.png` — expect one plate instead
 of three, and dialogue type well above 72px.
@@ -291,15 +295,15 @@ Prior art to read first, in order:
 
 | Doc | Why |
 | :--- | :--- |
-| `docs/erasure_overhaul_plan_2026-08-26.md` | The plan this continues; §7, §9 Phase 1, §10, §11 |
-| `docs/ctd_mask_validation_2026-08-26.md` | The 21-page CTD test — a learned model *does* give glyph-shaped masks on our corpus |
-| `docs/erasure_method_history_2026-08-27.md` | What the current method replaced, and why |
-| `docs/mask_precision_2026-08-27.md` | Masks-vs-inpainting measured; was waiting on the Torii screenshots that now exist |
-| `docs/RESUME_2026-08-28.md` | Where the thread was dropped |
+| `docs/archive/erasure_overhaul_plan_2026-08-26.md` | The plan this continues; §7, §9 Phase 1, §10, §11 |
+| `docs/archive/ctd_mask_validation_2026-08-26.md` | The 21-page CTD test — a learned model *does* give glyph-shaped masks on our corpus |
+| `docs/archive/erasure_method_history_2026-08-27.md` | What the current method replaced, and why |
+| `docs/archive/mask_precision_2026-08-27.md` | Masks-vs-inpainting measured; was waiting on the Torii screenshots that now exist |
+| `docs/archive/resume_2026-08-28.md` | Where the thread was dropped |
 
 Work:
 
-1. **Fold the Torii comparison into `mask_precision_2026-08-27.md`.** It has a "Torii screenshots
+1. **Fold the Torii comparison into `archive/mask_precision_2026-08-27.md`.** It has a "Torii screenshots
    still to come" placeholder and `docs/reference/2026-09-06-torii-comparison/` closes it. Torii's
    inpainted base is the reference target: tight to the glyphs, SFX untouched.
 2. **Build the measurement harness before choosing a model.** Metrics that already have precedent
@@ -315,7 +319,7 @@ Work:
 
 **Operational notes.** Benchmark on chrome-box, not the laptop — the laptop's two cores are eaten by
 any concurrent export arm and timing runs there are invalid. Long mechanical sweeps should go out as
-a written runbook (see `docs/gemini-corpus-regen-runbook.md` for the format) rather than being run
+a written runbook (see `docs/archive/gemini_corpus_regen_runbook_2026-08-27.md` for the format) rather than being run
 interactively. Verify any delegated run against the artifacts it claims to have produced, not against
 its own report: count pages in the state file, not invocations.
 

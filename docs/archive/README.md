@@ -67,7 +67,7 @@ The chain that produced the current `OCR_MERGE_THRESHOLD`. Read in this order:
   `we-already-have-benchmarking-replicated-aurora.md`.
 - [`free_openrouter_translation_benchmark_2026-08-06.md`](free_openrouter_translation_benchmark_2026-08-06.md)
   — 14 free OpenRouter models on one hand-made page. **Superseded** by
-  [`../free_model_bench_plan_2026-08.md`](../free_model_bench_plan_2026-08.md); kept because it is
+  [`free_model_bench_plan_2026-08.md`](free_model_bench_plan_2026-08.md); kept because it is
   the report that motivated building a repeatable benchmark at all.
 - [`benchmarking.md`](benchmarking.md) — the original OCR/VLM benchmarking walkthrough.
   **Superseded** by [`../guides/run_ocr_bench.md`](../guides/run_ocr_bench.md), which covers the

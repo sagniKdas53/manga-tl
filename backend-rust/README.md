@@ -1,14 +1,18 @@
 # manga-backend (Rust)
 
-The Rust rewrite of the Java/Spring Boot backend. Lives alongside `backend/` (Java) until
-the cutover; the HTTP contract is frozen — `spec/golden-openapi.json` is the exported spec
-from the running Java app (71 routes, 26 schemas), and the Rust side must match it.
+The production backend service for Manga Library, built with Axum, Tokio, and SQLx.
+It replaced the earlier Spring Boot service, serving the API contract defined in
+`spec/golden-openapi.json` (71 routes, 26 schemas) with native WebP generation,
+in-memory SSE broadcasting, and async pipeline coordination.
 
-## Why this exists
+## Architecture
 
-Same reasons you are reading this: no Maven, no JVM warmup, no 400-line factory beans.
-A debug binary builds in seconds; the release image is a ~20 MB static musl binary instead
-of a JRE + fat jar.
+- **Web Framework**: Axum 0.8 on Tokio
+- **Database**: PostgreSQL via SQLx connection pools
+- **Object Storage**: MinIO (S3-compatible API via AWS SDK)
+- **Cache & Pub/Sub**: Valkey / Redis via `redis` crate
+- **Image Processing**: Native WebP decoding and encoding via `image` and `webp` crates
+- **Frontend Serving**: Embedded React SPA assets via `rust-embed` at `/tlhub/`
 
 ## Quick start
 
@@ -73,20 +77,12 @@ spec/
 Reading errors: cargo prints the failing file/line and usually a "help:" suggestion that is
 literally the fix. Read the help line first; paste anything confusing into conversation.
 
-## Migration phases
+## Migration History
 
-Detailed, tickable checkpoint list: [MIGRATION.md](MIGRATION.md).
+The transition from Java/Spring Boot to Rust/Axum was executed in 5 phases, detailed in [MIGRATION.md](MIGRATION.md):
 
-- **Phase 0 (done)** — contract freeze + scaffold: config/secrets/validation, logging,
-  health endpoints, router under `/tlhub`, graceful shutdown, tests.
-- **Phase 1** — sqlx (compile-time-checked SQL) against the existing schema in
-  `database/init.sql`; JWT utils; MinIO client. No new routes yet.
-- **Phase 2** — CRUD controllers (auth, series/chapters/pages/images, layers, settings),
-  streaming downloads, WebP thumbnails via libwebp bindings (no JNI dance).
-- **Phase 3** — job pipeline port (`JobCoordinatorService`), worker callbacks
-  (`/api/internal/**`), Redis pub/sub, SSE notifications.
-- **Phase 4** — parity tests vs the 48 Java test files' scenarios, new Dockerfile
-  (cargo-chef, frontend embedded, musl static), compose swap, delete `backend/`.
-
-Contract rule for Phases 2–3: after each controller lands, regenerate the OpenAPI doc from
-utoipa annotations and diff it against `spec/golden-openapi.json` before moving on.
+- **Phase 0 (Completed)**: Contract freeze, configuration validation, logging, health endpoints, router mounting under `/tlhub`, graceful shutdown.
+- **Phase 1 (Completed)**: SQLx compile-time query verification against `database/init.sql`, JWT utilities, MinIO client.
+- **Phase 2 (Completed)**: CRUD operations (auth, series, chapters, pages, images, layers, settings), streaming downloads, native WebP thumbnails via libwebp.
+- **Phase 3 (Completed)**: Job pipeline coordinator (`jobs/coordinator.rs`), worker callbacks, Redis pub/sub, SSE notification broadcasts.
+- **Phase 4 (Completed)**: 48-scenario parity verification, multi-stage Dockerfile with embedded frontend SPA, compose cutover, and decommissioning of the Java tree.

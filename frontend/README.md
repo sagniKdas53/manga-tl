@@ -1,73 +1,72 @@
-# React + TypeScript + Vite
+# Manga Library — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Web application for Manga Library, providing the interactive manga reader, canvas-based scanlation layer editor, pipeline queue monitor, and series management.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Framework**: React 19 + TypeScript
+- **Build Tool**: Vite
+- **Component Library**: Material UI v9 (`@mui/material`)
+- **API Client**: `openapi-fetch` typed via `src/api/schema.d.ts`
+- **Testing**: Vitest with `@testing-library/react`
+- **Linting & Formatting**: ESLint (flat config) + Prettier
 
-## React Compiler
+## Architecture & Key Components
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. **Reader & Canvas Editor** (`src/components/Reader.tsx`):
+   - SVG/HTML5 canvas rendering of manga pages, masks, OCR bounding polygons, and translated text.
+   - Interactive editing: text-box dragging, rotation, vertex reshaping, font sizing, and visibility toggling.
+   - Layer inspection and hierarchy panel (`ReaderRightSidebar.tsx`).
+2. **Real-time Pipeline Synchronization**:
+   - `useSSE` (`src/utils/useSSE.ts`): Server-Sent Events listener receiving `job_update` events from the backend.
+   - `PipelineRefreshWatcher` (`src/components/PipelineRefreshWatcher.tsx`): Coordinates automatic background refetching of series, chapter, and page metadata across completed jobs with a 4s debounce and 30s cadence floor (`AUDIT-F27`).
+3. **Queue Manager** (`src/components/QueueManager.tsx`):
+   - Real-time display and prioritization of active, pending, and completed pipeline jobs.
+4. **Settings & Providers** (`src/components/SettingsModal.tsx`):
+   - Configuration modal for OCR engines, LLM translation providers, and QA modes.
 
-## Expanding the ESLint configuration
+## Development Workflow
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Requirements
+- Node.js 20.19+ or 22.12+ (Vite 8 engine requirement)
+- Running backend instance (default `http://localhost:8080`)
 
-```js
-export default defineConfig([
-  globalIgnores(["dist"]),
-  {
-    files: ["**/*.{ts,tsx}"],
-    extends: [
-      // Other configs...
+### Running Locally
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+```bash
+# Install dependencies
+npm install
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ["./tsconfig.node.json", "./tsconfig.app.json"],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-]);
+# Start development server on port 5173
+npm run dev
+
+# Start development server exposed on LAN
+npm run host
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### OpenAPI Contract Synchronization
 
-```js
-// eslint.config.js
-import reactX from "eslint-plugin-react-x";
-import reactDom from "eslint-plugin-react-dom";
+When backend DTOs or endpoints change, regenerate TypeScript types from the running backend:
 
-export default defineConfig([
-  globalIgnores(["dist"]),
-  {
-    files: ["**/*.{ts,tsx}"],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs["recommended-typescript"],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ["./tsconfig.node.json", "./tsconfig.app.json"],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-]);
+```bash
+npm run generate-api
+```
+
+### Verification & Gates
+
+```bash
+# Prettier formatting (CI runs this first)
+npm run format:check
+
+# Typecheck project references (tsconfig.app.json + tsconfig.node.json)
+npm run typecheck
+
+# Lint codebase
+npm run lint
+
+# Run unit tests
+npm run test
+
+# Build production bundle
+npm run build
 ```

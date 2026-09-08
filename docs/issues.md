@@ -1,32 +1,16 @@
 # Issues & Technical Debt
 
-> **Standing: 107 filed, 84 closed, 23 open.** Six items were added 2026-09-03 from the Codex
-> review of the fix stack — `AUDIT-R13`, `AUDIT-R14`, `AUDIT-F25`, `AUDIT-F26`, `AUDIT-F27` and
-> `AUDIT-T5`, all in [Open Review Findings](#open-review-findings-prs-118-124-2026-09-03).
-> `AUDIT-T5`, `AUDIT-F25`, `AUDIT-F26` and `AUDIT-F27` are now fixed; `AUDIT-R13` and
-> `AUDIT-R14`, the two reshape/rotation findings, remain open and remain unverified.
+> **Standing: 114 filed, 85 closed, 29 open.** Six review items were added 2026-09-03
+> (`AUDIT-R13`, `AUDIT-R14`, `AUDIT-F25`..`F27`, `AUDIT-T5`). Three renderer items were added 2026-09-05
+> (`AUDIT-R15`..`R17`). Three hardening items are folded in from backlog notes: `AUDIT-B19` (JWT signing error
+> masking), `AUDIT-B20` (systemic DB `unwrap_or_default`), and `AUDIT-F28` (settings catalog retry gate).
+> The PR #115–#138 review adds `AUDIT-R18` (export geometry), `AUDIT-B21` (translation retry callback),
+> `AUDIT-B22` (concurrent page ordering), and `AUDIT-B23` (dispatcher 429 cooldown never escalates); it
+> also confirms and raises the priority of `AUDIT-B15` and `AUDIT-B18`.
 >
-> **`AUDIT-F26` was upheld, and it reopened `AUDIT-F19`.** The refetch fired correctly and could
-> not change anything: the page DTO carried no field a pipeline run touches. Both are fixed
-> together 2026-09-04 — see `AUDIT-F26`.
->
-> **Three items were added 2026-09-05** from the renderer text-fitting handoff, all in
-> [Layout quality](#5-layout-quality): `AUDIT-R15`, `AUDIT-R16` and `AUDIT-R17`. The handoff's
-> headline — a typesetting test failing on `main` — **did not reproduce**, and neither did two of
-> its three bugs. `AUDIT-R15` is what was actually underneath the failure, and it is the more
-> serious finding: the same call returns 48, 56 or 75px depending on which font files the host
-> happens to have. `AUDIT-R17` records the rejected claim so it is not re-filed.
->
-> Re-audited 2026-09-02 against the field report in
-> `new issues.pdf`. Three previously-open items were closed as *obsolete* — they described Java
-> files the Rust rewrite deleted. Twenty-nine new items are filed (two, `AUDIT-B17` and
-> `AUDIT-F24`, found while fixing another), and sixteen are already fixed: `AUDIT-F14`,
-> `AUDIT-F15`, `AUDIT-F16`, `AUDIT-F17`, `AUDIT-F18`, `AUDIT-F19`, `AUDIT-F20`, `AUDIT-F21`,
-> `AUDIT-B12`, `AUDIT-B13`, `AUDIT-B17`, `AUDIT-R1`, `AUDIT-R5`, `AUDIT-R7`, `AUDIT-T4`,
-> `AUDIT-W13`.
->
-> *(The previous header read "68 filed, 61 closed, 7 open" while listing eight open items. The
-> table was right and the count was one short; these numbers are taken from the table.)*
+> `AUDIT-B14` (chapter page delete renumbering/parking) was closed 2026-09-04 in PR #136 and PR #137.
+> `AUDIT-F26` was upheld, and it reopened `AUDIT-F19`; both were closed together 2026-09-04 once `PageDto`
+> carried `lastRenderedAt` and `renderedThumbnailUrl`. `AUDIT-R13` and `AUDIT-R14` remain open and unverified.
 >
 > - **Resolved items** move to [docs/archive/history.md](archive/history.md) with root cause, fix details, and measurements.
 > - **Feature roadmap & active milestones** are tracked in [TODO.md](../TODO.md).
@@ -162,12 +146,13 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R7`](#audit-r7-medium-a-rectangle-arrived-as-a-40-vertex-polygon) | Medium | Worker | The simplification tolerance was a fraction of the *perimeter*, so small shapes got a sub-pixel tolerance and kept every vertex | **Fixed 2026-09-03** |
 | [`AUDIT-F15`](#audit-f15-medium-a-hidden-element-could-not-be-reached-again) | Medium | Frontend | Hiding an element removed the only way to select it | **Fixed 2026-09-03** |
 | [`AUDIT-R1`](#audit-r1-medium-four-answers-to-what-rectangle-does-text-go-in) | Medium | Render | Four different fitted rectangles — the live reader used none at all | **Fixed 2026-09-03** |
+| [`AUDIT-R18`](#audit-r18-high-export-lines-are-centred-in-the-raw-box-not-the-fitted-box) | High | Frontend/Render | PNG and ZIP exports fit text in the shared inset box, then centre it in the raw box | Ready |
 
 ### Seam 2 — the canvas and the artifact are not connected
 
 | ID | Sev | Component | Summary | State |
 | :--- | :--- | :--- | :--- | :--- |
-| [`AUDIT-B15`](#audit-b15-medium-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently) | Medium | Backend | The 5s re-render sweeper marks a page rendered when it *asks* for the render, so a lost render job strands that edit forever | Root-caused; needs repro to confirm it is the reported symptom |
+| [`AUDIT-B15`](#audit-b15-high-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently) | High | Backend | The 5s re-render sweeper marks a page rendered when it *asks* for the render, so a lost render job strands that edit forever | Ready; confirmed in PR #115–#138 review |
 | [`AUDIT-B12`](#audit-b12-medium-qas-verdicts-never-reach-the-rendered-output) | Medium | Backend/Render | QA runs *after* the only render, so no `direct_fix` or `reject_sfx` reaches the export | **Fixed 2026-09-02** |
 | [`AUDIT-B16`](#audit-b16-low-region-redo-layer-provenance) | Low | Backend | A region redo's new layer is not always what the reader ends up showing | Needs repro |
 | [`AUDIT-R11`](#audit-r11-high-no-texture-aware-erasure-d1) | High | Render | Flat-fill erasure only; complex backgrounds are destroyed | = [D1](render_quality_gap_2026-08-05.md), roadmap item |
@@ -179,6 +164,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-F17`](#audit-f17-high-the-reader-refreshes-for-four-job-types-on-one-page) | High | Frontend | SSE arrives; the reader discards it for QA/render, and for every page but the open one | **Fixed 2026-09-02** |
 | [`AUDIT-F19`](#audit-f19-medium-thumbnails-and-cards-never-re-poll) | Medium | Frontend | Thumbnails, chapter cards and series cards never refresh after work completes | **Fixed 2026-09-04** (reopened by `AUDIT-F26`; the 09-03 fix refetched DTOs that could not change) |
 | [`AUDIT-F20`](#audit-f20-low-the-queue-manager-sorts-by-chapter-before-status) | Low | Frontend | `PROCESSING` shared a sort rank with `PENDING`, so active jobs never moved | **Fixed 2026-09-02** |
+| [`AUDIT-F28`](#audit-f28-medium-settings-modal-deadlocks-on-unpopulated-provider-catalog) | Medium | Frontend | Settings modal aborts refetch immediately when Redis catalog is empty, leaving permanent N/A | Ready |
 | [`AUDIT-P10`](#audit-p10-unranked-sse--websocket) | Unranked | Platform | Proposal to replace SSE with a WebSocket | Not accepted; see the entry |
 
 ### Pipeline & scheduling
@@ -188,9 +174,14 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-W13`](#audit-w13-high-context-injected-translation-ran-in-parallel) | High | Worker/Backend | "Previous page dialogue" was read while the previous page was still translating — and `COALESCE` handed back its Japanese | **Fixed 2026-09-02** |
 | [`AUDIT-W14`](#audit-w14-medium-the-slot-policy-lets-slow-network-work-crowd-out-local-work) | Medium | Worker/Backend | Four light slots + a per-cycle capacity snapshot; OCR waits behind LLM calls | Needs measurement |
 | [`AUDIT-B17`](#audit-b17-low-jobspage_id-was-never-written) | Low | Backend | `jobs.page_id` existed, was deserialised, and was never populated by the INSERT | **Fixed 2026-09-03** |
-| [`AUDIT-B18`](#audit-b18-low-there-is-no-schema-migration-runner) | Low | Backend | `init.sql` only runs on a fresh volume, so no column can ever be added to a live deployment | Ready |
+| [`AUDIT-B18`](#audit-b18-medium-there-is-no-schema-migration-runner) | Medium | Backend | `init.sql` only runs on a fresh volume, so no column can ever be added to a live deployment | Ready |
+| [`AUDIT-B21`](#audit-b21-high-a-retryable-translation-callback-consumes-the-exactly-once-claim) | High | Worker/Backend | A retryable outage posts and claims a callback before retrying, so a later successful result is dropped | Ready |
+| [`AUDIT-B19`](#audit-b19-low-jwt-signing-failure-reported-as-successful-login) | Low | Backend | `unwrap_or_default()` yields empty token answered as 200 OK on signing error | Ready |
+| [`AUDIT-B20`](#audit-b20-low-database-query-errors-converted-to-empty-results) | Low | Backend | 53 sites convert query errors into empty lists/options disguised as 200 OK | Backlog |
 | [`AUDIT-B13`](#audit-b13-medium-a-page-with-no-translatable-text-fails-the-job) | Medium | Worker/Backend | An untranslatable page raises and burns 3 attempts; it should warn | **Fixed 2026-09-02** |
-| [`AUDIT-B14`](#audit-b14-medium-delete-then-re-add-leaves-a-chapter-inconsistent) | Medium | Backend/Frontend | Page count stale, old slot held, reader hangs on the loading screen | Needs repro |
+| [`AUDIT-B14`](#audit-b14-medium-delete-then-re-add-leaves-a-chapter-inconsistent) | Medium | Backend/Frontend | Page count stale, old slot held, reader hangs on the loading screen | **Fixed 2026-09-04** |
+| [`AUDIT-B22`](#audit-b22-medium-page-ordering-is-validated-before-the-chapter-is-locked) | Medium | Backend | Reorder and move validate outside their transaction, so concurrent page changes can invalidate the result | Ready |
+| [`AUDIT-B23`](#audit-b23-medium-the-dispatcher-429-cooldown-never-escalates-under-sustained-saturation) | Medium | Backend | `consecutive_429s` is cleared on every healthy `/capabilities` probe, so the exponential cooldown never advances past its 10s base | Ready |
 | [`AUDIT-W3`](#audit-w3-medium-cooldowns-and-lock-waits-burn-a-job-slot) | Medium | Worker | Cooldowns and lock waits block a concurrency slot doing nothing | Deprioritized; needs concurrency test harness |
 | [`AUDIT-F23`](#audit-f23-medium-no-paint-region-redo-and-no-batch-redo) | Medium | Frontend | Redo is per-region and free-form only; no painted region, no batch | Feature |
 | [`AUDIT-F22`](#audit-f22-medium-no-re-run-entire-chapter-action) | Medium | Frontend/Backend | Only "Force Re-export" / "Clear Exports"; no pipeline re-run | Feature |
@@ -335,9 +326,9 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   rather than getting a 400 for omitting a field it has never heard of.
 - **Not done:** *per-element* padding. That needs a column on `layer_elements`, and there is no
   migration runner — `init.sql` only runs on a fresh volume, so a new column would break every
-  existing deployment until one exists. Filed as [`AUDIT-B18`](#audit-b18-low-there-is-no-schema-migration-runner).
+  existing deployment until one exists. Filed as [`AUDIT-B18`](#audit-b18-medium-there-is-no-schema-migration-runner).
 
-### `AUDIT-B18` (low): There is no schema migration runner
+### `AUDIT-B18` (medium): There is no schema migration runner
 
 - **Locations:** `database/init.sql` (a `pg_dump`, mounted at `docker-entrypoint-initdb.d`),
   `backend-rust/src/db.rs:48` (`build_postgres_url`, marked "consumed by migration tooling in an
@@ -450,9 +441,28 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 
 ---
 
+### `AUDIT-R18` (high): Export lines are centred in the raw box, not the fitted box
+
+- **Locations:** `frontend/src/components/Reader.tsx` (the PNG export at `:2498-2514` and ZIP
+  export at `:2697-2714`), and `worker/src/worker/handlers/render.py:1254-1289`.
+- **Problem:** PR #121 correctly passes the shared `textFitBox` rectangle to `fitTextInBox`, so the
+  font size and wrapping honour `textBoxPaddingPx` and `textBoxSafetyPercent`. Both export paths
+  then discard that rectangle for vertical placement: `startY` is calculated from
+  `el.y + height / 2`. The worker calculates its `start_y` from `text_box_y` and `text_box_h`.
+  Safety scaling begins at the inset box's top-left, so these centres are not generally the same.
+  A multiline PNG/ZIP export can therefore be vertically shifted from the worker-rendered page
+  even though both claim to use the same fitted box.
+- **Reproduction:** create a multiline element in a non-square bubble with non-default padding or
+  safety percentage; compare the frontend PNG or ZIP layer raster with `/rendered`.
+- **Fix:** calculate each export's `startY` from `fitBox.y` and `fitBox.height`, and test PNG and
+  ZIP line positions against the worker's fitted-box geometry. Do not change the fitting helper or
+  the configured margin as part of this fix.
+
+---
+
 ## 2. Seam 2 — the canvas and the artifact are not connected
 
-### `AUDIT-B15` (medium): The debounced re-render is one-shot and can lose an edit permanently
+### `AUDIT-B15` (high): The debounced re-render is one-shot and can lose an edit permanently
 
 - **Correction, 2026-09-02.** This was first filed as "no edit anywhere enqueues a render job". That
   is **wrong** — I missed the sweeper. `recovery::process_pending_renders`
@@ -479,9 +489,10 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   (`internal.rs:1157-1161` for the image, `coordinator.rs:2077-2082` for the page) — and give the
   sweeper a separate "render requested at" marker so it debounces without claiming completion.
   Make `trigger_page_redo` propagate the enqueue failure rather than returning `Ok(())` regardless.
-- **Still needs a repro to confirm** this is the reported symptom and not a second cause. Capture a
-  page where an edit did not reach `/rendered`, and compare its `last_edited_at`,
-  `last_rendered_at`, and the status of its most recent `render` job.
+- **Confirmed in the PR #115–#138 review.** This is not only a plausible explanation: an enqueue
+  insert or Redis push failure is swallowed, and a worker failure after the timestamp update leaves
+  the same permanently false predicate. The remediation must be guarded by failures at each of
+  those points, not only by a successful-render test.
 
 ### `AUDIT-B12` (medium): QA's verdicts never reach the rendered output
 
@@ -493,8 +504,8 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   because each looks like the obvious culprit:
   1. `render.py:1055-1057` skips an element with no text *before* it draws anything, so the worker
      never paints a plate with nothing on it.
-  2. `paintLayerMask` (`frontend/src/utils/maskPaint.ts:60-72`) already refuses both an invisible
-     element and a blank-text one, with a corpus measurement in the comment.
+  2. `paintLayerMask` (`frontend/src/utils/maskPaint.ts:104`) already refuses an invisible element
+     and — unless `isManuallyEdited` — a blank-text one, with a corpus measurement in the comment.
   3. The reader's SVG overlay filters on `element.visible` too.
 
   The renderers were right. **The pipeline order was wrong:** `translation → render → qa`. QA is
@@ -527,7 +538,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
      nothing.
 - **Note:** human edits have their own path to a re-render (the 5s debounced sweeper), which is why
   this needed a fix of its own. QA is not an editor and never went through it. See
-  [`AUDIT-B15`](#audit-b15-medium-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently)
+  [`AUDIT-B15`](#audit-b15-high-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently)
   for the defect in that sweeper.
 
 ### `AUDIT-B16` (low): Region-redo layer provenance
@@ -647,6 +658,23 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   the UI writes over REST.
 - **Next Step:** fix `AUDIT-F17` first. If events still feel unreliable after that, reopen this with
   a measurement — dropped events per session, or reconnect frequency — not a preference.
+
+### `AUDIT-F28` (medium): Settings modal deadlocks on unpopulated provider catalog
+
+- **Locations:** `frontend/src/components/SettingsModal.tsx:29-33` (`isProviderUnavailable`),
+  `:135-204` (the refetch loop).
+- **Problem:** When Redis has not received `system:providers:config` yet (e.g. cold start or worker still
+  booting), the backend serves `activeProviders: []` and `providerModelsMap: {}`.
+  `isProviderUnavailable` evaluates to false when `activeProviders` is empty, so `isAnyProviderUnavailable`
+  returns false. The background refetch loop terminates immediately on first fetch and leaves every
+  provider and model selector rendered as `N/A (Capability Missing)` indefinitely. The user must close
+  and reopen the modal to see providers once the worker finishes publishing.
+- **Fix:**
+  1. Treat an empty catalog as unavailable: `activeProviders.length === 0` counts as unavailable so the
+     refetch loop continues polling until the worker publishes.
+  2. Cap the loop (e.g. 30 attempts × 2s) to prevent infinite polling in keyless environments.
+  3. Render an explicit non-blocking alert ("Waiting for worker to publish provider configuration...")
+     while the catalog is empty rather than confusing `N/A` dropdowns.
 
 ---
 
@@ -772,17 +800,85 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   so a whole-job retry cannot help either case. The warning names the symptom, which is actionable
   for both.
 
-### `AUDIT-B14` (medium): Delete then re-add leaves a chapter inconsistent
+### `AUDIT-B21` (high): A retryable translation callback consumes the exactly-once claim
+
+- **Locations:** `worker/src/worker/handlers/translation.py:416-455`,
+  `worker/src/worker/rq_tasks.py:182-200`, and
+  `backend-rust/src/jobs/coordinator.rs:102-141,1693-1708`.
+- **Problem:** the worker posts its translation callback *before* raising for an all-unavailable
+  provider result. The backend's pool-scoped `claim_callback` immediately writes
+  `callback_applied_at`, before it writes the callback result. RQ then marks the same job PENDING
+  for retry. If the retry receives real translations, its callback is ignored as a duplicate, so
+  the page remains untranslated despite a successful retry.
+- **Reproduction:** make all providers return no result on attempt one and a valid translation on
+  attempt two. The first callback claims the row; the second is dropped.
+- **Fix:** determine whether the result is retryable before posting a terminal callback. For a
+  retryable outage, raise without posting; on a terminal callback, use `claim_callback_tx` in the
+  same transaction as every layer/job write so a failed application releases the claim. Test the
+  outage-then-success path and a database write failure after claiming.
+
+### `AUDIT-B14` (medium): Delete then re-add leaves a chapter inconsistent — **Fixed 2026-09-04**
 
 - **Locations:** `backend-rust/src/routes/page.rs:945-985` (`delete_page`), `:238-320`
   (`insert_page`, the two-phase renumber).
 - **Problem:** the report describes three symptoms after deleting a page and re-uploading it: the
   chapter's page count does not update, the page is not reachable from the reader, and the old
   slot is still held so navigating there shows the loading screen forever.
-- **Next Step:** needs a repro before a fix — the three symptoms could be one backend renumbering
-  bug or one stale frontend list, and guessing between them wastes the fix. Reproduce with the page
-  grid and the reader both open, and capture `GET /api/chapters/{id}/pages` alongside the reader's
-  cache state.
+- **Fixed 2026-09-04 in PR #136 and PR #137.** Resolved page delete renumbering, parking of replaced slots,
+  and saturating integer casts on client JSON (`maxWidth`/`maxHeight`/`zOrder`). Page count and navigation
+  remain synchronized across deletions and re-uploads.
+
+### `AUDIT-B22` (medium): Page ordering is validated before the chapter is locked
+
+- **Locations:** `backend-rust/src/routes/page.rs:1196-1228` (`reorder_pages`) and
+  `:1289-1355` (`update_page_number`).
+- **Problem:** `reorder_pages` fetches and validates the submitted page IDs before opening its
+  transaction; `update_page_number` fetches the target page before it locks the current ordered
+  rows. A concurrent insert, delete, or reorder can therefore change the chapter between
+  validation and renumbering. The endpoint can return success while leaving the new page outside
+  the requested order, or calculate a move against an order that has already changed.
+- **Fix:** begin one transaction before reading either page set, lock all pages in that chapter with
+  `FOR UPDATE`, validate under that lock, then renumber and recalculate the cover before commit.
+  Cover reorder-vs-insert and move-vs-delete with two independent database connections.
+
+### `AUDIT-B23` (medium): The dispatcher 429 cooldown never escalates under sustained saturation
+
+- **Locations:** `backend-rust/src/jobs/dispatcher.rs` — `run_cycle` capabilities probe (the
+  `consecutive_429s.remove(url)` on a 200 response) and the `429` arm of `dispatch_slot`
+  (`cooldown_secs = COOLDOWN_BASE_SECS << (consecutive - 1).min(6)`).
+- **Problem:** the 429 arm is meant to back off exponentially — 10s base, doubling to a 60s cap —
+  keyed on a per-worker `consecutive_429s` streak. But `run_cycle` clears that streak for any
+  worker whose `/capabilities` probe returns 200, and a saturated worker (all job slots full)
+  still answers `/capabilities` fine. After each cooldown expires the next cycle probes
+  `/capabilities`, gets a 200, and resets the count to zero, so the following job submission that
+  draws another 429 is always counted as `consecutive = 1` and gets only the 10s base. The
+  doubling path is reachable only when `/capabilities` itself keeps failing, which is a
+  worker-down case, not saturation.
+- **Reproduction:** hold a worker at capacity so every `POST /jobs` returns 429 while
+  `/capabilities` stays 200. Observe the log line `returned 429 (consecutive=1). Cooling down for
+  10s.` on every cycle — it never reads `consecutive=2` or `20s`.
+- **Fix:** reset `consecutive_429s` only when a job submission actually succeeds, not on a
+  capabilities probe. The probe may still clear `cooldown_until`; the streak should persist until
+  the worker accepts work.
+
+### `AUDIT-B19` (low): JWT signing failure reported as successful login
+
+- **Locations:** `backend-rust/src/routes/auth.rs:298` (register), `:326` (login), `:346` (refresh).
+- **Problem:** `let token = state.jwt.generate_token(&user.email).unwrap_or_default();`
+  `generate_token` returns `Result`. On `Err`, `unwrap_or_default()` yields an empty string `""`, and all
+  three endpoints answer `200 OK` with `token: ""`. An empty token fails subsequent decode, so while not
+  an auth bypass, it produces silent session failure on the client with 401s rather than a legible error.
+- **Fix:** Map `Err` to a 500 error response at all three sites.
+
+### `AUDIT-B20` (low): Database query errors converted to empty results
+
+- **Locations:** 53 sites across `backend-rust/src/routes/`.
+- **Problem:** A failed query becomes an empty `Vec` or `None` via `unwrap_or_default()`, and the handler
+  serves it as a normal `200 OK`. A broken listing is indistinguishable from an empty one for callers
+  and in logs. As noted in `routes/page.rs:108`: *"totalElements. That is worse than an error, because it
+  looks like an answer."*
+- **Fix:** Target list endpoints first where empty and failed are ambiguous. Standardize on honest 500
+  responses instead of silent suppression, aligned with the `.expect()` panic strategy pass.
 
 ### `AUDIT-W3` (medium): Cooldowns and lock waits burn a job slot
 
@@ -1124,8 +1220,10 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 
 The Codex review of the 2026-09-02 fix stack raised fifteen findings. The six on PRs #115 and #116
 were addressed on the branch. Four P1s were addressed on 2026-09-03 (the `AUDIT-R5` wiring above,
-and the three folded into `AUDIT-F16`/`AUDIT-R1`). **These five P2s are not fixed** and are
-recorded here because the PR threads close when the stack merges.
+and the three folded into `AUDIT-F16`/`AUDIT-R1`). Of the five retained P2s, **`AUDIT-R13` and
+`AUDIT-R14` remain unverified; `AUDIT-F26`, `AUDIT-F27`, and `AUDIT-T5` were fixed 2026-09-04.**
+`AUDIT-F25`, the associated low-severity finding, was also fixed that day. The records remain here
+because the PR threads close when the stack merges.
 
 Severities are the reviewer's. Where an entry is marked *unverified* the claim has been read but
 not reproduced.
@@ -1253,40 +1351,6 @@ above it says is essential was being ignored and the selector had silently falle
 **Not verified visually.** The layout changes are mechanical and came from MUI's own codemod, but
 nothing here confirms what the affected screens now look like. `AUDIT-F9` (responsive layout is
 never verified) covers that gap and is still open.
-
----
-
-## Recently Closed Items (Reference)
-
-| ID | Summary | Closed Date | Resolution Details |
-| :--- | :--- | :--- | :--- |
-| `AUDIT-F14` | Rotating a text box made every save 400 | 2026-09-02 | `maxWidth`/`maxHeight` were `Option<i32>` and a rotated bounding box is fractional, so serde rejected the whole body. DTO rounds server-side; the rotation commit rounds the polygon before measuring it. |
-| `AUDIT-F17` | The reader refreshed for four job types, on one page | 2026-09-02 | An allow-list that had gone stale (`qa`, `qa-re-ocr`, `render`, `layout` all missing) plus a guard that dropped every page but the open one. Allow-list removed; any completion invalidates the page it names. |
-| `AUDIT-B12` | QA's verdicts never reached the rendered output | 2026-09-02 | The pipeline renders before it runs QA, and nothing re-rendered. QA now enqueues one `finalPass` render, which does not re-enter QA. |
-| `AUDIT-B13` | A page with no translatable text failed the job | 2026-09-02 | Worker raised, costing three whole-job retries and a red queue row, for pages whose only region was an SFX or an OCR misfire. Completes with a `WARNING` notification now. |
-| `AUDIT-F20` | The Queue Manager never moved active jobs up | 2026-09-02 | `PROCESSING` shared sort rank 1 with `PENDING` and `COMPLETED`, so starting work did not move a row. |
-| `AUDIT-R1` + `AUDIT-F16` | Four answers to "what rectangle does text go in?" | 2026-09-03 | The live reader used the raw box, the frontend's exports insetted 4px, and `render.py` insetted 4px then took 95%. One definition per language now, both driven by the same two settings and asserted against the same parity table. |
-| `AUDIT-F15` | A hidden element could not be reached again | 2026-09-03 | The `visible` toggle lived on the selected element's inspector and selecting meant clicking it on the canvas, so hiding was a one-way door. The layer panel lists elements now, each selectable with its own toggle. |
-| `AUDIT-F19` | Thumbnails and cards never re-polled | 2026-09-04 | Grids rendered whatever the first fetch returned; nothing subscribed to `job_update` and nothing polled, so a chapter that finished while its page was open kept showing untranslated thumbnails until a manual reload. One app-level watcher refreshes all three grids, debounced 4s so a finishing chapter's burst costs one refetch. **Closed 09-03 and reopened by `AUDIT-F26`:** the refetch fired but re-read DTOs that carried no field a pipeline run touches, so the grid still could not change. Closed again 09-04 once `PageDto` carried `lastRenderedAt` and a cache-keyed rendered thumbnail. |
-| `AUDIT-F21` | Dark mode was unpleasant to read | 2026-09-03 | Not short of contrast — it had far too much. Body text measured 19.0:1 against a 7:1 AAA threshold, which blooms glyph edges on a tablet at night, and every accent ran 84–100% saturation. Surfaces lifted, white pulled back to 13.7:1, accents desaturated at unchanged hue. Two side findings fixed with it: cards were 1.15:1 from the page behind them, and `primary` on `paper` was 3.99:1, below AA. |
-| `AUDIT-T4` | Nothing proved pagination and sort against a real database | 2026-09-03 | The filing was half wrong — `list_series` was covered; `list_chapters` and `list_pages`, the two the reader walks, had nothing. Seven tests against real Postgres, seeding rows out of order so a missing `ORDER BY` cannot pass. They found two live defects: `page * size` overflowed to a 500 (or, in release, a silent empty page), and `sortDir=DESC` sorted ascending. |
-| `AUDIT-F25` | A null `visible` was hidden on the canvas and visible in the sidebar | 2026-09-04 | `types.ts` said `boolean` for a column that is nullable, so nothing guarded a null and the four readers disagreed. The canvas, the hidden-count and the worker's renderer all treat null as hidden — the renderer decisively, since such an element is absent from the rendered PNG. Only the sidebar's row read `!== false`, so it offered "Hide element" for something already invisible and the first click did nothing. Type made honest; two readers moved to `=== true`. |
-| `AUDIT-F26` | The grid refresh re-fetched DTOs that could not show pipeline state | 2026-09-04 | Upheld, and it reopened `AUDIT-F19`. `PageDto`'s seven fields were all set at upload and `thumbnailUrl` pointed at the *original*'s thumbnail, so `/pages` returned byte-identical JSON across a translation. Rendered PNGs average ~1.7 MB so the grid could not show them directly; the render gets its own 512px WebP behind a new endpoint, and the DTO gained `lastRenderedAt` plus a `?v=`-keyed `renderedThumbnailUrl`. Generated eagerly on the render callback and lazily on a miss, which backfills the existing pages without a migration. |
-| `AUDIT-F27` | The refresh debounce assumed events arrive close together | 2026-09-04 | The 4s window only collapses events inside it, and `AUDIT-W13` made serialized translation the norm, so completions landed further apart and each fired its own full loaded-window refresh. No single window can be both live during a burst and longer than the gap between serialized pages, so the limits are now separate: the burst window plus a 30s floor on cadence. Ten pages 10s apart went from ten refreshes to at most four. |
-| `AUDIT-R7` | A rectangle arrived as a 40-vertex polygon | 2026-09-03 | The simplification tolerance was `0.002 × perimeter`, which is 0.4px on a small caption plate — below one pixel, so nothing was removed. Smaller shapes got tighter tolerances. Now an absolute 2px everywhere, plus the synthesized cover plate (28 points by construction) and the merge hull (never simplified at all). |
-| `AUDIT-R5` | Rotation turned the plate and left the glyphs level | 2026-09-03 | `rotation` was effectively always 0: the handle wrote the angle into the mask polygon and the *bounding box of that polygon* into x/y/w/h instead. So the plate tilted, the text stayed level (in the reader too — the canvas skipped `ctx.rotate` exactly when a polygon existed), and the box inflated on every turn. `rotation` is the angle now and the box is left alone. |
-| `AUDIT-B17` | `jobs.page_id` was never written | 2026-09-03 | The column existed and `Job` deserialised it, but the INSERT omitted it, so every row read back had `pageId: null` and the obvious `WHERE page_id = …` matched nothing. Fixed because `AUDIT-W13`'s gate must attribute a blocker to one page. |
-| `AUDIT-W13` | Context-injected translation ran in parallel | 2026-09-02 | Four light slots translated four consecutive pages at once, so each read a predecessor still in flight — and because the context query is `COALESCE(translated_text, text)`, that predecessor handed back its Japanese source labelled as the previous page's dialogue. Gated in the dispatcher, so no slot is held while a job waits. |
-| `AUDIT-F18` | Import Chapter kept a stale chapter number | 2026-09-02 | `useState(nextNum)` only read its argument on first mount. Re-syncs on open and asks the server for the true maximum. |
-| `AUDIT-Q1` | ~253 redundant `Objects.requireNonNull` calls | 2026-09-02 | **Obsolete.** All four named files lived under `backend/src/main/java/`, deleted by the Rust rewrite. `docker-compose.yml` builds `backend-rust/Dockerfile`. Nothing to clean up. |
-| `AUDIT-Q2` | Inline fully-qualified class names in controllers | 2026-09-02 | **Obsolete.** Same cause as `AUDIT-Q1` — `SeriesController.java` and `PageController.java` no longer exist. |
-| `AUDIT-T3` | `@WebMvcTest` cannot verify Spring Data sort composition | 2026-09-02 | **Obsolete as written** — the test classes are gone with the Java tree. The underlying gap is real against the Rust handlers and is refiled as [`AUDIT-T4`](#audit-t4-unranked-nothing-proves-pagination-and-sort-against-a-real-database). |
-| `AUDIT-R2` | Free-standing captions typeset outside their erased plate | 2026-08-29 | `free_text_box` squared a 91×293 column into 186×187, discarding erased height for artwork it did not own; 329 of 552 free-floating corpus elements had text on bare art. Fixed in `abdcce2` + worker `55dc693`. See [`LOCK-1`](#lock-1--free-standing-text-keeps-its-columns-height-it-is-never-squared-into-a-box). |
-| `AUDIT-R3` | OCR layers leaked into frontend exports | 2026-08-29 | Export filtering was gated on the `cleanScanlationView` overlay toggle, so a view setting decided a file's contents. See [`LOCK-2`](#lock-2--an-ocr-layer-never-reaches-an-export-whatever-the-reader-is-showing). |
-| `AUDIT-B10` | `listPages` sort parameter validation | 2026-08-16 | Switched to explicit `sortDir` parameter and safe `Sort.by(direction, "pageNumber")` in commit `94bd792`. See [history.md](archive/history.md). |
-| `AUDIT-B11` | Unbounded `?size=2000` pagination bypass | 2026-08-07 | Configured `spring.data.web.pageable.max-page-size: 100` in `application.yml`. See [history.md](archive/history.md). |
-| `AUDIT-F10–F12` | Pagination hook bugs (sort drift, unbounded walk, refcount) | 2026-08-07 | Fixed in `usePaginatedResource.ts` with 8 new unit tests. See [history.md](archive/history.md). |
-| `AUDIT-L1–L8` | Logging and observability audit | 2026-08-15 | Standardized trace IDs, MDC logging, log level filters, rotation caps, and Grafana dashboard. See [history.md](archive/history.md). |
 
 ---
 

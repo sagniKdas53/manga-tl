@@ -1,56 +1,48 @@
-# Frontend Commands Guide
+# Frontend Commands
 
-This document lists the common commands used for development, testing, and linting in the frontend project.
-
-The frontend uses **Vite** for the build tool, **React** for the UI, **ESLint** & **Prettier** for code style, **Vitest** for testing, and **TypeScript** for static type analysis.
+Commands for development, testing, and linting in `frontend/`.
 
 ## Development & Build
 
-Run these commands from the `frontend/` directory:
-
 ```bash
-# Start the local development server (with hot-reloading)
+# Start local development server
 npm run dev
 
-# Build the production bundle
+# Build production bundle (runs typecheck + vite build)
 npm run build
 
-# Preview the production build locally
+# Preview production build locally
 npm run preview
+
+# Generate TypeScript API definitions from OpenAPI spec
+npm run generate-api
 ```
 
-## Linting & Formatting
+## Linting & Typechecking
 
 ```bash
-# Run ESLint to check for code quality and style issues
+# Typecheck composite project references (AUDIT-T5)
+npm run typecheck
+
+# Run ESLint across code and tests
 npm run lint
 
-# Run ESLint and automatically fix fixable issues
+# Auto-fix lint issues
 npx eslint . --fix
 
-# Run Prettier to format the codebase
+# Format code with Prettier
 npm run format
 
-# Check formatting without writing — this is what CI gates on
+# Verify formatting without modifying files
 npm run format:check
-
-# Run TypeScript compiler type check without emitting files
-npx tsc --noEmit
 ```
 
 ## Testing
 
 ```bash
-# Run all unit tests
+# Run unit test suite
 npm run test
 
-# Run tests and generate code coverage report (including HTML report)
+# Run unit tests with code coverage report
 npm run test:coverage
 ```
-
-## Configuration Files
-
-- **ESLint Config**: `eslint.config.js`
-- **Prettier Config**: `.prettierrc`
-- **TypeScript Config**: `tsconfig.json`
-- **Vite/Vitest Config**: `vite.config.ts`

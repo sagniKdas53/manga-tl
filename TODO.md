@@ -54,17 +54,18 @@ Where it stands, in leverage order:
   its ~48% recovery rate on irregular bubbles turned out to be almost entirely the search finding
   its own crop window, not a real bubble. Drop the flag once a detector exists that finds
   irregular bubbles directly (a bigger YOLO model isn't it — tested, no additive value).
-- [x] Free-floating text now lays out in a squared-up box instead of the source's narrow
-  vertical column.
+- [x] Free-floating text preserves column height instead of squaring into a box (`LOCK-1` / `AUDIT-R2`).
+  Width is widened only if below readable threshold (`FREE_TEXT_MIN_WIDTH_FRACTION`).
 
 **QA does not close any of the geometry gaps above.** Tested 2026-08-12: QA rewrites text and
 touches nothing else, so none of D1/D6/D7/D8/D10/D14/D15/D16 are recoverable by the safety net.
 
 ### 2. Audit backlog — re-oriented 2026-09-02
 
-Full detail in [docs/issues.md](docs/issues.md). **98 filed, 79 closed, 19 open.** The 2026-09-02
+Full detail in [docs/issues.md](docs/issues.md). **114 filed, 85 closed, 29 open.** The 2026-09-02
 field report added 29 items; `AUDIT-Q1`, `AUDIT-Q2` and `AUDIT-T3` closed as obsolete because they
-named Java files the Rust rewrite deleted. Sixteen of the new items are already fixed.
+named Java files the Rust rewrite deleted. Review and hardening passes added `AUDIT-R13`..`R17`,
+`AUDIT-F25`..`F28`, `AUDIT-T5`, and `AUDIT-B19`..`B20`.
 
 The report is not 24 independent bugs. It is **three seams**, and they have to close in order —
 each later one is wasted effort until the earlier one holds.
@@ -85,8 +86,12 @@ each later one is wasted effort until the earlier one holds.
   - [x] `AUDIT-R7` — the simplification tolerance was a fraction of the *perimeter*, so a small
     caption plate got a sub-pixel tolerance and kept every vertex. Absolute 2px now, at all four
     sites — including the merge hull, which had none at all.
-  - [x] `AUDIT-F15` — hiding an element removed the only way to select it. The layer panel
-    lists elements now, each selectable with its own visibility toggle.
+  - [ ] `AUDIT-R13`/`AUDIT-R14` — reshape controls drawn at double rotation; vertex drag re-derives
+    bounding box from already-rotated polygon. Unverified.
+  - [ ] `AUDIT-R15` — typeset size depends on host font availability (Comic Neue vs DejaVu fallback);
+    needs vendored test font and miss-logging in `render.py`.
+  - [ ] `AUDIT-R16` — narrow portrait balloons capped by widest unbreakable token.
+  - [x] `AUDIT-R17` — `shape="rectangular"` is not ignored; confirmed active and tested.
 - [/] **Seam 2 — the canvas and the artifact are not connected.**
   - [x] `AUDIT-B12` — QA runs *after* the only render, so no `direct_fix` or `reject_sfx` ever
     reached `/rendered` or the chapter ZIP. QA now enqueues one `finalPass` render. Worth noting
@@ -96,14 +101,17 @@ each later one is wasted effort until the earlier one holds.
     every 5s. Its defect is that it stamps `last_rendered_at` when it *asks* for the render, not
     when the render lands, and gates that on an `is_ok()` that is always true. A lost render job
     therefore falsifies the sweeper's own predicate and strands that edit forever.
+  - [ ] `AUDIT-B18` — no schema migration runner; `init.sql` only runs on fresh volumes.
 - [/] **Seam 3 — the UI does not believe the backend.**
   - [x] `AUDIT-F17` — the reader filtered SSE down to four job types on one page. Both halves
     fixed; the allow-list was removed rather than extended, because it goes stale silently.
   - [x] `AUDIT-F20` — `PROCESSING` shared a sort rank with `PENDING`, so active jobs never moved.
-  - [x] `AUDIT-F19` — thumbnails and cards never re-polled. One app-level watcher refreshes
-    series, chapters and pages on `job_update`, debounced 4s so a finishing chapter's burst of
-    per-page-per-stage events costs one refetch rather than dozens. The per-page completion
-    marker the report also asked for is left open — it needs a rendered thumbnail variant.
+  - [x] `AUDIT-F19` / `AUDIT-F26` — thumbnails and cards never re-polled. Resolved 2026-09-04:
+    `PipelineRefreshWatcher` refetches on `job_update` with a 4s debounce and 30s cadence floor (`AUDIT-F27`).
+    `PageDto` now carries `lastRenderedAt` and `renderedThumbnailUrl` backed by a 512px WebP endpoint.
+  - [x] `AUDIT-F25` — `visible: null` was hidden on canvas and visible in sidebar; unified in `ReaderRightSidebar.tsx`.
+  - [ ] `AUDIT-F28` — settings modal aborts refetch immediately when Redis catalog is empty, leaving
+    dropdowns in permanent `N/A`.
   - [x] `AUDIT-F21` — dark mode read as harsh because it had *too much* contrast, not too
     little: 19:1 body text against a 7:1 AAA threshold, which blooms glyph edges on a tablet at
     night, plus 84–100% saturated accents on a near-black field. Surfaces lifted, white pulled
@@ -130,6 +138,10 @@ Running alongside, on the pipeline side:
   sweep puts orphaned PENDING rows back on their queue.
 - [x] `AUDIT-B13` — a page with nothing translatable burned 3 LLM attempts and landed red. It
   completes with a `WARNING` notification now, and the worker no longer raises.
+- [x] `AUDIT-B14` — page delete renumbering, slot parking, and saturating integer casts on client JSON
+  fixed in PR #136 and PR #137.
+- [ ] `AUDIT-B19` — JWT signing failure returns `token: ""` with 200 OK; needs honest 500 mapping.
+- [ ] `AUDIT-B20` — 53 database query sites convert errors into empty responses (`unwrap_or_default`).
 - [ ] `AUDIT-W14` (medium) — the dispatcher never decrements its per-cycle capacity snapshot.
   The tier split itself is a measurement question; `AUDIT-W10` moved it deliberately, so re-run
   the timing before touching the default.
@@ -140,6 +152,7 @@ Running alongside, on the pipeline side:
   pass by accident. They found two live defects: `page * size` overflowed (500 in debug, a silent
   empty page in release), and `sortDir=DESC` sorted ascending because the match was on the literal
   lowercase string while Spring's was case-insensitive.
+- [x] `AUDIT-T5` — frontend typechecking gate added via `npm run typecheck` (`tsc -b --noEmit`).
 
 Still deliberately last, each needing real experimentation rather than a pass:
 `AUDIT-T1` (a wire-protocol test double), `AUDIT-D5` (a measured memory peak), `AUDIT-F9`
@@ -328,12 +341,10 @@ building for tail latency and multi-worker resilience, not for throughput.
   `MAX_LIGHT_SLOTS=4`) and confirmed via a drained capture — see
   [docs/archive/history.md](docs/archive/history.md).
 - [x] Worker container given CPU/memory limits (2 CPUs / 4g, sized from measured peak usage).
-- [ ] **Large-upload performance (100+ images)** — thumbnail generation still serializes on the
-  global `WEBP_LOCK` in `PageService.java`. *Narrower than this item used to claim (verified
-  2026-08-17):* `AUDIT-B6` already pulled the non-WebP decode out of the lock, so a JPEG/PNG
-  source now decodes in parallel and only genuinely-WebP work is serialized (`PageService.java:260-283`).
-  The encode side (`:355`, `:518`) is still fully serialized, so the 4 executor threads still
-  bottleneck on a WebP-heavy upload. See [docs/reference/webp_thumbnail_encoding.md](docs/reference/webp_thumbnail_encoding.md).
+- [ ] **Large-upload performance (100+ images)** — thumbnail generation is implemented in
+  `backend-rust/src/thumbnails.rs` using `image` and `webp` crates under Tokio `spawn_blocking`.
+  Non-WebP decodes run concurrently across threadpools while WebP encodes are bound by CPU threads.
+  See [docs/reference/webp_thumbnail_encoding.md](docs/reference/webp_thumbnail_encoding.md).
 - [ ] **`mock-router`** — a deterministic mock LLM provider (speaks the OpenAI/Anthropic wire
   format) so the pipeline can be tested end-to-end with no API spend and no nondeterminism.
   Design doc: [docs/design/mock_router.md](docs/design/mock_router.md) — designed, not implemented, phased:
