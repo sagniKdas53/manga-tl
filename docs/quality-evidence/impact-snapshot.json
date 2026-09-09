@@ -1,0 +1,35 @@
+{
+  "context": {
+    "status": "fulfilled",
+    "value": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"status\": \"found\",\n  \"symbol\": {\n    \"uid\": \"Function:backend-rust/src/jobs/coordinator.rs:text_box_for\",\n    \"name\": \"text_box_for\",\n    \"kind\": \"Function\",\n    \"filePath\": \"backend-rust/src/jobs/coordinator.rs\",\n    \"startLine\": 1604,\n    \"endLine\": 1613\n  },\n  \"incoming\": {\n    \"calls\": [\n      {\n        \"uid\": \"Function:backend-rust/src/jobs/coordinator.rs:handle_translation_callback\",\n        \"name\": \"handle_translation_callback\",\n        \"filePath\": \"backend-rust/src/jobs/coordinator.rs\"\n      }\n    ]\n  },\n  \"outgoing\": {\n    \"calls\": [\n      {\n        \"uid\": \"Function:backend-rust/src/jobs/coordinator.rs:has_detected_bubble\",\n        \"name\": \"has_detected_bubble\",\n        \"filePath\": \"backend-rust/src/jobs/coordinator.rs\"\n      },\n      {\n        \"uid\": \"Function:backend-rust/src/jobs/coordinator.rs:page_bounds\",\n        \"name\": \"page_bounds\",\n        \"filePath\": \"backend-rust/src/jobs/coordinator.rs\"\n      },\n      {\n        \"uid\": \"Function:backend-rust/src/jobs/coordinator.rs:text_box_geometry\",\n        \"name\": \"text_box_geometry\",\n        \"filePath\": \"backend-rust/src/jobs/coordinator.rs\"\n      }\n    ]\n  },\n  \"processes\": []\n}\n\n---\n**Next:** If planning changes, use impact({target: \"text_box_for\", direction: \"upstream\", repo: \"manga-library\"}) to check blast radius. To see execution flows, READ gitnexus://repo/manga-library/processes."
+        }
+      ]
+    }
+  },
+  "groupingImpact": {
+    "status": "fulfilled",
+    "value": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"target\": {\n    \"id\": \"Function:src/worker/services/fragment_grouping.py:group_fragments\",\n    \"name\": \"group_fragments\",\n    \"type\": \"Function\",\n    \"filePath\": \"src/worker/services/fragment_grouping.py\"\n  },\n  \"direction\": \"upstream\",\n  \"impactedCount\": 2,\n  \"risk\": \"LOW\",\n  \"summary\": {\n    \"direct\": 1,\n    \"processes_affected\": 1,\n    \"modules_affected\": 1\n  },\n  \"byDepthCounts\": {\n    \"1\": 1,\n    \"2\": 1\n  },\n  \"affected_processes\": [\n    {\n      \"name\": \"process_ocr\",\n      \"type\": \"Function\",\n      \"filePath\": \"src/worker/handlers/ocr.py\",\n      \"affected_process_count\": 4,\n      \"total_hits\": 4,\n      \"earliest_broken_step\": 1\n    }\n  ],\n  \"affected_modules\": [\n    {\n      \"name\": \"Services\",\n      \"hits\": 2,\n      \"impact\": \"direct\"\n    }\n  ],\n  \"byDepth\": {\n    \"1\": [\n      {\n        \"depth\": 1,\n        \"id\": \"Function:src/worker/services/merge_regions.py:merge_ocr_regions\",\n        \"name\": \"merge_ocr_regions\",\n        \"filePath\": \"src/worker/services/merge_regions.py\",\n        \"relationType\": \"CALLS\",\n        \"confidence\": 0.85,\n        \"processes\": []\n      }\n    ],\n    \"2\": [\n      {\n        \"depth\": 2,\n        \"id\": \"Function:src/worker/handlers/ocr.py:process_ocr\",\n        \"name\": \"process_ocr\",\n        \"filePath\": \"src/worker/handlers/ocr.py\",\n        \"relationType\": \"CALLS\",\n        \"confidence\": 0.85,\n        \"processes\": [\n          {\n            \"id\": \"proc_80_process_ocr\",\n            \"label\": \"Process_ocr → _rapidocr_route\",\n            \"processType\": \"intra_community\",\n            \"step\": 1\n          },\n          {\n            \"id\": \"proc_8_process_ocr\",\n            \"label\": \"Process_ocr → Normalize_lang\",\n            \"processType\": \"cross_community\",\n            \"step\": 1\n          },\n          {\n            \"id\": \"proc_52_process_ocr\",\n            \"label\": \"Process_ocr → Get_config_loader\",\n            \"processType\": \"cross_community\",\n            \"step\": 1\n          },\n          {\n            \"id\": \"proc_1_process_ocr\",\n            \"label\": \"Process_ocr → _paddlex_config_root\",\n            \"processType\": \"cross_community\",\n            \"step\": 1\n          }\n        ]\n      }\n    ]\n  }\n}\n\n---\n**Next:** Review d=1 items first (WILL BREAK). To check affected execution flows, READ gitnexus://repo/manga-tl-worker/processes."
+        }
+      ]
+    }
+  },
+  "boxImpact": {
+    "status": "fulfilled",
+    "value": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"target\": {\n    \"id\": \"Function:backend-rust/src/jobs/coordinator.rs:text_box_for\",\n    \"name\": \"text_box_for\",\n    \"type\": \"Function\",\n    \"filePath\": \"backend-rust/src/jobs/coordinator.rs\"\n  },\n  \"direction\": \"upstream\",\n  \"impactedCount\": 2,\n  \"risk\": \"LOW\",\n  \"summary\": {\n    \"direct\": 1,\n    \"processes_affected\": 1,\n    \"modules_affected\": 2\n  },\n  \"byDepthCounts\": {\n    \"1\": 1,\n    \"2\": 1\n  },\n  \"affected_processes\": [\n    {\n      \"name\": \"translation_callback\",\n      \"type\": \"Function\",\n      \"filePath\": \"backend-rust/src/routes/internal.rs\",\n      \"affected_process_count\": 3,\n      \"total_hits\": 3,\n      \"earliest_broken_step\": 1\n    }\n  ],\n  \"affected_modules\": [\n    {\n      \"name\": \"Routes\",\n      \"hits\": 1,\n      \"impact\": \"indirect\"\n    },\n    {\n      \"name\": \"Jobs\",\n      \"hits\": 1,\n      \"impact\": \"direct\"\n    }\n  ],\n  \"byDepth\": {\n    \"1\": [\n      {\n        \"depth\": 1,\n        \"id\": \"Function:backend-rust/src/jobs/coordinator.rs:handle_translation_callback\",\n        \"name\": \"handle_translation_callback\",\n        \"filePath\": \"backend-rust/src/jobs/coordinator.rs\",\n        \"relationType\": \"CALLS\",\n        \"confidence\": 0.85,\n        \"processes\": []\n      }\n    ],\n    \"2\": [\n      {\n        \"depth\": 2,\n        \"id\": \"Function:backend-rust/src/routes/internal.rs:translation_callback\",\n        \"name\": \"translation_callback\",\n        \"filePath\": \"backend-rust/src/routes/internal.rs\",\n        \"relationType\": \"CALLS\",\n        \"confidence\": 0.85,\n        \"processes\": [\n          {\n            \"id\": \"proc_31_translation_callback\",\n            \"label\": \"Translation_callback → From\",\n            \"processType\": \"intra_community\",\n            \"step\": 1\n          },\n          {\n            \"id\": \"proc_244_translation_callback\",\n            \"label\": \"Translation_callback → Unauthorized_internal_token\",\n            \"processType\": \"intra_community\",\n            \"step\": 1\n          },\n          {\n            \"id\": \"proc_243_translation_callback\",\n            \"label\": \"Translation_callback → Problem_response\",\n            \"processType\": \"cross_community\",\n            \"step\": 1\n          }\n        ]\n      }\n    ]\n  }\n}\n\n---\n**Next:** Review d=1 items first (WILL BREAK). To check affected execution flows, READ gitnexus://repo/manga-library/processes."
+        }
+      ]
+    }
+  }
+}

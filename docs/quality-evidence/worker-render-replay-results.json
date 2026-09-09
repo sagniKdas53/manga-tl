@@ -1,0 +1,293 @@
+{
+  "environment": {
+    "python": "3.13.12",
+    "pillow": "12.3.0",
+    "requested_font": "Comic Neue bold",
+    "resolved_font": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "font_sha256": "d1c3ff99f1e1ce1827a33efd4dad81f40babda06bff9e43bd7591c86662a287b",
+    "typeset_sfx": false,
+    "use_uppercase_speech": "true",
+    "default_text_box_padding_px": 4,
+    "default_text_box_safety_percent": 95
+  },
+  "archive_replays": [
+    {
+      "sample": "sample222",
+      "source": {
+        "name": "source.png",
+        "sha256": "990b1c3b2032e628d4aa6f737d539dd39ae325771369651a3b7c975bbb594738",
+        "dimensions": [
+          4093,
+          2894
+        ]
+      },
+      "result": {
+        "file": "current-render-sample222.png",
+        "sha256": "27d0b8983539f37a59c1a1966bc979b7eaeeb12cfbc6de5a35f02aff86859249",
+        "dimensions": [
+          4093,
+          2894
+        ]
+      },
+      "archive_adapter": {
+        "restored_fields": [
+          "layerType",
+          "layerVisible"
+        ],
+        "synthetic_ocr_region_fields": [
+          "bboxW",
+          "bboxH",
+          "bubbleW",
+          "bubbleH"
+        ],
+        "synthetic_bubble_meaning": "bbox echo, therefore current renderer takes no-detected-bubble path"
+      },
+      "elements": {
+        "archived_total": 2,
+        "rendered": 1
+      },
+      "pixel_delta": {
+        "different_channel_values": 21743269,
+        "max_channel_delta": 255,
+        "changed_pixels": 7295537
+      }
+    },
+    {
+      "sample": "sample177",
+      "source": {
+        "name": "source.jpg",
+        "sha256": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382",
+        "dimensions": [
+          2048,
+          1910
+        ]
+      },
+      "result": {
+        "file": "current-render-sample177.png",
+        "sha256": "03bd0c354ee1f83c483f75cc0fbb9a1c5bb412658d19930678494d713522ac5b",
+        "dimensions": [
+          2048,
+          1910
+        ]
+      },
+      "archive_adapter": {
+        "restored_fields": [
+          "layerType",
+          "layerVisible"
+        ],
+        "synthetic_ocr_region_fields": [
+          "bboxW",
+          "bboxH",
+          "bubbleW",
+          "bubbleH"
+        ],
+        "synthetic_bubble_meaning": "bbox echo, therefore current renderer takes no-detected-bubble path"
+      },
+      "elements": {
+        "archived_total": 8,
+        "rendered": 4
+      },
+      "pixel_delta": {
+        "different_channel_values": 1019498,
+        "max_channel_delta": 255,
+        "changed_pixels": 346272
+      }
+    },
+    {
+      "sample": "sample83",
+      "source": {
+        "name": "source.jpg",
+        "sha256": "508d4269d36317c7e38f263b84398fdf10ad36d2c1441097969cf8e0cff0e8ab",
+        "dimensions": [
+          1412,
+          2000
+        ]
+      },
+      "result": {
+        "file": "current-render-sample83.png",
+        "sha256": "257d0034a3a6b0e6e256bc8f13bfbcc2fc580a13a44b8d5c2cf52a6539d928b7",
+        "dimensions": [
+          1412,
+          2000
+        ]
+      },
+      "archive_adapter": {
+        "restored_fields": [
+          "layerType",
+          "layerVisible"
+        ],
+        "synthetic_ocr_region_fields": [
+          "bboxW",
+          "bboxH",
+          "bubbleW",
+          "bubbleH"
+        ],
+        "synthetic_bubble_meaning": "bbox echo, therefore current renderer takes no-detected-bubble path"
+      },
+      "elements": {
+        "archived_total": 12,
+        "rendered": 3
+      },
+      "pixel_delta": {
+        "different_channel_values": 5715154,
+        "max_channel_delta": 255,
+        "changed_pixels": 1919856
+      }
+    },
+    {
+      "sample": "sample61",
+      "source": {
+        "name": "source.jpg",
+        "sha256": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76",
+        "dimensions": [
+          2000,
+          2000
+        ]
+      },
+      "result": {
+        "file": "current-render-sample61.png",
+        "sha256": "af09d7138b8b707fcbe1133bb1ef1b03b18a5c81942f2bbb13b804c0ba96aa23",
+        "dimensions": [
+          2000,
+          2000
+        ]
+      },
+      "archive_adapter": {
+        "restored_fields": [
+          "layerType",
+          "layerVisible"
+        ],
+        "synthetic_ocr_region_fields": [
+          "bboxW",
+          "bboxH",
+          "bubbleW",
+          "bubbleH"
+        ],
+        "synthetic_bubble_meaning": "bbox echo, therefore current renderer takes no-detected-bubble path"
+      },
+      "elements": {
+        "archived_total": 200,
+        "rendered": 49
+      },
+      "pixel_delta": {
+        "different_channel_values": 4549513,
+        "max_channel_delta": 247,
+        "changed_pixels": 1528677
+      }
+    },
+    {
+      "sample": "sample99",
+      "source": {
+        "name": "source.jpg",
+        "sha256": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0",
+        "dimensions": [
+          3219,
+          2932
+        ]
+      },
+      "result": {
+        "file": "current-render-sample99.png",
+        "sha256": "27318c23d660315915d5a95e47b51514f4fdd16484623a98799c247781763ed3",
+        "dimensions": [
+          3219,
+          2932
+        ]
+      },
+      "archive_adapter": {
+        "restored_fields": [
+          "layerType",
+          "layerVisible"
+        ],
+        "synthetic_ocr_region_fields": [
+          "bboxW",
+          "bboxH",
+          "bubbleW",
+          "bubbleH"
+        ],
+        "synthetic_bubble_meaning": "bbox echo, therefore current renderer takes no-detected-bubble path"
+      },
+      "elements": {
+        "archived_total": 20,
+        "rendered": 9
+      },
+      "pixel_delta": {
+        "different_channel_values": 8963111,
+        "max_channel_delta": 255,
+        "changed_pixels": 3033981
+      }
+    },
+    {
+      "sample": "sample93",
+      "source": {
+        "name": "source.png",
+        "sha256": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b",
+        "dimensions": [
+          6764,
+          4961
+        ]
+      },
+      "result": {
+        "file": "current-render-sample93.png",
+        "sha256": "68d778320a80f7541051193abc0157ce702365396c115e88d98fd583a5694203",
+        "dimensions": [
+          6764,
+          4961
+        ]
+      },
+      "archive_adapter": {
+        "restored_fields": [
+          "layerType",
+          "layerVisible"
+        ],
+        "synthetic_ocr_region_fields": [
+          "bboxW",
+          "bboxH",
+          "bubbleW",
+          "bubbleH"
+        ],
+        "synthetic_bubble_meaning": "bbox echo, therefore current renderer takes no-detected-bubble path"
+      },
+      "elements": {
+        "archived_total": 22,
+        "rendered": 4
+      },
+      "pixel_delta": {
+        "different_channel_values": 34673904,
+        "max_channel_delta": 255,
+        "changed_pixels": 11601979
+      }
+    }
+  ],
+  "synthetic_render_probes": [
+    {
+      "probe": "whitespace-text",
+      "input_text_repr": "'   '",
+      "is_manually_edited": false,
+      "region_type": null,
+      "layer_type": "translation",
+      "typeset_sfx_config": false,
+      "changed_pixels": 3721,
+      "max_channel_delta": 255
+    },
+    {
+      "probe": "empty-manual-plate",
+      "input_text_repr": "''",
+      "is_manually_edited": true,
+      "region_type": null,
+      "layer_type": "translation",
+      "typeset_sfx_config": false,
+      "changed_pixels": 0,
+      "max_channel_delta": 0
+    },
+    {
+      "probe": "sfx-bypasses-translation-filter",
+      "input_text_repr": "'SFX'",
+      "is_manually_edited": false,
+      "region_type": "sfx",
+      "layer_type": "sfx",
+      "typeset_sfx_config": false,
+      "changed_pixels": 3721,
+      "max_channel_delta": 255
+    }
+  ]
+}

@@ -1,0 +1,6220 @@
+[
+  {
+    "sample": "sample177",
+    "declared_dimensions": {
+      "width": 2048,
+      "height": 1910
+    },
+    "source": {
+      "name": "source.jpg",
+      "sha256": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382",
+      "dimensions": [
+        2048,
+        1910
+      ]
+    },
+    "project_original": {
+      "sha256": "930f29ad0c61d9f992c6157273561fe48878e5f4276fa012b0268dcce0182677",
+      "dimensions": [
+        2048,
+        1910
+      ],
+      "pixel_identical_to_source": false,
+      "different_channel_values": 1317157,
+      "max_channel_delta": 24
+    },
+    "counts": {
+      "ocr": 4,
+      "output": 4
+    },
+    "ocr_current_helpers": [
+      {
+        "region_id": "d3374d07-a261-4c95-8f56-3d57064e3bd8",
+        "box": [
+          900,
+          912,
+          944,
+          108
+        ],
+        "text_length": 17,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#ffffff",
+        "current_cover_mask_box": [
+          881,
+          893,
+          982,
+          146
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            900,
+            912,
+            944,
+            108
+          ]
+        ]
+      },
+      {
+        "region_id": "9a7c1d0e-4366-445f-b377-3fea7c816de6",
+        "box": [
+          40,
+          0,
+          1188,
+          312
+        ],
+        "text_length": 31,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#ffffff",
+        "current_cover_mask_box": [
+          0,
+          0,
+          1284,
+          368
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            40,
+            0,
+            1188,
+            312
+          ]
+        ]
+      },
+      {
+        "region_id": "a2c06f15-4dc8-436b-a4a0-d88ebd53f39e",
+        "box": [
+          220,
+          922,
+          484,
+          146
+        ],
+        "text_length": 22,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#ffffff",
+        "current_cover_mask_box": [
+          195,
+          896,
+          534,
+          198
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            220,
+            922,
+            484,
+            146
+          ]
+        ]
+      },
+      {
+        "region_id": "1a030e8a-14b7-4efc-bcfb-f2f6e6bdaa92",
+        "box": [
+          100,
+          1692,
+          1886,
+          186
+        ],
+        "text_length": 28,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#ffffff",
+        "current_cover_mask_box": [
+          67,
+          1659,
+          1952,
+          251
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            100,
+            1692,
+            1886,
+            186
+          ]
+        ]
+      }
+    ],
+    "saved_output_current_fit": [
+      {
+        "region_id": "9a7c1d0e-4366-445f-b377-3fea7c816de6",
+        "box": [
+          30,
+          0,
+          1208,
+          332
+        ],
+        "mask_box": [
+          40,
+          0,
+          1188,
+          312
+        ],
+        "text_length": 55,
+        "font_size": 92,
+        "line_count": 3
+      },
+      {
+        "region_id": "1a030e8a-14b7-4efc-bcfb-f2f6e6bdaa92",
+        "box": [
+          90,
+          1682,
+          1906,
+          206
+        ],
+        "mask_box": [
+          100,
+          1692,
+          1886,
+          186
+        ],
+        "text_length": 99,
+        "font_size": 74,
+        "line_count": 2
+      },
+      {
+        "region_id": "a2c06f15-4dc8-436b-a4a0-d88ebd53f39e",
+        "box": [
+          210,
+          912,
+          504,
+          166
+        ],
+        "mask_box": [
+          220,
+          922,
+          484,
+          146
+        ],
+        "text_length": 44,
+        "font_size": 46,
+        "line_count": 3
+      },
+      {
+        "region_id": "d3374d07-a261-4c95-8f56-3d57064e3bd8",
+        "box": [
+          890,
+          902,
+          964,
+          128
+        ],
+        "mask_box": [
+          900,
+          912,
+          944,
+          108
+        ],
+        "text_length": 34,
+        "font_size": 55,
+        "line_count": 1
+      }
+    ]
+  },
+  {
+    "sample": "sample222",
+    "declared_dimensions": {
+      "width": 4093,
+      "height": 2894
+    },
+    "source": {
+      "name": "source.png",
+      "sha256": "990b1c3b2032e628d4aa6f737d539dd39ae325771369651a3b7c975bbb594738",
+      "dimensions": [
+        4093,
+        2894
+      ]
+    },
+    "project_original": {
+      "sha256": "24e8258e485989db9ac435c81b8f8c4c43e4ce0c32a8c905595bf1ebdbca1fcf",
+      "dimensions": [
+        4093,
+        2894
+      ],
+      "pixel_identical_to_source": true,
+      "different_channel_values": 0,
+      "max_channel_delta": 0
+    },
+    "counts": {
+      "ocr": 1,
+      "output": 1
+    },
+    "ocr_current_helpers": [
+      {
+        "region_id": "18386afd-f707-43a5-ba26-66322c9266ab",
+        "box": [
+          59,
+          11,
+          2986,
+          2882
+        ],
+        "text_length": 174,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#eca8e0",
+        "current_cover_mask_box": [
+          0,
+          0,
+          3564,
+          2894
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            0,
+            0,
+            3564,
+            2894
+          ]
+        ]
+      }
+    ],
+    "saved_output_current_fit": [
+      {
+        "region_id": "18386afd-f707-43a5-ba26-66322c9266ab",
+        "box": [
+          49,
+          1,
+          3006,
+          2902
+        ],
+        "mask_box": [
+          0,
+          0,
+          3564,
+          2894
+        ],
+        "text_length": 589,
+        "font_size": 120,
+        "line_count": 20
+      }
+    ]
+  },
+  {
+    "sample": "sample61",
+    "declared_dimensions": {
+      "width": 2000,
+      "height": 2000
+    },
+    "source": {
+      "name": "source.jpg",
+      "sha256": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76",
+      "dimensions": [
+        2000,
+        2000
+      ]
+    },
+    "project_original": {
+      "sha256": "28e780a0d7e39a3384dd1a825b113eab09e72786347838a454d502b6424669c3",
+      "dimensions": [
+        2000,
+        2000
+      ],
+      "pixel_identical_to_source": true,
+      "different_channel_values": 0,
+      "max_channel_delta": 0
+    },
+    "counts": {
+      "ocr": 50,
+      "output": 150
+    },
+    "ocr_current_helpers": [
+      {
+        "region_id": "352fe29e-3f99-4727-96b6-36b63d946a00",
+        "box": [
+          982,
+          369,
+          424,
+          80
+        ],
+        "text_length": 105,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#232323",
+        "current_cover_mask_box": [
+          968,
+          355,
+          452,
+          108
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            982,
+            369,
+            424,
+            80
+          ],
+          [
+            982,
+            369,
+            424,
+            80
+          ],
+          [
+            982,
+            369,
+            424,
+            80
+          ]
+        ]
+      },
+      {
+        "region_id": "0ec5046d-3727-42fc-8298-7610e416b81b",
+        "box": [
+          982,
+          314,
+          467,
+          35
+        ],
+        "text_length": 49,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          976,
+          308,
+          479,
+          47
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            982,
+            314,
+            467,
+            35
+          ],
+          [
+            982,
+            314,
+            467,
+            35
+          ],
+          [
+            982,
+            314,
+            467,
+            35
+          ]
+        ]
+      },
+      {
+        "region_id": "aeceea59-7bdf-4405-a48d-41cb2a599ce6",
+        "box": [
+          1541,
+          460,
+          292,
+          26
+        ],
+        "text_length": 10,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#1d1d1d",
+        "current_cover_mask_box": [
+          1536,
+          455,
+          302,
+          36
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            1541,
+            460,
+            292,
+            26
+          ],
+          [
+            1541,
+            460,
+            292,
+            26
+          ],
+          [
+            1541,
+            460,
+            292,
+            26
+          ]
+        ]
+      },
+      {
+        "region_id": "47745c7c-11a3-41a4-90d4-97d0006b485e",
+        "box": [
+          986,
+          455,
+          14,
+          9
+        ],
+        "text_length": 1,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#2e2e2e",
+        "current_cover_mask_box": [
+          984,
+          453,
+          18,
+          13
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            984,
+            453,
+            18,
+            13
+          ],
+          [
+            984,
+            453,
+            18,
+            13
+          ],
+          [
+            984,
+            453,
+            18,
+            13
+          ]
+        ]
+      },
+      {
+        "region_id": "ff25a217-3c93-41d5-b1eb-55a605f8c1d3",
+        "box": [
+          982,
+          470,
+          937,
+          92
+        ],
+        "text_length": 217,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#232323",
+        "current_cover_mask_box": [
+          965,
+          453,
+          971,
+          126
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            982,
+            470,
+            937,
+            92
+          ],
+          [
+            982,
+            470,
+            937,
+            92
+          ],
+          [
+            982,
+            470,
+            937,
+            92
+          ]
+        ]
+      },
+      {
+        "region_id": "4ceec9f4-a5dc-4ab4-9269-7469f192cf40",
+        "box": [
+          1613,
+          611,
+          148,
+          27
+        ],
+        "text_length": 5,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#232323",
+        "current_cover_mask_box": [
+          1608,
+          606,
+          158,
+          37
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            1613,
+            611,
+            148,
+            27
+          ],
+          [
+            1613,
+            611,
+            148,
+            27
+          ],
+          [
+            1613,
+            611,
+            148,
+            27
+          ]
+        ]
+      },
+      {
+        "region_id": "44e3cee4-bb9a-4912-98cd-1eda5f36bd42",
+        "box": [
+          1576,
+          652,
+          224,
+          19
+        ],
+        "text_length": 11,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          1573,
+          649,
+          230,
+          25
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            1576,
+            652,
+            224,
+            19
+          ],
+          [
+            1576,
+            652,
+            224,
+            19
+          ],
+          [
+            1576,
+            652,
+            224,
+            19
+          ]
+        ]
+      },
+      {
+        "region_id": "c7ab93d5-2d43-4a86-91ab-1b41ca7bb943",
+        "box": [
+          988,
+          583,
+          127,
+          14
+        ],
+        "text_length": 7,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#171717",
+        "current_cover_mask_box": [
+          985,
+          580,
+          133,
+          20
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            985,
+            580,
+            133,
+            20
+          ],
+          [
+            985,
+            580,
+            133,
+            20
+          ],
+          [
+            985,
+            580,
+            133,
+            20
+          ]
+        ]
+      },
+      {
+        "region_id": "644b21e1-c33e-40ad-935a-c60c720c8cbc",
+        "box": [
+          982,
+          646,
+          939,
+          109
+        ],
+        "text_length": 257,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          962,
+          626,
+          979,
+          149
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            982,
+            646,
+            939,
+            109
+          ],
+          [
+            982,
+            646,
+            939,
+            109
+          ],
+          [
+            982,
+            646,
+            939,
+            109
+          ]
+        ]
+      },
+      {
+        "region_id": "20a20394-cc2e-4f48-8877-5a4f12e0e804",
+        "box": [
+          1576,
+          822,
+          220,
+          19
+        ],
+        "text_length": 11,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          1573,
+          819,
+          226,
+          25
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            1576,
+            822,
+            220,
+            19
+          ],
+          [
+            1576,
+            822,
+            220,
+            19
+          ],
+          [
+            1576,
+            822,
+            220,
+            19
+          ]
+        ]
+      },
+      {
+        "region_id": "3d92e557-d213-413f-aecc-590715ef473b",
+        "box": [
+          990,
+          820,
+          209,
+          13
+        ],
+        "text_length": 13,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#1c1b1b",
+        "current_cover_mask_box": [
+          988,
+          818,
+          213,
+          17
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            988,
+            818,
+            213,
+            17
+          ],
+          [
+            988,
+            818,
+            213,
+            17
+          ],
+          [
+            988,
+            818,
+            213,
+            17
+          ]
+        ]
+      },
+      {
+        "region_id": "50f1c421-2f83-4d21-931e-c08adfe38f2b",
+        "box": [
+          986,
+          761,
+          933,
+          53
+        ],
+        "text_length": 124,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          976,
+          751,
+          953,
+          73
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            986,
+            761,
+            933,
+            53
+          ],
+          [
+            986,
+            761,
+            933,
+            53
+          ],
+          [
+            986,
+            761,
+            933,
+            53
+          ]
+        ]
+      },
+      {
+        "region_id": "207f9426-e320-4329-bc49-2fc6b245efea",
+        "box": [
+          74,
+          681,
+          474,
+          43
+        ],
+        "text_length": 42,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#161616",
+        "current_cover_mask_box": [
+          66,
+          673,
+          490,
+          59
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            74,
+            681,
+            474,
+            43
+          ],
+          [
+            74,
+            681,
+            474,
+            43
+          ],
+          [
+            74,
+            681,
+            474,
+            43
+          ]
+        ]
+      },
+      {
+        "region_id": "23b7588d-6c72-4c87-9a90-2877acf9da2c",
+        "box": [
+          74,
+          974,
+          468,
+          59
+        ],
+        "text_length": 75,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          63,
+          963,
+          490,
+          81
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            74,
+            974,
+            468,
+            59
+          ],
+          [
+            74,
+            974,
+            468,
+            59
+          ],
+          [
+            74,
+            974,
+            468,
+            59
+          ]
+        ]
+      },
+      {
+        "region_id": "9019d131-f1fb-446a-891a-30a4f895ab02",
+        "box": [
+          74,
+          898,
+          726,
+          37
+        ],
+        "text_length": 88,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          67,
+          891,
+          740,
+          51
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            74,
+            898,
+            726,
+            37
+          ],
+          [
+            74,
+            898,
+            726,
+            37
+          ],
+          [
+            74,
+            898,
+            726,
+            37
+          ]
+        ]
+      },
+      {
+        "region_id": "958f6d9c-4542-4030-98c6-5532e1538ce8",
+        "box": [
+          74,
+          837,
+          658,
+          43
+        ],
+        "text_length": 46,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          66,
+          829,
+          674,
+          59
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            74,
+            837,
+            658,
+            43
+          ],
+          [
+            74,
+            837,
+            658,
+            43
+          ],
+          [
+            74,
+            837,
+            658,
+            43
+          ]
+        ]
+      },
+      {
+        "region_id": "265916f7-f161-470b-9d3c-228964c724de",
+        "box": [
+          595,
+          957,
+          164,
+          19
+        ],
+        "text_length": 14,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          592,
+          954,
+          170,
+          25
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            595,
+            957,
+            164,
+            19
+          ],
+          [
+            595,
+            957,
+            164,
+            19
+          ],
+          [
+            595,
+            957,
+            164,
+            19
+          ]
+        ]
+      },
+      {
+        "region_id": "98a08f5f-98cb-46a4-926b-83f296dc3e0d",
+        "box": [
+          76,
+          939,
+          269,
+          14
+        ],
+        "text_length": 23,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          73,
+          936,
+          275,
+          20
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            76,
+            939,
+            269,
+            14
+          ],
+          [
+            76,
+            939,
+            269,
+            14
+          ],
+          [
+            76,
+            939,
+            269,
+            14
+          ]
+        ]
+      },
+      {
+        "region_id": "a2dad0ba-5fc6-44d3-aabf-9623db181ef8",
+        "box": [
+          593,
+          1056,
+          209,
+          76
+        ],
+        "text_length": 61,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          579,
+          1042,
+          237,
+          104
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            593,
+            1056,
+            209,
+            76
+          ],
+          [
+            593,
+            1056,
+            209,
+            76
+          ],
+          [
+            593,
+            1056,
+            209,
+            76
+          ]
+        ]
+      },
+      {
+        "region_id": "5fa003eb-50ba-4c95-aeba-b12b10d09095",
+        "box": [
+          101,
+          1091,
+          174,
+          20
+        ],
+        "text_length": 12,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          97,
+          1087,
+          182,
+          28
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            101,
+            1091,
+            174,
+            20
+          ],
+          [
+            101,
+            1091,
+            174,
+            20
+          ],
+          [
+            101,
+            1091,
+            174,
+            20
+          ]
+        ]
+      },
+      {
+        "region_id": "a53ad3cb-5008-47fc-a2da-cf8e1fedcc6b",
+        "box": [
+          76,
+          1195,
+          716,
+          53
+        ],
+        "text_length": 131,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          66,
+          1185,
+          736,
+          73
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            76,
+            1195,
+            716,
+            53
+          ],
+          [
+            76,
+            1195,
+            716,
+            53
+          ],
+          [
+            76,
+            1195,
+            716,
+            53
+          ]
+        ]
+      },
+      {
+        "region_id": "379158fb-75fc-458a-80bc-24eaec75e088",
+        "box": [
+          76,
+          1117,
+          453,
+          56
+        ],
+        "text_length": 60,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          66,
+          1107,
+          473,
+          76
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            76,
+            1117,
+            453,
+            56
+          ],
+          [
+            76,
+            1117,
+            453,
+            56
+          ],
+          [
+            76,
+            1117,
+            453,
+            56
+          ]
+        ]
+      },
+      {
+        "region_id": "32fbf4b0-2872-4198-82d4-53c214a8423e",
+        "box": [
+          76,
+          1056,
+          45,
+          16
+        ],
+        "text_length": 4,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          74,
+          1054,
+          49,
+          20
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            76,
+            1056,
+            45,
+            16
+          ],
+          [
+            76,
+            1056,
+            45,
+            16
+          ],
+          [
+            76,
+            1056,
+            45,
+            16
+          ]
+        ]
+      },
+      {
+        "region_id": "f30a17c5-4c42-4a3b-9d03-d163a48927ed",
+        "box": [
+          78,
+          1285,
+          154,
+          19
+        ],
+        "text_length": 9,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          75,
+          1282,
+          160,
+          25
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            78,
+            1285,
+            154,
+            19
+          ],
+          [
+            78,
+            1285,
+            154,
+            19
+          ],
+          [
+            78,
+            1285,
+            154,
+            19
+          ]
+        ]
+      },
+      {
+        "region_id": "c96589ea-4ebc-49d7-8d02-e1950acfe089",
+        "box": [
+          72,
+          1310,
+          470,
+          113
+        ],
+        "text_length": 132,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          53,
+          1290,
+          508,
+          153
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            72,
+            1310,
+            470,
+            113
+          ],
+          [
+            72,
+            1310,
+            470,
+            113
+          ],
+          [
+            72,
+            1310,
+            470,
+            113
+          ]
+        ]
+      },
+      {
+        "region_id": "0aa47e4d-2b29-47e5-a763-76ae6bc99ddb",
+        "box": [
+          154,
+          1447,
+          322,
+          19
+        ],
+        "text_length": 16,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          151,
+          1444,
+          328,
+          25
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            154,
+            1447,
+            322,
+            19
+          ],
+          [
+            154,
+            1447,
+            322,
+            19
+          ],
+          [
+            154,
+            1447,
+            322,
+            19
+          ]
+        ]
+      },
+      {
+        "region_id": "85ee209d-ad2b-4be4-ab2d-fa61e92221e2",
+        "box": [
+          72,
+          1488,
+          478,
+          121
+        ],
+        "text_length": 160,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          51,
+          1466,
+          520,
+          165
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            72,
+            1488,
+            478,
+            121
+          ],
+          [
+            72,
+            1488,
+            478,
+            121
+          ],
+          [
+            72,
+            1488,
+            478,
+            121
+          ]
+        ]
+      },
+      {
+        "region_id": "668e834c-4787-4b50-984d-c85a5b1a8cab",
+        "box": [
+          80,
+          1628,
+          156,
+          14
+        ],
+        "text_length": 9,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#191919",
+        "current_cover_mask_box": [
+          77,
+          1625,
+          162,
+          20
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            77,
+            1625,
+            162,
+            20
+          ],
+          [
+            77,
+            1625,
+            162,
+            20
+          ],
+          [
+            77,
+            1625,
+            162,
+            20
+          ]
+        ]
+      },
+      {
+        "region_id": "1de4fa6d-9bcb-4587-877d-48e6375a3377",
+        "box": [
+          74,
+          1650,
+          478,
+          94
+        ],
+        "text_length": 151,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#232323",
+        "current_cover_mask_box": [
+          58,
+          1633,
+          510,
+          128
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            74,
+            1650,
+            478,
+            94
+          ],
+          [
+            74,
+            1650,
+            478,
+            94
+          ],
+          [
+            74,
+            1650,
+            478,
+            94
+          ]
+        ]
+      },
+      {
+        "region_id": "6e1a9bf9-7619-4684-8bfa-452032b91371",
+        "box": [
+          76,
+          1763,
+          466,
+          80
+        ],
+        "text_length": 88,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          62,
+          1749,
+          494,
+          108
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            76,
+            1763,
+            466,
+            80
+          ],
+          [
+            76,
+            1763,
+            466,
+            80
+          ],
+          [
+            76,
+            1763,
+            466,
+            80
+          ]
+        ]
+      },
+      {
+        "region_id": "33ba6420-35ad-464f-9d7b-d293838f1dff",
+        "box": [
+          982,
+          62,
+          478,
+          246
+        ],
+        "text_length": 374,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          938,
+          18,
+          566,
+          334
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            982,
+            62,
+            478,
+            246
+          ],
+          [
+            982,
+            62,
+            478,
+            246
+          ],
+          [
+            982,
+            62,
+            478,
+            246
+          ]
+        ]
+      },
+      {
+        "region_id": "6af48baa-32ea-4b9b-b401-f65883b2df93",
+        "box": [
+          982,
+          843,
+          935,
+          100
+        ],
+        "text_length": 264,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          964,
+          825,
+          971,
+          136
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            982,
+            843,
+            935,
+            100
+          ],
+          [
+            982,
+            843,
+            935,
+            100
+          ],
+          [
+            982,
+            843,
+            935,
+            100
+          ]
+        ]
+      },
+      {
+        "region_id": "a06c55e6-197b-4f71-92ab-f1b716ed88c2",
+        "box": [
+          982,
+          955,
+          937,
+          134
+        ],
+        "text_length": 304,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          959,
+          931,
+          983,
+          182
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            982,
+            955,
+            937,
+            134
+          ],
+          [
+            982,
+            955,
+            937,
+            134
+          ],
+          [
+            982,
+            955,
+            937,
+            134
+          ]
+        ]
+      },
+      {
+        "region_id": "a242f17c-db51-4a3e-ac87-d39da2bfeaba",
+        "box": [
+          1541,
+          1119,
+          287,
+          19
+        ],
+        "text_length": 14,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          1538,
+          1116,
+          293,
+          25
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            1541,
+            1119,
+            287,
+            19
+          ],
+          [
+            1541,
+            1119,
+            287,
+            19
+          ],
+          [
+            1541,
+            1119,
+            287,
+            19
+          ]
+        ]
+      },
+      {
+        "region_id": "a3ae4a58-1dc2-4a7b-a96b-5c2fbdef0380",
+        "box": [
+          1453,
+          1080,
+          312,
+          13
+        ],
+        "text_length": 25,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#272727",
+        "current_cover_mask_box": [
+          1451,
+          1078,
+          316,
+          17
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            1451,
+            1078,
+            316,
+            17
+          ],
+          [
+            1451,
+            1078,
+            316,
+            17
+          ],
+          [
+            1451,
+            1078,
+            316,
+            17
+          ]
+        ]
+      },
+      {
+        "region_id": "29a8f03b-bd55-4e17-bd15-e6a5c5031c61",
+        "box": [
+          1447,
+          1187,
+          476,
+          148
+        ],
+        "text_length": 247,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          1422,
+          1160,
+          526,
+          202
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            1447,
+            1187,
+            476,
+            148
+          ],
+          [
+            1447,
+            1187,
+            476,
+            148
+          ],
+          [
+            1447,
+            1187,
+            476,
+            148
+          ]
+        ]
+      },
+      {
+        "region_id": "cc192eb4-9b3e-4be6-a528-7ff84f2edcae",
+        "box": [
+          1453,
+          1466,
+          459,
+          41
+        ],
+        "text_length": 48,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          1446,
+          1459,
+          473,
+          55
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            1453,
+            1466,
+            459,
+            41
+          ],
+          [
+            1453,
+            1466,
+            459,
+            41
+          ],
+          [
+            1453,
+            1466,
+            459,
+            41
+          ]
+        ]
+      },
+      {
+        "region_id": "8c6b1cea-83ce-4e61-8a36-168ded89586d",
+        "box": [
+          1449,
+          1390,
+          465,
+          57
+        ],
+        "text_length": 75,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          1439,
+          1380,
+          485,
+          77
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            1449,
+            1390,
+            465,
+            57
+          ],
+          [
+            1449,
+            1390,
+            465,
+            57
+          ],
+          [
+            1449,
+            1390,
+            465,
+            57
+          ]
+        ]
+      },
+      {
+        "region_id": "d2bf3ea5-7084-455c-bbd6-9ee5a13d1cdd",
+        "box": [
+          1449,
+          1353,
+          451,
+          20
+        ],
+        "text_length": 35,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          1445,
+          1349,
+          459,
+          28
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            1449,
+            1353,
+            451,
+            20
+          ],
+          [
+            1449,
+            1353,
+            451,
+            20
+          ],
+          [
+            1449,
+            1353,
+            451,
+            20
+          ]
+        ]
+      },
+      {
+        "region_id": "d6a025bf-88fc-4e3c-be7f-9a157ad00402",
+        "box": [
+          324,
+          87,
+          476,
+          137
+        ],
+        "text_length": 177,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#1e1e1e",
+        "current_cover_mask_box": [
+          300,
+          62,
+          524,
+          187
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            324,
+            87,
+            476,
+            137
+          ],
+          [
+            324,
+            87,
+            476,
+            137
+          ],
+          [
+            324,
+            87,
+            476,
+            137
+          ]
+        ]
+      },
+      {
+        "region_id": "5d233cfc-5051-43e7-84d8-d5187bd931a5",
+        "box": [
+          330,
+          380,
+          68,
+          20
+        ],
+        "text_length": 3,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#232323",
+        "current_cover_mask_box": [
+          326,
+          376,
+          76,
+          28
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            330,
+            380,
+            68,
+            20
+          ],
+          [
+            330,
+            380,
+            68,
+            20
+          ],
+          [
+            330,
+            380,
+            68,
+            20
+          ]
+        ]
+      },
+      {
+        "region_id": "450e835d-3783-4ee0-8c42-f03876ce0e4d",
+        "box": [
+          351,
+          503,
+          178,
+          14
+        ],
+        "text_length": 12,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#1c1c1c",
+        "current_cover_mask_box": [
+          348,
+          500,
+          184,
+          20
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            348,
+            500,
+            184,
+            20
+          ],
+          [
+            348,
+            500,
+            184,
+            20
+          ],
+          [
+            348,
+            500,
+            184,
+            20
+          ]
+        ]
+      },
+      {
+        "region_id": "c5e2f50f-b9b8-4fb1-91d1-51b8471e7c54",
+        "box": [
+          330,
+          527,
+          453,
+          88
+        ],
+        "text_length": 124,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          314,
+          511,
+          485,
+          120
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            330,
+            527,
+            453,
+            88
+          ],
+          [
+            330,
+            527,
+            453,
+            88
+          ],
+          [
+            330,
+            527,
+            453,
+            88
+          ]
+        ]
+      },
+      {
+        "region_id": "903e6e54-6f91-4b7e-b512-a26c04635bce",
+        "box": [
+          328,
+          462,
+          45,
+          16
+        ],
+        "text_length": 4,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          326,
+          460,
+          49,
+          20
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            328,
+            462,
+            45,
+            16
+          ],
+          [
+            328,
+            462,
+            45,
+            16
+          ],
+          [
+            328,
+            462,
+            45,
+            16
+          ]
+        ]
+      },
+      {
+        "region_id": "207540a1-b75a-4c21-9648-f60fbff50c7a",
+        "box": [
+          326,
+          408,
+          466,
+          35
+        ],
+        "text_length": 72,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          320,
+          402,
+          478,
+          47
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            326,
+            408,
+            466,
+            35
+          ],
+          [
+            326,
+            408,
+            466,
+            35
+          ],
+          [
+            326,
+            408,
+            466,
+            35
+          ]
+        ]
+      },
+      {
+        "region_id": "280aced0-8bae-4b8f-a0d9-526d5b9ebb61",
+        "box": [
+          326,
+          322,
+          463,
+          37
+        ],
+        "text_length": 58,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          319,
+          315,
+          477,
+          51
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            326,
+            322,
+            463,
+            37
+          ],
+          [
+            326,
+            322,
+            463,
+            37
+          ],
+          [
+            326,
+            322,
+            463,
+            37
+          ]
+        ]
+      },
+      {
+        "region_id": "640e03b5-90a5-46b3-845f-b32dd34b8286",
+        "box": [
+          326,
+          244,
+          466,
+          58
+        ],
+        "text_length": 76,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          316,
+          234,
+          486,
+          78
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            326,
+            244,
+            466,
+            58
+          ],
+          [
+            326,
+            244,
+            466,
+            58
+          ],
+          [
+            326,
+            244,
+            466,
+            58
+          ]
+        ]
+      },
+      {
+        "region_id": "87a2658f-e7ce-4c37-b789-ae6c944bee7e",
+        "box": [
+          326,
+          621,
+          466,
+          50
+        ],
+        "text_length": 84,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#252525",
+        "current_cover_mask_box": [
+          317,
+          612,
+          484,
+          68
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            326,
+            621,
+            466,
+            50
+          ],
+          [
+            326,
+            621,
+            466,
+            50
+          ],
+          [
+            326,
+            621,
+            466,
+            50
+          ]
+        ]
+      },
+      {
+        "region_id": "90dc0d02-2278-487c-9a9b-c8e67ac1ce86",
+        "box": [
+          76,
+          773,
+          715,
+          43
+        ],
+        "text_length": 59,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          68,
+          765,
+          731,
+          59
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            76,
+            773,
+            715,
+            43
+          ],
+          [
+            76,
+            773,
+            715,
+            43
+          ],
+          [
+            76,
+            773,
+            715,
+            43
+          ]
+        ]
+      },
+      {
+        "region_id": "b7d9a00b-d9a7-45bd-b271-ee76bea4a987",
+        "box": [
+          76,
+          736,
+          720,
+          41
+        ],
+        "text_length": 76,
+        "current_type_without_bubble": "narration",
+        "cover_color": "#242424",
+        "current_cover_mask_box": [
+          69,
+          729,
+          734,
+          55
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            76,
+            736,
+            720,
+            41
+          ],
+          [
+            76,
+            736,
+            720,
+            41
+          ],
+          [
+            76,
+            736,
+            720,
+            41
+          ]
+        ]
+      }
+    ],
+    "saved_output_current_fit": [
+      {
+        "region_id": "32fbf4b0-2872-4198-82d4-53c214a8423e",
+        "box": [
+          66,
+          1046,
+          65,
+          36
+        ],
+        "mask_box": [
+          76,
+          1056,
+          45,
+          16
+        ],
+        "text_length": 12,
+        "font_size": 12,
+        "line_count": 2
+      },
+      {
+        "region_id": "f30a17c5-4c42-4a3b-9d03-d163a48927ed",
+        "box": [
+          68,
+          1275,
+          174,
+          39
+        ],
+        "mask_box": [
+          78,
+          1285,
+          154,
+          19
+        ],
+        "text_length": 28,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "0aa47e4d-2b29-47e5-a763-76ae6bc99ddb",
+        "box": [
+          144,
+          1437,
+          342,
+          39
+        ],
+        "mask_box": [
+          154,
+          1447,
+          322,
+          19
+        ],
+        "text_length": 62,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "20a20394-cc2e-4f48-8877-5a4f12e0e804",
+        "box": [
+          1566,
+          812,
+          240,
+          39
+        ],
+        "mask_box": [
+          1576,
+          822,
+          220,
+          19
+        ],
+        "text_length": 39,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "ff25a217-3c93-41d5-b1eb-55a605f8c1d3",
+        "box": [
+          972,
+          460,
+          957,
+          112
+        ],
+        "mask_box": [
+          982,
+          470,
+          937,
+          92
+        ],
+        "text_length": 551,
+        "font_size": 16,
+        "line_count": 5
+      },
+      {
+        "region_id": "958f6d9c-4542-4030-98c6-5532e1538ce8",
+        "box": [
+          64,
+          827,
+          678,
+          63
+        ],
+        "mask_box": [
+          74,
+          837,
+          658,
+          43
+        ],
+        "text_length": 95,
+        "font_size": 26,
+        "line_count": 2
+      },
+      {
+        "region_id": "a53ad3cb-5008-47fc-a2da-cf8e1fedcc6b",
+        "box": [
+          66,
+          1185,
+          736,
+          73
+        ],
+        "mask_box": [
+          76,
+          1195,
+          716,
+          53
+        ],
+        "text_length": 426,
+        "font_size": 13,
+        "line_count": 4
+      },
+      {
+        "region_id": "4ceec9f4-a5dc-4ab4-9269-7469f192cf40",
+        "box": [
+          1603,
+          601,
+          168,
+          47
+        ],
+        "mask_box": [
+          1613,
+          611,
+          148,
+          27
+        ],
+        "text_length": 13,
+        "font_size": 28,
+        "line_count": 1
+      },
+      {
+        "region_id": "44e3cee4-bb9a-4912-98cd-1eda5f36bd42",
+        "box": [
+          1566,
+          642,
+          244,
+          39
+        ],
+        "mask_box": [
+          1576,
+          652,
+          224,
+          19
+        ],
+        "text_length": 28,
+        "font_size": 18,
+        "line_count": 1
+      },
+      {
+        "region_id": "6e1a9bf9-7619-4684-8bfa-452032b91371",
+        "box": [
+          66,
+          1753,
+          486,
+          100
+        ],
+        "mask_box": [
+          76,
+          1763,
+          466,
+          80
+        ],
+        "text_length": 229,
+        "font_size": 16,
+        "line_count": 5
+      },
+      {
+        "region_id": "640e03b5-90a5-46b3-845f-b32dd34b8286",
+        "box": [
+          316,
+          234,
+          486,
+          78
+        ],
+        "mask_box": [
+          326,
+          244,
+          466,
+          58
+        ],
+        "text_length": 188,
+        "font_size": 16,
+        "line_count": 4
+      },
+      {
+        "region_id": "98a08f5f-98cb-46a4-926b-83f296dc3e0d",
+        "box": [
+          66,
+          929,
+          289,
+          34
+        ],
+        "mask_box": [
+          76,
+          939,
+          269,
+          14
+        ],
+        "text_length": 45,
+        "font_size": 14,
+        "line_count": 2
+      },
+      {
+        "region_id": "5fa003eb-50ba-4c95-aeba-b12b10d09095",
+        "box": [
+          91,
+          1081,
+          194,
+          40
+        ],
+        "mask_box": [
+          101,
+          1091,
+          174,
+          20
+        ],
+        "text_length": 33,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "23b7588d-6c72-4c87-9a90-2877acf9da2c",
+        "box": [
+          64,
+          964,
+          488,
+          79
+        ],
+        "mask_box": [
+          74,
+          974,
+          468,
+          59
+        ],
+        "text_length": 180,
+        "font_size": 16,
+        "line_count": 4
+      },
+      {
+        "region_id": "265916f7-f161-470b-9d3c-228964c724de",
+        "box": [
+          585,
+          947,
+          184,
+          39
+        ],
+        "mask_box": [
+          595,
+          957,
+          164,
+          19
+        ],
+        "text_length": 38,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "207f9426-e320-4329-bc49-2fc6b245efea",
+        "box": [
+          64,
+          671,
+          494,
+          63
+        ],
+        "mask_box": [
+          74,
+          681,
+          474,
+          43
+        ],
+        "text_length": 176,
+        "font_size": 16,
+        "line_count": 3
+      },
+      {
+        "region_id": "d2bf3ea5-7084-455c-bbd6-9ee5a13d1cdd",
+        "box": [
+          1439,
+          1343,
+          471,
+          40
+        ],
+        "mask_box": [
+          1449,
+          1353,
+          451,
+          20
+        ],
+        "text_length": 100,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "5d233cfc-5051-43e7-84d8-d5187bd931a5",
+        "box": [
+          320,
+          370,
+          88,
+          40
+        ],
+        "mask_box": [
+          330,
+          380,
+          68,
+          20
+        ],
+        "text_length": 13,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "450e835d-3783-4ee0-8c42-f03876ce0e4d",
+        "box": [
+          341,
+          493,
+          198,
+          34
+        ],
+        "mask_box": [
+          348,
+          500,
+          184,
+          20
+        ],
+        "text_length": 30,
+        "font_size": 14,
+        "line_count": 2
+      },
+      {
+        "region_id": "c7ab93d5-2d43-4a86-91ab-1b41ca7bb943",
+        "box": [
+          978,
+          573,
+          147,
+          34
+        ],
+        "mask_box": [
+          985,
+          580,
+          133,
+          20
+        ],
+        "text_length": 32,
+        "font_size": 14,
+        "line_count": 2
+      },
+      {
+        "region_id": "903e6e54-6f91-4b7e-b512-a26c04635bce",
+        "box": [
+          318,
+          452,
+          65,
+          36
+        ],
+        "mask_box": [
+          328,
+          462,
+          45,
+          16
+        ],
+        "text_length": 9,
+        "font_size": 14,
+        "line_count": 2
+      },
+      {
+        "region_id": "644b21e1-c33e-40ad-935a-c60c720c8cbc",
+        "box": [
+          972,
+          636,
+          959,
+          129
+        ],
+        "mask_box": [
+          982,
+          646,
+          939,
+          109
+        ],
+        "text_length": 526,
+        "font_size": 17,
+        "line_count": 5
+      },
+      {
+        "region_id": "33ba6420-35ad-464f-9d7b-d293838f1dff",
+        "box": [
+          972,
+          52,
+          498,
+          266
+        ],
+        "mask_box": [
+          982,
+          62,
+          478,
+          246
+        ],
+        "text_length": 950,
+        "font_size": 14,
+        "line_count": 15
+      },
+      {
+        "region_id": "aeceea59-7bdf-4405-a48d-41cb2a599ce6",
+        "box": [
+          1531,
+          450,
+          312,
+          46
+        ],
+        "mask_box": [
+          1541,
+          460,
+          292,
+          26
+        ],
+        "text_length": 14,
+        "font_size": 38,
+        "line_count": 1
+      },
+      {
+        "region_id": "a242f17c-db51-4a3e-ac87-d39da2bfeaba",
+        "box": [
+          1531,
+          1109,
+          307,
+          39
+        ],
+        "mask_box": [
+          1541,
+          1119,
+          287,
+          19
+        ],
+        "text_length": 50,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "8c6b1cea-83ce-4e61-8a36-168ded89586d",
+        "box": [
+          1439,
+          1380,
+          485,
+          77
+        ],
+        "mask_box": [
+          1449,
+          1390,
+          465,
+          57
+        ],
+        "text_length": 243,
+        "font_size": 15,
+        "line_count": 4
+      },
+      {
+        "region_id": "352fe29e-3f99-4727-96b6-36b63d946a00",
+        "box": [
+          972,
+          359,
+          444,
+          100
+        ],
+        "mask_box": [
+          982,
+          369,
+          424,
+          80
+        ],
+        "text_length": 296,
+        "font_size": 13,
+        "line_count": 5
+      },
+      {
+        "region_id": "0ec5046d-3727-42fc-8298-7610e416b81b",
+        "box": [
+          972,
+          304,
+          487,
+          55
+        ],
+        "mask_box": [
+          982,
+          314,
+          467,
+          35
+        ],
+        "text_length": 141,
+        "font_size": 15,
+        "line_count": 3
+      },
+      {
+        "region_id": "29a8f03b-bd55-4e17-bd15-e6a5c5031c61",
+        "box": [
+          1437,
+          1177,
+          496,
+          168
+        ],
+        "mask_box": [
+          1447,
+          1187,
+          476,
+          148
+        ],
+        "text_length": 517,
+        "font_size": 15,
+        "line_count": 9
+      },
+      {
+        "region_id": "6af48baa-32ea-4b9b-b401-f65883b2df93",
+        "box": [
+          972,
+          833,
+          955,
+          120
+        ],
+        "mask_box": [
+          982,
+          843,
+          935,
+          100
+        ],
+        "text_length": 685,
+        "font_size": 16,
+        "line_count": 6
+      },
+      {
+        "region_id": "a06c55e6-197b-4f71-92ab-f1b716ed88c2",
+        "box": [
+          972,
+          945,
+          957,
+          154
+        ],
+        "mask_box": [
+          982,
+          955,
+          937,
+          134
+        ],
+        "text_length": 805,
+        "font_size": 16,
+        "line_count": 8
+      },
+      {
+        "region_id": "47745c7c-11a3-41a4-90d4-97d0006b485e",
+        "box": [
+          976,
+          445,
+          34,
+          29
+        ],
+        "mask_box": [
+          984,
+          453,
+          18,
+          13
+        ],
+        "text_length": 0,
+        "font_size": 24,
+        "line_count": 1
+      },
+      {
+        "region_id": "50f1c421-2f83-4d21-931e-c08adfe38f2b",
+        "box": [
+          976,
+          751,
+          953,
+          73
+        ],
+        "mask_box": [
+          986,
+          761,
+          933,
+          53
+        ],
+        "text_length": 273,
+        "font_size": 20,
+        "line_count": 3
+      },
+      {
+        "region_id": "cc192eb4-9b3e-4be6-a528-7ff84f2edcae",
+        "box": [
+          1443,
+          1456,
+          479,
+          61
+        ],
+        "mask_box": [
+          1453,
+          1466,
+          459,
+          41
+        ],
+        "text_length": 204,
+        "font_size": 12,
+        "line_count": 4
+      },
+      {
+        "region_id": "3d92e557-d213-413f-aecc-590715ef473b",
+        "box": [
+          980,
+          810,
+          229,
+          33
+        ],
+        "mask_box": [
+          988,
+          818,
+          213,
+          17
+        ],
+        "text_length": 43,
+        "font_size": 13,
+        "line_count": 2
+      },
+      {
+        "region_id": "c5e2f50f-b9b8-4fb1-91d1-51b8471e7c54",
+        "box": [
+          320,
+          517,
+          473,
+          108
+        ],
+        "mask_box": [
+          330,
+          527,
+          453,
+          88
+        ],
+        "text_length": 338,
+        "font_size": 14,
+        "line_count": 6
+      },
+      {
+        "region_id": "85ee209d-ad2b-4be4-ab2d-fa61e92221e2",
+        "box": [
+          62,
+          1478,
+          498,
+          141
+        ],
+        "mask_box": [
+          72,
+          1488,
+          478,
+          121
+        ],
+        "text_length": 330,
+        "font_size": 17,
+        "line_count": 6
+      },
+      {
+        "region_id": "280aced0-8bae-4b8f-a0d9-526d5b9ebb61",
+        "box": [
+          316,
+          312,
+          483,
+          57
+        ],
+        "mask_box": [
+          326,
+          322,
+          463,
+          37
+        ],
+        "text_length": 193,
+        "font_size": 14,
+        "line_count": 3
+      },
+      {
+        "region_id": "b7d9a00b-d9a7-45bd-b271-ee76bea4a987",
+        "box": [
+          66,
+          726,
+          740,
+          61
+        ],
+        "mask_box": [
+          76,
+          736,
+          720,
+          41
+        ],
+        "text_length": 164,
+        "font_size": 17,
+        "line_count": 2
+      },
+      {
+        "region_id": "1de4fa6d-9bcb-4587-877d-48e6375a3377",
+        "box": [
+          64,
+          1640,
+          498,
+          114
+        ],
+        "mask_box": [
+          74,
+          1650,
+          478,
+          94
+        ],
+        "text_length": 332,
+        "font_size": 15,
+        "line_count": 6
+      },
+      {
+        "region_id": "207540a1-b75a-4c21-9648-f60fbff50c7a",
+        "box": [
+          316,
+          398,
+          486,
+          55
+        ],
+        "mask_box": [
+          326,
+          408,
+          466,
+          35
+        ],
+        "text_length": 254,
+        "font_size": 11,
+        "line_count": 4
+      },
+      {
+        "region_id": "d6a025bf-88fc-4e3c-be7f-9a157ad00402",
+        "box": [
+          314,
+          77,
+          496,
+          157
+        ],
+        "mask_box": [
+          324,
+          87,
+          476,
+          137
+        ],
+        "text_length": 424,
+        "font_size": 16,
+        "line_count": 8
+      },
+      {
+        "region_id": "90dc0d02-2278-487c-9a9b-c8e67ac1ce86",
+        "box": [
+          66,
+          763,
+          735,
+          63
+        ],
+        "mask_box": [
+          76,
+          773,
+          715,
+          43
+        ],
+        "text_length": 183,
+        "font_size": 17,
+        "line_count": 3
+      },
+      {
+        "region_id": "9019d131-f1fb-446a-891a-30a4f895ab02",
+        "box": [
+          64,
+          888,
+          746,
+          57
+        ],
+        "mask_box": [
+          74,
+          898,
+          726,
+          37
+        ],
+        "text_length": 300,
+        "font_size": 14,
+        "line_count": 3
+      },
+      {
+        "region_id": "87a2658f-e7ce-4c37-b789-ae6c944bee7e",
+        "box": [
+          316,
+          611,
+          486,
+          70
+        ],
+        "mask_box": [
+          326,
+          621,
+          466,
+          50
+        ],
+        "text_length": 268,
+        "font_size": 13,
+        "line_count": 4
+      },
+      {
+        "region_id": "c96589ea-4ebc-49d7-8d02-e1950acfe089",
+        "box": [
+          62,
+          1300,
+          490,
+          133
+        ],
+        "mask_box": [
+          72,
+          1310,
+          470,
+          113
+        ],
+        "text_length": 345,
+        "font_size": 15,
+        "line_count": 6
+      },
+      {
+        "region_id": "a2dad0ba-5fc6-44d3-aabf-9623db181ef8",
+        "box": [
+          583,
+          1046,
+          229,
+          96
+        ],
+        "mask_box": [
+          593,
+          1056,
+          209,
+          76
+        ],
+        "text_length": 219,
+        "font_size": 11,
+        "line_count": 6
+      },
+      {
+        "region_id": "379158fb-75fc-458a-80bc-24eaec75e088",
+        "box": [
+          66,
+          1107,
+          473,
+          76
+        ],
+        "mask_box": [
+          76,
+          1117,
+          453,
+          56
+        ],
+        "text_length": 185,
+        "font_size": 15,
+        "line_count": 4
+      },
+      {
+        "region_id": "a3ae4a58-1dc2-4a7b-a96b-5c2fbdef0380",
+        "box": [
+          1443,
+          1070,
+          332,
+          33
+        ],
+        "mask_box": [
+          1451,
+          1078,
+          316,
+          17
+        ],
+        "text_length": 61,
+        "font_size": 13,
+        "line_count": 2
+      },
+      {
+        "region_id": "668e834c-4787-4b50-984d-c85a5b1a8cab",
+        "box": [
+          70,
+          1618,
+          176,
+          34
+        ],
+        "mask_box": [
+          77,
+          1625,
+          162,
+          20
+        ],
+        "text_length": 35,
+        "font_size": 14,
+        "line_count": 2
+      },
+      {
+        "region_id": "20a20394-cc2e-4f48-8877-5a4f12e0e804",
+        "box": [
+          1566,
+          812,
+          240,
+          39
+        ],
+        "mask_box": [
+          1576,
+          822,
+          220,
+          19
+        ],
+        "text_length": 39,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "44e3cee4-bb9a-4912-98cd-1eda5f36bd42",
+        "box": [
+          1566,
+          642,
+          244,
+          39
+        ],
+        "mask_box": [
+          1576,
+          652,
+          224,
+          19
+        ],
+        "text_length": 35,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "5d233cfc-5051-43e7-84d8-d5187bd931a5",
+        "box": [
+          320,
+          370,
+          88,
+          40
+        ],
+        "mask_box": [
+          330,
+          380,
+          68,
+          20
+        ],
+        "text_length": 17,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "98a08f5f-98cb-46a4-926b-83f296dc3e0d",
+        "box": [
+          66,
+          929,
+          289,
+          34
+        ],
+        "mask_box": [
+          76,
+          939,
+          269,
+          14
+        ],
+        "text_length": 58,
+        "font_size": 14,
+        "line_count": 2
+      },
+      {
+        "region_id": "5fa003eb-50ba-4c95-aeba-b12b10d09095",
+        "box": [
+          91,
+          1081,
+          194,
+          40
+        ],
+        "mask_box": [
+          101,
+          1091,
+          174,
+          20
+        ],
+        "text_length": 31,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "32fbf4b0-2872-4198-82d4-53c214a8423e",
+        "box": [
+          66,
+          1046,
+          65,
+          36
+        ],
+        "mask_box": [
+          76,
+          1056,
+          45,
+          16
+        ],
+        "text_length": 16,
+        "font_size": 10,
+        "line_count": 3
+      },
+      {
+        "region_id": "aeceea59-7bdf-4405-a48d-41cb2a599ce6",
+        "box": [
+          1531,
+          450,
+          312,
+          46
+        ],
+        "mask_box": [
+          1541,
+          460,
+          292,
+          26
+        ],
+        "text_length": 14,
+        "font_size": 38,
+        "line_count": 1
+      },
+      {
+        "region_id": "3d92e557-d213-413f-aecc-590715ef473b",
+        "box": [
+          980,
+          810,
+          229,
+          33
+        ],
+        "mask_box": [
+          988,
+          818,
+          213,
+          17
+        ],
+        "text_length": 45,
+        "font_size": 13,
+        "line_count": 2
+      },
+      {
+        "region_id": "a242f17c-db51-4a3e-ac87-d39da2bfeaba",
+        "box": [
+          1531,
+          1109,
+          307,
+          39
+        ],
+        "mask_box": [
+          1541,
+          1119,
+          287,
+          19
+        ],
+        "text_length": 59,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "6e1a9bf9-7619-4684-8bfa-452032b91371",
+        "box": [
+          66,
+          1753,
+          486,
+          100
+        ],
+        "mask_box": [
+          76,
+          1763,
+          466,
+          80
+        ],
+        "text_length": 229,
+        "font_size": 16,
+        "line_count": 5
+      },
+      {
+        "region_id": "958f6d9c-4542-4030-98c6-5532e1538ce8",
+        "box": [
+          64,
+          827,
+          678,
+          63
+        ],
+        "mask_box": [
+          74,
+          837,
+          658,
+          43
+        ],
+        "text_length": 94,
+        "font_size": 26,
+        "line_count": 2
+      },
+      {
+        "region_id": "4ceec9f4-a5dc-4ab4-9269-7469f192cf40",
+        "box": [
+          1603,
+          601,
+          168,
+          47
+        ],
+        "mask_box": [
+          1613,
+          611,
+          148,
+          27
+        ],
+        "text_length": 13,
+        "font_size": 28,
+        "line_count": 1
+      },
+      {
+        "region_id": "f30a17c5-4c42-4a3b-9d03-d163a48927ed",
+        "box": [
+          68,
+          1275,
+          174,
+          39
+        ],
+        "mask_box": [
+          78,
+          1285,
+          154,
+          19
+        ],
+        "text_length": 27,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "33ba6420-35ad-464f-9d7b-d293838f1dff",
+        "box": [
+          972,
+          52,
+          498,
+          266
+        ],
+        "mask_box": [
+          982,
+          62,
+          478,
+          246
+        ],
+        "text_length": 922,
+        "font_size": 14,
+        "line_count": 15
+      },
+      {
+        "region_id": "8c6b1cea-83ce-4e61-8a36-168ded89586d",
+        "box": [
+          1439,
+          1380,
+          485,
+          77
+        ],
+        "mask_box": [
+          1449,
+          1390,
+          465,
+          57
+        ],
+        "text_length": 238,
+        "font_size": 14,
+        "line_count": 4
+      },
+      {
+        "region_id": "207540a1-b75a-4c21-9648-f60fbff50c7a",
+        "box": [
+          316,
+          398,
+          486,
+          55
+        ],
+        "mask_box": [
+          326,
+          408,
+          466,
+          35
+        ],
+        "text_length": 254,
+        "font_size": 11,
+        "line_count": 4
+      },
+      {
+        "region_id": "29a8f03b-bd55-4e17-bd15-e6a5c5031c61",
+        "box": [
+          1437,
+          1177,
+          496,
+          168
+        ],
+        "mask_box": [
+          1447,
+          1187,
+          476,
+          148
+        ],
+        "text_length": 517,
+        "font_size": 15,
+        "line_count": 9
+      },
+      {
+        "region_id": "6af48baa-32ea-4b9b-b401-f65883b2df93",
+        "box": [
+          972,
+          833,
+          955,
+          120
+        ],
+        "mask_box": [
+          982,
+          843,
+          935,
+          100
+        ],
+        "text_length": 705,
+        "font_size": 15,
+        "line_count": 6
+      },
+      {
+        "region_id": "a06c55e6-197b-4f71-92ab-f1b716ed88c2",
+        "box": [
+          972,
+          945,
+          957,
+          154
+        ],
+        "mask_box": [
+          982,
+          955,
+          937,
+          134
+        ],
+        "text_length": 867,
+        "font_size": 16,
+        "line_count": 8
+      },
+      {
+        "region_id": "640e03b5-90a5-46b3-845f-b32dd34b8286",
+        "box": [
+          316,
+          234,
+          486,
+          78
+        ],
+        "mask_box": [
+          326,
+          244,
+          466,
+          58
+        ],
+        "text_length": 442,
+        "font_size": 10,
+        "line_count": 6
+      },
+      {
+        "region_id": "a53ad3cb-5008-47fc-a2da-cf8e1fedcc6b",
+        "box": [
+          66,
+          1185,
+          736,
+          73
+        ],
+        "mask_box": [
+          76,
+          1195,
+          716,
+          53
+        ],
+        "text_length": 344,
+        "font_size": 15,
+        "line_count": 4
+      },
+      {
+        "region_id": "cc192eb4-9b3e-4be6-a528-7ff84f2edcae",
+        "box": [
+          1443,
+          1456,
+          479,
+          61
+        ],
+        "mask_box": [
+          1453,
+          1466,
+          459,
+          41
+        ],
+        "text_length": 204,
+        "font_size": 12,
+        "line_count": 4
+      },
+      {
+        "region_id": "d2bf3ea5-7084-455c-bbd6-9ee5a13d1cdd",
+        "box": [
+          1439,
+          1343,
+          471,
+          40
+        ],
+        "mask_box": [
+          1449,
+          1353,
+          451,
+          20
+        ],
+        "text_length": 120,
+        "font_size": 13,
+        "line_count": 2
+      },
+      {
+        "region_id": "450e835d-3783-4ee0-8c42-f03876ce0e4d",
+        "box": [
+          341,
+          493,
+          198,
+          34
+        ],
+        "mask_box": [
+          348,
+          500,
+          184,
+          20
+        ],
+        "text_length": 31,
+        "font_size": 14,
+        "line_count": 2
+      },
+      {
+        "region_id": "c5e2f50f-b9b8-4fb1-91d1-51b8471e7c54",
+        "box": [
+          320,
+          517,
+          473,
+          108
+        ],
+        "mask_box": [
+          330,
+          527,
+          453,
+          88
+        ],
+        "text_length": 350,
+        "font_size": 14,
+        "line_count": 6
+      },
+      {
+        "region_id": "0aa47e4d-2b29-47e5-a763-76ae6bc99ddb",
+        "box": [
+          144,
+          1437,
+          342,
+          39
+        ],
+        "mask_box": [
+          154,
+          1447,
+          322,
+          19
+        ],
+        "text_length": 68,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "85ee209d-ad2b-4be4-ab2d-fa61e92221e2",
+        "box": [
+          62,
+          1478,
+          498,
+          141
+        ],
+        "mask_box": [
+          72,
+          1488,
+          478,
+          121
+        ],
+        "text_length": 391,
+        "font_size": 16,
+        "line_count": 7
+      },
+      {
+        "region_id": "ff25a217-3c93-41d5-b1eb-55a605f8c1d3",
+        "box": [
+          972,
+          460,
+          957,
+          112
+        ],
+        "mask_box": [
+          982,
+          470,
+          937,
+          92
+        ],
+        "text_length": 551,
+        "font_size": 16,
+        "line_count": 5
+      },
+      {
+        "region_id": "644b21e1-c33e-40ad-935a-c60c720c8cbc",
+        "box": [
+          972,
+          636,
+          959,
+          129
+        ],
+        "mask_box": [
+          982,
+          646,
+          939,
+          109
+        ],
+        "text_length": 526,
+        "font_size": 17,
+        "line_count": 5
+      },
+      {
+        "region_id": "90dc0d02-2278-487c-9a9b-c8e67ac1ce86",
+        "box": [
+          66,
+          763,
+          735,
+          63
+        ],
+        "mask_box": [
+          76,
+          773,
+          715,
+          43
+        ],
+        "text_length": 183,
+        "font_size": 17,
+        "line_count": 3
+      },
+      {
+        "region_id": "23b7588d-6c72-4c87-9a90-2877acf9da2c",
+        "box": [
+          64,
+          964,
+          488,
+          79
+        ],
+        "mask_box": [
+          74,
+          974,
+          468,
+          59
+        ],
+        "text_length": 180,
+        "font_size": 16,
+        "line_count": 4
+      },
+      {
+        "region_id": "265916f7-f161-470b-9d3c-228964c724de",
+        "box": [
+          585,
+          947,
+          184,
+          39
+        ],
+        "mask_box": [
+          595,
+          957,
+          164,
+          19
+        ],
+        "text_length": 38,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "352fe29e-3f99-4727-96b6-36b63d946a00",
+        "box": [
+          972,
+          359,
+          444,
+          100
+        ],
+        "mask_box": [
+          982,
+          369,
+          424,
+          80
+        ],
+        "text_length": 296,
+        "font_size": 13,
+        "line_count": 5
+      },
+      {
+        "region_id": "903e6e54-6f91-4b7e-b512-a26c04635bce",
+        "box": [
+          318,
+          452,
+          65,
+          36
+        ],
+        "mask_box": [
+          328,
+          462,
+          45,
+          16
+        ],
+        "text_length": 9,
+        "font_size": 14,
+        "line_count": 2
+      },
+      {
+        "region_id": "9019d131-f1fb-446a-891a-30a4f895ab02",
+        "box": [
+          64,
+          888,
+          746,
+          57
+        ],
+        "mask_box": [
+          74,
+          898,
+          726,
+          37
+        ],
+        "text_length": 300,
+        "font_size": 14,
+        "line_count": 3
+      },
+      {
+        "region_id": "0ec5046d-3727-42fc-8298-7610e416b81b",
+        "box": [
+          972,
+          304,
+          487,
+          55
+        ],
+        "mask_box": [
+          982,
+          314,
+          467,
+          35
+        ],
+        "text_length": 141,
+        "font_size": 15,
+        "line_count": 3
+      },
+      {
+        "region_id": "47745c7c-11a3-41a4-90d4-97d0006b485e",
+        "box": [
+          976,
+          445,
+          34,
+          29
+        ],
+        "mask_box": [
+          984,
+          453,
+          18,
+          13
+        ],
+        "text_length": 0,
+        "font_size": 24,
+        "line_count": 1
+      },
+      {
+        "region_id": "87a2658f-e7ce-4c37-b789-ae6c944bee7e",
+        "box": [
+          316,
+          611,
+          486,
+          70
+        ],
+        "mask_box": [
+          326,
+          621,
+          466,
+          50
+        ],
+        "text_length": 268,
+        "font_size": 13,
+        "line_count": 4
+      },
+      {
+        "region_id": "c7ab93d5-2d43-4a86-91ab-1b41ca7bb943",
+        "box": [
+          978,
+          573,
+          147,
+          34
+        ],
+        "mask_box": [
+          985,
+          580,
+          133,
+          20
+        ],
+        "text_length": 32,
+        "font_size": 14,
+        "line_count": 2
+      },
+      {
+        "region_id": "280aced0-8bae-4b8f-a0d9-526d5b9ebb61",
+        "box": [
+          316,
+          312,
+          483,
+          57
+        ],
+        "mask_box": [
+          326,
+          322,
+          463,
+          37
+        ],
+        "text_length": 193,
+        "font_size": 14,
+        "line_count": 3
+      },
+      {
+        "region_id": "b7d9a00b-d9a7-45bd-b271-ee76bea4a987",
+        "box": [
+          66,
+          726,
+          740,
+          61
+        ],
+        "mask_box": [
+          76,
+          736,
+          720,
+          41
+        ],
+        "text_length": 164,
+        "font_size": 17,
+        "line_count": 2
+      },
+      {
+        "region_id": "207f9426-e320-4329-bc49-2fc6b245efea",
+        "box": [
+          64,
+          671,
+          494,
+          63
+        ],
+        "mask_box": [
+          74,
+          681,
+          474,
+          43
+        ],
+        "text_length": 176,
+        "font_size": 16,
+        "line_count": 3
+      },
+      {
+        "region_id": "c96589ea-4ebc-49d7-8d02-e1950acfe089",
+        "box": [
+          62,
+          1300,
+          490,
+          133
+        ],
+        "mask_box": [
+          72,
+          1310,
+          470,
+          113
+        ],
+        "text_length": 345,
+        "font_size": 15,
+        "line_count": 6
+      },
+      {
+        "region_id": "a2dad0ba-5fc6-44d3-aabf-9623db181ef8",
+        "box": [
+          583,
+          1046,
+          229,
+          96
+        ],
+        "mask_box": [
+          593,
+          1056,
+          209,
+          76
+        ],
+        "text_length": 219,
+        "font_size": 11,
+        "line_count": 6
+      },
+      {
+        "region_id": "379158fb-75fc-458a-80bc-24eaec75e088",
+        "box": [
+          66,
+          1107,
+          473,
+          76
+        ],
+        "mask_box": [
+          76,
+          1117,
+          453,
+          56
+        ],
+        "text_length": 185,
+        "font_size": 15,
+        "line_count": 4
+      },
+      {
+        "region_id": "a3ae4a58-1dc2-4a7b-a96b-5c2fbdef0380",
+        "box": [
+          1443,
+          1070,
+          332,
+          33
+        ],
+        "mask_box": [
+          1451,
+          1078,
+          316,
+          17
+        ],
+        "text_length": 61,
+        "font_size": 13,
+        "line_count": 2
+      },
+      {
+        "region_id": "668e834c-4787-4b50-984d-c85a5b1a8cab",
+        "box": [
+          70,
+          1618,
+          176,
+          34
+        ],
+        "mask_box": [
+          77,
+          1625,
+          162,
+          20
+        ],
+        "text_length": 35,
+        "font_size": 14,
+        "line_count": 2
+      },
+      {
+        "region_id": "50f1c421-2f83-4d21-931e-c08adfe38f2b",
+        "box": [
+          976,
+          751,
+          953,
+          73
+        ],
+        "mask_box": [
+          986,
+          761,
+          933,
+          53
+        ],
+        "text_length": 273,
+        "font_size": 20,
+        "line_count": 3
+      },
+      {
+        "region_id": "1de4fa6d-9bcb-4587-877d-48e6375a3377",
+        "box": [
+          64,
+          1640,
+          498,
+          114
+        ],
+        "mask_box": [
+          74,
+          1650,
+          478,
+          94
+        ],
+        "text_length": 332,
+        "font_size": 15,
+        "line_count": 6
+      },
+      {
+        "region_id": "d6a025bf-88fc-4e3c-be7f-9a157ad00402",
+        "box": [
+          314,
+          77,
+          496,
+          157
+        ],
+        "mask_box": [
+          324,
+          87,
+          476,
+          137
+        ],
+        "text_length": 424,
+        "font_size": 16,
+        "line_count": 8
+      },
+      {
+        "region_id": "44e3cee4-bb9a-4912-98cd-1eda5f36bd42",
+        "box": [
+          1566,
+          642,
+          244,
+          39
+        ],
+        "mask_box": [
+          1576,
+          652,
+          224,
+          19
+        ],
+        "text_length": 27,
+        "font_size": 17,
+        "line_count": 1
+      },
+      {
+        "region_id": "5d233cfc-5051-43e7-84d8-d5187bd931a5",
+        "box": [
+          320,
+          370,
+          88,
+          40
+        ],
+        "mask_box": [
+          330,
+          380,
+          68,
+          20
+        ],
+        "text_length": 13,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "90dc0d02-2278-487c-9a9b-c8e67ac1ce86",
+        "box": [
+          66,
+          763,
+          735,
+          63
+        ],
+        "mask_box": [
+          76,
+          773,
+          715,
+          43
+        ],
+        "text_length": 174,
+        "font_size": 17,
+        "line_count": 3
+      },
+      {
+        "region_id": "265916f7-f161-470b-9d3c-228964c724de",
+        "box": [
+          585,
+          947,
+          184,
+          39
+        ],
+        "mask_box": [
+          595,
+          957,
+          164,
+          19
+        ],
+        "text_length": 38,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "20a20394-cc2e-4f48-8877-5a4f12e0e804",
+        "box": [
+          1566,
+          812,
+          240,
+          39
+        ],
+        "mask_box": [
+          1576,
+          822,
+          220,
+          19
+        ],
+        "text_length": 39,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "903e6e54-6f91-4b7e-b512-a26c04635bce",
+        "box": [
+          318,
+          452,
+          65,
+          36
+        ],
+        "mask_box": [
+          328,
+          462,
+          45,
+          16
+        ],
+        "text_length": 9,
+        "font_size": 14,
+        "line_count": 2
+      },
+      {
+        "region_id": "5fa003eb-50ba-4c95-aeba-b12b10d09095",
+        "box": [
+          91,
+          1081,
+          194,
+          40
+        ],
+        "mask_box": [
+          101,
+          1091,
+          174,
+          20
+        ],
+        "text_length": 30,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "aeceea59-7bdf-4405-a48d-41cb2a599ce6",
+        "box": [
+          1531,
+          450,
+          312,
+          46
+        ],
+        "mask_box": [
+          1541,
+          460,
+          292,
+          26
+        ],
+        "text_length": 14,
+        "font_size": 38,
+        "line_count": 1
+      },
+      {
+        "region_id": "a242f17c-db51-4a3e-ac87-d39da2bfeaba",
+        "box": [
+          1531,
+          1109,
+          307,
+          39
+        ],
+        "mask_box": [
+          1541,
+          1119,
+          287,
+          19
+        ],
+        "text_length": 59,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "958f6d9c-4542-4030-98c6-5532e1538ce8",
+        "box": [
+          64,
+          827,
+          678,
+          63
+        ],
+        "mask_box": [
+          74,
+          837,
+          658,
+          43
+        ],
+        "text_length": 204,
+        "font_size": 13,
+        "line_count": 3
+      },
+      {
+        "region_id": "4ceec9f4-a5dc-4ab4-9269-7469f192cf40",
+        "box": [
+          1603,
+          601,
+          168,
+          47
+        ],
+        "mask_box": [
+          1613,
+          611,
+          148,
+          27
+        ],
+        "text_length": 13,
+        "font_size": 28,
+        "line_count": 1
+      },
+      {
+        "region_id": "f30a17c5-4c42-4a3b-9d03-d163a48927ed",
+        "box": [
+          68,
+          1275,
+          174,
+          39
+        ],
+        "mask_box": [
+          78,
+          1285,
+          154,
+          19
+        ],
+        "text_length": 27,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "0ec5046d-3727-42fc-8298-7610e416b81b",
+        "box": [
+          972,
+          304,
+          487,
+          55
+        ],
+        "mask_box": [
+          982,
+          314,
+          467,
+          35
+        ],
+        "text_length": 140,
+        "font_size": 15,
+        "line_count": 3
+      },
+      {
+        "region_id": "87a2658f-e7ce-4c37-b789-ae6c944bee7e",
+        "box": [
+          316,
+          611,
+          486,
+          70
+        ],
+        "mask_box": [
+          326,
+          621,
+          466,
+          50
+        ],
+        "text_length": 273,
+        "font_size": 13,
+        "line_count": 4
+      },
+      {
+        "region_id": "c7ab93d5-2d43-4a86-91ab-1b41ca7bb943",
+        "box": [
+          978,
+          573,
+          147,
+          34
+        ],
+        "mask_box": [
+          985,
+          580,
+          133,
+          20
+        ],
+        "text_length": 34,
+        "font_size": 13,
+        "line_count": 2
+      },
+      {
+        "region_id": "d2bf3ea5-7084-455c-bbd6-9ee5a13d1cdd",
+        "box": [
+          1439,
+          1343,
+          471,
+          40
+        ],
+        "mask_box": [
+          1449,
+          1353,
+          451,
+          20
+        ],
+        "text_length": 106,
+        "font_size": 15,
+        "line_count": 2
+      },
+      {
+        "region_id": "280aced0-8bae-4b8f-a0d9-526d5b9ebb61",
+        "box": [
+          316,
+          312,
+          483,
+          57
+        ],
+        "mask_box": [
+          326,
+          322,
+          463,
+          37
+        ],
+        "text_length": 191,
+        "font_size": 14,
+        "line_count": 3
+      },
+      {
+        "region_id": "b7d9a00b-d9a7-45bd-b271-ee76bea4a987",
+        "box": [
+          66,
+          726,
+          740,
+          61
+        ],
+        "mask_box": [
+          76,
+          736,
+          720,
+          41
+        ],
+        "text_length": 263,
+        "font_size": 16,
+        "line_count": 3
+      },
+      {
+        "region_id": "98a08f5f-98cb-46a4-926b-83f296dc3e0d",
+        "box": [
+          66,
+          929,
+          289,
+          34
+        ],
+        "mask_box": [
+          76,
+          939,
+          269,
+          14
+        ],
+        "text_length": 45,
+        "font_size": 14,
+        "line_count": 2
+      },
+      {
+        "region_id": "0aa47e4d-2b29-47e5-a763-76ae6bc99ddb",
+        "box": [
+          144,
+          1437,
+          342,
+          39
+        ],
+        "mask_box": [
+          154,
+          1447,
+          322,
+          19
+        ],
+        "text_length": 45,
+        "font_size": 16,
+        "line_count": 2
+      },
+      {
+        "region_id": "33ba6420-35ad-464f-9d7b-d293838f1dff",
+        "box": [
+          972,
+          52,
+          498,
+          266
+        ],
+        "mask_box": [
+          982,
+          62,
+          478,
+          246
+        ],
+        "text_length": 1013,
+        "font_size": 13,
+        "line_count": 15
+      },
+      {
+        "region_id": "8c6b1cea-83ce-4e61-8a36-168ded89586d",
+        "box": [
+          1439,
+          1380,
+          485,
+          77
+        ],
+        "mask_box": [
+          1449,
+          1390,
+          465,
+          57
+        ],
+        "text_length": 257,
+        "font_size": 14,
+        "line_count": 4
+      },
+      {
+        "region_id": "6af48baa-32ea-4b9b-b401-f65883b2df93",
+        "box": [
+          972,
+          833,
+          955,
+          120
+        ],
+        "mask_box": [
+          982,
+          843,
+          935,
+          100
+        ],
+        "text_length": 574,
+        "font_size": 16,
+        "line_count": 6
+      },
+      {
+        "region_id": "85ee209d-ad2b-4be4-ab2d-fa61e92221e2",
+        "box": [
+          62,
+          1478,
+          498,
+          141
+        ],
+        "mask_box": [
+          72,
+          1488,
+          478,
+          121
+        ],
+        "text_length": 377,
+        "font_size": 15,
+        "line_count": 7
+      },
+      {
+        "region_id": "a06c55e6-197b-4f71-92ab-f1b716ed88c2",
+        "box": [
+          972,
+          945,
+          957,
+          154
+        ],
+        "mask_box": [
+          982,
+          955,
+          937,
+          134
+        ],
+        "text_length": 817,
+        "font_size": 14,
+        "line_count": 8
+      },
+      {
+        "region_id": "640e03b5-90a5-46b3-845f-b32dd34b8286",
+        "box": [
+          316,
+          234,
+          486,
+          78
+        ],
+        "mask_box": [
+          326,
+          244,
+          466,
+          58
+        ],
+        "text_length": 568,
+        "font_size": 9,
+        "line_count": 6
+      },
+      {
+        "region_id": "a53ad3cb-5008-47fc-a2da-cf8e1fedcc6b",
+        "box": [
+          66,
+          1185,
+          736,
+          73
+        ],
+        "mask_box": [
+          76,
+          1195,
+          716,
+          53
+        ],
+        "text_length": 262,
+        "font_size": 15,
+        "line_count": 3
+      },
+      {
+        "region_id": "450e835d-3783-4ee0-8c42-f03876ce0e4d",
+        "box": [
+          341,
+          493,
+          198,
+          34
+        ],
+        "mask_box": [
+          348,
+          500,
+          184,
+          20
+        ],
+        "text_length": 33,
+        "font_size": 14,
+        "line_count": 2
+      },
+      {
+        "region_id": "c5e2f50f-b9b8-4fb1-91d1-51b8471e7c54",
+        "box": [
+          320,
+          517,
+          473,
+          108
+        ],
+        "mask_box": [
+          330,
+          527,
+          453,
+          88
+        ],
+        "text_length": 333,
+        "font_size": 14,
+        "line_count": 6
+      },
+      {
+        "region_id": "23b7588d-6c72-4c87-9a90-2877acf9da2c",
+        "box": [
+          64,
+          964,
+          488,
+          79
+        ],
+        "mask_box": [
+          74,
+          974,
+          468,
+          59
+        ],
+        "text_length": 253,
+        "font_size": 14,
+        "line_count": 4
+      },
+      {
+        "region_id": "32fbf4b0-2872-4198-82d4-53c214a8423e",
+        "box": [
+          66,
+          1046,
+          65,
+          36
+        ],
+        "mask_box": [
+          76,
+          1056,
+          45,
+          16
+        ],
+        "text_length": 8,
+        "font_size": 16,
+        "line_count": 1
+      },
+      {
+        "region_id": "352fe29e-3f99-4727-96b6-36b63d946a00",
+        "box": [
+          972,
+          359,
+          444,
+          100
+        ],
+        "mask_box": [
+          982,
+          369,
+          424,
+          80
+        ],
+        "text_length": 280,
+        "font_size": 14,
+        "line_count": 5
+      },
+      {
+        "region_id": "3d92e557-d213-413f-aecc-590715ef473b",
+        "box": [
+          980,
+          810,
+          229,
+          33
+        ],
+        "mask_box": [
+          988,
+          818,
+          213,
+          17
+        ],
+        "text_length": 43,
+        "font_size": 13,
+        "line_count": 2
+      },
+      {
+        "region_id": "9019d131-f1fb-446a-891a-30a4f895ab02",
+        "box": [
+          64,
+          888,
+          746,
+          57
+        ],
+        "mask_box": [
+          74,
+          898,
+          726,
+          37
+        ],
+        "text_length": 328,
+        "font_size": 13,
+        "line_count": 3
+      },
+      {
+        "region_id": "207f9426-e320-4329-bc49-2fc6b245efea",
+        "box": [
+          64,
+          671,
+          494,
+          63
+        ],
+        "mask_box": [
+          74,
+          681,
+          474,
+          43
+        ],
+        "text_length": 158,
+        "font_size": 17,
+        "line_count": 3
+      },
+      {
+        "region_id": "ff25a217-3c93-41d5-b1eb-55a605f8c1d3",
+        "box": [
+          972,
+          460,
+          957,
+          112
+        ],
+        "mask_box": [
+          982,
+          470,
+          937,
+          92
+        ],
+        "text_length": 551,
+        "font_size": 16,
+        "line_count": 5
+      },
+      {
+        "region_id": "d6a025bf-88fc-4e3c-be7f-9a157ad00402",
+        "box": [
+          314,
+          77,
+          496,
+          157
+        ],
+        "mask_box": [
+          324,
+          87,
+          476,
+          137
+        ],
+        "text_length": 424,
+        "font_size": 16,
+        "line_count": 8
+      },
+      {
+        "region_id": "a2dad0ba-5fc6-44d3-aabf-9623db181ef8",
+        "box": [
+          583,
+          1046,
+          229,
+          96
+        ],
+        "mask_box": [
+          593,
+          1056,
+          209,
+          76
+        ],
+        "text_length": 219,
+        "font_size": 11,
+        "line_count": 6
+      },
+      {
+        "region_id": "379158fb-75fc-458a-80bc-24eaec75e088",
+        "box": [
+          66,
+          1107,
+          473,
+          76
+        ],
+        "mask_box": [
+          76,
+          1117,
+          453,
+          56
+        ],
+        "text_length": 185,
+        "font_size": 15,
+        "line_count": 4
+      },
+      {
+        "region_id": "a3ae4a58-1dc2-4a7b-a96b-5c2fbdef0380",
+        "box": [
+          1443,
+          1070,
+          332,
+          33
+        ],
+        "mask_box": [
+          1451,
+          1078,
+          316,
+          17
+        ],
+        "text_length": 61,
+        "font_size": 13,
+        "line_count": 2
+      },
+      {
+        "region_id": "668e834c-4787-4b50-984d-c85a5b1a8cab",
+        "box": [
+          70,
+          1618,
+          176,
+          34
+        ],
+        "mask_box": [
+          77,
+          1625,
+          162,
+          20
+        ],
+        "text_length": 35,
+        "font_size": 14,
+        "line_count": 2
+      },
+      {
+        "region_id": "47745c7c-11a3-41a4-90d4-97d0006b485e",
+        "box": [
+          976,
+          445,
+          34,
+          29
+        ],
+        "mask_box": [
+          984,
+          453,
+          18,
+          13
+        ],
+        "text_length": 0,
+        "font_size": 24,
+        "line_count": 1
+      },
+      {
+        "region_id": "50f1c421-2f83-4d21-931e-c08adfe38f2b",
+        "box": [
+          976,
+          751,
+          953,
+          73
+        ],
+        "mask_box": [
+          986,
+          761,
+          933,
+          53
+        ],
+        "text_length": 273,
+        "font_size": 20,
+        "line_count": 3
+      },
+      {
+        "region_id": "1de4fa6d-9bcb-4587-877d-48e6375a3377",
+        "box": [
+          64,
+          1640,
+          498,
+          114
+        ],
+        "mask_box": [
+          74,
+          1650,
+          478,
+          94
+        ],
+        "text_length": 332,
+        "font_size": 15,
+        "line_count": 6
+      },
+      {
+        "region_id": "6e1a9bf9-7619-4684-8bfa-452032b91371",
+        "box": [
+          66,
+          1753,
+          486,
+          100
+        ],
+        "mask_box": [
+          76,
+          1763,
+          466,
+          80
+        ],
+        "text_length": 229,
+        "font_size": 16,
+        "line_count": 5
+      },
+      {
+        "region_id": "207540a1-b75a-4c21-9648-f60fbff50c7a",
+        "box": [
+          316,
+          398,
+          486,
+          55
+        ],
+        "mask_box": [
+          326,
+          408,
+          466,
+          35
+        ],
+        "text_length": 254,
+        "font_size": 11,
+        "line_count": 4
+      },
+      {
+        "region_id": "644b21e1-c33e-40ad-935a-c60c720c8cbc",
+        "box": [
+          972,
+          636,
+          959,
+          129
+        ],
+        "mask_box": [
+          982,
+          646,
+          939,
+          109
+        ],
+        "text_length": 526,
+        "font_size": 17,
+        "line_count": 5
+      },
+      {
+        "region_id": "cc192eb4-9b3e-4be6-a528-7ff84f2edcae",
+        "box": [
+          1443,
+          1456,
+          479,
+          61
+        ],
+        "mask_box": [
+          1453,
+          1466,
+          459,
+          41
+        ],
+        "text_length": 204,
+        "font_size": 12,
+        "line_count": 4
+      },
+      {
+        "region_id": "c96589ea-4ebc-49d7-8d02-e1950acfe089",
+        "box": [
+          62,
+          1300,
+          490,
+          133
+        ],
+        "mask_box": [
+          72,
+          1310,
+          470,
+          113
+        ],
+        "text_length": 345,
+        "font_size": 15,
+        "line_count": 6
+      },
+      {
+        "region_id": "29a8f03b-bd55-4e17-bd15-e6a5c5031c61",
+        "box": [
+          1437,
+          1177,
+          496,
+          168
+        ],
+        "mask_box": [
+          1447,
+          1187,
+          476,
+          148
+        ],
+        "text_length": 517,
+        "font_size": 15,
+        "line_count": 9
+      }
+    ]
+  },
+  {
+    "sample": "sample99",
+    "declared_dimensions": {
+      "width": 3219,
+      "height": 2932
+    },
+    "source": {
+      "name": "source.jpg",
+      "sha256": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0",
+      "dimensions": [
+        3219,
+        2932
+      ]
+    },
+    "project_original": {
+      "sha256": "13a4cdf47a4d5f7e497e4f0df08f762963f71f4291fedf05f9425dc2fd079fb4",
+      "dimensions": [
+        3219,
+        2932
+      ],
+      "pixel_identical_to_source": true,
+      "different_channel_values": 0,
+      "max_channel_delta": 0
+    },
+    "counts": {
+      "ocr": 10,
+      "output": 10
+    },
+    "ocr_current_helpers": [
+      {
+        "region_id": "e8ecc36c-a144-4f9c-b8b6-67e895a28777",
+        "box": [
+          2813,
+          81,
+          311,
+          566
+        ],
+        "text_length": 34,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#ffffff",
+        "current_cover_mask_box": [
+          2757,
+          25,
+          423,
+          678
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            2606,
+            50,
+            562,
+            644
+          ]
+        ]
+      },
+      {
+        "region_id": "8c5c8e0a-fb6b-4322-a8ca-c4ddbf612b09",
+        "box": [
+          1373,
+          69,
+          101,
+          292
+        ],
+        "text_length": 3,
+        "current_type_without_bubble": "sfx",
+        "cover_color": "#fecacc",
+        "current_cover_mask_box": [
+          1355,
+          52,
+          137,
+          326
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            1353,
+            49,
+            140,
+            331
+          ]
+        ]
+      },
+      {
+        "region_id": "9202eb8a-93b6-4e1f-8de4-c4b98f0414e3",
+        "box": [
+          1216,
+          66,
+          110,
+          301
+        ],
+        "text_length": 4,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#fecacc",
+        "current_cover_mask_box": [
+          1196,
+          47,
+          150,
+          339
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            1196,
+            46,
+            149,
+            340
+          ]
+        ]
+      },
+      {
+        "region_id": "cefd8690-e5f7-499b-9b29-fff66bdc5901",
+        "box": [
+          741,
+          59,
+          164,
+          327
+        ],
+        "text_length": 4,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#ffffff",
+        "current_cover_mask_box": [
+          711,
+          31,
+          224,
+          383
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            685,
+            0,
+            360,
+            382
+          ]
+        ]
+      },
+      {
+        "region_id": "a08e07bf-ccd7-4c6e-b30b-ec114b5ea117",
+        "box": [
+          531,
+          0,
+          179,
+          531
+        ],
+        "text_length": 9,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#ffffff",
+        "current_cover_mask_box": [
+          499,
+          2,
+          243,
+          559
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            511,
+            0,
+            162,
+            550
+          ]
+        ]
+      },
+      {
+        "region_id": "cc23d613-893e-4573-b8e3-581a472ccde9",
+        "box": [
+          0,
+          25,
+          465,
+          726
+        ],
+        "text_length": 17,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#ffffff",
+        "current_cover_mask_box": [
+          0,
+          0,
+          549,
+          835
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            0,
+            5,
+            484,
+            729
+          ]
+        ]
+      },
+      {
+        "region_id": "3a310894-2817-4888-8754-62543d104804",
+        "box": [
+          836,
+          377,
+          1097,
+          1229
+        ],
+        "text_length": 24,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#ffffff",
+        "current_cover_mask_box": [
+          639,
+          180,
+          1491,
+          1623
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            639,
+            180,
+            1491,
+            1623
+          ]
+        ]
+      },
+      {
+        "region_id": "887e1ad3-7e3e-4e88-81e1-67bc9b7cc949",
+        "box": [
+          103,
+          851,
+          107,
+          371
+        ],
+        "text_length": 4,
+        "current_type_without_bubble": "sfx",
+        "cover_color": "#fecacc",
+        "current_cover_mask_box": [
+          84,
+          833,
+          145,
+          407
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            30,
+            798,
+            281,
+            489
+          ]
+        ]
+      },
+      {
+        "region_id": "e7c6cd58-69b3-4d3e-ba20-21cce9cb4066",
+        "box": [
+          663,
+          1631,
+          377,
+          264
+        ],
+        "text_length": 3,
+        "current_type_without_bubble": "sfx",
+        "cover_color": "#cc9586",
+        "current_cover_mask_box": [
+          615,
+          1583,
+          473,
+          360
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            663,
+            1631,
+            377,
+            264
+          ]
+        ]
+      },
+      {
+        "region_id": "3340029a-4377-4485-8961-25d13db65bc4",
+        "box": [
+          418,
+          2231,
+          449,
+          632
+        ],
+        "text_length": 6,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#c69284",
+        "current_cover_mask_box": [
+          337,
+          2150,
+          611,
+          782
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            337,
+            2150,
+            611,
+            782
+          ]
+        ]
+      }
+    ],
+    "saved_output_current_fit": [
+      {
+        "region_id": "e8ecc36c-a144-4f9c-b8b6-67e895a28777",
+        "box": [
+          2622,
+          61,
+          540,
+          626
+        ],
+        "mask_box": [
+          2606,
+          50,
+          562,
+          644
+        ],
+        "text_length": 92,
+        "font_size": 57,
+        "line_count": 9
+      },
+      {
+        "region_id": "9202eb8a-93b6-4e1f-8de4-c4b98f0414e3",
+        "box": [
+          1206,
+          56,
+          130,
+          321
+        ],
+        "mask_box": [
+          1196,
+          46,
+          149,
+          340
+        ],
+        "text_length": 16,
+        "font_size": 30,
+        "line_count": 2
+      },
+      {
+        "region_id": "a08e07bf-ccd7-4c6e-b30b-ec114b5ea117",
+        "box": [
+          521,
+          10,
+          143,
+          531
+        ],
+        "mask_box": [
+          511,
+          0,
+          162,
+          550
+        ],
+        "text_length": 14,
+        "font_size": 43,
+        "line_count": 3
+      },
+      {
+        "region_id": "8c5c8e0a-fb6b-4322-a8ca-c4ddbf612b09",
+        "box": [
+          1363,
+          59,
+          121,
+          312
+        ],
+        "mask_box": [
+          1353,
+          49,
+          140,
+          331
+        ],
+        "text_length": 15,
+        "font_size": 34,
+        "line_count": 2
+      },
+      {
+        "region_id": "3340029a-4377-4485-8961-25d13db65bc4",
+        "box": [
+          408,
+          2221,
+          469,
+          652
+        ],
+        "mask_box": [
+          337,
+          2150,
+          611,
+          782
+        ],
+        "text_length": 11,
+        "font_size": 98,
+        "line_count": 2
+      },
+      {
+        "region_id": "e7c6cd58-69b3-4d3e-ba20-21cce9cb4066",
+        "box": [
+          653,
+          1621,
+          397,
+          284
+        ],
+        "mask_box": [
+          663,
+          1631,
+          377,
+          264
+        ],
+        "text_length": 0,
+        "font_size": 236,
+        "line_count": 1
+      },
+      {
+        "region_id": "cefd8690-e5f7-499b-9b29-fff66bdc5901",
+        "box": [
+          697,
+          10,
+          346,
+          365
+        ],
+        "mask_box": [
+          685,
+          0,
+          360,
+          382
+        ],
+        "text_length": 5,
+        "font_size": 93,
+        "line_count": 1
+      },
+      {
+        "region_id": "3a310894-2817-4888-8754-62543d104804",
+        "box": [
+          826,
+          367,
+          1117,
+          1249
+        ],
+        "mask_box": [
+          639,
+          180,
+          1491,
+          1623
+        ],
+        "text_length": 38,
+        "font_size": 208,
+        "line_count": 5
+      },
+      {
+        "region_id": "cc23d613-893e-4573-b8e3-581a472ccde9",
+        "box": [
+          10,
+          15,
+          465,
+          710
+        ],
+        "mask_box": [
+          0,
+          5,
+          484,
+          729
+        ],
+        "text_length": 47,
+        "font_size": 44,
+        "line_count": 3
+      },
+      {
+        "region_id": "887e1ad3-7e3e-4e88-81e1-67bc9b7cc949",
+        "box": [
+          42,
+          803,
+          269,
+          478
+        ],
+        "mask_box": [
+          30,
+          798,
+          281,
+          489
+        ],
+        "text_length": 15,
+        "font_size": 66,
+        "line_count": 3
+      }
+    ]
+  },
+  {
+    "sample": "sample93",
+    "declared_dimensions": {
+      "width": 6764,
+      "height": 4961
+    },
+    "source": {
+      "name": "source.png",
+      "sha256": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b",
+      "dimensions": [
+        6764,
+        4961
+      ]
+    },
+    "project_original": {
+      "sha256": "e2fff0442eeb505dc6e12fa666a98fa133c66b30b0fb3b6d600fe61af8f2f31c",
+      "dimensions": [
+        6764,
+        4961
+      ],
+      "pixel_identical_to_source": true,
+      "different_channel_values": 0,
+      "max_channel_delta": 0
+    },
+    "counts": {
+      "ocr": 11,
+      "output": 11
+    },
+    "ocr_current_helpers": [
+      {
+        "region_id": "fad11334-44f5-4409-b177-e3d2b254ce82",
+        "box": [
+          627,
+          0,
+          502,
+          878
+        ],
+        "text_length": 8,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#ffffff",
+        "current_cover_mask_box": [
+          537,
+          0,
+          682,
+          968
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            537,
+            0,
+            682,
+            968
+          ]
+        ]
+      },
+      {
+        "region_id": "11e9e502-2a4a-4c25-92da-45189809e3e9",
+        "box": [
+          502,
+          1552,
+          330,
+          872
+        ],
+        "text_length": 5,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#ffffff",
+        "current_cover_mask_box": [
+          443,
+          1493,
+          448,
+          990
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            443,
+            1493,
+            448,
+            990
+          ]
+        ]
+      },
+      {
+        "region_id": "38da4044-9204-4f05-b215-5255c7a844a6",
+        "box": [
+          0,
+          2133,
+          1017,
+          2319
+        ],
+        "text_length": 5,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#ffffff",
+        "current_cover_mask_box": [
+          0,
+          1950,
+          1200,
+          2685
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            0,
+            1950,
+            1200,
+            2685
+          ]
+        ]
+      },
+      {
+        "region_id": "0cf02e8c-6d1d-4570-8e09-744a747e40d0",
+        "box": [
+          2186,
+          46,
+          2457,
+          2794
+        ],
+        "text_length": 97,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#f4d5cb",
+        "current_cover_mask_box": [
+          1744,
+          0,
+          3341,
+          3282
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            1744,
+            0,
+            3341,
+            3282
+          ]
+        ]
+      },
+      {
+        "region_id": "af448e1f-7367-429c-a85c-65211163875b",
+        "box": [
+          6248,
+          184,
+          291,
+          1322
+        ],
+        "text_length": 20,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#e2dddc",
+        "current_cover_mask_box": [
+          6196,
+          132,
+          395,
+          1426
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            6196,
+            132,
+            395,
+            1426
+          ]
+        ]
+      },
+      {
+        "region_id": "f589561a-1d53-4bca-bae8-9f7cb5a13e5c",
+        "box": [
+          858,
+          1142,
+          205,
+          258
+        ],
+        "text_length": 1,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#493d35",
+        "current_cover_mask_box": [
+          821,
+          1105,
+          279,
+          332
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            821,
+            1105,
+            279,
+            332
+          ]
+        ]
+      },
+      {
+        "region_id": "0bc874c7-0cd1-4204-b024-ae52c7b79daf",
+        "box": [
+          2463,
+          2695,
+          443,
+          964
+        ],
+        "text_length": 1,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#fce4d9",
+        "current_cover_mask_box": [
+          2383,
+          2615,
+          603,
+          1124
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            2383,
+            2615,
+            603,
+            1124
+          ]
+        ]
+      },
+      {
+        "region_id": "36059f2b-fb58-4110-8a41-80f2d6c348a8",
+        "box": [
+          6044,
+          2840,
+          270,
+          416
+        ],
+        "text_length": 2,
+        "current_type_without_bubble": "sfx",
+        "cover_color": "#ac9da4",
+        "current_cover_mask_box": [
+          5995,
+          2791,
+          368,
+          514
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            6044,
+            2840,
+            270,
+            416
+          ]
+        ]
+      },
+      {
+        "region_id": "8d198001-fdf3-4506-8654-fb780ff017b4",
+        "box": [
+          4267,
+          3296,
+          323,
+          469
+        ],
+        "text_length": 3,
+        "current_type_without_bubble": "sfx",
+        "cover_color": "#998b83",
+        "current_cover_mask_box": [
+          4209,
+          3238,
+          439,
+          585
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            4209,
+            3238,
+            439,
+            585
+          ]
+        ]
+      },
+      {
+        "region_id": "a12274a7-a2df-476b-8582-27ac2b57956d",
+        "box": [
+          2001,
+          4121,
+          542,
+          839
+        ],
+        "text_length": 1,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#d2ab9e",
+        "current_cover_mask_box": [
+          1903,
+          4023,
+          738,
+          938
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            1903,
+            4023,
+            738,
+            938
+          ]
+        ]
+      },
+      {
+        "region_id": "5b0b0253-bdff-414b-8f1e-113788d675e2",
+        "box": [
+          1023,
+          4181,
+          641,
+          779
+        ],
+        "text_length": 1,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#b88c83",
+        "current_cover_mask_box": [
+          908,
+          4066,
+          871,
+          895
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            908,
+            4066,
+            871,
+            895
+          ]
+        ]
+      }
+    ],
+    "saved_output_current_fit": [
+      {
+        "region_id": "36059f2b-fb58-4110-8a41-80f2d6c348a8",
+        "box": [
+          6001,
+          2870,
+          356,
+          355
+        ],
+        "mask_box": [
+          6044,
+          2840,
+          270,
+          416
+        ],
+        "text_length": 0,
+        "font_size": 295,
+        "line_count": 1
+      },
+      {
+        "region_id": "5b0b0253-bdff-414b-8f1e-113788d675e2",
+        "box": [
+          1013,
+          4171,
+          661,
+          799
+        ],
+        "mask_box": [
+          908,
+          4066,
+          871,
+          895
+        ],
+        "text_length": 0,
+        "font_size": 665,
+        "line_count": 1
+      },
+      {
+        "region_id": "af448e1f-7367-429c-a85c-65211163875b",
+        "box": [
+          6070,
+          522,
+          646,
+          646
+        ],
+        "mask_box": [
+          6196,
+          132,
+          395,
+          1426
+        ],
+        "text_length": 39,
+        "font_size": 107,
+        "line_count": 5
+      },
+      {
+        "region_id": "f589561a-1d53-4bca-bae8-9f7cb5a13e5c",
+        "box": [
+          848,
+          1132,
+          225,
+          278
+        ],
+        "mask_box": [
+          821,
+          1105,
+          279,
+          332
+        ],
+        "text_length": 5,
+        "font_size": 76,
+        "line_count": 1
+      },
+      {
+        "region_id": "fad11334-44f5-4409-b177-e3d2b254ce82",
+        "box": [
+          535,
+          97,
+          685,
+          684
+        ],
+        "mask_box": [
+          537,
+          0,
+          682,
+          968
+        ],
+        "text_length": 20,
+        "font_size": 142,
+        "line_count": 4
+      },
+      {
+        "region_id": "11e9e502-2a4a-4c25-92da-45189809e3e9",
+        "box": [
+          387,
+          1709,
+          559,
+          558
+        ],
+        "mask_box": [
+          443,
+          1493,
+          448,
+          990
+        ],
+        "text_length": 5,
+        "font_size": 172,
+        "line_count": 1
+      },
+      {
+        "region_id": "38da4044-9204-4f05-b215-5255c7a844a6",
+        "box": [
+          0,
+          2513,
+          1557,
+          1558
+        ],
+        "mask_box": [
+          0,
+          1950,
+          1200,
+          2685
+        ],
+        "text_length": 0,
+        "font_size": 1298,
+        "line_count": 1
+      },
+      {
+        "region_id": "0cf02e8c-6d1d-4570-8e09-744a747e40d0",
+        "box": [
+          2176,
+          36,
+          2477,
+          2814
+        ],
+        "mask_box": [
+          1744,
+          0,
+          3341,
+          3282
+        ],
+        "text_length": 147,
+        "font_size": 234,
+        "line_count": 10
+      },
+      {
+        "region_id": "a12274a7-a2df-476b-8582-27ac2b57956d",
+        "box": [
+          1924,
+          4193,
+          695,
+          695
+        ],
+        "mask_box": [
+          1903,
+          4023,
+          738,
+          938
+        ],
+        "text_length": 0,
+        "font_size": 579,
+        "line_count": 1
+      },
+      {
+        "region_id": "0bc874c7-0cd1-4204-b024-ae52c7b79daf",
+        "box": [
+          2347,
+          2839,
+          675,
+          675
+        ],
+        "mask_box": [
+          2383,
+          2615,
+          603,
+          1124
+        ],
+        "text_length": 1,
+        "font_size": 562,
+        "line_count": 1
+      },
+      {
+        "region_id": "8d198001-fdf3-4506-8654-fb780ff017b4",
+        "box": [
+          4257,
+          3286,
+          343,
+          489
+        ],
+        "mask_box": [
+          4209,
+          3238,
+          439,
+          585
+        ],
+        "text_length": 0,
+        "font_size": 407,
+        "line_count": 1
+      }
+    ]
+  },
+  {
+    "sample": "sample83",
+    "declared_dimensions": {
+      "width": 1412,
+      "height": 2000
+    },
+    "source": {
+      "name": "source.jpg",
+      "sha256": "508d4269d36317c7e38f263b84398fdf10ad36d2c1441097969cf8e0cff0e8ab",
+      "dimensions": [
+        1412,
+        2000
+      ]
+    },
+    "project_original": {
+      "sha256": "7a1f2ecd5880b8d7f014536d0dd29ebf26d2c229e915fd034989554b8714a74e",
+      "dimensions": [
+        1412,
+        2000
+      ],
+      "pixel_identical_to_source": true,
+      "different_channel_values": 0,
+      "max_channel_delta": 0
+    },
+    "counts": {
+      "ocr": 3,
+      "output": 9
+    },
+    "ocr_current_helpers": [
+      {
+        "region_id": "dcfdde7a-ce80-49d9-935c-432edca8fba5",
+        "box": [
+          371,
+          146,
+          1011,
+          1617
+        ],
+        "text_length": 43,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#aaf2fe",
+        "current_cover_mask_box": [
+          189,
+          0,
+          1223,
+          1945
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            189,
+            0,
+            1223,
+            1945
+          ],
+          [
+            189,
+            0,
+            1223,
+            1945
+          ],
+          [
+            189,
+            0,
+            1223,
+            1945
+          ]
+        ]
+      },
+      {
+        "region_id": "595edb66-59f9-4471-a326-63b869ba25ee",
+        "box": [
+          25,
+          185,
+          410,
+          848
+        ],
+        "text_length": 22,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#aaf2fe",
+        "current_cover_mask_box": [
+          0,
+          111,
+          509,
+          996
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            0,
+            111,
+            509,
+            996
+          ],
+          [
+            0,
+            111,
+            509,
+            996
+          ],
+          [
+            0,
+            111,
+            509,
+            996
+          ]
+        ]
+      },
+      {
+        "region_id": "89e101ff-c126-4d2b-bb7a-99668c89700d",
+        "box": [
+          865,
+          365,
+          76,
+          117
+        ],
+        "text_length": 2,
+        "current_type_without_bubble": "caption",
+        "cover_color": "#aaf2fe",
+        "current_cover_mask_box": [
+          851,
+          351,
+          104,
+          145
+        ],
+        "historical_saved_mask_boxes": [
+          [
+            865,
+            365,
+            76,
+            117
+          ],
+          [
+            865,
+            365,
+            76,
+            117
+          ],
+          [
+            865,
+            365,
+            76,
+            117
+          ]
+        ]
+      }
+    ],
+    "saved_output_current_fit": [
+      {
+        "region_id": "dcfdde7a-ce80-49d9-935c-432edca8fba5",
+        "box": [
+          113,
+          305,
+          1299,
+          1299
+        ],
+        "mask_box": [
+          189,
+          0,
+          1223,
+          1945
+        ],
+        "text_length": 84,
+        "font_size": 180,
+        "line_count": 6
+      },
+      {
+        "region_id": "595edb66-59f9-4471-a326-63b869ba25ee",
+        "box": [
+          0,
+          303,
+          611,
+          611
+        ],
+        "mask_box": [
+          0,
+          111,
+          509,
+          996
+        ],
+        "text_length": 60,
+        "font_size": 86,
+        "line_count": 5
+      },
+      {
+        "region_id": "89e101ff-c126-4d2b-bb7a-99668c89700d",
+        "box": [
+          855,
+          355,
+          96,
+          137
+        ],
+        "mask_box": [
+          865,
+          365,
+          76,
+          117
+        ],
+        "text_length": 6,
+        "font_size": 30,
+        "line_count": 1
+      },
+      {
+        "region_id": "dcfdde7a-ce80-49d9-935c-432edca8fba5",
+        "box": [
+          113,
+          305,
+          1299,
+          1299
+        ],
+        "mask_box": [
+          189,
+          0,
+          1223,
+          1945
+        ],
+        "text_length": 82,
+        "font_size": 172,
+        "line_count": 6
+      },
+      {
+        "region_id": "89e101ff-c126-4d2b-bb7a-99668c89700d",
+        "box": [
+          855,
+          355,
+          96,
+          137
+        ],
+        "mask_box": [
+          865,
+          365,
+          76,
+          117
+        ],
+        "text_length": 6,
+        "font_size": 30,
+        "line_count": 1
+      },
+      {
+        "region_id": "595edb66-59f9-4471-a326-63b869ba25ee",
+        "box": [
+          0,
+          303,
+          611,
+          611
+        ],
+        "mask_box": [
+          0,
+          111,
+          509,
+          996
+        ],
+        "text_length": 58,
+        "font_size": 86,
+        "line_count": 5
+      },
+      {
+        "region_id": "dcfdde7a-ce80-49d9-935c-432edca8fba5",
+        "box": [
+          113,
+          305,
+          1299,
+          1299
+        ],
+        "mask_box": [
+          189,
+          0,
+          1223,
+          1945
+        ],
+        "text_length": 76,
+        "font_size": 180,
+        "line_count": 6
+      },
+      {
+        "region_id": "595edb66-59f9-4471-a326-63b869ba25ee",
+        "box": [
+          0,
+          303,
+          611,
+          611
+        ],
+        "mask_box": [
+          0,
+          111,
+          509,
+          996
+        ],
+        "text_length": 60,
+        "font_size": 95,
+        "line_count": 5
+      },
+      {
+        "region_id": "89e101ff-c126-4d2b-bb7a-99668c89700d",
+        "box": [
+          855,
+          355,
+          96,
+          137
+        ],
+        "mask_box": [
+          865,
+          365,
+          76,
+          117
+        ],
+        "text_length": 6,
+        "font_size": 30,
+        "line_count": 1
+      }
+    ]
+  }
+]

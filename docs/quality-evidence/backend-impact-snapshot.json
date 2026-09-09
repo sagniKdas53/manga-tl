@@ -1,0 +1,35 @@
+{
+  "touchPage": {
+    "status": "fulfilled",
+    "value": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"target\": {\n    \"id\": \"Function:backend-rust/src/routes/layers.rs:touch_page\",\n    \"name\": \"touch_page\",\n    \"type\": \"Function\",\n    \"filePath\": \"backend-rust/src/routes/layers.rs\"\n  },\n  \"direction\": \"upstream\",\n  \"impactedCount\": 6,\n  \"risk\": \"CRITICAL\",\n  \"summary\": {\n    \"direct\": 6,\n    \"processes_affected\": 6,\n    \"modules_affected\": 1\n  },\n  \"byDepthCounts\": {\n    \"1\": 6\n  },\n  \"affected_processes\": [\n    {\n      \"name\": \"delete_layer\",\n      \"type\": \"Function\",\n      \"filePath\": \"backend-rust/src/routes/layers_ops.rs\",\n      \"affected_process_count\": 2,\n      \"total_hits\": 2,\n      \"earliest_broken_step\": 1\n    },\n    {\n      \"name\": \"create_image_layer\",\n      \"type\": \"Function\",\n      \"filePath\": \"backend-rust/src/routes/layers.rs\",\n      \"affected_process_count\": 2,\n      \"total_hits\": 2,\n      \"earliest_broken_step\": 1\n    },\n    {\n      \"name\": \"create_page_layer\",\n      \"type\": \"Function\",\n      \"filePath\": \"backend-rust/src/routes/layers.rs\",\n      \"affected_process_count\": 2,\n      \"total_hits\": 2,\n      \"earliest_broken_step\": 1\n    },\n    {\n      \"name\": \"update_layer_element\",\n      \"type\": \"Function\",\n      \"filePath\": \"backend-rust/src/routes/layers.rs\",\n      \"affected_process_count\": 1,\n      \"total_hits\": 1,\n      \"earliest_broken_step\": 1\n    },\n    {\n      \"name\": \"update_layer\",\n      \"type\": \"Function\",\n      \"filePath\": \"backend-rust/src/routes/layers_ops.rs\",\n      \"affected_process_count\": 1,\n      \"total_hits\": 1,\n      \"earliest_broken_step\": 1\n    },\n    {\n      \"name\": \"create_layer_element\",\n      \"type\": \"Function\",\n      \"filePath\": \"backend-rust/src/routes/layers_ops.rs\",\n      \"affected_process_count\": 1,\n      \"total_hits\": 1,\n      \"earliest_broken_step\": 1\n    }\n  ],\n  \"affected_modules\": [\n    {\n      \"name\": \"Routes\",\n      \"hits\": 6,\n      \"impact\": \"direct\"\n    }\n  ]\n}\n\n---\n**Next:** Review d=1 items first (WILL BREAK). To check affected execution flows, READ gitnexus://repo/manga-library/processes."
+        }
+      ]
+    }
+  },
+  "updateElement": {
+    "status": "fulfilled",
+    "value": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"target\": {\n    \"id\": \"Function:backend-rust/src/routes/layers.rs:update_layer_element\",\n    \"name\": \"update_layer_element\",\n    \"type\": \"Function\",\n    \"filePath\": \"backend-rust/src/routes/layers.rs\"\n  },\n  \"direction\": \"upstream\",\n  \"impactedCount\": 0,\n  \"risk\": \"LOW\",\n  \"summary\": {\n    \"direct\": 0,\n    \"processes_affected\": 0,\n    \"modules_affected\": 0\n  },\n  \"byDepthCounts\": {},\n  \"affected_processes\": [],\n  \"affected_modules\": []\n}\n\n---\n**Next:** Review d=1 items first (WILL BREAK). To check affected execution flows, READ gitnexus://repo/manga-library/processes."
+        }
+      ]
+    }
+  },
+  "recovery": {
+    "status": "fulfilled",
+    "value": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"target\": {\n    \"id\": \"Function:backend-rust/src/jobs/recovery.rs:process_pending_renders\",\n    \"name\": \"process_pending_renders\",\n    \"type\": \"Function\",\n    \"filePath\": \"backend-rust/src/jobs/recovery.rs\"\n  },\n  \"direction\": \"upstream\",\n  \"impactedCount\": 2,\n  \"risk\": \"LOW\",\n  \"summary\": {\n    \"direct\": 1,\n    \"processes_affected\": 2,\n    \"modules_affected\": 1\n  },\n  \"byDepthCounts\": {\n    \"1\": 1,\n    \"2\": 1\n  },\n  \"affected_processes\": [\n    {\n      \"name\": \"spawn_scheduled_tasks\",\n      \"type\": \"Function\",\n      \"filePath\": \"backend-rust/src/jobs/mod.rs\",\n      \"affected_process_count\": 8,\n      \"total_hits\": 8,\n      \"earliest_broken_step\": 1\n    },\n    {\n      \"name\": \"main\",\n      \"type\": \"Function\",\n      \"filePath\": \"backend-rust/src/main.rs\",\n      \"affected_process_count\": 7,\n      \"total_hits\": 7,\n      \"earliest_broken_step\": 1\n    }\n  ],\n  \"affected_modules\": [\n    {\n      \"name\": \"Jobs\",\n      \"hits\": 2,\n      \"impact\": \"direct\"\n    }\n  ]\n}\n\n---\n**Next:** Review d=1 items first (WILL BREAK). To check affected execution flows, READ gitnexus://repo/manga-library/processes."
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "exported": {
+    "maxWidth": 186.43,
+    "maxHeight": 187.91,
+    "rotation": 12.5
+  },
+  "restored": {
+    "maxWidth": 150,
+    "maxHeight": 80,
+    "rotation": 12.5
+  },
+  "widthLossPx": 36.43000000000001,
+  "heightLossPx": 107.91,
+  "sourceUsesAsI64": true
+}

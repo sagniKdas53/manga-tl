@@ -1,0 +1,10 @@
+{
+  "boundary": "Current source SQL on isolated SQLite; not a Postgres/API integration",
+  "touch_query": "UPDATE pages SET last_edited_at = now() WHERE id = (SELECT page_id FROM layers WHERE id = $1)",
+  "element_id_rows_updated": 0,
+  "timestamp_after_element_id": 1,
+  "layer_id_rows_updated": 1,
+  "timestamp_after_layer_id": 20,
+  "pending_before_enqueue": 1,
+  "pending_after_enqueue_without_completion": 0
+}

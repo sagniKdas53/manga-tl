@@ -1,0 +1,41 @@
+{
+  "sample": "sample83",
+  "source": {
+    "name": "source.jpg",
+    "sha256": "508d4269d36317c7e38f263b84398fdf10ad36d2c1441097969cf8e0cff0e8ab",
+    "dimensions": [
+      1412,
+      2000
+    ]
+  },
+  "result": {
+    "file": "current-render-sample83.png",
+    "sha256": "257d0034a3a6b0e6e256bc8f13bfbcc2fc580a13a44b8d5c2cf52a6539d928b7",
+    "dimensions": [
+      1412,
+      2000
+    ]
+  },
+  "archive_adapter": {
+    "restored_fields": [
+      "layerType",
+      "layerVisible"
+    ],
+    "synthetic_ocr_region_fields": [
+      "bboxW",
+      "bboxH",
+      "bubbleW",
+      "bubbleH"
+    ],
+    "synthetic_bubble_meaning": "bbox echo, therefore current renderer takes no-detected-bubble path"
+  },
+  "elements": {
+    "archived_total": 12,
+    "rendered": 3
+  },
+  "pixel_delta": {
+    "different_channel_values": 5715154,
+    "max_channel_delta": 255,
+    "changed_pixels": 1919856
+  }
+}

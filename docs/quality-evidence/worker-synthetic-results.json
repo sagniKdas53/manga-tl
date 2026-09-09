@@ -1,0 +1,54 @@
+{
+  "grouping_chain": {
+    "input_boxes": [
+      [
+        0,
+        0,
+        10,
+        10
+      ],
+      [
+        14,
+        0,
+        10,
+        10
+      ],
+      [
+        28,
+        0,
+        10,
+        10
+      ]
+    ],
+    "merged": [
+      {
+        "text": "C B A",
+        "detectedLanguage": "ja",
+        "confidence": 1.0,
+        "rotation": 0.0,
+        "x": 0,
+        "y": 0,
+        "width": 38,
+        "height": 10,
+        "panelId": null,
+        "bubbleReadingOrder": 0,
+        "backgroundColor": "#ffffff",
+        "bubbleX": 0,
+        "bubbleY": 0,
+        "bubbleWidth": 38,
+        "bubbleHeight": 10,
+        "bubbleId": null,
+        "detectionConfidence": 0.0,
+        "maskPolygon": null,
+        "safeTextX": 0,
+        "safeTextY": 0,
+        "safeTextW": 38,
+        "safeTextH": 10
+      }
+    ]
+  },
+  "confidence_zero": {
+    "zero": "speech",
+    "point_one": "sign"
+  }
+}

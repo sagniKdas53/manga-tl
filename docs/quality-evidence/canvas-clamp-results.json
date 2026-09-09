@@ -1,0 +1,23 @@
+{
+  "raw": {
+    "x": 100,
+    "y": 200,
+    "width": 300,
+    "height": 120
+  },
+  "fitted": {
+    "x": 104,
+    "y": 204,
+    "width": 277,
+    "height": 106
+  },
+  "lineWidth": 100,
+  "polygonLineCenter": 381,
+  "browserCenter": 350,
+  "workerCenter": 331,
+  "driftPx": -19,
+  "browserLeft": 300,
+  "workerLeft": 281,
+  "pngRawClamp": true,
+  "zipRawClamp": true
+}
