@@ -1,0 +1,153 @@
+# Standalone dev stack. Run scripts/dev_setup.py init first; no production networks or updater.
+name: ${DEV_PROJECT_NAME:-manga-quality-dev}
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: manga_library
+      # init.sql assigns objects to tladmin, so a fresh database needs this role.
+      POSTGRES_USER: tladmin
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    volumes:
+      - dev-postgres:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    secrets: [db_password]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U tladmin -d manga_library"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: valkey/valkey:8-alpine
+    command: [valkey-server, --appendonly, "yes"]
+    volumes: ["dev-redis:/data"]
+    healthcheck:
+      test: [CMD, valkey-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_password
+    secrets: [minio_password]
+    volumes: ["dev-minio:/data"]
+    ports:
+      - "127.0.0.1:${DEV_MINIO_PORT:-19000}:9000"
+      - "127.0.0.1:${DEV_MINIO_CONSOLE_PORT:-19001}:9001"
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:9000/minio/health/live]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend-rust/Dockerfile
+      args:
+        VITE_BASE_PATH: ${CONTEXT_PATH:-/tlhub}
+    env_file: [./secrets/runtime/models.env]
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/manga_library
+      SPRING_DATASOURCE_USERNAME: tladmin
+      SPRING_DATASOURCE_PASSWORD_FILE: /run/secrets/db_password
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY_FILE: /run/secrets/minio_password
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      INTERNAL_API_TOKEN_FILE: /run/secrets/internal_api_token
+      WORKER_API_SECRET_FILE: /run/secrets/worker_api_secret
+      WORKER_URLS: http://worker:8000
+      WORKER_POLL_MS: ${WORKER_POLL_MS:-2000}
+      CONTEXT_PATH: ${CONTEXT_PATH:-/tlhub}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    secrets: [db_password, minio_password, jwt_secret, internal_api_token, worker_api_secret]
+    ports: ["127.0.0.1:${DEV_HTTP_PORT:-18080}:8080"]
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      minio: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, /usr/local/bin/healthcheck]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  worker:
+    build: ./worker
+    env_file: [./secrets/runtime/models.env]
+    environment:
+      REDIS_HOST: redis
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY_FILE: /run/secrets/minio_password
+      BACKEND_CALLBACK_URL: http://backend:8080${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
+      INTERNAL_API_TOKEN_FILE: /run/secrets/internal_api_token
+      WORKER_API_SECRET_FILE: /run/secrets/worker_api_secret
+      DOCKER_SECRETS_JSON: /run/secrets/api_keys
+      PROVIDERS_CONFIG: /app/config/providers.json
+      YOLO_MODEL_PATH: /opt/models/yolo11n_bubble.onnx
+      DISABLE_LOCAL_OCR: ${DISABLE_LOCAL_OCR:-false}
+      DISABLE_LOCAL_LLM: ${DISABLE_LOCAL_LLM:-true}
+      DISABLE_DEEPL_TRANSLATE: ${DISABLE_DEEPL_TRANSLATE:-true}
+      DISABLE_GOOGLE_TRANSLATE: ${DISABLE_GOOGLE_TRANSLATE:-true}
+      LOCAL_LLM_PROVIDER: ${LOCAL_LLM_PROVIDER:-}
+      LOCAL_LLM_ENDPOINT: ${LOCAL_LLM_ENDPOINT:-}
+      LOCAL_LLM_MODEL: ${LOCAL_LLM_MODEL:-}
+      LOCAL_VLM_MODEL: ${LOCAL_VLM_MODEL:-}
+      PADDLEOCR_DEVICE: ${PADDLEOCR_DEVICE:-cpu}
+      PADDLEOCR_LOCAL_MODEL: ${PADDLEOCR_LOCAL_MODEL:-}
+      PADDLEOCR_DET_MODEL: ${PADDLEOCR_DET_MODEL:-}
+      PADDLEOCR_REC_MODEL: ${PADDLEOCR_REC_MODEL:-}
+      CONCURRENT_JOBS: ${CONCURRENT_JOBS:-5}
+      MAX_HEAVY_SLOTS: ${MAX_HEAVY_SLOTS:-1}
+      MAX_LIGHT_SLOTS: ${MAX_LIGHT_SLOTS:-4}
+      OMP_NUM_THREADS: ${WORKER_THREADS:-2}
+      MKL_NUM_THREADS: ${WORKER_THREADS:-2}
+      OPENBLAS_NUM_THREADS: ${WORKER_THREADS:-2}
+      LOG_LEVEL: ${LOG_LEVEL_WORKER:-INFO}
+      LOG_PAYLOAD_MAX_CHARS: ${LOG_PAYLOAD_MAX_CHARS:-2000}
+      RENDER_CACHE_DIR: /app/rendered_cache
+    secrets: [minio_password, internal_api_token, worker_api_secret, api_keys]
+    volumes:
+      - ./config/providers.json:/app/config/providers.json:ro
+      - type: bind
+        source: ./data/bootstrap/yolo11n_bubble.onnx
+        target: /opt/models/yolo11n_bubble.onnx
+        read_only: true
+        bind: {create_host_path: false}
+      # Named volumes inherit the image's UID 10001 cache ownership on first use.
+      - dev-huggingface:/home/worker/.cache/huggingface
+      - dev-paddlex:/home/worker/.paddlex
+      - dev-rendered:/app/rendered_cache
+    depends_on:
+      backend: {condition: service_healthy}
+    deploy:
+      resources:
+        limits:
+          cpus: "${WORKER_CPUS:-2.0}"
+          memory: ${WORKER_MEMORY:-4g}
+
+volumes:
+  dev-postgres:
+  dev-redis:
+  dev-minio:
+  dev-huggingface:
+  dev-paddlex:
+  dev-rendered:
+
+secrets:
+  db_password: {file: ./secrets/runtime/db_password.txt}
+  minio_password: {file: ./secrets/runtime/minio_password.txt}
+  jwt_secret: {file: ./secrets/runtime/jwt_secret.txt}
+  internal_api_token: {file: ./secrets/runtime/internal_api_token.txt}
+  worker_api_secret: {file: ./secrets/runtime/worker_api_secret.txt}
+  api_keys: {file: ./secrets/runtime/api_keys.json}

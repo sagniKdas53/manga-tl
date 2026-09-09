@@ -1,0 +1,62 @@
+{
+  "date": "2026-09-09",
+  "branch": "feat/output-quality",
+  "investigation_commit": "17cebdc",
+  "environment": {
+    "before_lines": 88,
+    "after_lines": 35,
+    "preserved_assignments": 34,
+    "removed_inert_keys": [
+      "REGISTRY_OWNER",
+      "USE_REMOTE_ML",
+      "REMOTE_ML_URL"
+    ],
+    "private_backup": "secrets/.env.before-output-quality",
+    "secret_values_recorded": false
+  },
+  "reproduced_before_fix": {
+    "old_seed_overwrote_existing_password": true,
+    "old_test_file_mode": "0664",
+    "scope": "temporary directory; actual user credentials not regenerated"
+  },
+  "setup_tests": {
+    "command": ".venv/bin/python -m unittest scripts.test_seed_secrets scripts.test_dev_setup -q",
+    "passed": 13,
+    "failed": 0,
+    "skipped": 0,
+    "compose_config": "Docker Compose 5.5.1; five isolated services and generated QA model verified"
+  },
+  "worker_gates": {
+    "ruff_check": "passed",
+    "ruff_format_check": "101 files formatted",
+    "pyright": "0 errors, 0 warnings",
+    "pytest": {
+      "passed": 492,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 7.22,
+      "environment": "outside sandbox"
+    },
+    "sandbox_limit": "Existing FastAPI TestClient auth test hung in AnyIO event loop inside sandbox; reproduced alone with timeout and completed outside sandbox"
+  },
+  "real_model_validation": {
+    "model": "yolo11n_bubble.onnx",
+    "bytes": 12131307,
+    "sha256": "c9208cb610aa35b8f8dc7ef0890182322992a43399a853093ad5d04a3764af4f",
+    "onnx_session": "initialized successfully",
+    "local_ocr": "explicitly skipped; CLI reader tests use mocks"
+  },
+  "gitnexus": {
+    "existing_secret_script_main_impact": "LOW; one direct script caller, no execution flows",
+    "new_symbols": "some not indexed; reviewed direct source and staged diffs",
+    "pre_commit_detect_changes": "required independently in app, worker and corpus"
+  },
+  "limits": [
+    "No paid inference or full corpus regeneration",
+    "No fresh cloud Docker build/deployment performed",
+    "No fresh JA/KO/ZH weight downloads; run models on the target box",
+    "Model defaults reflect catalog and available configured credentials, not live provider access or pricing validation"
+  ],
+  "worker_commit": "4b56c48a7c96cd6a993557944f4f0a8f8d619e75",
+  "corpus_commit": "ed9b191da255e4d3d132a2d050ab8fffa1815e26"
+}
