@@ -1,0 +1,21 @@
+{
+  "date": "2026-09-09",
+  "heads": {
+    "app": "ac133879ee93180de3e2533c3530560808fe6f94",
+    "worker": "3a7b46c2994e2acff78cc27a9ef0c4545803ac0d",
+    "corpus": "607b78b8b7211778f44ada940a06d7b8052917e6"
+  },
+  "task_count": 58,
+  "milestone_count": 10,
+  "dependency_graph": "acyclic; all dependencies resolve",
+  "local_markdown_links_checked": 47,
+  "markdown_whitespace": "pass",
+  "timestamp_extractor": "executed successfully; 262 active bundles",
+  "latest_stage_fields_and_sample_ids": "verified against current files",
+  "selected_git_author_committer_dates_and_subjects": "verified",
+  "git_diff_check": "pass",
+  "worker_and_corpus_worktrees": "clean",
+  "production_changes": false,
+  "application_tests": "not run; planning/evidence-only changes",
+  "implementation_gates": "all pending"
+}

@@ -1,0 +1,260 @@
+{
+  "generated_at": "2026-09-09",
+  "reproduction": "./.venv/bin/python docs/quality-evidence/corpus-cutoff_extract.py",
+  "scope": {
+    "root": "corpus/samples/<ja|ko|zh>/sample*/project/project.json",
+    "active_definition": "language directories and sample directories directly below samples/, excluding directories beginning with _",
+    "active_projects": 262,
+    "by_language": {
+      "ja": 211,
+      "ko": 29,
+      "zh": 22
+    },
+    "missing_stage_timestamps": [
+      "ja/sample1"
+    ]
+  },
+  "date_distribution_utc_lexical_iso": {
+    "exportedAt": {
+      "n": 262,
+      "min": "2026-08-05T13:06:18.019Z",
+      "p10": "2026-08-13T16:31:49.952Z",
+      "median": "2026-08-20T02:07:13.983Z",
+      "p90": "2026-08-23T19:01:18.515Z",
+      "max": "2026-08-28T19:11:55.236Z"
+    },
+    "earliest_stage_date": {
+      "n": 261,
+      "min": "2026-08-05T13:04:38.787851438Z",
+      "p10": "2026-08-13T15:51:28.630166148Z",
+      "median": "2026-08-18T17:15:14.243547235Z",
+      "p90": "2026-08-22T18:23:47.422629127Z",
+      "max": "2026-08-28T19:11:12.391297190+00:00"
+    },
+    "latest_stage_date": {
+      "n": 261,
+      "min": "2026-08-05T13:04:50.767407266Z",
+      "p10": "2026-08-13T16:02:21.945218279Z",
+      "median": "2026-08-18T17:22:14.443280633Z",
+      "p90": "2026-08-22T18:24:25.966168551Z",
+      "max": "2026-08-28T19:11:44.700850881+00:00"
+    },
+    "export_date_counts": {
+      "2026-08-05": 1,
+      "2026-08-06": 1,
+      "2026-08-13": 39,
+      "2026-08-14": 23,
+      "2026-08-15": 14,
+      "2026-08-16": 44,
+      "2026-08-19": 2,
+      "2026-08-20": 11,
+      "2026-08-21": 13,
+      "2026-08-22": 69,
+      "2026-08-23": 21,
+      "2026-08-24": 20,
+      "2026-08-26": 2,
+      "2026-08-28": 2
+    }
+  },
+  "fixtures": {
+    "ja/sample177": {
+      "ocr_at": "2026-08-22T11:04:42.691026857Z",
+      "translation_at": [
+        "2026-08-22T11:06:27.676590170Z"
+      ],
+      "qa_at": [
+        "2026-08-22T11:07:48.257595735Z"
+      ],
+      "latest_stage_at": "2026-08-22T11:07:48.257595735Z",
+      "exportedAt": "2026-08-22T15:10:38.218Z",
+      "corpus_import_commits": [
+        "c28b91b8",
+        "38ec562b",
+        "6b222229"
+      ]
+    },
+    "ja/sample222": {
+      "ocr_at": "2026-08-22T11:08:17.397621142Z",
+      "translation_at": [
+        "2026-08-22T11:12:26.678615685Z"
+      ],
+      "qa_at": [
+        "2026-08-22T11:13:28.892920789Z"
+      ],
+      "latest_stage_at": "2026-08-22T11:13:28.892920789Z",
+      "exportedAt": "2026-08-23T18:45:45.252Z",
+      "corpus_import_commits": [
+        "18aa9336",
+        "6b222229"
+      ]
+    },
+    "ja/sample61": {
+      "ocr_at": "2026-08-16T09:43:04.066644580Z",
+      "translation_at": [
+        "2026-08-16T09:44:51.497352025Z",
+        "2026-08-16T09:49:15.378054087Z",
+        "2026-08-16T09:52:41.499364325Z"
+      ],
+      "qa_at": [
+        "2026-08-16T09:45:50.794094978Z",
+        "2026-08-16T09:50:09.134140903Z",
+        "2026-08-16T09:53:37.252275160Z"
+      ],
+      "latest_stage_at": "2026-08-16T09:53:37.252275160Z",
+      "exportedAt": "2026-08-16T17:06:59.083Z",
+      "corpus_import_commits": [
+        "3517922a",
+        "bedde7e4",
+        "a179a7bd",
+        "6b222229"
+      ]
+    },
+    "ja/sample99": {
+      "ocr_at": "2026-08-13T17:41:36.904047608Z",
+      "translation_at": [
+        "2026-08-13T17:42:15.252254735Z"
+      ],
+      "qa_at": [
+        "2026-08-13T17:42:54.697966151Z"
+      ],
+      "latest_stage_at": "2026-08-13T17:42:54.697966151Z",
+      "exportedAt": "2026-08-13T18:12:37.551Z",
+      "corpus_import_commits": [
+        "1157c174",
+        "38ec562b",
+        "6b222229"
+      ]
+    },
+    "ja/sample93": {
+      "ocr_at": "2026-08-13T15:31:32.033618473Z",
+      "translation_at": [
+        "2026-08-13T15:31:45.127324130Z"
+      ],
+      "qa_at": [
+        "2026-08-13T15:32:36.360364511Z"
+      ],
+      "latest_stage_at": "2026-08-13T15:32:36.360364511Z",
+      "exportedAt": "2026-08-15T07:16:56.581Z",
+      "corpus_import_commits": [
+        "1157c174",
+        "38ec562b",
+        "6b222229"
+      ]
+    },
+    "ja/sample83": {
+      "ocr_at": "2026-08-13T14:28:48.729890865Z",
+      "translation_at": [
+        "2026-08-13T14:29:17.224560652Z",
+        "2026-08-13T14:30:05.240565356Z",
+        "2026-08-13T14:30:41.366831213Z"
+      ],
+      "qa_at": [
+        "2026-08-13T14:29:49.049560593Z",
+        "2026-08-13T14:30:32.402479955Z",
+        "2026-08-13T14:31:05.689749831Z"
+      ],
+      "latest_stage_at": "2026-08-13T14:31:05.689749831Z",
+      "exportedAt": "2026-08-13T14:58:44.446Z",
+      "corpus_import_commits": [
+        "1157c174",
+        "38ec562b",
+        "6b222229"
+      ]
+    }
+  },
+  "cutoffs": {
+    "pinned_ocr_geometry": {
+      "utc": "2026-08-13T06:41:45Z",
+      "worker_commit": "2ed7c3e",
+      "meaning": "historical corpus curation policy cutoff; compare OCR layer time because geometry and masks are baked at OCR; later geometry/render commits exist"
+    },
+    "active_embedded_output": {
+      "latest_exportedAt": "2026-08-28T19:11:55.236Z",
+      "latest_stage_at": "2026-08-28T19:11:44.700850881+00:00",
+      "meaning": "practical corpus-output cutoff; later app/worker commits cannot be represented by these files"
+    },
+    "post_output_fix_window": {
+      "utc_start": "2026-08-29T15:21:26Z",
+      "meaning": "earliest author timestamp among the representative later fixes listed here; not an exhaustive first-fix claim"
+    }
+  },
+  "representative_later_fixes": {
+    "app": [
+      {
+        "commit": "2dd8bd8",
+        "author_date": "2026-08-29T21:28:28+05:30",
+        "committer_date": "2026-08-29T21:28:28+05:30",
+        "subject": "fix(export): an OCR layer never reaches an export",
+        "effect": "OCR layers are excluded from raster export"
+      },
+      {
+        "commit": "abdcce2",
+        "author_date": "2026-08-29T20:51:50+05:30",
+        "committer_date": "2026-08-29T20:51:50+05:30",
+        "subject": "fix(typeset): keep a free-floating column's height instead of squaring it away"
+      },
+      {
+        "commit": "3433977",
+        "author_date": "2026-09-03T01:20:35+05:30",
+        "committer_date": "2026-09-04T00:02:21+05:30",
+        "subject": "fix(render): one fitted rectangle, configurable, shared by both renderers"
+      },
+      {
+        "commit": "9542fea",
+        "author_date": "2026-09-03T01:08:30+05:30",
+        "committer_date": "2026-09-04T00:02:11+05:30",
+        "subject": "fix(editor): reach an element after hiding it"
+      }
+    ],
+    "worker": [
+      {
+        "commit": "55dc693",
+        "author_date": "2026-08-29T20:51:26+05:30",
+        "committer_date": "2026-08-29T20:51:26+05:30",
+        "subject": "fix(render): erase what you typeset for free-floating captions"
+      },
+      {
+        "commit": "6b70db1",
+        "author_date": "2026-09-03T01:19:29+05:30",
+        "committer_date": "2026-09-03T01:19:29+05:30",
+        "subject": "fix(render): one fitted rectangle, configurable, shared with the frontend"
+      },
+      {
+        "commit": "1e29253",
+        "author_date": "2026-09-03T00:58:34+05:30",
+        "committer_date": "2026-09-03T00:58:34+05:30",
+        "subject": "fix(render): set glyphs along the element's angle"
+      },
+      {
+        "commit": "ad1cf9e",
+        "author_date": "2026-09-08T14:39:37+05:30",
+        "committer_date": "2026-09-08T14:39:37+05:30",
+        "subject": "feat: route worker OCR through RapidOCR on ARM64"
+      }
+    ]
+  },
+  "limitations": [
+    "meta.json and corpus import commit dates describe copying/flattening/regrouping, not generation; embedded project.json stage fields are the evidence for OCR/translation/QA execution time.",
+    "exportedAt is browser/export time and can be days after the last stage; it is not an OCR or QA timestamp.",
+    "Author and committer dates are repository chronology only; they do not identify the deployed app or worker image used for a run.",
+    "An exact deployed commit cannot be inferred from timestamps alone; deployment logs, image digests, or run provenance are required."
+  ],
+  "latest_by_type_and_field": {
+    "ocr.time": {
+      "sample": "ja/sample2",
+      "at": "2026-08-28T19:11:12.391297190+00:00"
+    },
+    "translation.time": {
+      "sample": "ja/sample2",
+      "at": "2026-08-28T19:11:44.700640976+00:00"
+    },
+    "translation.last_modified": {
+      "sample": "ja/sample2",
+      "at": "2026-08-28T19:11:44.700850881+00:00"
+    },
+    "translation.last_qa_at": {
+      "sample": "ja/sample263",
+      "at": "2026-08-26T07:46:26.218722981Z"
+    }
+  }
+}
