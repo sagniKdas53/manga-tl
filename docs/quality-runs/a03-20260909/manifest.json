@@ -1,0 +1,39 @@
+{
+  "task": "A03",
+  "status": "BLOCKED",
+  "run_id": "a03-20260909",
+  "created_at_utc": "2026-09-09",
+  "heads": {
+    "app": "9bf0a2ac417e64e000610de6d76f2cad7764e35e",
+    "worker": "4b56c48a7c96cd6a993557944f4f0a8f8d619e75",
+    "corpus": "ed9b191da255e4d3d132a2d050ab8fffa1815e26"
+  },
+  "runtime": {
+    "python": "3.13.12 (.venv)",
+    "docker_server": "unavailable_or_not_reported",
+    "serving_stack": "not running",
+    "quality_preflight": "PASS; docs/quality-checkpoints/A03-preflight.json",
+    "providers_config_sha256": "4bb8783caf95a928a45b992ee285fc18b1b6bfb2d639dbdbdd8c7b573835c54b",
+    "worker_requirements_sha256": "ef21eacfa5410bfe96bcdf4997ea7e775c58d7718ebe2e7d006521f9e3efe858",
+    "effective_font_inventory": [
+      {"path": "backend/target/reports/fonts/glyphicons-halflings-regular.ttf", "sha256": "e27b969ef04fed3b39000b7b977e602d6e6a2b1c8c0d618bebf6dd875243ea3c"},
+      {"path": ".venv/lib/python3.13/site-packages/cv2/qt/fonts/DejaVuSans.ttf", "sha256": "15da2d8f12e6950001b1cc8225c1ba72ddce1938837d37702ff3e9bf6d79bd5e"}
+    ]
+  },
+  "stages": {
+    "ocr": {"status": "not-executed", "path": "stubbed", "reason": "serving worker unavailable; benchmark requires corpus/ocr regions or a live worker"},
+    "translation": {"status": "not-executed", "path": "stubbed", "reason": "serving backend/worker unavailable; existing translation benchmark corpus does not map these six source pages"},
+    "cleanup": {"status": "not-executed", "path": "stubbed", "reason": "no current OCR/translation artifacts"},
+    "render": {"status": "not-executed", "path": "stubbed", "reason": "historical render replay is explicitly excluded from A03"}
+  },
+  "pages": [
+    {"sample": "sample177", "language": "ja", "source": "corpus/samples/ja/sample177/source.jpg", "sha256": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "dimensions": [2048, 1910]},
+    {"sample": "sample222", "language": "ja", "source": "corpus/samples/ja/sample222/source.png", "sha256": "990b1c3b2032e628d4aa6f737d539dd39ae325771369651a3b7c975bbb594738", "dimensions": [4093, 2894]},
+    {"sample": "sample61", "language": "ja", "source": "corpus/samples/ja/sample61/source.jpg", "sha256": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76", "dimensions": [2000, 2000]},
+    {"sample": "sample99", "language": "ja", "source": "corpus/samples/ja/sample99/source.jpg", "sha256": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0", "dimensions": [3219, 2932]},
+    {"sample": "sample93", "language": "ja", "source": "corpus/samples/ja/sample93/source.png", "sha256": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b", "dimensions": [6764, 4961]},
+    {"sample": "sample83", "language": "ja", "source": "corpus/samples/ja/sample83/source.jpg", "sha256": "508d4269d36317c7e38f263b84398fdf10ad36d2c1441097969cf8e0cff0e8ab", "dimensions": [1412, 2000]}
+  ],
+  "calls": [],
+  "historical_artifacts_reused": false
+}

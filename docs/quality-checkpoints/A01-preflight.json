@@ -1,0 +1,45 @@
+{
+  "started_at": "2026-09-09T17:18:17.048745+00:00",
+  "heads": {
+    "app": "9bf0a2ac417e64e000610de6d76f2cad7764e35e",
+    "worker": "4b56c48a7c96cd6a993557944f4f0a8f8d619e75",
+    "corpus": "ed9b191da255e4d3d132a2d050ab8fffa1815e26"
+  },
+  "hardware": {
+    "platform": "Linux-5.15.0-181-generic-x86_64-with-glibc2.35",
+    "machine": "x86_64",
+    "python": "3.10.12",
+    "lscpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           39 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  4\nOn-line CPU(s) list:                     0-3\nVendor ID:                               GenuineIntel\nModel name:                              Intel(R) Core(TM) i5-7200U CPU @ 2.50GHz\nCPU family:                              6\nModel:                                   142\nThread(s) per core:                      2\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                9\nCPU max MHz:                             3100.0000\nCPU min MHz:                             400.0000\nBogoMIPS:                                5399.81\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault invpcid_single pti ssbd ibrs ibpb stibp tpr_shadow vnmi flexpriority ept vpid ept_ad fsgsbase tsc_adjust sgx bmi1 avx2 smep bmi2 erms invpcid mpx rdseed adx smap clflushopt intel_pt xsaveopt xsavec xgetbv1 xsaves dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp md_clear flush_l1d arch_capabilities ibpb_exit_to_user\nVirtualization:                          VT-x\nL1d cache:                               64 KiB (2 instances)\nL1i cache:                               64 KiB (2 instances)\nL2 cache:                                512 KiB (2 instances)\nL3 cache:                                3 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-3\nVulnerability Gather data sampling:      Mitigation; Microcode\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             KVM: Mitigation: VMX disabled\nVulnerability L1tf:                      Mitigation; PTE Inversion; VMX conditional cache flushes, SMT vulnerable\nVulnerability Mds:                       Mitigation; Clear CPU buffers; SMT vulnerable\nVulnerability Meltdown:                  Mitigation; PTI\nVulnerability Mmio stale data:           Mitigation; Clear CPU buffers; SMT vulnerable\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Mitigation; IBRS\nVulnerability Spec rstack overflow:      Not affected\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl and seccomp\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; IBRS; IBPB conditional; STIBP conditional; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Mitigation; Microcode\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace",
+    "memory": "total        used        free      shared  buff/cache   available\nMem:            19Gi        10Gi       300Mi       703Mi       8.3Gi       7.6Gi\nSwap:           17Gi       5.0Gi        12Gi",
+    "gpu": "NVIDIA GeForce 940MX, 580.159.03, 4096 MiB"
+  },
+  "model_font_hashes": [
+    {
+      "path": "data/worker/huggingface/models/yolo11n_bubble.onnx",
+      "sha256": "c9208cb610aa35b8f8dc7ef0890182322992a43399a853093ad5d04a3764af4f",
+      "bytes": 12131307
+    },
+    {
+      "path": "data/worker/huggingface/models/yolo26s_manga109.onnx",
+      "sha256": "62c9ee32f21e471dc0b4004842b0c73f0d711618d97083c9ded30cfe084827c8",
+      "bytes": 42296376
+    }
+  ],
+  "preflight": {
+    "passed": true,
+    "sentinel": "quality-preflight-c7db089d-85ee-46ee-bb3a-b1ae29710cb0",
+    "services": {
+      "db": {
+        "connected": true,
+        "sentinel_readback": true
+      },
+      "redis": {
+        "connected": true
+      },
+      "storage": {
+        "connected": true,
+        "health_endpoint": "/minio/health/live"
+      }
+    }
+  }
+}

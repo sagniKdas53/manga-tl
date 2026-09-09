@@ -1,0 +1,48 @@
+# Ephemeral services for the output-quality preflight.
+#
+# This file deliberately has its own project name, localhost ports and tmpfs
+# storage. It must never share the serving or dev volumes/networks.
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: quality_test
+      POSTGRES_PASSWORD: quality_test_password
+      POSTGRES_DB: quality_test
+    ports:
+      - "127.0.0.1:55590:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quality_test -d quality_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: valkey/valkey:8-alpine
+    ports:
+      - "127.0.0.1:56490:6379"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  minio:
+    image: minio/minio
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: quality_test
+      MINIO_ROOT_PASSWORD: quality_test_password
+    ports:
+      - "127.0.0.1:19190:9000"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
