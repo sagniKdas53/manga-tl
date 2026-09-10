@@ -1,0 +1,16 @@
+{
+  "source_hashes_verified": 24,
+  "recipe_resolved_rows_equal": 24,
+  "language_counts": {
+    "ja": 8,
+    "ko": 8,
+    "zh": 8
+  },
+  "style_lane_tag_counts_match": true,
+  "local_markdown_links_verified": 35,
+  "inventory_decoded_sources": 637,
+  "inventory_source_errors": 0,
+  "exact_source_duplicate_groups": 1,
+  "status": "passed",
+  "limits": "No automated style/language truth, family independence, pipeline quality or acceptance-label validation."
+}

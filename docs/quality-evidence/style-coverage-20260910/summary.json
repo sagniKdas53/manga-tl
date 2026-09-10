@@ -1,0 +1,65 @@
+{
+  "app_head": "d6bd527d44077ec5dfa98edeadeafe26aa2bb7b3",
+  "corpus_head": "ed9b191da255e4d3d132a2d050ab8fffa1815e26",
+  "worker_head": "7d70b64baca51690abf4dfbd7a89c2cde56b2c7e",
+  "language_count_basis": "Declared metadata, not a corpus-wide linguistic verification",
+  "counts": {
+    "active/ja": 211,
+    "active/ko": 29,
+    "active/zh": 22,
+    "pending/ja": 24,
+    "pending/ko": 192,
+    "pending/zh": 159
+  },
+  "duplicate_source_bytes": [
+    [
+      "sample258",
+      "sample637"
+    ]
+  ],
+  "errors": [],
+  "selection_counts": {
+    "conventional_control/ja": 8,
+    "conventional_control/ko": 8,
+    "conventional_control/zh": 8
+  },
+  "selection_styles": {
+    "bw_panel_manga": 9,
+    "bw_single_panel_dialogue": 3,
+    "color_four_panel_strip": 4,
+    "color_panel_webcomic": 6,
+    "color_scene_collage": 1,
+    "limited_palette_panel_comic": 1
+  },
+  "selection_tags": {
+    "action_panels": 1,
+    "angular_balloons": 1,
+    "clean_gutters": 19,
+    "colored_dialogue": 1,
+    "dark_art": 2,
+    "dense_dialogue": 5,
+    "dialogue_and_sfx": 5,
+    "high_resolution": 1,
+    "horizontal_dialogue": 5,
+    "irregular_scenes": 1,
+    "low_resolution": 1,
+    "mixed_script_sfx": 1,
+    "multi_speaker": 7,
+    "outlined_dialogue": 1,
+    "oval_balloons": 22,
+    "painted_background": 2,
+    "panel_breaking_art": 1,
+    "ruby_candidate": 2,
+    "screentone": 3,
+    "sfx_over_art": 1,
+    "short_strip": 7,
+    "sparse_dialogue": 1,
+    "thin_line_art": 2,
+    "vertical_dialogue": 3,
+    "workplace_gag": 1
+  },
+  "selection_lanes": {
+    "active": 15,
+    "pending": 9
+  }
+}

@@ -1,0 +1,715 @@
+{
+  "status": "source-selection-reviewed; labels-and-fresh-baselines-pending",
+  "date": "2026-09-10",
+  "purpose": "Conventional-page development controls supplementing, not replacing, the six adversarial regressions. Not a frozen holdout.",
+  "review_scope": "Source composition and visible dialogue script only; no ground-truth transcription, region masks, output quality or artist nationality inferred.",
+  "holdout_policy": "A09 must reserve separate source-family-disjoint pages, verify languages and near-duplicate artwork, and freeze labels/thresholds before tuning. All samples here are development-only.",
+  "retained_regression_ids": [
+    "sample177",
+    "sample222",
+    "sample61",
+    "sample99",
+    "sample93",
+    "sample83"
+  ],
+  "excluded_sources": [
+    {
+      "id": "sample4",
+      "declared_language": "ja",
+      "observed_dialogue_language": "zh",
+      "reason": "Source pixels contain Chinese dialogue and Chinese chart labels."
+    },
+    {
+      "id": "sample204",
+      "declared_language": "ja",
+      "observed_dialogue_language": "ko",
+      "reason": "Source speech balloons contain Hangul."
+    },
+    {
+      "id": "sample266",
+      "declared_language": "ko",
+      "observed_dialogue_language": "ja",
+      "reason": "Source has Japanese title, narration and reading-direction instruction."
+    },
+    {
+      "id": "sample312",
+      "declared_language": "ko",
+      "observed_dialogue_language": "en",
+      "reason": "Source dialogue is already English; not a Korean-to-English input."
+    },
+    {
+      "id": "sample361",
+      "declared_language": "ko",
+      "observed_dialogue_language": "en",
+      "reason": "Source dialogue is already English; sample363 also appears to share the artwork and needs a role/variant audit."
+    },
+    {
+      "id": "sample409",
+      "declared_language": "ko",
+      "observed_dialogue_language": "ja",
+      "reason": "Source balloons and margin dialogue contain Japanese kana and kanji."
+    },
+    {
+      "id": "sample138",
+      "declared_language": "zh",
+      "observed_dialogue_language": null,
+      "reason": "358x506 degraded action page with Japanese SFX and no verified Chinese dialogue; cannot satisfy a Chinese dialogue quota."
+    }
+  ],
+  "samples": [
+    {
+      "id": "sample7",
+      "language": "ja",
+      "lane": "active",
+      "source": "corpus/samples/ja/sample7/source.jpeg",
+      "sha256": "7e23ae0c9e7ffbec45221c2820a35dcde2e81aae99d34eb922d71f25855f71e9",
+      "width": 1299,
+      "height": 1831,
+      "origin": {
+        "previous_path": "samples/sample7"
+      },
+      "gap_category": null,
+      "provenance_metadata": {},
+      "contact_sheet": "active-ja-01.jpg",
+      "split": "conventional_control",
+      "style": "bw_panel_manga",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "multi_speaker",
+        "vertical_dialogue"
+      ],
+      "reason": "Ordinary dense conversation across distinct bordered panels."
+    },
+    {
+      "id": "sample139",
+      "language": "ja",
+      "lane": "active",
+      "source": "corpus/samples/ja/sample139/source.png",
+      "sha256": "192040b01567524ea7cfb7a9c7962b2a4f98c08a6ad6e4f0201ebb024dc796db",
+      "width": 800,
+      "height": 2282,
+      "origin": {
+        "previous_path": "gaps/Japanese/sample_gap23_4koma_gag_series",
+        "slug": "sample_gap23_4koma_gag_series"
+      },
+      "gap_category": "4-Koma Comedy Webcomic Strip (4\u30b3\u30de\u6f2b\u753b)",
+      "provenance_metadata": {},
+      "contact_sheet": "active-ja-03.jpg",
+      "split": "conventional_control",
+      "style": "bw_panel_manga",
+      "tags": [
+        "clean_gutters",
+        "angular_balloons",
+        "short_strip",
+        "screentone",
+        "workplace_gag"
+      ],
+      "reason": "Conventional monochrome workplace four-panel gag with angular speech balloons and an adult cast; broadens beyond game-character aesthetics."
+    },
+    {
+      "id": "sample39",
+      "language": "ja",
+      "lane": "active",
+      "source": "corpus/samples/ja/sample39/source.jpg",
+      "sha256": "d776a3cc203d65563edfb8c213c3196864f16738e7755876fda3dd4daf34c1f2",
+      "width": 900,
+      "height": 1280,
+      "origin": {
+        "previous_path": "samples/sample39"
+      },
+      "gap_category": null,
+      "provenance_metadata": {},
+      "contact_sheet": "active-ja-01.jpg",
+      "split": "conventional_control",
+      "style": "bw_panel_manga",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "dense_dialogue",
+        "multi_speaker"
+      ],
+      "reason": "Conventional multi-tier conversation with several independent balloons."
+    },
+    {
+      "id": "sample47",
+      "language": "ja",
+      "lane": "active",
+      "source": "corpus/samples/ja/sample47/source.jpg",
+      "sha256": "00b19b4cd45c3410920dbdd6d16a8fc8d43f1e3692ad94af5922257d64658854",
+      "width": 1029,
+      "height": 1646,
+      "origin": {
+        "previous_path": "samples/sample47"
+      },
+      "gap_category": null,
+      "provenance_metadata": {},
+      "contact_sheet": "active-ja-01.jpg",
+      "split": "conventional_control",
+      "style": "bw_panel_manga",
+      "tags": [
+        "action_panels",
+        "sfx_over_art",
+        "dialogue_and_sfx",
+        "ruby_candidate"
+      ],
+      "reason": "Mainstream action-page counterexample: preserve drawn SFX without dropping ordinary dialogue."
+    },
+    {
+      "id": "sample123",
+      "language": "ja",
+      "lane": "active",
+      "source": "corpus/samples/ja/sample123/source.jpg",
+      "sha256": "4d8c0bdb8e819b399210258d71e123cbb29fc4b883660b3e508cb752443a2611",
+      "width": 540,
+      "height": 720,
+      "origin": {
+        "previous_path": "gaps/Japanese/sample_gap2_dialogue_sfx",
+        "slug": "sample_gap2_dialogue_sfx"
+      },
+      "gap_category": "Conversational Dialogue & Sound Effects",
+      "provenance_metadata": {},
+      "contact_sheet": "active-ja-03.jpg",
+      "split": "conventional_control",
+      "style": "bw_panel_manga",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "dense_dialogue",
+        "low_resolution",
+        "dialogue_and_sfx",
+        "ruby_candidate"
+      ],
+      "reason": "Traditional rounded-character B&W dialogue page with four panels and multiple speakers; 540x720 source makes small dialogue/ruby a resolution control, not a high-resolution scan claim."
+    },
+    {
+      "id": "sample134",
+      "language": "ja",
+      "lane": "active",
+      "source": "corpus/samples/ja/sample134/source.jpg",
+      "sha256": "77f11ee385bd82fd183c1856c9a6308c01e2dfb6ee7b806d6e7d041c5f4a407f",
+      "width": 4299,
+      "height": 6071,
+      "origin": {
+        "previous_path": "gaps/Japanese/sample_gap16_immich_ultra_res_manga",
+        "slug": "sample_gap16_immich_ultra_res_manga"
+      },
+      "gap_category": "Ultra-High Resolution B&W Manga Page (4299x6071)",
+      "provenance_metadata": {},
+      "contact_sheet": "active-ja-03.jpg",
+      "split": "conventional_control",
+      "style": "bw_panel_manga",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "screentone",
+        "high_resolution"
+      ],
+      "reason": "Detailed conventional fantasy manga page at 4299x6071; bubble interiors and textured art must stay distinct."
+    },
+    {
+      "id": "sample150",
+      "language": "ja",
+      "lane": "active",
+      "source": "corpus/samples/ja/sample150/source.jpg",
+      "sha256": "5e49a2a275e8abe9251404c277ce6d6ded88e0b81a043e9a923b002cfd49d92d",
+      "width": 1460,
+      "height": 2048,
+      "origin": {
+        "previous_path": "gaps/Japanese/sample_gap35_4koma_color_romance",
+        "slug": "sample_gap35_4koma_color_romance"
+      },
+      "gap_category": "Clean 4-Panel Color Romance Webcomic",
+      "provenance_metadata": {},
+      "contact_sheet": "active-ja-04.jpg",
+      "split": "conventional_control",
+      "style": "color_four_panel_strip",
+      "tags": [
+        "clean_gutters",
+        "short_strip",
+        "oval_balloons",
+        "outlined_dialogue"
+      ],
+      "reason": "Clean colored four-panel comic with conventional panel-local dialogue; not a long-scroll webtoon."
+    },
+    {
+      "id": "sample172",
+      "language": "ja",
+      "lane": "active",
+      "source": "corpus/samples/ja/sample172/source.jpeg",
+      "sha256": "0c579dfaabb65bae96b7f69e1645fd747bd4c25954769152a0601a97a79659a1",
+      "width": 1157,
+      "height": 2048,
+      "origin": {
+        "previous_path": "gaps/Japanese/sample_gap60_dialogue",
+        "slug": "sample_gap60_dialogue"
+      },
+      "gap_category": "Dialogue",
+      "provenance_metadata": {},
+      "contact_sheet": "active-ja-04.jpg",
+      "split": "conventional_control",
+      "style": "color_four_panel_strip",
+      "tags": [
+        "clean_gutters",
+        "short_strip",
+        "oval_balloons",
+        "dialogue_and_sfx"
+      ],
+      "reason": "Four stacked panels combine ordinary bubble fitting with a final emphatic SFX panel."
+    },
+    {
+      "id": "sample192",
+      "language": "ko",
+      "lane": "active",
+      "source": "corpus/samples/ko/sample192/source.jpg",
+      "sha256": "177c5519f413956cdfb028c9465f6e34ac28452b123bf0c5ca84818d60d141db",
+      "width": 1536,
+      "height": 2048,
+      "origin": {
+        "previous_path": "gaps/Korean/sample_gap_ko15_bw_screentone_dialogue",
+        "slug": "sample_gap_ko15_bw_screentone_dialogue"
+      },
+      "gap_category": "Korean Black & White Screentone Dialogue",
+      "provenance_metadata": {},
+      "contact_sheet": "active-ko-01.jpg",
+      "split": "conventional_control",
+      "style": "bw_single_panel_dialogue",
+      "tags": [
+        "oval_balloons",
+        "horizontal_dialogue",
+        "multi_speaker"
+      ],
+      "reason": "Monochrome Hangul balloon control; deliberately not counted as a multi-panel page."
+    },
+    {
+      "id": "sample197",
+      "language": "ko",
+      "lane": "active",
+      "source": "corpus/samples/ko/sample197/source.png",
+      "sha256": "f2d36d0a6629baf250ab364ba6c889edadeae29f0fdd95e5a0ee93789d7a19c4",
+      "width": 3496,
+      "height": 4961,
+      "origin": {
+        "previous_path": "gaps/Korean/sample_gap_ko20_ultra_res_dense_dialogue",
+        "slug": "sample_gap_ko20_ultra_res_dense_dialogue"
+      },
+      "gap_category": "Ultra-resolution, dense dialogue",
+      "provenance_metadata": {},
+      "contact_sheet": "active-ko-01.jpg",
+      "split": "conventional_control",
+      "style": "limited_palette_panel_comic",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "multi_speaker",
+        "panel_breaking_art"
+      ],
+      "reason": "Structured limited-palette comic with many local dialogue owners and a foreground figure."
+    },
+    {
+      "id": "sample199",
+      "language": "ko",
+      "lane": "active",
+      "source": "corpus/samples/ko/sample199/source.png",
+      "sha256": "b9dcc5435eddb9087656cc8714106fd1160186acd7f495e262cad63f948e2478",
+      "width": 1600,
+      "height": 2400,
+      "origin": {
+        "previous_path": "gaps/Korean/sample_gap_ko23_dialogue",
+        "slug": "sample_gap_ko23_dialogue"
+      },
+      "gap_category": "Dialogue",
+      "provenance_metadata": {},
+      "contact_sheet": "active-ko-01.jpg",
+      "split": "conventional_control",
+      "style": "bw_panel_manga",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "sparse_dialogue",
+        "thin_line_art"
+      ],
+      "reason": "Minimal clean two-panel Hangul comic tests conservative white-interior cleanup."
+    },
+    {
+      "id": "sample268",
+      "language": "ko",
+      "lane": "pending",
+      "source": "corpus/gaps/pending/ko/sample268/source.jpg",
+      "sha256": "50168dcf479c8ca0b66ac125feb7c13646cf1260b9975d6e6e62c06717bd1a7d",
+      "width": 1451,
+      "height": 2048,
+      "origin": {
+        "previous_path": "gaps/scraped_tweets_pairs/pairs/src_2071911794231435520.jpg",
+        "slug": "gap_ko44_tweet_2071911794231435520"
+      },
+      "gap_category": null,
+      "provenance_metadata": {
+        "handle": "RagingAsn_",
+        "tweet_url": "https://x.com/RagingAsn_/status/2071952142034714771",
+        "created_at": "2026-06-30T13:41:00.000Z",
+        "lang_pair": "kr-en",
+        "caption": "EN Translation by @RagingAsn_\nArtist Comment: aw damn it's another Binah\n\nThis is the English translation! \nSee you next time! x.com/Eveveb_414/sta\u2026"
+      },
+      "contact_sheet": "pending-ko-01.jpg",
+      "split": "conventional_control",
+      "style": "color_panel_webcomic",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "short_strip"
+      ],
+      "reason": "Clearly bordered colored conversation panels with horizontal Hangul balloons."
+    },
+    {
+      "id": "sample289",
+      "language": "ko",
+      "lane": "pending",
+      "source": "corpus/gaps/pending/ko/sample289/source.jpg",
+      "sha256": "7d2034a3a0f487465d6c04aa20d4794fdad3ba51a684b7eec4a9403c2729132a",
+      "width": 1448,
+      "height": 2048,
+      "origin": {
+        "previous_path": "gaps/scraped_tweets_pairs/pairs/src_2073621695034995041.jpg",
+        "slug": "gap_ko65_tweet_2073621695034995041"
+      },
+      "gap_category": null,
+      "provenance_metadata": {
+        "handle": "RagingAsn_",
+        "tweet_url": "https://x.com/RagingAsn_/status/2073629015907180743",
+        "created_at": "2026-07-05T04:44:18.000Z",
+        "lang_pair": "kr-en",
+        "caption": "EN Translation by @RagingAsn_\nArtist Comment: Discovering My Own Life\n\nThis is the English translation!\nSee you next time! x.com/dltkdrlf92/sta\u2026"
+      },
+      "contact_sheet": "pending-ko-01.jpg",
+      "split": "conventional_control",
+      "style": "color_four_panel_strip",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "dense_dialogue",
+        "short_strip"
+      ],
+      "reason": "Dense colorful four-panel dialogue control, distinct from free-standing illustration text."
+    },
+    {
+      "id": "sample320",
+      "language": "ko",
+      "lane": "pending",
+      "source": "corpus/gaps/pending/ko/sample320/source.jpg",
+      "sha256": "1bf2b9de55340209f608e6fa8cf17f78bb65136305cde493cfff8385fe967316",
+      "width": 600,
+      "height": 1388,
+      "origin": {
+        "previous_path": "gaps/scraped_tweets_pairs/pairs/src_2077604139618484719.jpg",
+        "slug": "gap_ko96_tweet_2077604139618484719"
+      },
+      "gap_category": null,
+      "provenance_metadata": {
+        "handle": "RagingAsn_",
+        "tweet_url": "https://x.com/RagingAsn_/status/2077616321391382939",
+        "created_at": "2026-07-16T04:48:25.000Z",
+        "lang_pair": "kr-en",
+        "caption": "EN Translation by @RagingAsn_\n\nEnglish translation! \nSee you next time! x.com/Oo12271547/sta\u2026"
+      },
+      "contact_sheet": "pending-ko-02.jpg",
+      "split": "conventional_control",
+      "style": "color_four_panel_strip",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "dark_art",
+        "short_strip"
+      ],
+      "reason": "White speech balloons against blue/dark panels; short strip rather than long-scroll evidence."
+    },
+    {
+      "id": "sample360",
+      "language": "ko",
+      "lane": "pending",
+      "source": "corpus/gaps/pending/ko/sample360/source.jpg",
+      "sha256": "a816bf10406ba91e1e2bdc00d6544de56d185257dc0fc2c9a15783d7c8caf14a",
+      "width": 1443,
+      "height": 2048,
+      "origin": {
+        "previous_path": "gaps/scraped_tweets_pairs/pairs/src_2082250043495756236.jpg",
+        "slug": "gap_ko136_tweet_2082250043495756236"
+      },
+      "gap_category": null,
+      "provenance_metadata": {
+        "handle": "RagingAsn_",
+        "tweet_url": "https://x.com/RagingAsn_/status/2082262219987800498",
+        "created_at": "2026-07-29T00:29:34.000Z",
+        "lang_pair": "kr-en",
+        "caption": "EN Translation by @RagingAsn_\nArtist Comment: Hot Hina-chan\n\nThis is the English translation!\nSee you next time! x.com/oneso4628/stat\u2026"
+      },
+      "contact_sheet": "pending-ko-03.jpg",
+      "split": "conventional_control",
+      "style": "bw_panel_manga",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "multi_speaker",
+        "horizontal_dialogue"
+      ],
+      "reason": "Conventional monochrome multi-tier panel layout with Hangul dialogue."
+    },
+    {
+      "id": "sample416",
+      "language": "ko",
+      "lane": "pending",
+      "source": "corpus/gaps/pending/ko/sample416/source.jpg",
+      "sha256": "b9dfb8e7295ebdd166c1853966e9fb329a35d2d7afe5383f36a7f86893ca238f",
+      "width": 1051,
+      "height": 2048,
+      "origin": {
+        "previous_path": "gaps/scraped_tweets_pairs/pairs/src_2088964101850718344.jpg",
+        "slug": "gap_ko192_tweet_2088964101850718344"
+      },
+      "gap_category": null,
+      "provenance_metadata": {
+        "handle": "RagingAsn_",
+        "tweet_url": "https://x.com/RagingAsn_/status/2088968749638377754",
+        "created_at": "2026-08-16T12:38:55.000Z",
+        "lang_pair": "kr-en",
+        "caption": "EN Translation by @RagingAsn_\n\nThis is the English translation! \nSee you next time! x.com/dltkdrlf92/sta\u2026"
+      },
+      "contact_sheet": "pending-ko-04.jpg",
+      "split": "conventional_control",
+      "style": "color_panel_webcomic",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "short_strip",
+        "painted_background"
+      ],
+      "reason": "Warm painted backgrounds and four panels across three tiers broaden the Korean visual palette."
+    },
+    {
+      "id": "sample206",
+      "language": "zh",
+      "lane": "active",
+      "source": "corpus/samples/zh/sample206/source.png",
+      "sha256": "ea0a4df4821cededdd8e46aeff87f88f08e7fc1893ed92012dafceb72f03c419",
+      "width": 2888,
+      "height": 4093,
+      "origin": {
+        "previous_path": "gaps/Chinese/sample_gap_zh10_bw_lineart_sfx",
+        "slug": "sample_gap_zh10_bw_lineart_sfx"
+      },
+      "gap_category": "Chinese Black & White Line Art with Hand-Drawn SFX",
+      "provenance_metadata": {
+        "original_sample_file": "only-proper-bubbles-the-two-on-top-detected.png",
+        "recovered_from": "gaps/Uncategorized/Chinese/sample_gap_zh7_partial_bubble_detection/ (deleted+re-added catalog, see gaps/README.md)"
+      },
+      "contact_sheet": "active-zh-01.jpg",
+      "split": "conventional_control",
+      "style": "bw_panel_manga",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "dialogue_and_sfx",
+        "mixed_script_sfx",
+        "thin_line_art"
+      ],
+      "reason": "Chinese dialogue with Hangul-like drawn SFX; language does not establish creator origin or a monolingual page."
+    },
+    {
+      "id": "sample208",
+      "language": "zh",
+      "lane": "active",
+      "source": "corpus/samples/zh/sample208/source.png",
+      "sha256": "eb90fff0ffcc0d2cee63cd6a7b8acb7e5c0ccfb9ac468c9532c0c0ad55ed237e",
+      "width": 1080,
+      "height": 1689,
+      "origin": {
+        "previous_path": "gaps/Chinese/sample_gap_zh15_classroom_multipanel",
+        "slug": "sample_gap_zh15_classroom_multipanel"
+      },
+      "gap_category": "Multi-Panel Classroom Scene & Inner-Monologue Narration",
+      "provenance_metadata": {},
+      "contact_sheet": "active-zh-01.jpg",
+      "split": "conventional_control",
+      "style": "color_scene_collage",
+      "tags": [
+        "oval_balloons",
+        "dense_dialogue",
+        "multi_speaker",
+        "irregular_scenes"
+      ],
+      "reason": "One dense Chinese balloon/scene collage control, not counted as clean panels; exclude sibling sample209 from holdout."
+    },
+    {
+      "id": "sample226",
+      "language": "zh",
+      "lane": "active",
+      "source": "corpus/samples/zh/sample226/source.jpg",
+      "sha256": "71c75822e09043831f805f65d77754af0927f9f024d00764fb5d9aabbfb03bc7",
+      "width": 1600,
+      "height": 2265,
+      "origin": {
+        "previous_path": "gaps/Chinese/sample_gap_zh12_catgirl_dense_dialogue",
+        "slug": "sample_gap_zh12_catgirl_dense_dialogue"
+      },
+      "gap_category": "Chinese Dense Two-Panel Dialogue",
+      "provenance_metadata": {},
+      "contact_sheet": "active-zh-01.jpg",
+      "split": "conventional_control",
+      "style": "color_panel_webcomic",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "vertical_dialogue",
+        "colored_dialogue"
+      ],
+      "reason": "Chinese colored dialogue in clean panel-local bubbles; group related sample227/sample230/sample231 before splitting."
+    },
+    {
+      "id": "sample261",
+      "language": "zh",
+      "lane": "active",
+      "source": "corpus/samples/zh/sample261/source.png",
+      "sha256": "ff8c69ff142d3d09f7473c3e2a4d532ec6d5a0d25eaff99e44dfde2c2aec14d3",
+      "width": 1240,
+      "height": 1754,
+      "origin": {
+        "previous_path": "gaps/Chinese/New Folder (1)",
+        "slug": "gap_zh25_6"
+      },
+      "gap_category": null,
+      "provenance_metadata": {},
+      "contact_sheet": "active-zh-01.jpg",
+      "split": "conventional_control",
+      "style": "bw_single_panel_dialogue",
+      "tags": [
+        "oval_balloons",
+        "dense_dialogue",
+        "screentone",
+        "multi_speaker"
+      ],
+      "reason": "Dense grayscale Chinese speech-balloon page; not evidence for multi-panel manhua."
+    },
+    {
+      "id": "sample457",
+      "language": "zh",
+      "lane": "pending",
+      "source": "corpus/gaps/pending/zh/sample457/source.jpg",
+      "sha256": "9d780c60ab7ba834e8e95f33cb69bb8d477a8d0ce2b4d0823e114937faff4776",
+      "width": 1542,
+      "height": 2048,
+      "origin": {
+        "previous_path": "gaps/scraped_tweets_pairs/pairs/cn_2004920369782911115.jpg",
+        "slug": "gap_zh29_tweet_2004920369782911115"
+      },
+      "gap_category": null,
+      "provenance_metadata": {
+        "handle": "ArcSSS90",
+        "tweet_url": "https://x.com/ArcSSS90/status/2004915171433627837",
+        "created_at": "2025-12-27T14:00:01.000Z",
+        "lang_pair": "zh-en",
+        "caption": "When the Qingming Sword\u2019s side effects got too severe"
+      },
+      "contact_sheet": "pending-zh-01.jpg",
+      "split": "conventional_control",
+      "style": "color_panel_webcomic",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "horizontal_dialogue"
+      ],
+      "reason": "One representative of the heavily repeated Chinese two-panel fan-webcomic family, rather than selecting dozens of siblings."
+    },
+    {
+      "id": "sample609",
+      "language": "zh",
+      "lane": "pending",
+      "source": "corpus/gaps/pending/zh/sample609/source.jpg",
+      "sha256": "dfb5a780a819a1db0982e699c50999b3fd6f2c0852384c21b9bc7122625ebb0d",
+      "width": 1381,
+      "height": 2048,
+      "origin": {
+        "previous_path": "gaps/scraped_tweets_pairs/pairs/cn_2069637030183944554.jpg",
+        "slug": "gap_zh181_tweet_2069637030183944554"
+      },
+      "gap_category": null,
+      "provenance_metadata": {
+        "handle": "ArcSSS90",
+        "tweet_url": "https://x.com/ArcSSS90/status/2069626178848317889",
+        "created_at": "2026-06-24T03:38:27.000Z",
+        "lang_pair": "zh-en",
+        "caption": "What the F are they doi\u2014Ohh..."
+      },
+      "contact_sheet": "pending-zh-04.jpg",
+      "split": "conventional_control",
+      "style": "color_panel_webcomic",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "horizontal_dialogue",
+        "painted_background"
+      ],
+      "reason": "Different painted two-panel presentation from the dominant flat-color Chinese family; uploader is not assumed to be artist."
+    },
+    {
+      "id": "sample611",
+      "language": "zh",
+      "lane": "pending",
+      "source": "corpus/gaps/pending/zh/sample611/source.jpg",
+      "sha256": "0a8d82a152fb13b8d9e0e6b85ebada0c48669a1685d09e73f3c6f471b35a7bab",
+      "width": 1920,
+      "height": 1891,
+      "origin": {
+        "previous_path": "gaps/scraped_tweets_pairs/pairs/cn_2080300024853156011.jpg",
+        "slug": "gap_zh183_tweet_2080300024853156011"
+      },
+      "gap_category": null,
+      "provenance_metadata": {
+        "handle": "ArcSSS90",
+        "tweet_url": "https://x.com/ArcSSS90/status/2080292314212421728",
+        "created_at": "2026-07-23T14:01:52.000Z",
+        "lang_pair": "zh-en",
+        "caption": "norm"
+      },
+      "contact_sheet": "pending-zh-04.jpg",
+      "split": "conventional_control",
+      "style": "bw_single_panel_dialogue",
+      "tags": [
+        "oval_balloons",
+        "horizontal_dialogue",
+        "dark_art"
+      ],
+      "reason": "Simple monochrome Chinese gag with two clean bubbles; counted as a single-panel control only."
+    },
+    {
+      "id": "sample612",
+      "language": "zh",
+      "lane": "pending",
+      "source": "corpus/gaps/pending/zh/sample612/source.jpg",
+      "sha256": "4cce048893f940d5826085cad8b2dfb0dc7cbb33dc20a75d917c7a5c0d6b17b1",
+      "width": 800,
+      "height": 1131,
+      "origin": {
+        "previous_path": "gaps/scraped_tweets_pairs/pairs/cn_2083053660402299376.jpg",
+        "slug": "gap_zh184_tweet_2083053660402299376"
+      },
+      "gap_category": null,
+      "provenance_metadata": {
+        "handle": "HlsDeveloper",
+        "tweet_url": "https://x.com/HlsDeveloper/status/2083025123435852268",
+        "created_at": "2026-07-31T03:01:04.000Z",
+        "lang_pair": "zh-en",
+        "caption": "Is the wife Remiere?"
+      },
+      "contact_sheet": "pending-zh-04.jpg",
+      "split": "conventional_control",
+      "style": "color_panel_webcomic",
+      "tags": [
+        "clean_gutters",
+        "oval_balloons",
+        "vertical_dialogue",
+        "dialogue_and_sfx"
+      ],
+      "reason": "Chinese vertical dialogue and decorative type in a short colored two-panel comic; no claim of print-manhua provenance."
+    }
+  ]
+}
