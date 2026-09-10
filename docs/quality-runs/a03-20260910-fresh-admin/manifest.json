@@ -1,0 +1,486 @@
+{
+  "task": "A03",
+  "run_id": "a03-20260910-fresh-admin",
+  "status": "COMPLETED",
+  "lifecycle": "fresh isolated Compose instance; administrator deletes the preceding disposable series before each next fixture",
+  "models": {
+    "ocr": "local / PP-OCRv6",
+    "translation": "openrouter / openai/gpt-5.6-luna",
+    "qa_llm": "openrouter / openai/gpt-5.6-luna",
+    "qa_vlm": "openrouter / google/gemini-3.1-flash-lite",
+    "fallback_models": false
+  },
+  "pages": [
+    {
+      "sample": "sample177",
+      "series_id": "63bffaa4-d2e6-40c2-a051-4af180d84ff2",
+      "chapter_id": "faf78cea-4533-4a75-8431-dbc2f4cc2edc",
+      "page_id": "23cefeac-a7fa-4b90-8539-c2dd101f8ed4",
+      "image_id": "4464f19c-3b60-47f8-a5d7-8010240df8cc",
+      "source_sha256": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382",
+      "render_sha256": "0e8df4213477ba2d033c00d0bd60ec0be7ad34b4803a1fac238c4d5e7da97ec2",
+      "render_dimensions": [
+        2048,
+        1910
+      ],
+      "ocr_regions": 4,
+      "layers": [
+        "ocr",
+        "translation",
+        "translation"
+      ],
+      "qa_statuses": [
+        "passed"
+      ],
+      "jobs": [
+        {
+          "type": "panel-detection",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "ocr",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "layout",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "translation",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "render",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "qa",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "translation",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "render",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "qa",
+          "status": "COMPLETED",
+          "attempt": 1
+        }
+      ],
+      "resolved_models": {
+        "ocr": {
+          "provider": "local",
+          "model": "PP-OCRv6_medium_rec",
+          "source": "chapter"
+        },
+        "translation": {
+          "provider": "openrouter",
+          "model": "openai/gpt-5.6-luna",
+          "source": "chapter"
+        },
+        "qa": {
+          "provider": "openrouter",
+          "llmModel": "openai/gpt-5.6-luna",
+          "vlmModel": "google/gemini-3.1-flash-lite",
+          "mode": "auto",
+          "source": "chapter"
+        },
+        "useFallbackModels": false
+      }
+    },
+    {
+      "sample": "sample222",
+      "series_id": "429fcce4-e4c3-4c82-ac02-88341ca080f7",
+      "chapter_id": "e40b23df-98b9-4489-870c-a5f169a7bdad",
+      "page_id": "3390e549-3367-40a7-bdc5-336183345672",
+      "image_id": "2ede0ff9-7039-4df9-b56e-3fa234701776",
+      "source_sha256": "990b1c3b2032e628d4aa6f737d539dd39ae325771369651a3b7c975bbb594738",
+      "render_sha256": "3e345ffade0a12570b793034d18072a221f74c1186cacf030492c44a46abf01f",
+      "render_dimensions": [
+        4093,
+        2894
+      ],
+      "ocr_regions": 1,
+      "layers": [
+        "ocr",
+        "translation"
+      ],
+      "qa_statuses": [
+        "manual_review"
+      ],
+      "jobs": [
+        {
+          "type": "panel-detection",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "ocr",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "layout",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "translation",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "render",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "qa",
+          "status": "COMPLETED",
+          "attempt": 1
+        }
+      ],
+      "resolved_models": {
+        "ocr": {
+          "provider": "local",
+          "model": "PP-OCRv6_medium_rec",
+          "source": "chapter"
+        },
+        "translation": {
+          "provider": "openrouter",
+          "model": "openai/gpt-5.6-luna",
+          "source": "chapter"
+        },
+        "qa": {
+          "provider": "openrouter",
+          "llmModel": "openai/gpt-5.6-luna",
+          "vlmModel": "google/gemini-3.1-flash-lite",
+          "mode": "auto",
+          "source": "chapter"
+        },
+        "useFallbackModels": false
+      }
+    },
+    {
+      "sample": "sample61",
+      "series_id": "3d084c36-72b3-4ac2-ae33-fbdb31c6095a",
+      "chapter_id": "97fb737e-b6d0-430c-8805-55d5e9faa59b",
+      "page_id": "4a0361d1-a98a-4388-a84a-180ae5c71721",
+      "image_id": "83d2b2bf-48e6-480b-ad65-94e6cda9c06a",
+      "source_sha256": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76",
+      "render_sha256": "0340998a9f41e06cea5d5070464c865952f4341feca9d9a5c4ef69eea71d90a4",
+      "render_dimensions": [
+        2000,
+        2000
+      ],
+      "ocr_regions": 50,
+      "layers": [
+        "ocr",
+        "translation"
+      ],
+      "qa_statuses": [
+        "passed",
+        "reject_sfx"
+      ],
+      "jobs": [
+        {
+          "type": "panel-detection",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "ocr",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "layout",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "translation",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "render",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "qa",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "render",
+          "status": "COMPLETED",
+          "attempt": 1
+        }
+      ],
+      "resolved_models": {
+        "ocr": {
+          "provider": "local",
+          "model": "PP-OCRv6_medium_rec",
+          "source": "chapter"
+        },
+        "translation": {
+          "provider": "openrouter",
+          "model": "openai/gpt-5.6-luna",
+          "source": "chapter"
+        },
+        "qa": {
+          "provider": "openrouter",
+          "llmModel": "openai/gpt-5.6-luna",
+          "vlmModel": "google/gemini-3.1-flash-lite",
+          "mode": "auto",
+          "source": "chapter"
+        },
+        "useFallbackModels": false
+      }
+    },
+    {
+      "sample": "sample99",
+      "series_id": "79ecb3c8-8d1e-4ff4-91e1-b316baf4a51c",
+      "chapter_id": "d5c2433f-9317-4479-a259-2e5e1d80bd5c",
+      "page_id": "81a06a75-5a50-478f-964c-ba64c33f5558",
+      "image_id": "6bbf4b86-7757-49c3-92f6-992b03951418",
+      "source_sha256": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0",
+      "render_sha256": "f94254160445423984707da56d987aae45cc811ed24824f7f560953efdd2161b",
+      "render_dimensions": [
+        3219,
+        2932
+      ],
+      "ocr_regions": 10,
+      "layers": [
+        "ocr",
+        "translation"
+      ],
+      "qa_statuses": [
+        "passed",
+        "reject_sfx"
+      ],
+      "jobs": [
+        {
+          "type": "panel-detection",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "ocr",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "layout",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "translation",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "render",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "qa",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "render",
+          "status": "COMPLETED",
+          "attempt": 1
+        }
+      ],
+      "resolved_models": {
+        "ocr": {
+          "provider": "local",
+          "model": "PP-OCRv6_medium_rec",
+          "source": "chapter"
+        },
+        "translation": {
+          "provider": "openrouter",
+          "model": "openai/gpt-5.6-luna",
+          "source": "chapter"
+        },
+        "qa": {
+          "provider": "openrouter",
+          "llmModel": "openai/gpt-5.6-luna",
+          "vlmModel": "google/gemini-3.1-flash-lite",
+          "mode": "auto",
+          "source": "chapter"
+        },
+        "useFallbackModels": false
+      }
+    },
+    {
+      "sample": "sample93",
+      "series_id": "d148ba0a-8b55-4db0-946b-e9da7b6bc233",
+      "chapter_id": "9f313424-b7c5-4f07-afb1-6ad33d0e30d9",
+      "page_id": "dc86d89a-4a34-4c0c-ba6a-a8eb5fe01aa0",
+      "image_id": "10f878ca-adf8-4630-b2f3-e2c5741360d0",
+      "source_sha256": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b",
+      "render_sha256": "13877666875e9a7029adc1b2202b233980efe11cf79666001800115aa54d3840",
+      "render_dimensions": [
+        6764,
+        4961
+      ],
+      "ocr_regions": 11,
+      "layers": [
+        "ocr",
+        "translation"
+      ],
+      "qa_statuses": [
+        "passed",
+        "reject_sfx"
+      ],
+      "jobs": [
+        {
+          "type": "panel-detection",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "ocr",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "layout",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "translation",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "render",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "qa",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "render",
+          "status": "COMPLETED",
+          "attempt": 1
+        }
+      ],
+      "resolved_models": {
+        "ocr": {
+          "provider": "local",
+          "model": "PP-OCRv6_medium_rec",
+          "source": "chapter"
+        },
+        "translation": {
+          "provider": "openrouter",
+          "model": "openai/gpt-5.6-luna",
+          "source": "chapter"
+        },
+        "qa": {
+          "provider": "openrouter",
+          "llmModel": "openai/gpt-5.6-luna",
+          "vlmModel": "google/gemini-3.1-flash-lite",
+          "mode": "auto",
+          "source": "chapter"
+        },
+        "useFallbackModels": false
+      }
+    },
+    {
+      "sample": "sample83",
+      "series_id": "4a65ed5a-dbd9-4ba3-b55e-cf95f1c906fb",
+      "chapter_id": "3ec96246-dbcc-46fa-91b9-31fafa05de42",
+      "page_id": "94abf5e5-a50a-48e2-bbbe-3c713a36ecfb",
+      "image_id": "06d876fb-2eba-4d08-b891-0fa560ae0536",
+      "source_sha256": "508d4269d36317c7e38f263b84398fdf10ad36d2c1441097969cf8e0cff0e8ab",
+      "render_sha256": "2c7280866461f948357fb28e7e2e1b576c9e88be7dc8e09355e125fd5df658b1",
+      "render_dimensions": [
+        1412,
+        2000
+      ],
+      "ocr_regions": 3,
+      "layers": [
+        "ocr",
+        "translation"
+      ],
+      "qa_statuses": [],
+      "jobs": [
+        {
+          "type": "panel-detection",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "ocr",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "layout",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "translation",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "render",
+          "status": "COMPLETED",
+          "attempt": 1
+        },
+        {
+          "type": "qa",
+          "status": "COMPLETED",
+          "attempt": 1
+        }
+      ],
+      "resolved_models": {
+        "ocr": {
+          "provider": "local",
+          "model": "PP-OCRv6_medium_rec",
+          "source": "chapter"
+        },
+        "translation": {
+          "provider": "openrouter",
+          "model": "openai/gpt-5.6-luna",
+          "source": "chapter"
+        },
+        "qa": {
+          "provider": "openrouter",
+          "llmModel": "openai/gpt-5.6-luna",
+          "vlmModel": "google/gemini-3.1-flash-lite",
+          "mode": "auto",
+          "source": "chapter"
+        },
+        "useFallbackModels": false
+      }
+    }
+  ],
+  "historical_artifacts_reused": false
+}

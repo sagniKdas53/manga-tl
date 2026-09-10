@@ -1,0 +1,66 @@
+{
+  "page_id": "23cefeac-a7fa-4b90-8539-c2dd101f8ed4",
+  "image_id": "4464f19c-3b60-47f8-a5d7-8010240df8cc",
+  "ocr_regions": 4,
+  "layers": [
+    "ocr",
+    "translation",
+    "translation"
+  ],
+  "qa_statuses": [
+    "passed"
+  ],
+  "source_sha256": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382",
+  "render_sha256": "0e8df4213477ba2d033c00d0bd60ec0be7ad34b4803a1fac238c4d5e7da97ec2",
+  "render_dimensions": [
+    2048,
+    1910
+  ],
+  "jobs": [
+    {
+      "type": "panel-detection",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "ocr",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "layout",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "translation",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "render",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "qa",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "translation",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "render",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "qa",
+      "status": "COMPLETED",
+      "attempt": 1
+    }
+  ]
+}

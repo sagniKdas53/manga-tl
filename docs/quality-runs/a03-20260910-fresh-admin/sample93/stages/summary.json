@@ -1,0 +1,56 @@
+{
+  "page_id": "dc86d89a-4a34-4c0c-ba6a-a8eb5fe01aa0",
+  "image_id": "10f878ca-adf8-4630-b2f3-e2c5741360d0",
+  "ocr_regions": 11,
+  "layers": [
+    "ocr",
+    "translation"
+  ],
+  "qa_statuses": [
+    "passed",
+    "reject_sfx"
+  ],
+  "source_sha256": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b",
+  "render_sha256": "13877666875e9a7029adc1b2202b233980efe11cf79666001800115aa54d3840",
+  "render_dimensions": [
+    6764,
+    4961
+  ],
+  "jobs": [
+    {
+      "type": "panel-detection",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "ocr",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "layout",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "translation",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "render",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "qa",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "render",
+      "status": "COMPLETED",
+      "attempt": 1
+    }
+  ]
+}

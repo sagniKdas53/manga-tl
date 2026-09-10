@@ -1,0 +1,50 @@
+{
+  "page_id": "3390e549-3367-40a7-bdc5-336183345672",
+  "image_id": "2ede0ff9-7039-4df9-b56e-3fa234701776",
+  "ocr_regions": 1,
+  "layers": [
+    "ocr",
+    "translation"
+  ],
+  "qa_statuses": [
+    "manual_review"
+  ],
+  "source_sha256": "990b1c3b2032e628d4aa6f737d539dd39ae325771369651a3b7c975bbb594738",
+  "render_sha256": "3e345ffade0a12570b793034d18072a221f74c1186cacf030492c44a46abf01f",
+  "render_dimensions": [
+    4093,
+    2894
+  ],
+  "jobs": [
+    {
+      "type": "panel-detection",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "ocr",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "layout",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "translation",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "render",
+      "status": "COMPLETED",
+      "attempt": 1
+    },
+    {
+      "type": "qa",
+      "status": "COMPLETED",
+      "attempt": 1
+    }
+  ]
+}
