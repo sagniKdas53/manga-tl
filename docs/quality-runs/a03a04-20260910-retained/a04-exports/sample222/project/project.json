@@ -1,0 +1,184 @@
+{
+  "pageNumber": 1,
+  "imageId": "496acf31-379e-4f38-9cdc-b27f4872b782",
+  "dimensions": {
+    "width": 4093,
+    "height": 2894
+  },
+  "totalCost": {
+    "estimated_cost": 0.00241165,
+    "display": "$0.002412",
+    "currency": "USD",
+    "unpricedCalls": 0,
+    "complete": true
+  },
+  "exportedAt": "2026-09-10T12:47:24.290Z",
+  "layers": [
+    {
+      "id": "404c42f8-793b-43ed-8cc1-9acd02f5db3f",
+      "type": "ocr",
+      "targetLanguage": null,
+      "visible": true,
+      "zOrder": 1,
+      "metadataJson": {
+        "time": "2026-09-10T12:33:34.189726794+00:00",
+        "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+        "provider": "OCR Worker",
+        "confidence": 0.965111147080149,
+        "layer_name": "OCR",
+        "layer_order": 1,
+        "last_modified": "2026-09-10T12:33:34.189871545+00:00"
+      },
+      "elements": [
+        {
+          "id": "d3600e2a-bd57-4065-b0db-034492fd56cc",
+          "text": "神企画¥1000,000,000玩具♪18歳完全強制人生終了宣言200minVIDEODVD鮮烈！Aデビュー合意無し政治家の秋山凜子現役女子高生現役対魔忍愛し合うの♪勿論、生ハメ♪合意無し完全强制現役裏切り！クソ対魔忍！任務の後は、先生と人生終了宣言人権「廃棄」しちゃいまし正義を懲らしめ、悪を助くた邪魔者は消しますW間失格！？愛する先生方の為に♪",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": null,
+          "x": 59,
+          "y": 11,
+          "maxWidth": 2986,
+          "maxHeight": 2882,
+          "rotation": null,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "isManuallyEdited": false,
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "6b11ce4b-878b-4ab9-bf10-f0cc14b5f47d"
+        }
+      ]
+    },
+    {
+      "id": "fe248257-b942-4150-a385-2b5afbaa34b1",
+      "type": "translation",
+      "targetLanguage": "en",
+      "visible": true,
+      "zOrder": 2,
+      "metadataJson": {
+        "qa": {
+          "cost": {
+            "currency": "USD",
+            "breakdown": [
+              {
+                "model": "google/gemini-3.1-flash-lite",
+                "stage": "qa",
+                "currency": "USD",
+                "provider": "openrouter",
+                "cost_source": "authoritative",
+                "duration_ms": 8110,
+                "total_tokens": 2866,
+                "cached_tokens": 0,
+                "generation_id": "gen-1789043641-16Z3F76F4FrCRrl3fbya",
+                "prompt_tokens": 2511,
+                "estimated_cost": 0.00116025,
+                "model_resolved": "google/gemini-3.1-flash-lite",
+                "completion_tokens": 355,
+                "upstream_provider": "Google AI Studio",
+                "cache_write_tokens": 0
+              }
+            ],
+            "priced_calls": 1,
+            "cached_tokens": 0,
+            "prompt_tokens": 2511,
+            "unknown_calls": 0,
+            "estimated_cost": 0.00116025,
+            "completion_tokens": 355
+          },
+          "failed": 0,
+          "passed": 0,
+          "status": "manual_review",
+          "avg_score": 0.6,
+          "direct_fix": 0,
+          "last_qa_at": "2026-09-10T12:34:08.231593552+00:00",
+          "retries_used": 0,
+          "manual_review": 1,
+          "total_regions": 1,
+          "failed_regions": [
+            {
+              "qaScore": 0.6,
+              "qaStatus": "manual_review",
+              "regionId": "6b11ce4b-878b-4ab9-bf10-f0cc14b5f47d",
+              "escalation": {
+                "ocrBad": false,
+                "orderBad": true,
+                "needsReOcr": false,
+                "correctedSourceText": "",
+                "needsManualIntervention": true,
+                "suggestedReadingOrderIndex": 1
+              },
+              "qaFeedback": "The provided text is a composite of multiple distinct text blocks and graphic elements scattered across the page. Treating them as a single monolithic block of text makes it impossible to typeset correctly or maintain the intended reading order. The translation needs to be broken down and segmented by the actual graphic elements on the page (labels, headers, and body text) rather than being clumped into one large block. The current translation includes placeholder symbols for emojis that should be adjusted for cleaner English presentation.",
+              "bubbleReadingOrder": 1
+            }
+          ]
+        },
+        "tl": {
+          "cost": {
+            "currency": "USD",
+            "breakdown": [
+              {
+                "model": "openai/gpt-5.6-luna",
+                "stage": "translation",
+                "currency": "USD",
+                "provider": "openrouter",
+                "cost_source": "authoritative",
+                "duration_ms": 10165,
+                "total_tokens": 2084,
+                "cached_tokens": 0,
+                "generation_id": "gen-1789043622-fvSnfK1zlcFHh1kfIIYZ",
+                "prompt_tokens": 1315,
+                "estimated_cost": 0.0012514,
+                "model_resolved": "openai/gpt-5.6-luna",
+                "completion_tokens": 769,
+                "upstream_provider": "OpenAI",
+                "cache_write_tokens": 1312
+              }
+            ],
+            "priced_calls": 1,
+            "cached_tokens": 0,
+            "prompt_tokens": 1315,
+            "unknown_calls": 0,
+            "estimated_cost": 0.0012514,
+            "completion_tokens": 769
+          }
+        },
+        "time": "2026-09-10T12:33:52.309962517+00:00",
+        "model": "openai/gpt-5.6-luna",
+        "provider": "openrouter",
+        "confidence": 0.84,
+        "layer_name": "Translation (qa-manual-review-needed)",
+        "layer_order": 2,
+        "last_modified": "2026-09-10T12:33:52.310169203+00:00"
+      },
+      "elements": [
+        {
+          "id": "3be2fb4a-2374-4057-bfb0-2e4d4817a161",
+          "text": "The ultimate production! ¥1,000,000,000 toy♪ An 18-year-old's life-ending declaration under total coercion! A sensational 200-minute video DVD! A shocking debut! No consent! Politician Rinko Akiyama—an active high school girl and active anti-demon ninja—making love♪ Of course, raw sex♪ No consent! Total coercion! The active-duty traitor! You damn anti-demon ninja! After the mission, she'll make a life-ending declaration with her teacher! We'll \"discard\" her human rights! We punish justice and aid evil! We eliminate anyone who gets in our way! A disgrace to humanity!? For the sake of our beloved teachers♪",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 49,
+          "y": 1,
+          "maxWidth": 3006,
+          "maxHeight": 2902,
+          "rotation": null,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#eca8e0",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "isManuallyEdited": false,
+          "boxShape": "elliptical",
+          "maskPolygon": "[[3479,318],[3542,472],[3564,637],[3564,2257],[3542,2422],[3479,2576],[3378,2708],[3246,2809],[3092,2872],[2927,2894],[637,2894],[472,2872],[318,2809],[186,2708],[85,2576],[22,2422],[0,2257],[0,637],[22,472],[85,318],[186,186],[318,85],[472,22],[637,0],[2927,0],[3092,22],[3246,85],[3378,186]]",
+          "regionId": "6b11ce4b-878b-4ab9-bf10-f0cc14b5f47d"
+        }
+      ]
+    }
+  ]
+}

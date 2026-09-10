@@ -1,0 +1,130 @@
+{
+  "schema_version": "a06-owner-labels-draft/v1",
+  "task": "A06",
+  "status": "coordinator-reviewed",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "confidence_interpretation": "Confidence describes support for this draft label, not a coordinator-approved truth.",
+    "verification_rule": "A label is not verified from position, crop, panel, conversation, or detector extent alone. Raw A02 fragment IDs are absent from this retained run; unresolved membership remains unresolved.",
+    "review_requirement": "A coordinator must visually review every draft and unresolved label before any A06 DONE status."
+  },
+  "sources": [
+    {
+      "sample": "sample177",
+      "source_path": "corpus/samples/ja/sample177/source.jpg",
+      "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382",
+      "dimensions": { "width": 2048, "height": 1910 },
+      "current_ocr_artifact": "a04-exports/sample177/page-snapshot.json",
+      "final_ocr_region_count": 4,
+      "raw_a02_fragment_capture": "absent",
+      "labels": [
+        { "id": "s177-illustration-01", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "s177-owner-illustration-01", "container_id": "none", "fragment_member_identity": "none; illustration association has no retained OCR fragment", "geometry": { "coordinate_space": "source-pixels", "role": "illustration extent", "bbox": [150, 220, 700, 700] }, "confidence": 0.88, "evidence_basis": "Coordinator-reviewed separate upper-left portrait; no positional OCR grouping is inferred.", "review_state": "verified" },
+        { "id": "s177-illustration-02", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "s177-owner-illustration-02", "container_id": "none", "fragment_member_identity": "none; illustration association has no retained OCR fragment", "geometry": { "coordinate_space": "source-pixels", "role": "illustration extent", "bbox": [900, 280, 530, 650] }, "confidence": 0.88, "evidence_basis": "Coordinator-reviewed separate upper-middle portrait; no positional OCR grouping is inferred.", "review_state": "verified" },
+        { "id": "s177-illustration-03", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "s177-owner-illustration-03", "container_id": "none", "fragment_member_identity": "none; illustration association has no retained OCR fragment", "geometry": { "coordinate_space": "source-pixels", "role": "illustration extent", "bbox": [1450, 290, 480, 640] }, "confidence": 0.88, "evidence_basis": "Coordinator-reviewed separate upper-right portrait; no positional OCR grouping is inferred.", "review_state": "verified" },
+        { "id": "s177-illustration-04", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "s177-owner-illustration-04", "container_id": "none", "fragment_member_identity": "none; illustration association has no retained OCR fragment", "geometry": { "coordinate_space": "source-pixels", "role": "illustration extent", "bbox": [80, 1080, 610, 650] }, "confidence": 0.88, "evidence_basis": "Coordinator-reviewed separate lower-left portrait; no positional OCR grouping is inferred.", "review_state": "verified" },
+        { "id": "s177-illustration-05", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "s177-owner-illustration-05", "container_id": "none", "fragment_member_identity": "none; illustration association has no retained OCR fragment", "geometry": { "coordinate_space": "source-pixels", "role": "illustration extent", "bbox": [720, 1080, 610, 700] }, "confidence": 0.88, "evidence_basis": "Coordinator-reviewed separate lower-middle portrait; no positional OCR grouping is inferred.", "review_state": "verified" },
+        { "id": "s177-illustration-06", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "s177-owner-illustration-06", "container_id": "none", "fragment_member_identity": "none; illustration association has no retained OCR fragment", "geometry": { "coordinate_space": "source-pixels", "role": "illustration extent", "bbox": [1400, 1030, 580, 720] }, "confidence": 0.88, "evidence_basis": "Coordinator-reviewed separate lower-right portrait; no positional OCR grouping is inferred.", "review_state": "verified" },
+        { "id": "s177-ocr-direct-text-0", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region 142c2c8d-5e22-4f9c-a7bb-3bce9f8aaa8d; raw members absent", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [40, 0, 1188, 312] }, "confidence": 0.31, "evidence_basis": "The retained final region spans multiple handwritten heading lines; its crop and proximity do not prove one owner.", "review_state": "unresolved" },
+        { "id": "s177-ocr-direct-text-1", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region c9b0b80a-f74a-4e8e-95f8-eccd46cb31cf; raw members absent", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [220, 922, 484, 146] }, "confidence": 0.43, "evidence_basis": "A title is visibly below the first portrait, but the retained artifact cannot establish an owner/member relationship from placement alone.", "review_state": "unresolved" },
+        { "id": "s177-ocr-direct-text-2", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region 5e552b84-beee-4dc7-90c8-d6a24e255a80; raw members absent", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [900, 912, 944, 108] }, "confidence": 0.18, "evidence_basis": "The source visibly contains separate title text under two portraits, while one retained final region fuses their span; no split is asserted.", "review_state": "unresolved" },
+        { "id": "s177-ocr-direct-text-3", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region 64a4b135-9e9c-4876-acf0-611154451e9b; raw members absent", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [100, 1692, 1886, 186] }, "confidence": 0.12, "evidence_basis": "The source visibly contains title text below three distinct lower portraits, while one retained final region covers the row; no split is asserted.", "review_state": "unresolved" }
+      ]
+    },
+    {
+      "sample": "sample222",
+      "source_path": "corpus/samples/ja/sample222/source.png",
+      "source_digest": "990b1c3b2032e628d4aa6f737d539dd39ae325771369651a3b7c975bbb594738",
+      "dimensions": { "width": 4093, "height": 2894 },
+      "current_ocr_artifact": "a04-exports/sample222/page-snapshot.json",
+      "final_ocr_region_count": 1,
+      "raw_a02_fragment_capture": "absent",
+      "labels": [
+        { "id": "s222-fused-page-region", "source_digest": "990b1c3b2032e628d4aa6f737d539dd39ae325771369651a3b7c975bbb594738", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region 6b11ce4b-878b-4ab9-bf10-f0cc14b5f47d; raw members absent", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [59, 11, 2986, 2882] }, "confidence": 0.0, "evidence_basis": "The exact source has many independent cover labels and headers. The current OCR artifact is a monolithic page-sized composite and its QA explicitly requires segmentation; no owner is inferred.", "review_state": "unresolved" }
+      ]
+    },
+    {
+      "sample": "sample61",
+      "source_path": "corpus/samples/ja/sample61/source.jpg",
+      "source_digest": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76",
+      "dimensions": { "width": 2000, "height": 2000 },
+      "current_ocr_artifact": "a04-exports/sample61/page-snapshot.json",
+      "final_ocr_region_count": 50,
+      "raw_a02_fragment_capture": "absent",
+      "unassigned_final_ocr_regions": 50,
+      "labels": [
+        { "id": "s61-container-upper-left", "source_digest": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76", "owner_id": "s61-owner-container-upper-left", "container_id": "s61-container-upper-left", "fragment_member_identity": "unresolved; no retained raw fragments or safe per-container member assignment", "geometry": { "coordinate_space": "source-pixels", "role": "visible dark container", "bbox": [290, 65, 565, 565] }, "confidence": 0.91, "evidence_basis": "The exact source visibly shows a closed upper-left dark document container. This labels the container only, not any OCR membership.", "review_state": "draft" },
+        { "id": "s61-container-upper-middle", "source_digest": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76", "owner_id": "s61-owner-container-upper-middle", "container_id": "s61-container-upper-middle", "fragment_member_identity": "unresolved; no retained raw fragments or safe per-container member assignment", "geometry": { "coordinate_space": "source-pixels", "role": "visible dark container", "bbox": [940, 45, 560, 1055] }, "confidence": 0.91, "evidence_basis": "The exact source visibly shows a closed upper-middle dark document container. This labels the container only, not any OCR membership.", "review_state": "draft" },
+        { "id": "s61-container-lower-left", "source_digest": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76", "owner_id": "s61-owner-container-lower-left", "container_id": "s61-container-lower-left", "fragment_member_identity": "unresolved; no retained raw fragments or safe per-container member assignment", "geometry": { "coordinate_space": "source-pixels", "role": "visible dark container", "bbox": [25, 630, 620, 1250] }, "confidence": 0.91, "evidence_basis": "The exact source visibly shows a closed lower-left dark document container. This labels the container only, not any OCR membership.", "review_state": "draft" },
+        { "id": "s61-container-right", "source_digest": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76", "owner_id": "s61-owner-container-right", "container_id": "s61-container-right", "fragment_member_identity": "unresolved; no retained raw fragments or safe per-container member assignment", "geometry": { "coordinate_space": "source-pixels", "role": "visible dark container", "bbox": [1405, 360, 575, 1200] }, "confidence": 0.91, "evidence_basis": "The exact source visibly shows a closed right dark document container. This labels the container only, not any OCR membership.", "review_state": "draft" }
+      ]
+    },
+    {
+      "sample": "sample99",
+      "source_path": "corpus/samples/ja/sample99/source.jpg",
+      "source_digest": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0",
+      "dimensions": { "width": 3219, "height": 2932 },
+      "current_ocr_artifact": "a04-exports/sample99/page-snapshot.json",
+      "final_ocr_region_count": 10,
+      "raw_a02_fragment_capture": "absent",
+      "labels": [
+        { "id": "s99-r01", "source_digest": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0", "owner_id": "s99-owner-r01", "container_id": "bubble_0", "fragment_member_identity": "final OCR region b5b6ecf8-7fd0-4c36-961d-9aa3300f5b1e", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [2813, 81, 311, 566] }, "confidence": 0.89, "evidence_basis": "A separately bounded speech bubble is visible in the exact source and the final artifact identifies one region.", "review_state": "draft" },
+        { "id": "s99-r02", "source_digest": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0", "owner_id": "s99-owner-r02", "container_id": "bubble_2", "fragment_member_identity": "final OCR region 7926993e-feb1-443e-9424-7f7a0f0ab53d", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [1373, 69, 101, 292] }, "confidence": 0.74, "evidence_basis": "A separate vertical text area is visibly bounded in the exact source; shared bubble IDs do not merge it with other owners.", "review_state": "draft" },
+        { "id": "s99-r03", "source_digest": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0", "owner_id": "s99-owner-r03", "container_id": "bubble_2", "fragment_member_identity": "final OCR region aac3a2fb-bb28-43ba-a4e9-ff08731b1c0d", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [1216, 66, 110, 301] }, "confidence": 0.74, "evidence_basis": "A separate vertical text area is visibly bounded in the exact source; shared bubble IDs do not merge it with other owners.", "review_state": "draft" },
+        { "id": "s99-r04", "source_digest": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0", "owner_id": "s99-owner-r04", "container_id": "none", "fragment_member_identity": "final OCR region 22c19f7e-e173-4c8d-942c-70c6876f0a61", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [663, 1631, 377, 264] }, "confidence": 0.67, "evidence_basis": "The exact source shows a localized standalone SFX area; it is retained as an independent non-merge draft, not a cleanup authorization.", "review_state": "draft" },
+        { "id": "s99-r05", "source_digest": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0", "owner_id": "s99-owner-r05", "container_id": "bubble_5", "fragment_member_identity": "final OCR region 31c723e1-abca-4d7f-970e-4b4ee8ea6828", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [418, 2231, 449, 632] }, "confidence": 0.86, "evidence_basis": "A distinct lower speech bubble is visibly bounded in the exact source and is represented by one final OCR region.", "review_state": "draft" },
+        { "id": "s99-r06", "source_digest": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region deb04429-229b-4f06-8e9c-7471992a040a; raw members absent", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [0, 25, 465, 726] }, "confidence": 0.23, "evidence_basis": "The irregular detector extent overlaps multiple source marks; crop extent alone cannot establish a single owner.", "review_state": "unresolved" },
+        { "id": "s99-r07", "source_digest": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region 8bd9fda5-acf6-44b3-8ff7-a2ecf5b1ac6a; raw members absent", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [836, 377, 1097, 1229] }, "confidence": 0.0, "evidence_basis": "The current region is a large composite across independent lettering/SFX and art; no owner split is inferred.", "review_state": "unresolved" },
+        { "id": "s99-r08", "source_digest": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0", "owner_id": "s99-owner-r08", "container_id": "bubble_1", "fragment_member_identity": "final OCR region 647d424c-f3f8-4ac5-81fc-349a0f555357", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [103, 851, 107, 371] }, "confidence": 0.82, "evidence_basis": "A distinct left-side speech bubble is visible in the exact source and has one final OCR region.", "review_state": "draft" },
+        { "id": "s99-r09", "source_digest": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0", "owner_id": "s99-owner-r09", "container_id": "bubble_3", "fragment_member_identity": "final OCR region 537db672-7189-40df-9518-74b4ed71c213", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [741, 59, 164, 327] }, "confidence": 0.82, "evidence_basis": "A distinct upper speech bubble is visible in the exact source and has one final OCR region.", "review_state": "draft" },
+        { "id": "s99-r10", "source_digest": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0", "owner_id": "s99-owner-r10", "container_id": "bubble_4", "fragment_member_identity": "final OCR region 50c248e3-b8b8-44f3-8f93-6107fc91ce80", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [531, 0, 179, 531] }, "confidence": 0.77, "evidence_basis": "A distinct upper-left speech bubble is visible in the exact source; reused container IDs do not imply a merge.", "review_state": "draft" }
+      ]
+    },
+    {
+      "sample": "sample93",
+      "source_path": "corpus/samples/ja/sample93/source.png",
+      "source_digest": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b",
+      "dimensions": { "width": 6764, "height": 4961 },
+      "current_ocr_artifact": "a04-exports/sample93/page-snapshot.json",
+      "final_ocr_region_count": 11,
+      "raw_a02_fragment_capture": "absent",
+      "labels": [
+        { "id": "s93-r01", "source_digest": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b", "owner_id": "s93-owner-r01", "container_id": "none", "fragment_member_identity": "final OCR region 3a5f17e9-384d-4747-8d64-3daf9f6215f2", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [6044, 2840, 270, 416] }, "confidence": 0.62, "evidence_basis": "The exact source shows a localized SFX area. It is a standalone draft owner and is not merged by nearby composition.", "review_state": "draft" },
+        { "id": "s93-r02", "source_digest": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b", "owner_id": "s93-owner-r02", "container_id": "none", "fragment_member_identity": "final OCR region 6bee5d53-7452-4c25-9172-a1d3702d5537", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [2001, 4121, 542, 839] }, "confidence": 0.29, "evidence_basis": "The final artifact is retained as one local region only; no relation to other text is inferred.", "review_state": "draft" },
+        { "id": "s93-r03", "source_digest": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b", "owner_id": "s93-owner-r03", "container_id": "none", "fragment_member_identity": "final OCR region a3ab914a-cefd-4e34-aa3a-aeed3ea26ef5", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [2463, 2695, 443, 964] }, "confidence": 0.62, "evidence_basis": "The exact source shows a localized vertical mark/SFX area; no cross-composition relationship is inferred.", "review_state": "draft" },
+        { "id": "s93-r04", "source_digest": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b", "owner_id": "s93-owner-r04", "container_id": "none", "fragment_member_identity": "final OCR region 0f4c5bb7-4e50-407f-b3bd-7c0ee239da0e", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [4267, 3296, 323, 469] }, "confidence": 0.35, "evidence_basis": "The final artifact is retained as one local region only; no relation to other text is inferred.", "review_state": "draft" },
+        { "id": "s93-r05", "source_digest": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b", "owner_id": "s93-owner-r05", "container_id": "b8fe4994-2476-409f-8066-ff33fca3fcaa", "fragment_member_identity": "final OCR region 5cc4a9d9-6dae-41eb-bb33-7318e4aeb69f", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [502, 1552, 330, 872] }, "confidence": 0.50, "evidence_basis": "The final region is locally bounded but its text class is uncertain; it is not merged with other composition text.", "review_state": "draft" },
+        { "id": "s93-r06", "source_digest": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region 64db88b1-f95a-4ee5-872b-a391a7386c52; raw members absent", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [2186, 46, 2457, 2794] }, "confidence": 0.0, "evidence_basis": "The page-scale final region crosses distinct source text areas and artwork; no owner split is inferred from the crop.", "review_state": "unresolved" },
+        { "id": "s93-r07", "source_digest": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b", "owner_id": "s93-owner-r07", "container_id": "none", "fragment_member_identity": "final OCR region e78245bf-aae4-4dca-8f4c-c606fcdcea9e", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [6248, 184, 291, 1322] }, "confidence": 0.78, "evidence_basis": "The exact source visibly has a separate right-side speech area and the artifact identifies one local region.", "review_state": "draft" },
+        { "id": "s93-r08", "source_digest": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b", "owner_id": "s93-owner-r08", "container_id": "b8fe4994-2476-409f-8066-ff33fca3fcaa", "fragment_member_identity": "final OCR region 5dc3c438-a4dd-4d6c-a27f-63ca0017cbe7", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [627, 0, 502, 878] }, "confidence": 0.75, "evidence_basis": "The exact source visibly has a left-side speech area; it is separate from the page-scale composite region.", "review_state": "draft" },
+        { "id": "s93-r09", "source_digest": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b", "owner_id": "s93-owner-r09", "container_id": "none", "fragment_member_identity": "final OCR region 66c7fe5d-2b2e-40e1-9969-359009203120", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [1023, 4181, 641, 779] }, "confidence": 0.49, "evidence_basis": "The final artifact is retained as one local region only; no relation to other text is inferred.", "review_state": "draft" },
+        { "id": "s93-r10", "source_digest": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region eeefd800-6b50-414c-b9b2-697ceb16e601; raw members absent", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [0, 2133, 1017, 2319] }, "confidence": 0.0, "evidence_basis": "The detector region is large and QA classifies it as SFX; crop extent does not establish one independent owner.", "review_state": "unresolved" },
+        { "id": "s93-r11", "source_digest": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b", "owner_id": "s93-owner-r11", "container_id": "none", "fragment_member_identity": "final OCR region a64d7ef8-1271-4cb9-b4c9-1d6da1d0395d", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [858, 1142, 205, 258] }, "confidence": 0.61, "evidence_basis": "The exact source shows a local small mark; it is retained independently and not joined to nearby labels.", "review_state": "draft" }
+      ]
+    },
+    {
+      "sample": "sample83",
+      "source_path": "corpus/samples/ja/sample83/source.jpg",
+      "source_digest": "508d4269d36317c7e38f263b84398fdf10ad36d2c1441097969cf8e0cff0e8ab",
+      "dimensions": { "width": 1412, "height": 2000 },
+      "current_ocr_artifact": "a04-exports/sample83/page-snapshot.json",
+      "final_ocr_region_count": 3,
+      "raw_a02_fragment_capture": "absent",
+      "labels": [
+        { "id": "s83-r01", "source_digest": "508d4269d36317c7e38f263b84398fdf10ad36d2c1441097969cf8e0cff0e8ab", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region a747b607-a84e-42dd-ac0e-521eff25bb45; raw members absent", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [371, 146, 1011, 1617] }, "confidence": 0.0, "evidence_basis": "The final OCR extent crosses the right dialogue, central art, and other source text; it cannot be verified as one owner from its crop.", "review_state": "unresolved" },
+        { "id": "s83-r02", "source_digest": "508d4269d36317c7e38f263b84398fdf10ad36d2c1441097969cf8e0cff0e8ab", "owner_id": "s83-owner-r02", "container_id": "none", "fragment_member_identity": "final OCR region 66fdd10d-5cbf-46a2-9c47-d482caf4bb93", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [865, 365, 76, 117] }, "confidence": 0.70, "evidence_basis": "The source visibly has a local standalone text mark; it remains separate from the broad detector extent.", "review_state": "draft" },
+        { "id": "s83-r03", "source_digest": "508d4269d36317c7e38f263b84398fdf10ad36d2c1441097969cf8e0cff0e8ab", "owner_id": "s83-owner-r03", "container_id": "none", "fragment_member_identity": "final OCR region 19b4f103-0d59-40c0-aa58-e2bf3463676d", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [25, 185, 410, 848] }, "confidence": 0.82, "evidence_basis": "The source visibly has a separately bounded left dialogue area; it remains separate from the central art and right text.", "review_state": "draft" }
+      ]
+    }
+  ],
+  "counts": {
+    "labels": { "verified": 6, "draft": 23, "unresolved": 10, "total": 39 },
+    "sample177_distinct_illustration_labels": 6,
+    "fragment_accounting": {
+      "retained_raw_a02_fragments": 0,
+      "retained_final_ocr_regions": 79,
+      "final_regions_directly_identified_by_label": 29,
+      "final_regions_explicitly_unassigned": 50,
+      "unassigned_reason": "sample61 retains 50 final OCR regions but no A02 raw fragment capture or safe region-to-visible-container membership; all 50 remain unresolved rather than being assigned by proximity."
+    }
+  }
+}
