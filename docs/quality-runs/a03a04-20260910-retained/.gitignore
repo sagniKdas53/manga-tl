@@ -2,3 +2,6 @@
 # archives embed third-party source artwork, so they remain local evidence.
 a04-exports/**/*.png
 a04-exports/**/*.zip
+
+# The runner retains these only when interrupted; completed runs remove them.
+*-manifest.partial.json

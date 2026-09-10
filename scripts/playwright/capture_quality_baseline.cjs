@@ -305,6 +305,9 @@ capture_quality_baseline.cjs — fresh A03 pipeline data plus A04 browser export
     }
     manifest.finished_at = new Date().toISOString();
     writeJson(path.join(out, "manifest.json"), manifest);
+    for (const name of ["a03-manifest.partial.json", "a04-manifest.partial.json"]) {
+      fs.rmSync(path.join(out, name), { force: true });
+    }
     console.log(`completed six retained baselines and exports: ${out}`);
   } finally {
     await browser.close();
