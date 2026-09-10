@@ -1,0 +1,3 @@
+# Private third-party source previews; regenerate with audit_style_coverage.py.
+*.jpg
+inventory.json
