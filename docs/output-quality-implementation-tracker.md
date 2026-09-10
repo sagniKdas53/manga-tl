@@ -1,6 +1,6 @@
 # Output quality implementation tracker
 
-Planning checkpoint: 2026-09-09. **Implementation has not started.** This is the authoritative execution tracker for the user's requested unified renderer, SFX policy, independent text ownership and generated cleanup improvements. Read the [architecture recommendations](output-quality-architecture-decisions.md) for rationale and the [investigation](output-quality-investigation.md) for reproductions.
+Planning checkpoint: 2026-09-09. **Implementation is in progress:** A01–A06 are complete; M0 and every later milestone remain open. This is the authoritative execution tracker for the user's requested unified renderer, SFX policy, independent text ownership and generated cleanup improvements. Read the [architecture recommendations](output-quality-architecture-decisions.md) for rationale and the [investigation](output-quality-investigation.md) for reproductions.
 
 ## Scope overrides from the user
 
@@ -22,11 +22,11 @@ Planning evidence is complete: [investigation](output-quality-investigation.md),
 
 ## Tracker and execution order
 
-Task statuses: `TODO`, `READY`, `ACTIVE`, `REVIEW`, `DONE`, `BLOCKED`. Only A01 starts `READY`; the coordinator advances tasks after their dependencies and the applicable entry gate pass. All task cards below start `TODO` unless stated otherwise. A milestone checkbox means its exit gate has passed, with evidence linked here. An unresolved or unexecuted gate is not a pass.
+Task statuses: `TODO`, `READY`, `ACTIVE`, `REVIEW`, `DONE`, `BLOCKED`. A01–A06 are `DONE`; A07 is next after its dependency has passed. The coordinator advances later tasks after their dependencies and the applicable entry gate pass. A milestone checkbox means its exit gate has passed, with evidence linked here. An unresolved or unexecuted gate is not a pass.
 
 | Complete | Milestone | Task IDs | Entry condition | Exit gate | Checkpoint |
 | --- | --- | --- | --- | --- | --- |
-| [ ] | M0 — current baseline and reviewed acceptance data | A01–A09 | Planning complete | G0 | Pending |
+| [ ] | M0 — current baseline and reviewed acceptance data | A01–A09 | Planning complete | G0 | A01–A06 done; A07 next |
 | [ ] | M1 — new artifact and API contract | B01–B05 | G0 | G1 | Pending |
 | [ ] | M2 — revision-safe output lifecycle | C01–C05 | G1 | G2 | Pending |
 | [ ] | M3 — SFX decisions before paid/destructive work | D01–D05 | G1 | G3 | Pending |
@@ -312,6 +312,6 @@ For every model/browser/batch run also persist a machine-readable manifest with 
 
 ## Resume packet
 
-> Read this tracker, the latest completed task checkpoint and the relevant source seams. Recheck app/worker/corpus heads. Start **A01 only**, using Luna medium with a bounded path list. Establish isolated test services and runtime provenance; do not implement rendering/grouping fixes or regenerate the corpus yet. After A01's evidence is reviewed, mark A02 ready. For later sessions, choose the next dependency-satisfied task, reproduce it on that checkout, run upstream impact, implement only that task and save its checkpoint before stopping. If a behavior already passes, retain a regression check and remove the obsolete fix from the task scope.
+> Read this tracker, the latest completed task checkpoint and the relevant source seams. Recheck app/worker/corpus heads. Start **A07** as one bounded fixture curation packet, preserving all unresolved A06 ownership labels. Do not implement rendering/grouping fixes or regenerate the corpus. After each packet's evidence is reviewed, advance only its dependency-satisfied successor. For later sessions, choose the next dependency-satisfied task, reproduce it on that checkout, run upstream impact, implement only that task and save its checkpoint before stopping. If a behavior already passes, retain a regression check and remove the obsolete fix from the task scope.
 
-Planning checkpoint: all ten milestones and 58 task cards are specified; implementation and quality gates remain pending. The corpus cutoff and ARM64/new-format scope are integrated. Dependency, local-link, timestamp/Git and clean-submodule checks passed; see the [planning validation record](quality-evidence/implementation-plan-validation.json). Update the milestone table with checkpoint links as work passes review.
+Planning checkpoint: all ten milestones and 58 task cards are specified; A01–A06 are complete and all milestone gates remain pending. The corpus cutoff and ARM64/new-format scope are integrated. Dependency, local-link, timestamp/Git and clean-submodule checks passed; see the [planning validation record](quality-evidence/implementation-plan-validation.json). Update the milestone table with checkpoint links as work passes review.
