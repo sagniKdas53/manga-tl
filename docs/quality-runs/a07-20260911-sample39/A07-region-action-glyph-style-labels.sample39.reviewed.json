@@ -1,0 +1,81 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-single-fixture-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a06-c-20260911-controls/A06-C-owner-labels.controls.reviewed.json",
+    "review_rule": "Actions, source-style cues, and glyph-support expectations are source-pixel review annotations. They are not masks, cleanup assets, replacements, translations, or implementation authorization.",
+    "replacement_rule": "replace is an intended candidate action only. A later policy decision, approved glyph support, and validated cleanup remain required before pixels may change.",
+    "review_rule_for_pixels": "review preserves source pixels and creates no automatic cleanup or replacement text until a later explicit decision.",
+    "preservation_rule": "preserve forbids automatic cleanup and automatic replacement text."
+  },
+  "source": {
+    "sample": "sample39",
+    "language": "ja",
+    "script_variant": "Japanese vertical dialogue with free-standing drawn effects",
+    "style": "bw_panel_manga",
+    "source_path": "corpus/samples/ja/sample39/source.jpg",
+    "source_digest": "d776a3cc203d65563edfb8c213c3196864f16738e7755876fda3dd4daf34c1f2",
+    "dimensions": { "width": 900, "height": 1280 },
+    "review_artifacts": [
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample39-overview.png",
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample39-regions.png",
+      "../a06-c-20260911-controls/a04-exports/sample39/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "ja-vertical-balloon": {
+      "writing_mode": "vertical",
+      "rotation_degrees": 0,
+      "fill": "near-black solid source glyphs",
+      "stroke": "no separate outline observed",
+      "weight": "regular clean manga dialogue",
+      "source_background": "white balloon or locally bounded white dialogue field",
+      "confidence": "high",
+      "notes": "English layout remains local to the source container; vertical Japanese does not require vertical English."
+    },
+    "preserved-drawn-sfx": {
+      "writing_mode": "vertical",
+      "rotation_degrees": 0,
+      "fill": "near-black hand-drawn effect lettering",
+      "stroke": "integral to the drawn effect",
+      "weight": "decorative or emphatic",
+      "source_background": "panel art and bookcase detail",
+      "confidence": "high",
+      "notes": "Preserve the complete source effect and adjacent art; no cleanup extent is inferred from the OCR box."
+    },
+    "preserved-decorative-mark": {
+      "writing_mode": "not applicable",
+      "rotation_degrees": 0,
+      "fill": "fine grey or black source mark",
+      "stroke": "not distinguishable at this review resolution",
+      "weight": "decorative",
+      "source_background": "bookcase and panel art",
+      "confidence": "high",
+      "notes": "This non-dialogue mark is retained without an automatic text or cleanup action."
+    }
+  },
+  "labels": [
+    { "owner_label_id": "sample39-r001", "final_ocr_region_id": "74fb2aaa-f791-459d-b948-148ee95bd609", "action": "replace", "action_reason": "Independent vertical Japanese dialogue in a white bordered balloon.", "glyph_support": "required; include only black source glyphs and antialiased edges inside the white balloon interior", "protected_context": "Balloon border and tail, adjacent character art, room detail, and all pixels outside approved glyph support.", "style_profile": "ja-vertical-balloon" },
+    { "owner_label_id": "sample39-r002", "final_ocr_region_id": "1bb5e550-bf39-42e4-898a-e13b14b04d83", "action": "preserve", "action_reason": "Free-standing hand-drawn effect lettering over the bookcase, not ordinary dialogue.", "glyph_support": "not requested; preserve the complete effect without inferring a cleanup extent", "protected_context": "All effect lettering, shrimp display, bookcase, books, and adjacent panel art.", "style_profile": "preserved-drawn-sfx" },
+    { "owner_label_id": "sample39-r003", "final_ocr_region_id": "5aa50889-e046-4444-822b-a96e58da0b81", "action": "preserve", "action_reason": "Free-standing hand-drawn effect lettering over book spines, not ordinary dialogue.", "glyph_support": "not requested; preserve the complete effect without inferring a cleanup extent", "protected_context": "All effect lettering, book spines, shrimp display, and adjacent panel art.", "style_profile": "preserved-drawn-sfx" },
+    { "owner_label_id": "sample39-r004", "final_ocr_region_id": "394bdad9-a264-4171-b70c-e0d7755dd346", "action": "replace", "action_reason": "Locally bounded Japanese dialogue in the lower-panel white dialogue field.", "glyph_support": "required; include only black source glyphs and antialiased edges within the local white text field", "protected_context": "Bookcase, books, shrimp display, panel line, and all pixels outside approved glyph support.", "style_profile": "ja-vertical-balloon" },
+    { "owner_label_id": "sample39-r005", "final_ocr_region_id": "a655a6de-3d72-4c5b-9572-041bf78ab457", "action": "preserve", "action_reason": "Tiny non-dialogue book-spine mark.", "glyph_support": "not requested", "protected_context": "Complete mark, book spine, and surrounding bookcase art.", "style_profile": "preserved-decorative-mark" },
+    { "owner_label_id": "sample39-r006", "final_ocr_region_id": "886ffcae-27b0-4956-8470-7672e33553ee", "action": "replace", "action_reason": "Independent vertical Japanese dialogue in a white bordered balloon.", "glyph_support": "required; include only black source glyphs and antialiased edges inside the white balloon interior", "protected_context": "Balloon border and tail, character hair, room detail, and panel border.", "style_profile": "ja-vertical-balloon" },
+    { "owner_label_id": "sample39-r007", "final_ocr_region_id": "8f2d88d3-20e6-4d45-87cf-b6053159f1a5", "action": "replace", "action_reason": "Independent vertical Japanese dialogue in a white bordered balloon.", "glyph_support": "required; include only black source glyphs and antialiased edges inside the white balloon interior", "protected_context": "Balloon border and tail, character hair, bed detail, and panel border.", "style_profile": "ja-vertical-balloon" },
+    { "owner_label_id": "sample39-r008", "final_ocr_region_id": "0497af9d-e08c-455c-8bdb-e8f231a16720", "action": "replace", "action_reason": "Independent vertical Japanese dialogue in a white bordered balloon.", "glyph_support": "required; include only black source glyphs and antialiased edges inside the white balloon interior", "protected_context": "Balloon border and tail, curtain, character hair, and panel border.", "style_profile": "ja-vertical-balloon" },
+    { "owner_label_id": "sample39-r009", "final_ocr_region_id": "a322da5b-e04f-4bb2-998b-c7b738105e9f", "action": "replace", "action_reason": "Independent vertical Japanese dialogue in a white bordered balloon.", "glyph_support": "required; include only black source glyphs and antialiased edges inside the white balloon interior", "protected_context": "Balloon border and tail, curtain, character hair, and panel border.", "style_profile": "ja-vertical-balloon" },
+    { "owner_label_id": "sample39-r010", "final_ocr_region_id": "993bf697-55cf-4d09-bebf-48c5a9784e6b", "action": "replace", "action_reason": "Independent emphatic Japanese dialogue in a white bordered balloon.", "glyph_support": "required; include only black source glyphs and antialiased edges inside the white balloon interior", "protected_context": "Balloon border and tail, seated characters, table, and panel border.", "style_profile": "ja-vertical-balloon" },
+    { "owner_label_id": "sample39-r011", "final_ocr_region_id": "b5aee690-9c49-4b65-b2c8-a3af78f6ec14", "action": "replace", "action_reason": "Independent vertical Japanese dialogue in a white bordered balloon.", "glyph_support": "required; include only black source glyphs and antialiased edges inside the white balloon interior", "protected_context": "Balloon border and tail, foreground character, room detail, and panel border.", "style_profile": "ja-vertical-balloon" },
+    { "owner_label_id": "sample39-r012", "final_ocr_region_id": "381d71ed-f178-419e-bb5b-9784b68e8d00", "action": "replace", "action_reason": "Independent vertical Japanese dialogue in a white bordered balloon.", "glyph_support": "required; include only black source glyphs and antialiased edges inside the white balloon interior", "protected_context": "Balloon border and tail, foreground character, wall detail, and panel border.", "style_profile": "ja-vertical-balloon" },
+    { "owner_label_id": "sample39-r013", "final_ocr_region_id": "9f6e3725-9968-4524-b380-17a3cd19691e", "action": "replace", "action_reason": "Independent vertical Japanese dialogue in a white bordered balloon.", "glyph_support": "required; include only black source glyphs and antialiased edges inside the white balloon interior", "protected_context": "Balloon border and tail, foreground character, TV detail, and panel border.", "style_profile": "ja-vertical-balloon" }
+  ],
+  "counts": { "reviewed_owner_labels": 13, "replace_candidate": 10, "preserve": 3, "review": 0, "explain": 0, "replace_with_required_glyph_support": 10, "preserved_drawn_sfx": 2, "preserved_decorative_marks": 1 },
+  "coverage_findings": {
+    "ordinary_balloon_control": "covered by ten independent Japanese dialogue owners across five black-and-white panels.",
+    "preserved_sfx": "covered by r002 and r003; both retain their complete hand-drawn effect and surrounding bookcase art.",
+    "protected_art": "recorded per label as balloon geometry, character, room, bookcase, or panel exclusions; no cleanup asset is created.",
+    "unresolved": "This packet supplies no binary glyph support, cleanup patch, font selection, translated layout, or implementation authorization."
+  }
+}

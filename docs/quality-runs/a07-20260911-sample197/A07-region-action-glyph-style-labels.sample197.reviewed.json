@@ -1,0 +1,205 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-single-fixture-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a06-c-20260911-controls/A06-C-owner-labels.controls.reviewed.json",
+    "review_rule": "Actions, source-style cues, and glyph-support expectations are source-pixel review annotations. They are not masks, cleanup assets, replacements, translations, or implementation authorization.",
+    "replacement_rule": "replace is an intended candidate action only. A later policy decision, approved glyph support, and validated cleanup remain required before pixels may change.",
+    "review_rule_for_pixels": "review preserves source pixels and creates no automatic cleanup or replacement text until a later explicit decision."
+  },
+  "source": {
+    "sample": "sample197",
+    "language": "ko",
+    "script_variant": "Korean horizontal dialogue with one outlined free-standing caption and one outlined drawn effect",
+    "style": "limited_palette_panel_comic",
+    "source_path": "corpus/samples/ko/sample197/source.png",
+    "source_digest": "f2d36d0a6629baf250ab364ba6c889edadeae29f0fdd95e5a0ee93789d7a19c4",
+    "dimensions": {
+      "width": 3496,
+      "height": 4961
+    },
+    "review_artifacts": [
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample197-overview.png",
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample197-regions.png",
+      "../a06-c-20260911-controls/a04-exports/sample197/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "ko-horizontal-balloon": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "dark brown-black solid source glyphs",
+      "stroke": "no separate glyph outline observed",
+      "weight": "regular clean comic dialogue",
+      "source_background": "white or very light speech-balloon interior with dark border",
+      "confidence": "high",
+      "notes": "Korean source writing is horizontal; any later English layout remains constrained to the individual source balloon."
+    },
+    "ko-outlined-caption-over-panel": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "white source glyph interiors",
+      "stroke": "heavy dark integral outline with antialiased edges",
+      "weight": "bold emphatic display lettering",
+      "source_background": "muted panel field beside character and panel art",
+      "confidence": "high",
+      "notes": "The lettering is free-standing rather than in a blank balloon. The profile records visible treatment only and supplies no support mask."
+    },
+    "preserved-outlined-drawn-sfx": {
+      "writing_mode": "not applicable",
+      "rotation_degrees": 0,
+      "fill": "white hand-drawn effect interiors",
+      "stroke": "heavy dark integral outline",
+      "weight": "decorative / emphatic",
+      "source_background": "character and panel art, not a replacement plate",
+      "confidence": "high",
+      "notes": "Preserve the complete source effect and adjacent art; do not infer cleanup from its OCR box."
+    }
+  },
+  "labels": [
+    {
+      "owner_label_id": "sample197-r001",
+      "final_ocr_region_id": "ea490479-7d50-49f9-a455-4e474ae5ddee",
+      "action": "replace",
+      "action_reason": "Independent Korean dialogue in a bordered white balloon.",
+      "glyph_support": "required; include only dark source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border and tail, adjacent character hair and face, panel line, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample197-r002",
+      "final_ocr_region_id": "227e7f81-d032-4955-b3a7-2018a08bd546",
+      "action": "replace",
+      "action_reason": "Independent Korean dialogue in a bordered light balloon.",
+      "glyph_support": "required; include only dark source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border and tail, panel border, character art below the balloon, and adjacent dialogue.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample197-r003",
+      "final_ocr_region_id": "f98100ed-136e-4f90-ac32-e25f20ddfc18",
+      "action": "review",
+      "action_reason": "Free-standing outlined caption over a muted panel field beside protected character art; safe support and replacement intent need a later explicit decision.",
+      "glyph_support": "not authorized; future investigation must distinguish white fill, integral dark outline, antialiasing, and adjacent panel/character pixels before any cleanup",
+      "protected_context": "Complete outlined caption, nearby character, panel field, panel border, and all source pixels until reviewed.",
+      "style_profile": "ko-outlined-caption-over-panel"
+    },
+    {
+      "owner_label_id": "sample197-r004",
+      "final_ocr_region_id": "d2da7bb2-3e62-46c8-8a2f-ef3fd5905483",
+      "action": "replace",
+      "action_reason": "Independent small Korean dialogue label in its own light balloon.",
+      "glyph_support": "required; include only dark source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border, nearby character ear and hair, panel border, and surrounding art.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample197-r005",
+      "final_ocr_region_id": "fe35d8a8-50d2-4065-b567-908165497f86",
+      "action": "preserve",
+      "action_reason": "Outlined drawn impact effect beside character art, not dialogue.",
+      "glyph_support": "not requested; preserve the full effect rather than extracting a cleanup mask",
+      "protected_context": "Complete effect lettering, character hair and face, panel field, and adjacent art.",
+      "style_profile": "preserved-outlined-drawn-sfx"
+    },
+    {
+      "owner_label_id": "sample197-r006",
+      "final_ocr_region_id": "dc352342-4bf4-4420-9881-b4cec2e5a5f7",
+      "action": "replace",
+      "action_reason": "Independent Korean dialogue in a bordered white balloon.",
+      "glyph_support": "required; include only dark source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border and tail, foreground character face and hair, panel border, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample197-r007",
+      "final_ocr_region_id": "a394bb18-485f-451b-894e-361cfc1f0828",
+      "action": "replace",
+      "action_reason": "Independent Korean dialogue in a bordered white balloon.",
+      "glyph_support": "required; include only dark source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border and tail, character hair, panel lines, and neighboring dialogue.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample197-r008",
+      "final_ocr_region_id": "130b017e-38c2-4d0a-b499-c00b6bc13dac",
+      "action": "replace",
+      "action_reason": "Independent Korean dialogue in a bordered white balloon.",
+      "glyph_support": "required; include only dark source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border and tail, panel line, character art, and nearby dialogue.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample197-r009",
+      "final_ocr_region_id": "447988e2-0d48-4b23-8481-baffdacc1327",
+      "action": "replace",
+      "action_reason": "Independent Korean dialogue in a bordered light balloon.",
+      "glyph_support": "required; include only dark source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border and tail, character ears and head, panel border, and surrounding panel art.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample197-r010",
+      "final_ocr_region_id": "d7f852a2-5151-4915-8a62-81e16cb275be",
+      "action": "replace",
+      "action_reason": "Independent Korean dialogue in a bordered white balloon.",
+      "glyph_support": "required; include only dark source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border and tail, panel line, adjacent character art, and neighboring dialogue.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample197-r011",
+      "final_ocr_region_id": "8a0a2bde-8db2-4f21-97b6-8a176a84d7bb",
+      "action": "replace",
+      "action_reason": "Independent Korean dialogue in a bordered light balloon.",
+      "glyph_support": "required; include only dark source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border and tail, character head, small decorative drawing, panel border, and surrounding art.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample197-r012",
+      "final_ocr_region_id": "e21e0cfc-81d0-4757-bdea-80b0a78954aa",
+      "action": "replace",
+      "action_reason": "Independent Korean dialogue in a locally bounded light balloon.",
+      "glyph_support": "required; include only dark source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon edge, foreground character ear and hair, panel border, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample197-r013",
+      "final_ocr_region_id": "38d305bb-1b49-4590-b6a8-37f0658bda15",
+      "action": "replace",
+      "action_reason": "Independent Korean dialogue in a bordered white balloon.",
+      "glyph_support": "required; include only dark source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border and tail, nearby character drawing, panel border, and surrounding art.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample197-r014",
+      "final_ocr_region_id": "18963667-5f72-4f09-a052-157ed1d79d9c",
+      "action": "replace",
+      "action_reason": "Independent Korean dialogue in a bordered white balloon.",
+      "glyph_support": "required; include only dark source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border and tail, foreground character face and hair, panel line, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    }
+  ],
+  "counts": {
+    "reviewed_owner_labels": 14,
+    "replace_candidate": 12,
+    "preserve": 1,
+    "review": 1,
+    "replace_with_required_glyph_support": 12,
+    "outlined_glyph_review_case": 1,
+    "preserved_sfx_or_stylized_effect": 1
+  },
+  "coverage_findings": {
+    "ordinary_balloon_control": "covered by twelve independent Korean horizontal dialogue owners in a limited-palette panel comic.",
+    "outlined_glyph": "covered by r003 as a review-only outlined free-standing caption. It preserves pixels and does not authorize cleanup because adjacent art and support boundaries remain unmeasured.",
+    "preserved_sfx": "covered by r005, which preserves the complete outlined drawn impact effect and adjacent art.",
+    "protected_art": "recorded per label as balloon border/tail, panel, character, and surrounding-art exclusions; no bounded cleanup asset is created.",
+    "unresolved": "r003 remains review. This packet supplies no binary mask, cleanup patch, font selection, replacement object, or implementation authorization."
+  }
+}

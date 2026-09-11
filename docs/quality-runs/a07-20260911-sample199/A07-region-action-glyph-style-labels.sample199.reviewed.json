@@ -1,0 +1,103 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-single-fixture-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a06-c-20260911-controls/A06-C-owner-labels.controls.reviewed.json",
+    "review_rule": "Actions, source-style cues, and glyph-support expectations are source-pixel review annotations. They are not masks, cleanup assets, replacements, translations, or implementation authorization.",
+    "replacement_rule": "replace is an intended candidate action only. A later policy decision, approved glyph support, and validated cleanup remain required before pixels may change.",
+    "review_rule_for_pixels": "review preserves source pixels and creates no automatic cleanup or replacement text until a later explicit decision."
+  },
+  "source": {
+    "sample": "sample199",
+    "language": "ko",
+    "script_variant": "Korean horizontal dialogue and a printed package label",
+    "style": "bw_panel_manga",
+    "source_path": "corpus/samples/ko/sample199/source.png",
+    "source_digest": "b9dcc5435eddb9087656cc8714106fd1160186acd7f495e262cad63f948e2478",
+    "dimensions": { "width": 1600, "height": 2400 },
+    "review_artifacts": [
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample199-overview.png",
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample199-regions.png",
+      "../a06-c-20260911-controls/a04-exports/sample199/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "ko-horizontal-balloon": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black solid Korean Hangul glyphs",
+      "stroke": "no separate outline observed",
+      "weight": "regular clean dialogue lettering",
+      "source_background": "white speech-balloon interior with black border",
+      "confidence": "high",
+      "notes": "The English layout remains constrained to the individual source balloon; glyph support excludes the balloon border, tail, and adjacent art."
+    },
+    "ko-printed-package-label": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black solid Hangul glyphs",
+      "stroke": "no separate outline observed",
+      "weight": "clean printed package lettering",
+      "source_background": "white food-package face held by a character",
+      "confidence": "high",
+      "notes": "The label is source packaging, not an ordinary dialogue container. Its support and translation policy require a later explicit decision."
+    }
+  },
+  "labels": [
+    {
+      "owner_label_id": "sample199-r001",
+      "final_ocr_region_id": "6b97935e-5fa4-41c7-a543-988d0246cbd2",
+      "action": "review",
+      "action_reason": "Printed source label on a food package held in character art; it is not an ordinary speech balloon and its translation intent and safe support require a later explicit decision.",
+      "glyph_support": "not authorized; review preserves the package label and creates no mask, cleanup, or replacement text",
+      "protected_context": "Complete package face and border, character fingers and hands, character clothing, and all surrounding panel art.",
+      "style_profile": "ko-printed-package-label"
+    },
+    {
+      "owner_label_id": "sample199-r002",
+      "final_ocr_region_id": "b1479fdc-9b4b-41f4-9e55-16bce2211305",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, character face and hair, panel border, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample199-r003",
+      "final_ocr_region_id": "6f581c5c-d1fd-459b-a9b7-3902305758fb",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, character hair and face, package edge, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample199-r004",
+      "final_ocr_region_id": "0a2f0c61-6fd5-4935-b7d2-737118aba778",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, character ears, hair, face, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    }
+  ],
+  "counts": {
+    "reviewed_owner_labels": 4,
+    "replace_candidate": 3,
+    "preserve": 0,
+    "explain": 0,
+    "review": 1,
+    "replace_with_required_glyph_support": 3,
+    "reviewed_package_label": 1,
+    "outlined_glyph_owner": 0
+  },
+  "coverage_findings": {
+    "ordinary_balloon_control": "covered by r002 through r004, three independent Korean horizontal dialogue owners in white bordered balloons.",
+    "protected_non_dialogue_or_incidental_text": "r001 is a printed package label over protected hand and package art; review preserves its pixels and supplies no inferred cleanup.",
+    "protected_art": "recorded per label as balloon border/tail, character, package, panel, or adjacent-art exclusions; no bounded cleanup asset is created.",
+    "outlined_glyph": "not present in this fixture; no outlined-glyph support is inferred.",
+    "unresolved": "r001 remains review-only. This packet supplies no binary mask, cleanup patch, font selection, replacement text, or implementation authorization. It does not complete A07."
+  }
+}

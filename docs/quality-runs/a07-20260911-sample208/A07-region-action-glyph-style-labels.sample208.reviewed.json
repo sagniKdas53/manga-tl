@@ -1,0 +1,149 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-single-fixture-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a06-c-20260911-controls/A06-C-owner-labels.controls.reviewed.json",
+    "review_rule": "Actions, source-style cues, and glyph-support expectations are source-pixel review annotations. They are not masks, cleanup assets, replacements, translations, or implementation authorization.",
+    "replacement_rule": "replace is an intended candidate action only. A later policy decision, approved glyph support, and validated cleanup remain required before pixels may change.",
+    "preservation_rule": "preserve forbids automatic cleanup and automatic replacement text. The retained OCR record remains usable as non-raster metadata.",
+    "review_rule_for_pixels": "review preserves source pixels and creates no automatic cleanup or replacement text until a later explicit decision."
+  },
+  "source": {
+    "sample": "sample208",
+    "language": "zh",
+    "script_variant": "Traditional Chinese horizontal dialogue",
+    "style": "color_scene_collage",
+    "source_path": "corpus/samples/zh/sample208/source.png",
+    "source_digest": "eb90fff0ffcc0d2cee63cd6a7b8acb7e5c0ccfb9ac468c9532c0c0ad55ed237e",
+    "dimensions": {
+      "width": 1080,
+      "height": 1689
+    },
+    "review_artifacts": [
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample208-overview.png",
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample208-regions.png",
+      "../a06-c-20260911-controls/a04-exports/sample208/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "zh-horizontal-balloon": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black solid Traditional Chinese glyphs",
+      "stroke": "no separate outline observed",
+      "weight": "clean regular-to-bold dialogue lettering",
+      "source_background": "white speech balloon interior with black border",
+      "confidence": "high",
+      "notes": "The English layout remains constrained to the individual source balloon; horizontal source writing does not authorize changes outside approved glyph support."
+    }
+  },
+  "labels": [
+    {
+      "owner_label_id": "sample208-r001",
+      "final_ocr_region_id": "83a91875-81c3-4d76-b8b3-c17d8047ec99",
+      "action": "replace",
+      "action_reason": "Independent Traditional Chinese dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, classroom wall and desk art, nearby figures, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample208-r002",
+      "final_ocr_region_id": "86ee6af8-d433-4159-aef4-5338407cef59",
+      "action": "replace",
+      "action_reason": "Independent Traditional Chinese internal dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, nearby book, clothing, legs, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample208-r003",
+      "final_ocr_region_id": "1337d4a6-ffe0-4c7c-a233-e959c218098a",
+      "action": "replace",
+      "action_reason": "Independent Traditional Chinese dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border, adjacent clothing and character art, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample208-r004",
+      "final_ocr_region_id": "fdf2a156-1da3-43c8-b288-95bb4d88fbbf",
+      "action": "replace",
+      "action_reason": "Independent Traditional Chinese internal dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, books, nearby clothing and body art, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample208-r005",
+      "final_ocr_region_id": "dc6b8450-0774-453a-8082-db71e081094e",
+      "action": "replace",
+      "action_reason": "Independent Traditional Chinese narration in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border, page edge, character hair and face, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample208-r006",
+      "final_ocr_region_id": "5cac9a02-2a62-4cbc-94e7-547adc09cea8",
+      "action": "replace",
+      "action_reason": "Independent short Traditional Chinese dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border, ceiling fan and wall line art, nearby figures, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample208-r007",
+      "final_ocr_region_id": "be9d9349-aac5-4f3c-94ff-3fa21604bdfb",
+      "action": "replace",
+      "action_reason": "Independent Traditional Chinese dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, nearby hair, desk, and character art, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample208-r008",
+      "final_ocr_region_id": "e121d23a-98f2-47eb-be53-75994ceb5b9b",
+      "action": "replace",
+      "action_reason": "Independent emphatic Traditional Chinese dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border, nearby character hair and face, desk art, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample208-r009",
+      "final_ocr_region_id": "8225fb42-56b4-46aa-b764-2801e5435831",
+      "action": "replace",
+      "action_reason": "Independent Traditional Chinese internal dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border, page edge, character hair and clothing, books, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample208-r010",
+      "final_ocr_region_id": "f32251a0-ec2d-4a95-add5-4f162cc91f5e",
+      "action": "replace",
+      "action_reason": "Independent short Traditional Chinese internal dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, nearby character body and hand art, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    }
+  ],
+  "counts": {
+    "reviewed_owner_labels": 10,
+    "replace_candidate": 10,
+    "preserve": 0,
+    "explain": 0,
+    "review": 0,
+    "replace_with_required_glyph_support": 10,
+    "outlined_glyph_owner": 0
+  },
+  "coverage_findings": {
+    "ordinary_balloon_control": "covered by ten independent Traditional Chinese dialogue or narration owners in white bordered balloons across a color scene collage.",
+    "protected_art": "recorded per label as balloon border/tail, character, book, classroom, or page-edge exclusions; no bounded cleanup asset is created.",
+    "outlined_glyph": "not present in this fixture. It remains a required cross-fixture A07 coverage case.",
+    "unresolved": "No reviewed final OCR record is ambiguous in this fixture. This packet supplies no binary mask, cleanup patch, font selection, or implementation authorization."
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-single-fixture-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a03a04-20260910-retained/A06-owner-labels.draft.json",
+    "provenance_rule": "Each row retains its A06 draft or unresolved state. A07 does not verify ownership, infer raw fragment membership, or alter A06 confidence.",
+    "review_rule": "review preserves source pixels and authorizes neither cleanup nor replacement text.",
+    "replacement_rule": "replace is a candidate action only; later approval, glyph support, and validated cleanup remain required before pixels may change.",
+    "preservation_rule": "preserve forbids automatic cleanup and automatic replacement text."
+  },
+  "source": {
+    "sample": "sample99",
+    "language": "ja",
+    "script_variant": "Japanese vertical dialogue, drawn effects, and coloured speech fields",
+    "style": "colour_illustration_manga",
+    "source_path": "corpus/samples/ja/sample99/source.jpg",
+    "source_digest": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0",
+    "dimensions": { "width": 3219, "height": 2932 },
+    "review_artifacts": [
+      "../a03a04-20260910-retained/A06-owner-labels.draft.json",
+      "../a03a04-20260910-retained/manifest.json",
+      "../a03a04-20260910-retained/a04-exports/sample99/page-snapshot.json",
+      "../a03a04-20260910-retained/a04-exports/sample99/project/original.png"
+    ]
+  },
+  "shared_style_profiles": {
+    "ja-vertical-dialogue-light-field": {
+      "writing_mode": "vertical",
+      "rotation_degrees": 0,
+      "fill": "near-black source glyphs",
+      "stroke": "no separate outline safely distinguished",
+      "weight": "regular manga dialogue",
+      "source_background": "white or pale coloured locally bounded dialogue field",
+      "confidence": "high",
+      "notes": "Future English layout remains local to the source dialogue field; no field cleanup is supplied."
+    },
+    "ja-vertical-dialogue-pink-field": {
+      "writing_mode": "vertical",
+      "rotation_degrees": 0,
+      "fill": "light source glyphs with pink outline treatment",
+      "stroke": "integral pink outline",
+      "weight": "regular emphatic manga dialogue",
+      "source_background": "pink locally bounded speech field",
+      "confidence": "high",
+      "notes": "Glyph support, if later approved, is limited to the visible glyph and antialiased edge pixels."
+    },
+    "preserved-red-drawn-sfx": {
+      "writing_mode": "vertical or angled",
+      "rotation_degrees": 0,
+      "fill": "dark red hand-drawn effect lettering",
+      "stroke": "integral white outline",
+      "weight": "bold expressive effect lettering",
+      "source_background": "character and scene art",
+      "confidence": "high",
+      "notes": "Preserve the complete effect and adjacent art; no cleanup extent is inferred from the OCR box."
+    },
+    "review-unresolved-or-fused": {
+      "writing_mode": "not safely determined",
+      "rotation_degrees": 0,
+      "fill": "not authorized",
+      "stroke": "not authorized",
+      "weight": "not safely determined",
+      "source_background": "mixed source lettering and art",
+      "confidence": "low",
+      "notes": "Pixel-preserving review only; no glyph support, cleanup extent, or replacement text is authorized."
+    }
+  },
+  "labels": [
+    { "owner_label_id": "s99-r01", "a06_provenance": { "review_state": "draft", "owner_id": "s99-owner-r01", "container_id": "bubble_0", "fragment_member_identity": "final OCR region b5b6ecf8-7fd0-4c36-961d-9aa3300f5b1e" }, "final_ocr_region_id": "b5b6ecf8-7fd0-4c36-961d-9aa3300f5b1e", "action": "replace", "action_reason": "Separately bounded vertical dialogue in a white speech bubble is visible in the source.", "glyph_support": "required if later approved; include only visible dark glyphs and antialiased edges inside the bubble interior", "protected_context": "Bubble border and tail, character hair and face, skin shading, hearts, and all pixels outside approved glyph support.", "style_profile": "ja-vertical-dialogue-light-field" },
+    { "owner_label_id": "s99-r02", "a06_provenance": { "review_state": "draft", "owner_id": "s99-owner-r02", "container_id": "bubble_2", "fragment_member_identity": "final OCR region 7926993e-feb1-443e-9424-7f7a0f0ab53d" }, "final_ocr_region_id": "7926993e-feb1-443e-9424-7f7a0f0ab53d", "action": "replace", "action_reason": "A distinct short vertical dialogue area is visibly bounded in the pale pink speech field.", "glyph_support": "required if later approved; include only visible light glyphs, pink outline, and antialiased edges within this local field", "protected_context": "Speech-field edge, hearts, adjacent text column, character hair, and all pixels outside approved glyph support.", "style_profile": "ja-vertical-dialogue-pink-field" },
+    { "owner_label_id": "s99-r03", "a06_provenance": { "review_state": "draft", "owner_id": "s99-owner-r03", "container_id": "bubble_2", "fragment_member_identity": "final OCR region aac3a2fb-bb28-43ba-a4e9-ff08731b1c0d" }, "final_ocr_region_id": "aac3a2fb-bb28-43ba-a4e9-ff08731b1c0d", "action": "replace", "action_reason": "A separate vertical dialogue area is visibly bounded in the shared pale pink speech field; the shared container is not an ownership merge.", "glyph_support": "required if later approved; include only visible light glyphs, pink outline, and antialiased edges within this local field", "protected_context": "Speech-field edge, hearts, adjacent text column, character hair, and all pixels outside approved glyph support.", "style_profile": "ja-vertical-dialogue-pink-field" },
+    { "owner_label_id": "s99-r04", "a06_provenance": { "review_state": "draft", "owner_id": "s99-owner-r04", "container_id": "none", "fragment_member_identity": "final OCR region 22c19f7e-e173-4c8d-942c-70c6876f0a61" }, "final_ocr_region_id": "22c19f7e-e173-4c8d-942c-70c6876f0a61", "action": "preserve", "action_reason": "Localized free-standing drawn sound effect, not ordinary dialogue.", "glyph_support": "not requested; preserve the complete effect without inferring a cleanup extent", "protected_context": "Complete red effect lettering and outline, skin shading, character art, and adjacent scene detail.", "style_profile": "preserved-red-drawn-sfx" },
+    { "owner_label_id": "s99-r05", "a06_provenance": { "review_state": "draft", "owner_id": "s99-owner-r05", "container_id": "bubble_5", "fragment_member_identity": "final OCR region 31c723e1-abca-4d7f-970e-4b4ee8ea6828" }, "final_ocr_region_id": "31c723e1-abca-4d7f-970e-4b4ee8ea6828", "action": "preserve", "action_reason": "The lower localized source mark is expressive drawn effect lettering over scene art, not a safe ordinary-dialogue replacement target.", "glyph_support": "not requested; preserve the complete effect without inferring a cleanup extent", "protected_context": "Complete effect lettering and outline, character art, censor bars, hand detail, and surrounding scene pixels.", "style_profile": "preserved-red-drawn-sfx" },
+    { "owner_label_id": "s99-r06", "a06_provenance": { "review_state": "unresolved", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region deb04429-229b-4f06-8e9c-7471992a040a; raw members absent" }, "final_ocr_region_id": "deb04429-229b-4f06-8e9c-7471992a040a", "action": "review", "action_reason": "A06 records missing raw membership and an irregular extent overlapping multiple source marks; no single owner or safe support is established.", "glyph_support": "not authorized; review preserves pixels and creates no cleanup or replacement text", "protected_context": "Entire irregular extent, all source lettering, bubble edges, character art, and every source pixel until later review.", "style_profile": "review-unresolved-or-fused" },
+    { "owner_label_id": "s99-r07", "a06_provenance": { "review_state": "unresolved", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region 8bd9fda5-acf6-44b3-8ff7-a2ecf5b1ac6a; raw members absent" }, "final_ocr_region_id": "8bd9fda5-acf6-44b3-8ff7-a2ecf5b1ac6a", "action": "review", "action_reason": "A06 identifies a large composite across independent lettering, effects, and art with no raw member identity; no split is inferred.", "glyph_support": "not authorized; review preserves pixels and creates no cleanup or replacement text", "protected_context": "Entire composite extent, all lettering, hearts, character art, and every source pixel until later review.", "style_profile": "review-unresolved-or-fused" },
+    { "owner_label_id": "s99-r08", "a06_provenance": { "review_state": "draft", "owner_id": "s99-owner-r08", "container_id": "bubble_1", "fragment_member_identity": "final OCR region 647d424c-f3f8-4ac5-81fc-349a0f555357" }, "final_ocr_region_id": "647d424c-f3f8-4ac5-81fc-349a0f555357", "action": "replace", "action_reason": "A distinct left-side vertical dialogue field is visibly bounded in the source.", "glyph_support": "required if later approved; include only visible light glyphs, pink outline, and antialiased edges within the local speech field", "protected_context": "Speech-field boundary, adjacent character art, hearts, background shading, and all pixels outside approved glyph support.", "style_profile": "ja-vertical-dialogue-pink-field" },
+    { "owner_label_id": "s99-r09", "a06_provenance": { "review_state": "draft", "owner_id": "s99-owner-r09", "container_id": "bubble_3", "fragment_member_identity": "final OCR region 537db672-7189-40df-9518-74b4ed71c213" }, "final_ocr_region_id": "537db672-7189-40df-9518-74b4ed71c213", "action": "replace", "action_reason": "A distinct upper vertical dialogue bubble is visible in the source.", "glyph_support": "required if later approved; include only visible dark glyphs and antialiased edges inside the bubble interior", "protected_context": "Bubble border and tail, adjacent bubbles, character hair, hearts, and all pixels outside approved glyph support.", "style_profile": "ja-vertical-dialogue-light-field" },
+    { "owner_label_id": "s99-r10", "a06_provenance": { "review_state": "draft", "owner_id": "s99-owner-r10", "container_id": "bubble_4", "fragment_member_identity": "final OCR region 50c248e3-b8b8-44f3-8f93-6107fc91ce80" }, "final_ocr_region_id": "50c248e3-b8b8-44f3-8f93-6107fc91ce80", "action": "replace", "action_reason": "A distinct upper-left vertical dialogue bubble is visible in the source; reused container identifiers do not merge owners.", "glyph_support": "required if later approved; include only visible dark glyphs and antialiased edges inside the bubble interior", "protected_context": "Bubble border and tail, adjacent bubbles, character art, hearts, and all pixels outside approved glyph support.", "style_profile": "ja-vertical-dialogue-light-field" }
+  ],
+  "counts": { "reviewed_owner_labels": 10, "a06_draft": 8, "a06_unresolved": 2, "replace_candidate": 6, "preserve": 2, "review": 2, "explain": 0, "replace_with_required_glyph_support": 6, "preserved_drawn_sfx": 2 },
+  "final_ocr_coverage": { "a06_records": 10, "records_with_explicit_final_ocr_region_id": 10, "records_without_explicit_final_ocr_region_id": 0, "snapshot_ocr_regions": 10, "matched_explicit_snapshot_ids": 10, "unavailable_final_ocr_records": [] },
+  "coverage_findings": {
+    "provenance": "All eight A06 draft records remain draft and both A06 unresolved records remain unresolved; no ownership was promoted to verified.",
+    "review_policy": "r06 and r07 remain pixel-preserving review cases because their raw membership is absent and their retained final extents are not safe owner assertions.",
+    "protected_art": "Protected context is recorded per label; no cleanup mask, binary glyph asset, replacement object, translated layout, font, or implementation authorization is created.",
+    "completion": "This bounded packet is for coordinator review only and does not complete A07, G0, or any later gate."
+  }
+}

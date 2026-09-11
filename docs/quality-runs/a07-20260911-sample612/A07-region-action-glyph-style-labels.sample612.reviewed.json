@@ -1,0 +1,150 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-single-fixture-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a06-c-20260911-controls/A06-C-owner-labels.controls.reviewed.json",
+    "review_rule": "Actions, source-style cues, and glyph-support expectations are source-pixel review annotations. They are not masks, cleanup assets, replacements, translations, or implementation authorization.",
+    "replacement_rule": "replace is an intended candidate action only. A later policy decision, approved glyph support, and validated cleanup remain required before pixels may change.",
+    "preservation_rule": "preserve forbids automatic cleanup and automatic replacement text. The retained OCR record remains usable as non-raster metadata.",
+    "review_rule_for_pixels": "review preserves source pixels and creates no automatic cleanup or replacement text until a later explicit decision."
+  },
+  "source": {
+    "sample": "sample612",
+    "language": "zh",
+    "script_variant": "Traditional Chinese vertical dialogue with a small drawn emotive mark and creator credit",
+    "style": "color_panel_webcomic",
+    "source_path": "corpus/gaps/pending/zh/sample612/source.jpg",
+    "source_digest": "4cce048893f940d5826085cad8b2dfb0dc7cbb33dc20a75d917c7a5c0d6b17b1",
+    "dimensions": { "width": 800, "height": 1131 },
+    "review_artifacts": [
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample612-overview.png",
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample612-regions.png",
+      "../a06-c-20260911-controls/a04-exports/sample612/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "zh-vertical-balloon": {
+      "writing_mode": "vertical",
+      "rotation_degrees": 0,
+      "fill": "near-black solid Traditional Chinese glyphs",
+      "stroke": "no separate outline observed",
+      "weight": "regular clean webcomic dialogue lettering",
+      "source_background": "white speech balloon interior with black border",
+      "confidence": "high",
+      "notes": "Any later English layout remains constrained to the individual source balloon; support excludes the border, tail, hearts, decorative marks, and all adjacent art."
+    },
+    "preserved-drawn-emotive-mark": {
+      "writing_mode": "not applicable",
+      "rotation_degrees": 0,
+      "fill": "near-black drawn source mark",
+      "stroke": "integral to the small drawn mark",
+      "weight": "decorative / emotive",
+      "source_background": "lavender decorative field beside character art",
+      "confidence": "high",
+      "notes": "The mark is non-dialogue source content and is preserved with its decorative field; it is not a cleanup or replacement target."
+    },
+    "preserved-creator-credit": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black small Latin and Chinese credit lettering",
+      "stroke": "no separate outline observed",
+      "weight": "small source attribution lettering",
+      "source_background": "page-edge field over decorative background",
+      "confidence": "high",
+      "notes": "The credit is non-dialogue source attribution and is preserved with its page-edge context; it is not a cleanup or replacement target."
+    }
+  },
+  "labels": [
+    {
+      "owner_label_id": "sample612-r001",
+      "final_ocr_region_id": "3a4afd26-c043-4657-948b-4f4e956f8abb",
+      "action": "replace",
+      "action_reason": "Independent vertical Traditional Chinese dialogue in the upper-right white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, character hair, face, hands, decorative hearts, background, and all pixels outside approved glyph support.",
+      "style_profile": "zh-vertical-balloon"
+    },
+    {
+      "owner_label_id": "sample612-r002",
+      "final_ocr_region_id": "db0fee64-35fe-4d4a-b1f8-30f56366d4a3",
+      "action": "replace",
+      "action_reason": "Independent vertical Traditional Chinese dialogue in the upper-left white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, adjacent r003 source glyphs, character hair, face, hands, decorative hearts, and all pixels outside approved glyph support.",
+      "style_profile": "zh-vertical-balloon"
+    },
+    {
+      "owner_label_id": "sample612-r003",
+      "final_ocr_region_id": "c2f07d8c-f4f5-4cb7-9ea4-aeefcf04ec94",
+      "action": "replace",
+      "action_reason": "Independent short vertical Traditional Chinese dialogue extent in the upper-left white bordered speech balloon.",
+      "glyph_support": "required; include only this record's near-black source glyphs and antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, adjacent r002 source glyphs, heart mark, character hair and hand, decorative background, and all pixels outside approved glyph support.",
+      "style_profile": "zh-vertical-balloon"
+    },
+    {
+      "owner_label_id": "sample612-r004",
+      "final_ocr_region_id": "7fbc7a4d-1a7e-48a0-9e5b-0f294ecd74d1",
+      "action": "preserve",
+      "action_reason": "Small drawn emotive mark, classified by A06-C as non-dialogue.",
+      "glyph_support": "not requested; preserve the complete drawn mark and decorative field rather than inferring a cleanup mask",
+      "protected_context": "Complete drawn mark, lavender decorative field, adjacent character art, neighboring dialogue balloons, and all surrounding source pixels.",
+      "style_profile": "preserved-drawn-emotive-mark"
+    },
+    {
+      "owner_label_id": "sample612-r005",
+      "final_ocr_region_id": "ae5a4404-c143-4549-be3d-d21b190c55cb",
+      "action": "replace",
+      "action_reason": "Independent vertical Traditional Chinese dialogue in the lower-left white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, character face, hair, clothing, lavender decorative field, and all pixels outside approved glyph support.",
+      "style_profile": "zh-vertical-balloon"
+    },
+    {
+      "owner_label_id": "sample612-r006",
+      "final_ocr_region_id": "8caa7528-6561-456c-a225-29133072ef6d",
+      "action": "preserve",
+      "action_reason": "Page-edge creator credit, classified by A06-C as non-dialogue source attribution.",
+      "glyph_support": "not requested; preserve the complete credit and page-edge context rather than inferring a cleanup mask",
+      "protected_context": "Complete creator credit, page edge, lavender decorative field, and all adjacent source pixels.",
+      "style_profile": "preserved-creator-credit"
+    },
+    {
+      "owner_label_id": "sample612-r007",
+      "final_ocr_region_id": "69b961e0-d51f-4fce-878b-5159e2a00f7d",
+      "action": "replace",
+      "action_reason": "Independent vertical Traditional Chinese dialogue in the small lower-center white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, character hair, face, lavender decorative field, and all pixels outside approved glyph support.",
+      "style_profile": "zh-vertical-balloon"
+    },
+    {
+      "owner_label_id": "sample612-r008",
+      "final_ocr_region_id": "ae946d0b-a53a-4030-9759-0505581f0075",
+      "action": "replace",
+      "action_reason": "Independent vertical Traditional Chinese dialogue in the right white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, character hair, face, hands, panel border, decorative field, and all pixels outside approved glyph support.",
+      "style_profile": "zh-vertical-balloon"
+    }
+  ],
+  "counts": {
+    "reviewed_owner_labels": 8,
+    "replace_candidate": 6,
+    "preserve": 2,
+    "explain": 0,
+    "review": 0,
+    "replace_with_required_glyph_support": 6,
+    "preserved_non_dialogue": 2,
+    "outlined_glyph_owner": 0
+  },
+  "coverage_findings": {
+    "ordinary_balloon_control": "covered by six A06-C-reviewed vertical Traditional Chinese dialogue owners in white bordered balloons.",
+    "preserved_non_dialogue": "r004 preserves the observed drawn emotive mark and r006 preserves source attribution; neither becomes a cleanup target.",
+    "protected_art": "recorded per label as balloon border/tail, character, decorative field, credit, panel, or adjacent OCR-glyph exclusions; no bounded cleanup asset is created.",
+    "outlined_glyph": "not present in this fixture; no outlined-glyph support is inferred.",
+    "unresolved": "This packet supplies no binary mask, cleanup patch, font selection, replacement object, or implementation authorization. It does not complete A07."
+  }
+}

@@ -1,0 +1,170 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-single-fixture-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a06-c-20260911-controls/A06-C-owner-labels.controls.reviewed.json",
+    "review_rule": "Actions, source-style cues, and glyph-support expectations are source-pixel review annotations. They are not masks, cleanup assets, replacements, translations, or implementation authorization.",
+    "replacement_rule": "replace is an intended candidate action only. A later policy decision, approved glyph support, and validated cleanup remain required before pixels may change.",
+    "review_rule_for_pixels": "review preserves source pixels and creates no automatic cleanup or replacement text until a later explicit decision."
+  },
+  "source": {
+    "sample": "sample360",
+    "language": "ko",
+    "script_variant": "Korean horizontal dialogue with a free-standing title and unboxed lettering over halftone art",
+    "style": "bw_panel_manga",
+    "source_path": "corpus/gaps/pending/ko/sample360/source.jpg",
+    "source_digest": "a816bf10406ba91e1e2bdc00d6544de56d185257dc0fc2c9a15783d7c8caf14a",
+    "dimensions": {
+      "width": 1443,
+      "height": 2048
+    },
+    "review_artifacts": [
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample360-overview.png",
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample360-regions.png",
+      "../a06-c-20260911-controls/a04-exports/sample360/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "ko-horizontal-balloon": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black solid source glyphs",
+      "stroke": "no separate glyph outline observed",
+      "weight": "regular clean manga dialogue",
+      "source_background": "white speech-balloon interior with black border",
+      "confidence": "high",
+      "notes": "Korean source writing is horizontal; later English layout remains constrained to the individual source balloon."
+    },
+    "ko-emphatic-balloon": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black solid source glyphs",
+      "stroke": "no separate glyph outline observed",
+      "weight": "emphatic dialogue lettering",
+      "source_background": "locally bounded white speech field amid action lines",
+      "confidence": "high",
+      "notes": "The local white speech field is distinct from the nearby action-line art, which remains protected."
+    },
+    "ko-free-standing-page-title": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black solid source glyphs",
+      "stroke": "no separate glyph outline observed",
+      "weight": "small page-heading lettering",
+      "source_background": "white page margin above the panel",
+      "confidence": "high",
+      "notes": "The title is free-standing page text, not a dialogue container or automatic cleanup target."
+    },
+    "ko-lettering-over-halftone-art": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black source glyphs",
+      "stroke": "no separate glyph outline observed",
+      "weight": "small narrative/emphasis lettering",
+      "source_background": "halftone field immediately beside character face and hair art",
+      "confidence": "high",
+      "notes": "The lettering is unboxed and adjacent to protected halftone and character pixels. This review profile supplies no support mask."
+    }
+  },
+  "labels": [
+    {
+      "owner_label_id": "sample360-r001",
+      "final_ocr_region_id": "ecb3eb1b-a129-49a6-92b9-95917a70bc6c",
+      "action": "explain",
+      "action_reason": "Free-standing small page title; any translation is a note/transcript decision, not authorization to replace source title pixels.",
+      "glyph_support": "not requested; explain creates no source cleanup or automatic page text object",
+      "protected_context": "Complete title lettering, white page margin, and top panel border.",
+      "style_profile": "ko-free-standing-page-title"
+    },
+    {
+      "owner_label_id": "sample360-r002",
+      "final_ocr_region_id": "2007e78e-6c75-464f-b953-9d2fea98f1b8",
+      "action": "replace",
+      "action_reason": "Independent Korean dialogue in a bordered white balloon.",
+      "glyph_support": "required; include only near-black source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border and tail, black halftone field, character clothing and hair, heart mark, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample360-r003",
+      "final_ocr_region_id": "88855db4-2f9f-4b84-9e6a-fdb04c56d5ac",
+      "action": "review",
+      "action_reason": "Unboxed lettering over a halftone field immediately beside protected character face and hair art; safe support and replacement intent need a later explicit decision.",
+      "glyph_support": "not authorized; future investigation must distinguish glyphs, antialiasing, halftone, decorative marks, and adjacent character pixels before any cleanup",
+      "protected_context": "Complete lettering, halftone field, character face and hair, nearby decorative marks, panel border, and all source pixels until reviewed.",
+      "style_profile": "ko-lettering-over-halftone-art"
+    },
+    {
+      "owner_label_id": "sample360-r004",
+      "final_ocr_region_id": "b197a24d-84ed-440e-a3d5-e279f88987bb",
+      "action": "replace",
+      "action_reason": "Independent short Korean dialogue in a bordered white balloon.",
+      "glyph_support": "required; include only near-black source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border, black halftone field, adjacent character art, and panel border.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample360-r005",
+      "final_ocr_region_id": "a9532f7d-e44f-46cf-b6d0-62bdc8f77f0e",
+      "action": "replace",
+      "action_reason": "Independent Korean dialogue in a bordered white balloon.",
+      "glyph_support": "required; include only near-black source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border and tail, character hair and clothing, decorative marks, panel border, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample360-r006",
+      "final_ocr_region_id": "14c22e75-b7bb-4419-8218-7020fbfaa791",
+      "action": "replace",
+      "action_reason": "Independent emphatic Korean dialogue in a locally bounded white speech field.",
+      "glyph_support": "required; include only near-black source glyphs and antialiased edges inside the local white speech field",
+      "protected_context": "Speech-field edge, action lines, character face and hair, sweat marks, panel border, and all pixels outside approved glyph support.",
+      "style_profile": "ko-emphatic-balloon"
+    },
+    {
+      "owner_label_id": "sample360-r007",
+      "final_ocr_region_id": "974b9e8c-1e16-43f4-90ee-386e68f390f7",
+      "action": "replace",
+      "action_reason": "Independent Korean dialogue in a bordered white balloon.",
+      "glyph_support": "required; include only near-black source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border and tail, character hair and clothing, panel border, and surrounding art.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample360-r008",
+      "final_ocr_region_id": "9f476a9b-03ae-4031-b623-8caad5b00a1c",
+      "action": "replace",
+      "action_reason": "Independent emphatic Korean dialogue in a locally bounded white speech field.",
+      "glyph_support": "required; include only near-black source glyphs and antialiased edges inside the local white speech field",
+      "protected_context": "Speech-field edge, panel border, adjacent character face and hair, and all pixels outside approved glyph support.",
+      "style_profile": "ko-emphatic-balloon"
+    },
+    {
+      "owner_label_id": "sample360-r009",
+      "final_ocr_region_id": "1dde6ea1-e84e-49fb-b244-1b0689ce91d1",
+      "action": "replace",
+      "action_reason": "Independent Korean dialogue in a bordered white balloon.",
+      "glyph_support": "required; include only near-black source glyphs and antialiased edges inside the local balloon interior",
+      "protected_context": "Balloon border and tail, black halftone field, character art, heart mark, and panel border.",
+      "style_profile": "ko-horizontal-balloon"
+    }
+  ],
+  "counts": {
+    "reviewed_owner_labels": 9,
+    "replace_candidate": 7,
+    "preserve": 0,
+    "explain": 1,
+    "review": 1,
+    "replace_with_required_glyph_support": 7,
+    "unboxed_lettering_review_case": 1
+  },
+  "coverage_findings": {
+    "ordinary_balloon_control": "covered by seven independent Korean horizontal dialogue owners in a black-and-white panel manga page.",
+    "page_title_policy": "r001 exercises explain-only semantics: an optional note/transcript without destructive source replacement.",
+    "unboxed_lettering": "r003 is a review-only case. It preserves pixels and does not authorize cleanup because the lettering is immediately adjacent to halftone and character art.",
+    "protected_art": "recorded per label as balloon/speech-field edge, panel, halftone, character, and decorative exclusions; no bounded cleanup asset is created.",
+    "unresolved": "r003 remains review. This packet supplies no binary mask, cleanup patch, font selection, replacement object, or implementation authorization."
+  }
+}

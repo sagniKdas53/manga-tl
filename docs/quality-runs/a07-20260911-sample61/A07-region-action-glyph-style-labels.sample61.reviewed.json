@@ -1,0 +1,87 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-evidence-only-child-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a03a04-20260910-retained/A06-owner-labels.draft.json",
+    "review_rule": "review preserves source pixels. It is not a cleanup mask, replacement authorization, source-membership inference, or verified ownership promotion.",
+    "final_ocr_rule": "A final OCR region ID is recorded only when the corresponding A06 label explicitly supplies one."
+  },
+  "source": {
+    "sample": "sample61",
+    "language": "ja",
+    "source_path": "corpus/samples/ja/sample61/source.jpg",
+    "source_digest": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76",
+    "dimensions": { "width": 2000, "height": 2000 },
+    "review_artifacts": [
+      "../a03a04-20260910-retained/A06-owner-labels.draft.json",
+      "../a03a04-20260910-retained/manifest.json",
+      "../a03a04-20260910-retained/a04-exports/sample61/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "dark-ui-document-container": {
+      "source_style": "dark game-document panel with light text and a light border",
+      "glyph_support": "not requested; A06 retains no safe per-container OCR membership",
+      "protected_art": "complete dark container, border, every contained text line, and adjacent character art",
+      "notes": "The visible container does not establish a final OCR membership or a cleanup boundary."
+    }
+  },
+  "labels": [
+    {
+      "owner_label_id": "s61-container-upper-left",
+      "a06_review_state": "draft",
+      "a06_label": { "id": "s61-container-upper-left", "source_digest": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76", "owner_id": "s61-owner-container-upper-left", "container_id": "s61-container-upper-left", "fragment_member_identity": "unresolved; no retained raw fragments or safe per-container member assignment", "geometry": { "coordinate_space": "source-pixels", "role": "visible dark container", "bbox": [290, 65, 565, 565] }, "confidence": 0.91, "evidence_basis": "The exact source visibly shows a closed upper-left dark document container. This labels the container only, not any OCR membership.", "review_state": "draft" },
+      "action": "review",
+      "action_reason": "A06 ownership is draft and retains no raw fragment or safe per-container final OCR membership.",
+      "source_type": "visible dark document container",
+      "glyph_support": "not requested; preserve all source pixels and do not infer a cleanup mask",
+      "protected_context": "Complete upper-left dark container, light border, all contained text, and surrounding white background.",
+      "style_profile": "dark-ui-document-container"
+    },
+    {
+      "owner_label_id": "s61-container-upper-middle",
+      "a06_review_state": "draft",
+      "a06_label": { "id": "s61-container-upper-middle", "source_digest": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76", "owner_id": "s61-owner-container-upper-middle", "container_id": "s61-container-upper-middle", "fragment_member_identity": "unresolved; no retained raw fragments or safe per-container member assignment", "geometry": { "coordinate_space": "source-pixels", "role": "visible dark container", "bbox": [940, 45, 560, 1055] }, "confidence": 0.91, "evidence_basis": "The exact source visibly shows a closed upper-middle dark document container. This labels the container only, not any OCR membership.", "review_state": "draft" },
+      "action": "review",
+      "action_reason": "A06 ownership is draft and retains no raw fragment or safe per-container final OCR membership.",
+      "source_type": "visible dark document container",
+      "glyph_support": "not requested; preserve all source pixels and do not infer a cleanup mask",
+      "protected_context": "Complete upper-middle dark container, light border, all contained text, and adjacent character art.",
+      "style_profile": "dark-ui-document-container"
+    },
+    {
+      "owner_label_id": "s61-container-lower-left",
+      "a06_review_state": "draft",
+      "a06_label": { "id": "s61-container-lower-left", "source_digest": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76", "owner_id": "s61-owner-container-lower-left", "container_id": "s61-container-lower-left", "fragment_member_identity": "unresolved; no retained raw fragments or safe per-container member assignment", "geometry": { "coordinate_space": "source-pixels", "role": "visible dark container", "bbox": [25, 630, 620, 1250] }, "confidence": 0.91, "evidence_basis": "The exact source visibly shows a closed lower-left dark document container. This labels the container only, not any OCR membership.", "review_state": "draft" },
+      "action": "review",
+      "action_reason": "A06 ownership is draft and retains no raw fragment or safe per-container final OCR membership.",
+      "source_type": "visible dark document container",
+      "glyph_support": "not requested; preserve all source pixels and do not infer a cleanup mask",
+      "protected_context": "Complete lower-left dark container, light border, all contained text, and adjacent character art.",
+      "style_profile": "dark-ui-document-container"
+    },
+    {
+      "owner_label_id": "s61-container-right",
+      "a06_review_state": "draft",
+      "a06_label": { "id": "s61-container-right", "source_digest": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76", "owner_id": "s61-owner-container-right", "container_id": "s61-container-right", "fragment_member_identity": "unresolved; no retained raw fragments or safe per-container member assignment", "geometry": { "coordinate_space": "source-pixels", "role": "visible dark container", "bbox": [1405, 360, 575, 1200] }, "confidence": 0.91, "evidence_basis": "The exact source visibly shows a closed right dark document container. This labels the container only, not any OCR membership.", "review_state": "draft" },
+      "action": "review",
+      "action_reason": "A06 ownership is draft and retains no raw fragment or safe per-container final OCR membership.",
+      "source_type": "visible dark document container",
+      "glyph_support": "not requested; preserve all source pixels and do not infer a cleanup mask",
+      "protected_context": "Complete right dark container, light border, all contained text, and adjacent character art.",
+      "style_profile": "dark-ui-document-container"
+    }
+  ],
+  "counts": { "reviewed_owner_labels": 4, "review": 4, "replace_candidate": 0, "preserve": 0, "a06_verified": 0, "a06_draft": 4, "a06_unresolved": 0 },
+  "final_ocr_coverage": {
+    "snapshot_final_ocr_regions": 50,
+    "a06_explicit_final_ocr_ids": 0,
+    "matched_explicit_final_ocr_ids": 0,
+    "labels_without_a06_final_ocr_id": 4,
+    "a06_explicitly_unassigned_final_ocr_regions": 50,
+    "unavailable_reason": "A06 records all 50 final OCR regions as unassigned and supplies no safe per-container membership; no final OCR IDs were fabricated."
+  },
+  "limitations": "This bounded packet does not complete A07. It creates no mask, cleanup asset, replacement text, membership assignment, ownership verification, or implementation authorization."
+}

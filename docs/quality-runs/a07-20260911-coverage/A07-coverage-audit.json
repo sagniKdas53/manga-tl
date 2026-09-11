@@ -1,0 +1,88 @@
+{
+  "schema_version": "a07-coverage-audit/v1",
+  "task": "A07",
+  "status": "completed-with-explicit-review-coverage",
+  "date": "2026-09-11",
+  "inputs": {
+    "original_owner_labels": "../a03a04-20260910-retained/A06-owner-labels.draft.json",
+    "control_owner_labels": "../a06-c-20260911-controls/A06-C-owner-labels.controls.reviewed.json",
+    "sample7_owner_labels": "../a06-c-20260910-sample7/A06-C-owner-labels.sample7.reviewed.json"
+  },
+  "packets": {
+    "total": 30,
+    "ja": [
+      "sample7",
+      "sample39",
+      "sample47",
+      "sample123",
+      "sample134",
+      "sample139",
+      "sample150",
+      "sample172",
+      "sample177",
+      "sample222",
+      "sample61",
+      "sample99",
+      "sample93",
+      "sample83"
+    ],
+    "ko": [
+      "sample192",
+      "sample197",
+      "sample199",
+      "sample268",
+      "sample289",
+      "sample320",
+      "sample360",
+      "sample416"
+    ],
+    "zh": [
+      "sample206",
+      "sample208",
+      "sample226",
+      "sample261",
+      "sample457",
+      "sample609",
+      "sample611",
+      "sample612"
+    ]
+  },
+  "label_accounting": {
+    "total": 267,
+    "ja": 142,
+    "ko": 64,
+    "zh": 61,
+    "actions": {
+      "replace_candidate": 172,
+      "preserve": 53,
+      "explain": 5,
+      "review": 37
+    },
+    "destructive_artifacts_created": 0
+  },
+  "required_coverage": {
+    "ordinary_balloon_panel_controls": "24 conventional controls are packeted: 8 each for JA, KO, and ZH.",
+    "dialogue_and_sfx": "Dialogue replacement candidates and preserve/review SFX policies are represented in each language slice; sample7 and sample47 retain explicit drawn-effect preservation cases.",
+    "outlined_glyph": "sample150-r005 is the source-reviewed white-fill/heavy-black-outline protected-art review case. It remains non-destructive pending later glyph-support measurement.",
+    "protected_art": "Every packet records source-art exclusions. No protected art was translated into a mask or patch.",
+    "source_style": "Packets retain writing mode, fill/stroke/weight, container/background cues, and confidence without selecting a font or renderer."
+  },
+  "known_coverage_gaps": [
+    {
+      "sample": "sample61",
+      "count": 50,
+      "description": "A06 retains 50 final OCR regions with no raw fragments or safe region-to-container membership. The four visible container labels are review-only and these 50 final regions remain explicitly unassigned."
+    },
+    {
+      "sample": "sample177",
+      "count": 6,
+      "description": "Six verified illustration extents have no retained final OCR ID; they remain separate protected-art review records."
+    },
+    {
+      "scope": "all review actions",
+      "count": 37,
+      "description": "Review is an explicit pixel-preserving decision, not an absent label, translation failure, cleanup authorization, or passed replacement."
+    }
+  ],
+  "task_result": "A07 is complete as curation: every A06/A06-C label record has an action/style/protected-context annotation or an explicit retained review state. This does not pass G0, create glyph masks, authorize cleanup, resolve unknown ownership, or permit later quality gates to treat review as translated."
+}

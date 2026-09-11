@@ -1,0 +1,162 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-evidence-only-child-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a03a04-20260910-retained/A06-owner-labels.draft.json",
+    "review_rule": "review preserves source pixels. It is not a cleanup mask, replacement authorization, source-membership inference, or verified ownership promotion.",
+    "final_ocr_rule": "A final OCR region ID is recorded only when the corresponding A06 label explicitly supplies one."
+  },
+  "source": {
+    "sample": "sample177",
+    "language": "ja",
+    "source_path": "corpus/samples/ja/sample177/source.jpg",
+    "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382",
+    "dimensions": { "width": 2048, "height": 1910 },
+    "review_artifacts": [
+      "../a03a04-20260910-retained/A06-owner-labels.draft.json",
+      "../a03a04-20260910-retained/manifest.json",
+      "../a03a04-20260910-retained/a04-exports/sample177/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "colored-handdrawn-illustration": {
+      "source_style": "colored hand-drawn portrait with black line art on white",
+      "glyph_support": "not applicable; this record has no retained OCR fragment membership",
+      "protected_art": "complete portrait, line art, watercolor fills, and white background",
+      "notes": "The profile documents visible source style only and does not authorize alteration."
+    },
+    "handwritten-title-on-white": {
+      "source_style": "black handwritten title lettering on white",
+      "glyph_support": "not requested; unresolved OCR ownership and composite extent prevent a safe glyph-only boundary",
+      "protected_art": "all handwritten glyphs, whitespace, and adjacent portrait art",
+      "notes": "No mask or title split is inferred from an OCR bounding box."
+    }
+  },
+  "labels": [
+    {
+      "owner_label_id": "s177-illustration-01",
+      "a06_review_state": "verified",
+      "a06_label": { "id": "s177-illustration-01", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "s177-owner-illustration-01", "container_id": "none", "fragment_member_identity": "none; illustration association has no retained OCR fragment", "geometry": { "coordinate_space": "source-pixels", "role": "illustration extent", "bbox": [150, 220, 700, 700] }, "confidence": 0.88, "evidence_basis": "Coordinator-reviewed separate upper-left portrait; no positional OCR grouping is inferred.", "review_state": "verified" },
+      "action": "review",
+      "action_reason": "Verified illustration label has no retained OCR fragment membership; preserve pixels pending any separate membership evidence.",
+      "source_type": "reviewed illustration",
+      "glyph_support": "not applicable; no final OCR ID was supplied by A06",
+      "protected_context": "Complete upper-left portrait, line art, watercolor fills, and surrounding white background.",
+      "style_profile": "colored-handdrawn-illustration"
+    },
+    {
+      "owner_label_id": "s177-illustration-02",
+      "a06_review_state": "verified",
+      "a06_label": { "id": "s177-illustration-02", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "s177-owner-illustration-02", "container_id": "none", "fragment_member_identity": "none; illustration association has no retained OCR fragment", "geometry": { "coordinate_space": "source-pixels", "role": "illustration extent", "bbox": [900, 280, 530, 650] }, "confidence": 0.88, "evidence_basis": "Coordinator-reviewed separate upper-middle portrait; no positional OCR grouping is inferred.", "review_state": "verified" },
+      "action": "review",
+      "action_reason": "Verified illustration label has no retained OCR fragment membership; preserve pixels pending any separate membership evidence.",
+      "source_type": "reviewed illustration",
+      "glyph_support": "not applicable; no final OCR ID was supplied by A06",
+      "protected_context": "Complete upper-middle portrait, line art, watercolor fills, and surrounding white background.",
+      "style_profile": "colored-handdrawn-illustration"
+    },
+    {
+      "owner_label_id": "s177-illustration-03",
+      "a06_review_state": "verified",
+      "a06_label": { "id": "s177-illustration-03", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "s177-owner-illustration-03", "container_id": "none", "fragment_member_identity": "none; illustration association has no retained OCR fragment", "geometry": { "coordinate_space": "source-pixels", "role": "illustration extent", "bbox": [1450, 290, 480, 640] }, "confidence": 0.88, "evidence_basis": "Coordinator-reviewed separate upper-right portrait; no positional OCR grouping is inferred.", "review_state": "verified" },
+      "action": "review",
+      "action_reason": "Verified illustration label has no retained OCR fragment membership; preserve pixels pending any separate membership evidence.",
+      "source_type": "reviewed illustration",
+      "glyph_support": "not applicable; no final OCR ID was supplied by A06",
+      "protected_context": "Complete upper-right portrait, line art, watercolor fills, and surrounding white background.",
+      "style_profile": "colored-handdrawn-illustration"
+    },
+    {
+      "owner_label_id": "s177-illustration-04",
+      "a06_review_state": "verified",
+      "a06_label": { "id": "s177-illustration-04", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "s177-owner-illustration-04", "container_id": "none", "fragment_member_identity": "none; illustration association has no retained OCR fragment", "geometry": { "coordinate_space": "source-pixels", "role": "illustration extent", "bbox": [80, 1080, 610, 650] }, "confidence": 0.88, "evidence_basis": "Coordinator-reviewed separate lower-left portrait; no positional OCR grouping is inferred.", "review_state": "verified" },
+      "action": "review",
+      "action_reason": "Verified illustration label has no retained OCR fragment membership; preserve pixels pending any separate membership evidence.",
+      "source_type": "reviewed illustration",
+      "glyph_support": "not applicable; no final OCR ID was supplied by A06",
+      "protected_context": "Complete lower-left portrait, line art, watercolor fills, and surrounding white background.",
+      "style_profile": "colored-handdrawn-illustration"
+    },
+    {
+      "owner_label_id": "s177-illustration-05",
+      "a06_review_state": "verified",
+      "a06_label": { "id": "s177-illustration-05", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "s177-owner-illustration-05", "container_id": "none", "fragment_member_identity": "none; illustration association has no retained OCR fragment", "geometry": { "coordinate_space": "source-pixels", "role": "illustration extent", "bbox": [720, 1080, 610, 700] }, "confidence": 0.88, "evidence_basis": "Coordinator-reviewed separate lower-middle portrait; no positional OCR grouping is inferred.", "review_state": "verified" },
+      "action": "review",
+      "action_reason": "Verified illustration label has no retained OCR fragment membership; preserve pixels pending any separate membership evidence.",
+      "source_type": "reviewed illustration",
+      "glyph_support": "not applicable; no final OCR ID was supplied by A06",
+      "protected_context": "Complete lower-middle portrait, line art, watercolor fills, and surrounding white background.",
+      "style_profile": "colored-handdrawn-illustration"
+    },
+    {
+      "owner_label_id": "s177-illustration-06",
+      "a06_review_state": "verified",
+      "a06_label": { "id": "s177-illustration-06", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "s177-owner-illustration-06", "container_id": "none", "fragment_member_identity": "none; illustration association has no retained OCR fragment", "geometry": { "coordinate_space": "source-pixels", "role": "illustration extent", "bbox": [1400, 1030, 580, 720] }, "confidence": 0.88, "evidence_basis": "Coordinator-reviewed separate lower-right portrait; no positional OCR grouping is inferred.", "review_state": "verified" },
+      "action": "review",
+      "action_reason": "Verified illustration label has no retained OCR fragment membership; preserve pixels pending any separate membership evidence.",
+      "source_type": "reviewed illustration",
+      "glyph_support": "not applicable; no final OCR ID was supplied by A06",
+      "protected_context": "Complete lower-right portrait, line art, watercolor fills, and surrounding white background.",
+      "style_profile": "colored-handdrawn-illustration"
+    },
+    {
+      "owner_label_id": "s177-ocr-direct-text-0",
+      "a06_review_state": "unresolved",
+      "a06_label": { "id": "s177-ocr-direct-text-0", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region 142c2c8d-5e22-4f9c-a7bb-3bce9f8aaa8d; raw members absent", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [40, 0, 1188, 312] }, "confidence": 0.31, "evidence_basis": "The retained final region spans multiple handwritten heading lines; its crop and proximity do not prove one owner.", "review_state": "unresolved" },
+      "final_ocr_region_id": "142c2c8d-5e22-4f9c-a7bb-3bce9f8aaa8d",
+      "action": "review",
+      "action_reason": "A06 is unresolved and the final OCR extent spans multiple handwritten headings; no owner split or glyph boundary is safe.",
+      "source_type": "composite handwritten heading area",
+      "glyph_support": "not requested; preserve all source pixels and do not infer a cleanup mask",
+      "protected_context": "All handwritten heading lines, white background, and adjacent upper-left portrait art.",
+      "style_profile": "handwritten-title-on-white"
+    },
+    {
+      "owner_label_id": "s177-ocr-direct-text-1",
+      "a06_review_state": "unresolved",
+      "a06_label": { "id": "s177-ocr-direct-text-1", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region c9b0b80a-f74a-4e8e-95f8-eccd46cb31cf; raw members absent", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [220, 922, 484, 146] }, "confidence": 0.43, "evidence_basis": "A title is visibly below the first portrait, but the retained artifact cannot establish an owner/member relationship from placement alone.", "review_state": "unresolved" },
+      "final_ocr_region_id": "c9b0b80a-f74a-4e8e-95f8-eccd46cb31cf",
+      "action": "review",
+      "action_reason": "A06 is unresolved; visible proximity below a portrait is not source-membership evidence.",
+      "source_type": "handwritten title area with unresolved ownership",
+      "glyph_support": "not requested; preserve all source pixels and do not infer a cleanup mask",
+      "protected_context": "All title lettering, white background, and the adjacent lower-left portrait.",
+      "style_profile": "handwritten-title-on-white"
+    },
+    {
+      "owner_label_id": "s177-ocr-direct-text-2",
+      "a06_review_state": "unresolved",
+      "a06_label": { "id": "s177-ocr-direct-text-2", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region 5e552b84-beee-4dc7-90c8-d6a24e255a80; raw members absent", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [900, 912, 944, 108] }, "confidence": 0.18, "evidence_basis": "The source visibly contains separate title text under two portraits, while one retained final region fuses their span; no split is asserted.", "review_state": "unresolved" },
+      "final_ocr_region_id": "5e552b84-beee-4dc7-90c8-d6a24e255a80",
+      "action": "review",
+      "action_reason": "A06 identifies a fused final region over separate title text; no split, ownership, or glyph support is inferred.",
+      "source_type": "fused handwritten title area",
+      "glyph_support": "not requested; preserve all source pixels and do not infer a cleanup mask",
+      "protected_context": "Both title areas, all whitespace, and the two adjacent upper portraits.",
+      "style_profile": "handwritten-title-on-white"
+    },
+    {
+      "owner_label_id": "s177-ocr-direct-text-3",
+      "a06_review_state": "unresolved",
+      "a06_label": { "id": "s177-ocr-direct-text-3", "source_digest": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region 64a4b135-9e9c-4876-acf0-611154451e9b; raw members absent", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [100, 1692, 1886, 186] }, "confidence": 0.12, "evidence_basis": "The source visibly contains title text below three distinct lower portraits, while one retained final region covers the row; no split is asserted.", "review_state": "unresolved" },
+      "final_ocr_region_id": "64a4b135-9e9c-4876-acf0-611154451e9b",
+      "action": "review",
+      "action_reason": "A06 identifies a fused final region over three distinct title areas; no split, ownership, or glyph support is inferred.",
+      "source_type": "fused handwritten title row",
+      "glyph_support": "not requested; preserve all source pixels and do not infer a cleanup mask",
+      "protected_context": "All lower-row title lettering, whitespace, and the three adjacent lower portraits.",
+      "style_profile": "handwritten-title-on-white"
+    }
+  ],
+  "counts": { "reviewed_owner_labels": 10, "review": 10, "replace_candidate": 0, "preserve": 0, "a06_verified": 6, "a06_draft": 0, "a06_unresolved": 4 },
+  "final_ocr_coverage": {
+    "snapshot_final_ocr_regions": 4,
+    "a06_explicit_final_ocr_ids": 4,
+    "matched_explicit_final_ocr_ids": 4,
+    "labels_without_a06_final_ocr_id": 6,
+    "unavailable_reason": "The six illustration labels explicitly retain no OCR fragment; no final OCR IDs were fabricated."
+  },
+  "limitations": "This bounded packet does not complete A07. It creates no mask, cleanup asset, replacement text, membership assignment, ownership verification, or implementation authorization."
+}

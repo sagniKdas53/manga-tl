@@ -1,0 +1,91 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-single-fixture-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a06-c-20260911-controls/A06-C-owner-labels.controls.reviewed.json",
+    "review_rule": "Actions, source-style cues, and glyph-support expectations are source-pixel review annotations. They are not masks, cleanup assets, replacements, translations, or implementation authorization.",
+    "replacement_rule": "replace is an intended candidate action only. A later policy decision, approved glyph support, and validated cleanup remain required before pixels may change.",
+    "review_rule_for_pixels": "review preserves source pixels and creates no automatic cleanup or replacement text until a later explicit decision.",
+    "preservation_rule": "preserve forbids automatic cleanup and automatic replacement text."
+  },
+  "source": {
+    "sample": "sample47",
+    "language": "ja",
+    "script_variant": "Japanese vertical dialogue with free-standing combat effects",
+    "style": "bw_panel_manga",
+    "source_path": "corpus/samples/ja/sample47/source.jpg",
+    "source_digest": "00b19b4cd45c3410920dbdd6d16a8fc8d43f1e3692ad94af5922257d64658854",
+    "dimensions": { "width": 1029, "height": 1646 },
+    "review_artifacts": [
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample47-overview.png",
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample47-regions.png",
+      "../a06-c-20260911-controls/a04-exports/sample47/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "ja-vertical-balloon": {
+      "writing_mode": "vertical",
+      "rotation_degrees": 0,
+      "fill": "near-black solid source glyphs",
+      "stroke": "no separate outline observed",
+      "weight": "regular clean manga dialogue",
+      "source_background": "white balloon or locally bounded white dialogue field",
+      "confidence": "high",
+      "notes": "English layout remains local to the source container; vertical Japanese does not require vertical English."
+    },
+    "preserved-drawn-sfx": {
+      "writing_mode": "vertical or angled",
+      "rotation_degrees": 0,
+      "fill": "near-black hand-drawn effect lettering",
+      "stroke": "integral to the drawn effect",
+      "weight": "very bold emphatic display lettering",
+      "source_background": "combat art, speed lines, or adjacent character detail",
+      "confidence": "high",
+      "notes": "Preserve the complete source effect and adjacent art; no cleanup extent is inferred from the OCR box."
+    },
+    "preserved-decorative-mark": {
+      "writing_mode": "not applicable",
+      "rotation_degrees": 0,
+      "fill": "grey or black source mark",
+      "stroke": "integral or not distinguishable at this review resolution",
+      "weight": "decorative",
+      "source_background": "character and panel art",
+      "confidence": "high",
+      "notes": "This non-dialogue mark is retained without an automatic text or cleanup action."
+    },
+    "review-clipped-dialogue": {
+      "writing_mode": "vertical",
+      "rotation_degrees": 0,
+      "fill": "near-black source glyphs in a clipped page-edge extent",
+      "stroke": "not safely distinguishable at this review resolution",
+      "weight": "regular dialogue",
+      "source_background": "page edge and adjacent dialogue art",
+      "confidence": "low",
+      "notes": "The clipped extent remains source-pixel review only. It authorizes neither cleanup nor replacement text."
+    }
+  },
+  "labels": [
+    { "owner_label_id": "sample47-r001", "final_ocr_region_id": "332d4ad3-f207-4a05-9f96-c34f8abc6581", "action": "preserve", "action_reason": "Tiny non-dialogue decorative mark at the page edge.", "glyph_support": "not requested", "protected_context": "Complete mark, page edge, adjacent character art, and speed lines.", "style_profile": "preserved-decorative-mark" },
+    { "owner_label_id": "sample47-r002", "final_ocr_region_id": "2485050c-1868-4f45-8990-ac3578e7de7a", "action": "replace", "action_reason": "Independent vertical Japanese dialogue in a white bordered balloon.", "glyph_support": "required; include only black source glyphs and antialiased edges inside the white balloon interior", "protected_context": "Balloon border and tail, page edge, character art, and all pixels outside approved glyph support.", "style_profile": "ja-vertical-balloon" },
+    { "owner_label_id": "sample47-r003", "final_ocr_region_id": "bdb4653d-4d54-4587-9453-bcc5c183c6ae", "action": "replace", "action_reason": "Independent vertical Japanese dialogue in a white bordered balloon.", "glyph_support": "required; include only black source glyphs and antialiased edges inside the white balloon interior", "protected_context": "Balloon border and tail, character faces and hair, speed lines, and panel art.", "style_profile": "ja-vertical-balloon" },
+    { "owner_label_id": "sample47-r004", "final_ocr_region_id": "ee9ef209-2090-43b9-be75-2bdd737d2f0e", "action": "preserve", "action_reason": "Free-standing drawn effect beside character art, not ordinary dialogue.", "glyph_support": "not requested; preserve the complete effect without inferring a cleanup extent", "protected_context": "Complete effect lettering, character clothing, hair, and adjacent combat art.", "style_profile": "preserved-drawn-sfx" },
+    { "owner_label_id": "sample47-r005", "final_ocr_region_id": "2c40de81-14b9-4c77-ae97-13f3b17a5f8f", "action": "preserve", "action_reason": "Large free-standing impact effect, not ordinary dialogue.", "glyph_support": "not requested; preserve the complete effect without inferring a cleanup extent", "protected_context": "Complete impact lettering, speed lines, foreground character, and surrounding combat art.", "style_profile": "preserved-drawn-sfx" },
+    { "owner_label_id": "sample47-r006", "final_ocr_region_id": "7d982402-026b-4077-be9f-a56805568f82", "action": "preserve", "action_reason": "Free-standing impact effect over combat art, not ordinary dialogue.", "glyph_support": "not requested; preserve the complete effect without inferring a cleanup extent", "protected_context": "Complete impact lettering, speed lines, character and costume art, and panel borders.", "style_profile": "preserved-drawn-sfx" },
+    { "owner_label_id": "sample47-r007", "final_ocr_region_id": "51bef0c9-0002-4edf-bd4a-8fa675067667", "action": "replace", "action_reason": "Independent vertical Japanese dialogue in a locally bounded white dialogue field.", "glyph_support": "required; include only black source glyphs and antialiased edges within the local white text field", "protected_context": "Dialogue-field boundary, character face and hair, nearby speech field, and all pixels outside approved glyph support.", "style_profile": "ja-vertical-balloon" },
+    { "owner_label_id": "sample47-r008", "final_ocr_region_id": "63126af9-f45b-4021-bb76-4f4f13f24c85", "action": "replace", "action_reason": "Independent vertical Japanese dialogue in a locally bounded white dialogue field.", "glyph_support": "required; include only black source glyphs and antialiased edges within the local white text field", "protected_context": "Dialogue-field boundary, character face and hair, and adjacent speech fields.", "style_profile": "ja-vertical-balloon" },
+    { "owner_label_id": "sample47-r009", "final_ocr_region_id": "b695c036-8316-4c93-ab21-f5ad4ba3d7cd", "action": "replace", "action_reason": "Independent vertical Japanese dialogue in a white bordered balloon.", "glyph_support": "required; include only black source glyphs and antialiased edges inside the white balloon interior", "protected_context": "Balloon border and tail, combat pose, costume, speed lines, and panel art.", "style_profile": "ja-vertical-balloon" },
+    { "owner_label_id": "sample47-r010", "final_ocr_region_id": "63a64a5c-e4aa-4ea9-8dce-12b51cfe0c4f", "action": "replace", "action_reason": "Independent vertical Japanese dialogue in a white bordered balloon.", "glyph_support": "required; include only black source glyphs and antialiased edges inside the white balloon interior", "protected_context": "Balloon border and tail, page edge, character art, and adjacent speech field.", "style_profile": "ja-vertical-balloon" },
+    { "owner_label_id": "sample47-r011", "final_ocr_region_id": "9decbdea-ee8c-47f3-b8d2-0d2d7169aa0e", "action": "review", "action_reason": "The source extent is clipped at the page edge; its lettering and any safe support cannot be distinguished without a later explicit review.", "glyph_support": "not authorized; review preserves pixels and creates no cleanup or replacement text", "protected_context": "Entire clipped page-edge extent, adjacent speech field, character art, and all source pixels until reviewed.", "style_profile": "review-clipped-dialogue" },
+    { "owner_label_id": "sample47-r012", "final_ocr_region_id": "4891b9b7-6314-424b-b73b-1954dcbef986", "action": "replace", "action_reason": "Independent vertical Japanese dialogue in a white bordered balloon.", "glyph_support": "required; include only black source glyphs and antialiased edges inside the white balloon interior", "protected_context": "Balloon border and tail, character face and hair, motion effects, and adjacent combat art.", "style_profile": "ja-vertical-balloon" }
+  ],
+  "counts": { "reviewed_owner_labels": 12, "replace_candidate": 7, "preserve": 4, "review": 1, "explain": 0, "replace_with_required_glyph_support": 7, "preserved_drawn_sfx": 3, "preserved_decorative_marks": 1, "clipped_dialogue_review_case": 1 },
+  "coverage_findings": {
+    "ordinary_balloon_control": "covered by seven independent Japanese dialogue owners across a black-and-white combat page.",
+    "preserved_sfx": "covered by r004 through r006; all retain their source lettering and adjacent combat art.",
+    "review_policy": "r011 is a clipped-page-edge review item. It preserves pixels and authorizes neither cleanup nor replacement text.",
+    "protected_art": "recorded per label as balloon geometry, character, speed-line, combat, or page-edge exclusions; no cleanup asset is created.",
+    "unresolved": "This packet supplies no binary glyph support, cleanup patch, font selection, translated layout, or implementation authorization."
+  }
+}

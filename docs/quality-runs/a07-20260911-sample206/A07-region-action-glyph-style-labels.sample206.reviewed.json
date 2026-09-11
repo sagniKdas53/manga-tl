@@ -1,0 +1,82 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-single-fixture-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a06-c-20260911-controls/A06-C-owner-labels.controls.reviewed.json",
+    "review_rule": "Actions, source-style cues, and glyph-support expectations are source-pixel review annotations. They are not masks, cleanup assets, replacements, translations, or implementation authorization.",
+    "replacement_rule": "replace is an intended candidate action only. A later policy decision, approved glyph support, and validated cleanup remain required before pixels may change.",
+    "review_rule_for_pixels": "review preserves source pixels and creates no automatic cleanup or replacement text until a later explicit decision."
+  },
+  "source": {
+    "sample": "sample206",
+    "language": "zh",
+    "script_variant": "Traditional Chinese horizontal dialogue",
+    "style": "bw_panel_manga",
+    "source_path": "corpus/samples/zh/sample206/source.png",
+    "source_digest": "ea0a4df4821cededdd8e46aeff87f88f08e7fc1893ed92012dafceb72f03c419",
+    "dimensions": { "width": 2888, "height": 4093 },
+    "review_artifacts": [
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample206-overview.png",
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample206-regions.png",
+      "../a06-c-20260911-controls/a04-exports/sample206/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "zh-horizontal-balloon": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black solid Traditional Chinese glyphs",
+      "stroke": "no separate outline observed",
+      "weight": "regular clean manga dialogue",
+      "source_background": "white speech balloon interior with black border",
+      "confidence": "high",
+      "notes": "Any later English layout remains constrained to the individual source balloon; support excludes the border, tail, and all adjacent art."
+    }
+  },
+  "labels": [
+    {
+      "owner_label_id": "sample206-r001",
+      "final_ocr_region_id": "bec99df9-16ef-4e75-9d20-437ae32a3fcb",
+      "action": "replace",
+      "action_reason": "Independent Traditional Chinese dialogue in the large lower-right white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, adjacent r003 source glyphs, character hair, torso, hands, clothing line art, panel border, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample206-r002",
+      "final_ocr_region_id": "b1601050-f48a-436d-9df3-70e183146d91",
+      "action": "replace",
+      "action_reason": "Independent Traditional Chinese dialogue in the upper-left white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, character hair and shoulder, panel border, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample206-r003",
+      "final_ocr_region_id": "9f5ed55e-32a9-48fd-b7a1-c84b624fe952",
+      "action": "replace",
+      "action_reason": "Independent short Traditional Chinese dialogue extent in the lower-right white bordered speech balloon.",
+      "glyph_support": "required; include only this record's near-black source glyphs and antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, adjacent r001 source glyphs, character hair, torso, hands, clothing line art, panel border, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    }
+  ],
+  "counts": {
+    "reviewed_owner_labels": 3,
+    "replace_candidate": 3,
+    "preserve": 0,
+    "explain": 0,
+    "review": 0,
+    "replace_with_required_glyph_support": 3,
+    "outlined_glyph_owner": 0
+  },
+  "coverage_findings": {
+    "ordinary_balloon_control": "covered by three A06-C-reviewed Traditional Chinese dialogue owners in two white bordered balloons.",
+    "protected_art": "recorded per label as balloon border/tail, adjacent OCR glyphs, character, panel, and background exclusions; no bounded cleanup asset is created.",
+    "outlined_glyph": "not present in this fixture; no outlined-glyph support is inferred.",
+    "unresolved": "This packet supplies no binary mask, cleanup patch, font selection, replacement object, or implementation authorization. It does not complete A07."
+  }
+}

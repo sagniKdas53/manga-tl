@@ -1,0 +1,131 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-single-fixture-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a06-c-20260911-controls/A06-C-owner-labels.controls.reviewed.json",
+    "review_rule": "Actions, source-style cues, and glyph-support expectations are source-pixel review annotations. They are not masks, cleanup assets, replacements, translations, or implementation authorization.",
+    "replacement_rule": "replace is an intended candidate action only. A later policy decision, approved glyph support, and validated cleanup remain required before pixels may change.",
+    "preservation_rule": "preserve forbids automatic cleanup and automatic replacement text. The retained OCR record remains usable as non-raster metadata."
+  },
+  "source": {
+    "sample": "sample416",
+    "language": "ko",
+    "script_variant": "Korean horizontal dialogue with a Latin source logo",
+    "style": "color_panel_webcomic",
+    "source_path": "corpus/gaps/pending/ko/sample416/source.jpg",
+    "source_digest": "b9dfb8e7295ebdd166c1853966e9fb329a35d2d7afe5383f36a7f86893ca238f",
+    "dimensions": { "width": 1051, "height": 2048 },
+    "review_artifacts": [
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample416-overview.png",
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample416-regions.png",
+      "../a06-c-20260911-controls/a04-exports/sample416/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "ko-horizontal-balloon": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black solid Korean Hangul glyphs",
+      "stroke": "no separate outline observed",
+      "weight": "regular clean dialogue lettering",
+      "source_background": "white speech-balloon interior with black border",
+      "confidence": "high",
+      "notes": "The English layout remains constrained to the individual source balloon; glyph support excludes the balloon border, tail, and adjacent art."
+    },
+    "ko-bold-single-word-balloon": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black solid Korean Hangul glyph",
+      "stroke": "no separate outline observed",
+      "weight": "very bold single-word dialogue lettering",
+      "source_background": "white speech-balloon interior with black border",
+      "confidence": "high",
+      "notes": "The isolated emphatic word remains constrained to its balloon; its bold treatment does not authorize support outside visible glyphs."
+    },
+    "preserved-latin-series-logo": {
+      "writing_mode": "stacked horizontal",
+      "rotation_degrees": 0,
+      "fill": "white display Latin glyphs",
+      "stroke": "integral pale shadow or highlight treatment",
+      "weight": "bold decorative series logo",
+      "source_background": "cyan oval logo field with decorative stars and leaf mark",
+      "confidence": "high",
+      "notes": "The complete logo is non-dialogue source branding and is preserved with its cyan field and decorative marks; it is not a cleanup or replacement target."
+    }
+  },
+  "labels": [
+    {
+      "owner_label_id": "sample416-r001",
+      "final_ocr_region_id": "6cba527d-cde2-4e58-b2d0-a07f5fb7ef35",
+      "action": "preserve",
+      "action_reason": "Latin series logo, classified by A06-C as non-dialogue source branding.",
+      "glyph_support": "not requested; preserve the complete logo and cyan field rather than inferring a cleanup mask",
+      "protected_context": "Complete logo lettering, cyan oval, stars, leaf mark, white page margin, and nearby decorative graphics.",
+      "style_profile": "preserved-latin-series-logo"
+    },
+    {
+      "owner_label_id": "sample416-r002",
+      "final_ocr_region_id": "55360471-9fe2-4dd4-bf8e-ac3216bb8458",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, ceiling and room background, character hair, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample416-r003",
+      "final_ocr_region_id": "ee2a5434-c41f-4e5a-bf1e-95155c3a9001",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, character hair and face, room background, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample416-r004",
+      "final_ocr_region_id": "92eb7c30-7e0f-4c09-92b4-580033fe04cc",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, foreground hand, character hair and face, room background, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample416-r005",
+      "final_ocr_region_id": "b79e8bea-28f2-41c0-8cff-055f4c703b18",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, character hair, raised hands, room background, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample416-r006",
+      "final_ocr_region_id": "64dc15a9-3e9d-4892-aef7-0d95132d22f7",
+      "action": "replace",
+      "action_reason": "Independent emphatic single-word Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyph and its antialiased edge inside the white balloon interior",
+      "protected_context": "Balloon border and tail, character hands and hair, room background, and all pixels outside approved glyph support.",
+      "style_profile": "ko-bold-single-word-balloon"
+    }
+  ],
+  "counts": {
+    "reviewed_owner_labels": 6,
+    "replace_candidate": 5,
+    "preserve": 1,
+    "explain": 0,
+    "review": 0,
+    "replace_with_required_glyph_support": 5,
+    "preserved_latin_series_logo": 1,
+    "outlined_glyph_owner": 0
+  },
+  "coverage_findings": {
+    "ordinary_balloon_control": "covered by r002 through r006, five independent Korean horizontal dialogue owners in white bordered balloons, including a bold single-word case.",
+    "preserved_non_dialogue": "r001 preserves the observed Latin series logo and its cyan field as source branding.",
+    "protected_art": "recorded per label as balloon border/tail, character, logo, panel, or background exclusions; no bounded cleanup asset is created.",
+    "outlined_glyph": "not present in this fixture; no outlined-glyph support is inferred.",
+    "unresolved": "This packet supplies no binary mask, cleanup patch, font selection, replacement text, or implementation authorization. It does not complete A07."
+  }
+}

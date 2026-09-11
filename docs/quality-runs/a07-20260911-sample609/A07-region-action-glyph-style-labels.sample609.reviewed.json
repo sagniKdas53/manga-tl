@@ -1,0 +1,204 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-single-fixture-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a06-c-20260911-controls/A06-C-owner-labels.controls.reviewed.json",
+    "review_rule": "Actions, source-style cues, and glyph-support expectations are source-pixel review annotations. They are not masks, cleanup assets, replacements, translations, or implementation authorization.",
+    "replacement_rule": "replace is an intended candidate action only. A later policy decision, approved glyph support, and validated cleanup remain required before pixels may change.",
+    "preservation_rule": "preserve forbids automatic cleanup and automatic replacement text. The retained OCR record remains usable as non-raster metadata.",
+    "review_rule_for_pixels": "review preserves source pixels and creates no automatic cleanup or replacement text until a later explicit decision."
+  },
+  "source": {
+    "sample": "sample609",
+    "language": "zh",
+    "script_variant": "Traditional Chinese horizontal dialogue; Japanese costume lettering; Latin numeral counters and credit",
+    "style": "color_panel_webcomic",
+    "source_path": "corpus/gaps/pending/zh/sample609/source.jpg",
+    "source_digest": "dfb5a780a819a1db0982e699c50999b3fd6f2c0852384c21b9bc7122625ebb0d",
+    "dimensions": {
+      "width": 1381,
+      "height": 2048
+    },
+    "review_artifacts": [
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample609-overview.png",
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample609-regions.png",
+      "../a06-c-20260911-controls/a04-exports/sample609/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "zh-horizontal-balloon": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black solid Traditional Chinese glyphs",
+      "stroke": "no separate outline observed",
+      "weight": "bold clean dialogue lettering",
+      "source_background": "white speech balloon interior with black border",
+      "confidence": "high",
+      "notes": "The English layout remains constrained to the individual source balloon; horizontal source writing does not authorize changes outside approved glyph support."
+    },
+    "zh-horizontal-thought-balloon": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black solid Traditional Chinese glyphs",
+      "stroke": "no separate outline observed",
+      "weight": "bold clean internal-dialogue lettering",
+      "source_background": "white thought balloon interior with black border and trailing thought marks",
+      "confidence": "high",
+      "notes": "The thought-balloon outline and trailing marks are protected container pixels, not approved glyph support."
+    },
+    "preserved-costume-lettering": {
+      "writing_mode": "vertical",
+      "rotation_degrees": 0,
+      "fill": "light source lettering on dark costume fabric",
+      "stroke": "integral to the costume graphic",
+      "weight": "decorative costume lettering",
+      "source_background": "dark shirt and adjacent character art",
+      "confidence": "high",
+      "notes": "This A06-C non-dialogue item is preserved with the costume artwork and is not a cleanup target."
+    },
+    "preserved-counter": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black hand-drawn Latin numerals",
+      "stroke": "no separate outline observed",
+      "weight": "bold hand-drawn counter lettering",
+      "source_background": "small white count balloon with black border",
+      "confidence": "high",
+      "notes": "The counters are non-dialogue source content and are preserved with their complete count balloons."
+    },
+    "preserved-small-sfx": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black small source effect lettering",
+      "stroke": "integral to the drawn effect",
+      "weight": "small emphatic effect",
+      "source_background": "character clothing and adjacent art",
+      "confidence": "high",
+      "notes": "This A06-C non-dialogue effect is preserved; no cleanup is inferred from its OCR box."
+    },
+    "preserved-credit": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black Latin credit lettering",
+      "stroke": "no separate outline observed",
+      "weight": "small credit lettering",
+      "source_background": "wood floor and page edge",
+      "confidence": "high",
+      "notes": "The credit is non-dialogue source content and is not a replacement or cleanup target."
+    }
+  },
+  "labels": [
+    {
+      "owner_label_id": "sample609-r001",
+      "final_ocr_region_id": "026b51b7-2e89-4eb3-8d63-abc2e4629d90",
+      "action": "preserve",
+      "action_reason": "A06-C classifies the vertical costume lettering as non-dialogue.",
+      "glyph_support": "not requested; preserve the complete costume lettering rather than inferring a cleanup mask",
+      "protected_context": "Complete costume lettering, dark shirt fabric, character face and hair, and adjacent clothing art.",
+      "style_profile": "preserved-costume-lettering"
+    },
+    {
+      "owner_label_id": "sample609-r002",
+      "final_ocr_region_id": "a7959254-11bd-475f-a36f-be0d07146a79",
+      "action": "preserve",
+      "action_reason": "A06-C classifies the observed '48' count as non-dialogue source content.",
+      "glyph_support": "not requested; preserve the complete counter and its count balloon rather than inferring a cleanup mask",
+      "protected_context": "Complete '48' lettering, count-balloon border and tail, nearby character art, and background pixels.",
+      "style_profile": "preserved-counter"
+    },
+    {
+      "owner_label_id": "sample609-r003",
+      "final_ocr_region_id": "2146a339-13f4-46a3-8ce2-872b3d13ada3",
+      "action": "replace",
+      "action_reason": "Independent Traditional Chinese dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, character hair and face, wall background, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample609-r004",
+      "final_ocr_region_id": "4f741d7d-350d-408d-a1d9-2c2723f06bc8",
+      "action": "preserve",
+      "action_reason": "A06-C classifies this small source effect as non-dialogue.",
+      "glyph_support": "not requested; preserve the complete effect rather than inferring a cleanup mask",
+      "protected_context": "Complete small effect lettering, character clothing and hair, and adjacent source art.",
+      "style_profile": "preserved-small-sfx"
+    },
+    {
+      "owner_label_id": "sample609-r005",
+      "final_ocr_region_id": "2cf8a716-2a70-4204-90ef-8726bc414601",
+      "action": "preserve",
+      "action_reason": "A06-C classifies the observed '50' count as non-dialogue source content.",
+      "glyph_support": "not requested; preserve the complete counter and its count balloon rather than inferring a cleanup mask",
+      "protected_context": "Complete '50' lettering, count-balloon border and tail, nearby character art, and background pixels.",
+      "style_profile": "preserved-counter"
+    },
+    {
+      "owner_label_id": "sample609-r006",
+      "final_ocr_region_id": "c43a6c6a-4c0d-4592-9b20-6ccb6511753a",
+      "action": "preserve",
+      "action_reason": "A06-C classifies the lower-page credit as non-dialogue.",
+      "glyph_support": "not requested; preserve the complete credit rather than inferring a cleanup mask",
+      "protected_context": "Complete credit lettering, wood floor, page edge, and adjacent background pixels.",
+      "style_profile": "preserved-credit"
+    },
+    {
+      "owner_label_id": "sample609-r007",
+      "final_ocr_region_id": "fc738736-86b9-49f8-b5a4-9080b2d753fa",
+      "action": "replace",
+      "action_reason": "Independent Traditional Chinese dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, character hair and face, wall background, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample609-r008",
+      "final_ocr_region_id": "65ef5d5e-4a6a-4b2d-897e-24a86b696414",
+      "action": "replace",
+      "action_reason": "Independent Traditional Chinese dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, character hair and face, white wall background, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample609-r009",
+      "final_ocr_region_id": "d620e1a1-1f9b-4dc6-ae37-a575f03167fe",
+      "action": "replace",
+      "action_reason": "Independent Traditional Chinese internal dialogue in a white thought balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white thought-balloon interior",
+      "protected_context": "Thought-balloon border and trailing thought marks, character hair and face, white wall background, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-thought-balloon"
+    },
+    {
+      "owner_label_id": "sample609-r010",
+      "final_ocr_region_id": "1a9ff9fe-f4bb-4f45-9c80-9c4fb76282c8",
+      "action": "preserve",
+      "action_reason": "A06-C classifies the observed '49' count as non-dialogue source content.",
+      "glyph_support": "not requested; preserve the complete counter and its count balloon rather than inferring a cleanup mask",
+      "protected_context": "Complete '49' lettering, count-balloon border and tail, nearby character art, and background pixels.",
+      "style_profile": "preserved-counter"
+    }
+  ],
+  "counts": {
+    "reviewed_owner_labels": 10,
+    "replace_candidate": 4,
+    "preserve": 6,
+    "explain": 0,
+    "review": 0,
+    "replace_with_required_glyph_support": 4,
+    "preserved_counter": 3,
+    "preserved_costume_lettering": 1,
+    "preserved_small_sfx": 1,
+    "preserved_credit": 1,
+    "outlined_glyph_owner": 0
+  },
+  "coverage_findings": {
+    "ordinary_balloon_control": "covered by r003, r007, r008, and r009: three speech balloons and one thought balloon with Traditional Chinese dialogue.",
+    "preserved_non_dialogue": "r001, r002, r004, r005, r006, and r010 retain the observed costume lettering, counters, small effect, and source credit with their art context.",
+    "protected_art": "recorded per label as balloon border/tail, thought marks, character, costume, wall, wood floor, or page-edge exclusions; no bounded cleanup asset is created.",
+    "outlined_glyph": "not present in this fixture. It remains a required cross-fixture A07 coverage case.",
+    "unresolved": "No reviewed final OCR record is ambiguous in this fixture. This packet supplies no binary mask, cleanup patch, font selection, or implementation authorization."
+  }
+}

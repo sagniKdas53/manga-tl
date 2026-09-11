@@ -1,0 +1,131 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-single-fixture-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a06-c-20260911-controls/A06-C-owner-labels.controls.reviewed.json",
+    "review_rule": "Actions, source-style cues, and glyph-support expectations are source-pixel review annotations. They are not masks, cleanup assets, replacements, translations, or implementation authorization.",
+    "replacement_rule": "replace is an intended candidate action only. A later policy decision, approved glyph support, and validated cleanup remain required before pixels may change.",
+    "review_rule_for_pixels": "review preserves source pixels and creates no automatic cleanup or replacement text until a later explicit decision."
+  },
+  "source": {
+    "sample": "sample320",
+    "language": "ko",
+    "script_variant": "Korean horizontal dialogue, translucent narration captions, and a page title",
+    "style": "color_four_panel_strip",
+    "source_path": "corpus/gaps/pending/ko/sample320/source.jpg",
+    "source_digest": "1bf2b9de55340209f608e6fa8cf17f78bb65136305cde493cfff8385fe967316",
+    "dimensions": { "width": 600, "height": 1388 },
+    "review_artifacts": [
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample320-overview.png",
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample320-regions.png",
+      "../a06-c-20260911-controls/a04-exports/sample320/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "ko-horizontal-balloon": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black solid Korean Hangul glyphs",
+      "stroke": "no separate outline observed",
+      "weight": "regular clean dialogue lettering",
+      "source_background": "white speech-balloon interior with black border",
+      "confidence": "high",
+      "notes": "The English layout remains constrained to the individual source balloon; glyph support excludes the balloon border, tail, and adjacent art."
+    },
+    "ko-translucent-caption-over-art": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "muted blue-grey source glyphs",
+      "stroke": "no separate outline observed",
+      "weight": "medium caption lettering",
+      "source_background": "pale translucent rectangular treatment over panel art",
+      "confidence": "high",
+      "notes": "The caption treatment overlaps or is inseparable from source art at this review resolution. Review preserves pixels and supplies no cleanup support."
+    },
+    "ko-horizontal-page-title": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "muted pink source glyphs",
+      "stroke": "no separate outline observed",
+      "weight": "medium page-heading lettering",
+      "source_background": "white page margin",
+      "confidence": "high",
+      "notes": "The title is a free-standing page label, not a dialogue container or automatic cleanup target."
+    }
+  },
+  "labels": [
+    {
+      "owner_label_id": "sample320-r001",
+      "final_ocr_region_id": "934dfa9f-8b44-47d3-aba7-1ea8cd08b534",
+      "action": "review",
+      "action_reason": "Free-standing translucent narration caption over source panel art; its safe support and replacement policy require a later explicit decision.",
+      "glyph_support": "not authorized; review preserves the caption treatment and creates no mask, cleanup, or replacement text",
+      "protected_context": "Complete translucent caption treatment, starry background, character silhouettes, railing line art, and all adjacent panel pixels.",
+      "style_profile": "ko-translucent-caption-over-art"
+    },
+    {
+      "owner_label_id": "sample320-r002",
+      "final_ocr_region_id": "bd41086b-d2f3-4321-a805-e4fccb835e46",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, moonlit background, railing, character silhouette, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample320-r003",
+      "final_ocr_region_id": "57931099-6b89-416b-a63f-d650554665f0",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, character hair and ears, starry background, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample320-r004",
+      "final_ocr_region_id": "d2cef538-1690-4660-9e7e-2131027da513",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, character hair and face, starry background, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample320-r005",
+      "final_ocr_region_id": "0b1a355e-e249-433e-82d9-97cb527724d3",
+      "action": "review",
+      "action_reason": "Free-standing translucent narration caption over source art; its safe support and replacement policy require a later explicit decision.",
+      "glyph_support": "not authorized; review preserves the caption treatment and creates no mask, cleanup, or replacement text",
+      "protected_context": "Complete translucent caption treatment, character hair and clothing, panel edge, starry background, and all adjacent panel pixels.",
+      "style_profile": "ko-translucent-caption-over-art"
+    },
+    {
+      "owner_label_id": "sample320-r006",
+      "final_ocr_region_id": "ac1c2a3a-ff9a-4612-9998-55f2d6cc64cb",
+      "action": "explain",
+      "action_reason": "Free-standing page title; any translation is a note or transcript decision, not authorization to replace source title pixels.",
+      "glyph_support": "not requested; explain creates no source cleanup or automatic page text object",
+      "protected_context": "Complete title lettering, white page margin, and adjacent panel border and light effects.",
+      "style_profile": "ko-horizontal-page-title"
+    }
+  ],
+  "counts": {
+    "reviewed_owner_labels": 6,
+    "replace_candidate": 3,
+    "preserve": 0,
+    "explain": 1,
+    "review": 2,
+    "replace_with_required_glyph_support": 3,
+    "reviewed_translucent_caption": 2,
+    "outlined_glyph_owner": 0
+  },
+  "coverage_findings": {
+    "ordinary_balloon_control": "covered by r002 through r004, three independent Korean horizontal dialogue owners in white bordered balloons.",
+    "protected_free_standing_text": "r001 and r005 are translucent captions retained as pixel-preserving review cases, while r006 is explain-only page-title text.",
+    "protected_art": "recorded per label as balloon border/tail, character, panel, title margin, or background exclusions; no bounded cleanup asset is created.",
+    "outlined_glyph": "not present in this fixture; no outlined-glyph support is inferred.",
+    "unresolved": "r001 and r005 remain review-only. This packet supplies no binary mask, cleanup patch, font selection, replacement text, or implementation authorization. It does not complete A07."
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-evidence-only-child-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a03a04-20260910-retained/A06-owner-labels.draft.json",
+    "review_rule": "review preserves source pixels. It is not a cleanup mask, replacement authorization, source-membership inference, or verified ownership promotion.",
+    "final_ocr_rule": "A final OCR region ID is recorded only when the corresponding A06 label explicitly supplies one."
+  },
+  "source": {
+    "sample": "sample222",
+    "language": "ja",
+    "source_path": "corpus/samples/ja/sample222/source.png",
+    "source_digest": "990b1c3b2032e628d4aa6f737d539dd39ae325771369651a3b7c975bbb594738",
+    "dimensions": { "width": 4093, "height": 2894 },
+    "review_artifacts": [
+      "../a03a04-20260910-retained/A06-owner-labels.draft.json",
+      "../a03a04-20260910-retained/manifest.json",
+      "../a03a04-20260910-retained/a04-exports/sample222/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "fused-color-cover-composite": {
+      "source_style": "color cover artwork with multiple independent typographic treatments and illustration",
+      "glyph_support": "not requested; the retained region is page-scale and no independent source membership is available",
+      "protected_art": "all cover typography, colored artwork, background, and border elements",
+      "notes": "A page-scale OCR region cannot supply a cleanup mask or a safe replacement boundary."
+    }
+  },
+  "labels": [
+    {
+      "owner_label_id": "s222-fused-page-region",
+      "a06_review_state": "unresolved",
+      "a06_label": { "id": "s222-fused-page-region", "source_digest": "990b1c3b2032e628d4aa6f737d539dd39ae325771369651a3b7c975bbb594738", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region 6b11ce4b-878b-4ab9-bf10-f0cc14b5f47d; raw members absent", "geometry": { "coordinate_space": "source-pixels", "role": "final OCR bbox", "bbox": [59, 11, 2986, 2882] }, "confidence": 0.0, "evidence_basis": "The exact source has many independent cover labels and headers. The current OCR artifact is a monolithic page-sized composite and its QA explicitly requires segmentation; no owner is inferred.", "review_state": "unresolved" },
+      "final_ocr_region_id": "6b11ce4b-878b-4ab9-bf10-f0cc14b5f47d",
+      "action": "review",
+      "action_reason": "A06 and retained QA identify a monolithic composite across independent cover labels, headers, and artwork; segmentation and source membership remain unavailable.",
+      "source_type": "fused page-scale cover composite",
+      "glyph_support": "not requested; preserve all source pixels and do not infer a cleanup mask",
+      "protected_context": "All independent typography, colored illustration, background field, and cover border elements.",
+      "style_profile": "fused-color-cover-composite"
+    }
+  ],
+  "counts": { "reviewed_owner_labels": 1, "review": 1, "replace_candidate": 0, "preserve": 0, "a06_verified": 0, "a06_draft": 0, "a06_unresolved": 1 },
+  "final_ocr_coverage": {
+    "snapshot_final_ocr_regions": 1,
+    "a06_explicit_final_ocr_ids": 1,
+    "matched_explicit_final_ocr_ids": 1,
+    "labels_without_a06_final_ocr_id": 0,
+    "unavailable_reason": "The sole final OCR ID is retained only as evidence of the fused region, not as a source segmentation or cleanup boundary."
+  },
+  "limitations": "This bounded packet does not complete A07. It creates no segmentation, mask, cleanup asset, replacement text, membership assignment, ownership verification, or implementation authorization."
+}

@@ -1,0 +1,107 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-single-fixture-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a06-c-20260911-controls/A06-C-owner-labels.controls.reviewed.json",
+    "review_rule": "Actions, source-style cues, and glyph-support expectations are source-pixel review annotations. They are not masks, cleanup assets, replacements, translations, or implementation authorization.",
+    "replacement_rule": "replace is an intended candidate action only. A later policy decision, approved glyph support, and validated cleanup remain required before pixels may change.",
+    "preservation_rule": "preserve forbids automatic cleanup and automatic replacement text. The retained OCR record remains usable as non-raster metadata.",
+    "ambiguity_rule": "Ambiguous source text must remain review; this packet assigns no action to image content without a matching final OCR region."
+  },
+  "source": {
+    "sample": "sample611",
+    "language": "zh",
+    "script_variant": "Traditional Chinese horizontal dialogue; white handwritten Latin media counters",
+    "style": "bw_single_panel_dialogue",
+    "source_path": "corpus/gaps/pending/zh/sample611/source.jpg",
+    "source_digest": "0a8d82a152fb13b8d9e0e6b85ebada0c48669a1685d09e73f3c6f471b35a7bab",
+    "dimensions": {
+      "width": 1920,
+      "height": 1891
+    },
+    "review_artifacts": [
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample611-overview.png",
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample611-regions.png",
+      "../a06-c-20260911-controls/a04-exports/sample611/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "zh-horizontal-balloon": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black solid Traditional Chinese glyphs",
+      "stroke": "no separate outline observed",
+      "weight": "bold clean dialogue lettering",
+      "source_background": "white speech balloon interior with black border",
+      "confidence": "high",
+      "notes": "The English layout remains constrained to the individual source balloon; horizontal source writing does not authorize changes outside approved glyph support."
+    },
+    "preserved-media-counter": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "white handwritten Latin numerals, parentheses, and slash",
+      "stroke": "no separate outline observed",
+      "weight": "light handwritten counter lettering",
+      "source_background": "black media-frame strip over embedded image content",
+      "confidence": "high",
+      "notes": "The counter is non-dialogue source content and is preserved with its black strip and adjacent media image; it is not a cleanup or replacement target."
+    }
+  },
+  "labels": [
+    {
+      "owner_label_id": "sample611-r001",
+      "final_ocr_region_id": "4680a669-eb0e-4de6-902a-22cf811bcf01",
+      "action": "replace",
+      "action_reason": "Independent Traditional Chinese dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, character hair and bow behind the balloon, face and clothing line art, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample611-r002",
+      "final_ocr_region_id": "d823c2b1-a2df-41dc-b326-e7396709825e",
+      "action": "preserve",
+      "action_reason": "White '(1/3)' media counter on a black embedded-image strip, classified by A06-C as non-dialogue.",
+      "glyph_support": "not requested; preserve the complete counter and its black strip rather than inferring a cleanup mask",
+      "protected_context": "Complete '(1/3)' lettering, black media-frame strip, embedded portrait image, and adjacent character and background art.",
+      "style_profile": "preserved-media-counter"
+    },
+    {
+      "owner_label_id": "sample611-r003",
+      "final_ocr_region_id": "0a47c410-e2ea-4d38-bf70-ef7f9eb4e1d7",
+      "action": "replace",
+      "action_reason": "Independent Traditional Chinese dialogue in a separate white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges within the local white balloon interior",
+      "protected_context": "Balloon border and tail, character clothing and hair, panel art, and all pixels outside approved glyph support.",
+      "style_profile": "zh-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample611-r004",
+      "final_ocr_region_id": "08ecc76b-da78-454c-a165-7fc38ac2b39f",
+      "action": "preserve",
+      "action_reason": "White '(3/3)' media counter on a black embedded-image strip, classified by A06-C as non-dialogue.",
+      "glyph_support": "not requested; preserve the complete counter and its black strip rather than inferring a cleanup mask",
+      "protected_context": "Complete '(3/3)' lettering, black media-frame strip, embedded image content, and adjacent character and background art.",
+      "style_profile": "preserved-media-counter"
+    }
+  ],
+  "counts": {
+    "reviewed_owner_labels": 4,
+    "replace_candidate": 2,
+    "preserve": 2,
+    "explain": 0,
+    "review": 0,
+    "replace_with_required_glyph_support": 2,
+    "preserved_media_counter": 2,
+    "outlined_glyph_owner": 0
+  },
+  "coverage_findings": {
+    "ordinary_balloon_control": "covered by r001 and r003, two independent Traditional Chinese dialogue owners in white bordered balloons.",
+    "preserved_non_dialogue": "covered by r002 and r004, which retain the observed media counters and their embedded-image context.",
+    "protected_art": "recorded per label as balloon border/tail, character, panel, media-frame, or embedded-image exclusions; no bounded cleanup asset is created.",
+    "outlined_glyph": "not present in this fixture. It remains a required cross-fixture A07 coverage case.",
+    "unresolved": "No reviewed final OCR record is ambiguous in this fixture. Image content without a matching final OCR record receives no inferred action. This packet supplies no binary mask, cleanup patch, font selection, or implementation authorization."
+  }
+}

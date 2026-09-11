@@ -1,0 +1,63 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-single-fixture-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a03a04-20260910-retained/A06-owner-labels.draft.json",
+    "provenance_rule": "Each row retains its A06 draft or unresolved state. A07 does not verify ownership, infer raw fragment membership, or alter A06 confidence.",
+    "review_rule": "review preserves source pixels and authorizes neither cleanup nor replacement text.",
+    "replacement_rule": "replace is a candidate action only; later approval, glyph support, and validated cleanup remain required before pixels may change.",
+    "preservation_rule": "preserve forbids automatic cleanup and automatic replacement text."
+  },
+  "source": {
+    "sample": "sample83",
+    "language": "ja",
+    "script_variant": "Japanese vertical dialogue over coloured illustration art",
+    "style": "colour_illustration_manga",
+    "source_path": "corpus/samples/ja/sample83/source.jpg",
+    "source_digest": "508d4269d36317c7e38f263b84398fdf10ad36d2c1441097969cf8e0cff0e8ab",
+    "dimensions": { "width": 1412, "height": 2000 },
+    "review_artifacts": [
+      "../a03a04-20260910-retained/A06-owner-labels.draft.json",
+      "../a03a04-20260910-retained/manifest.json",
+      "../a03a04-20260910-retained/a04-exports/sample83/page-snapshot.json",
+      "../a03a04-20260910-retained/a04-exports/sample83/project/original.png"
+    ]
+  },
+  "shared_style_profiles": {
+    "ja-vertical-dialogue-on-art": {
+      "writing_mode": "vertical",
+      "rotation_degrees": 0,
+      "fill": "red source glyphs",
+      "stroke": "integral light outline",
+      "weight": "bold manga dialogue",
+      "source_background": "blue bedding and adjacent character art",
+      "confidence": "high",
+      "notes": "Future English layout remains local to the reviewed dialogue field; no cleanup extent is supplied."
+    },
+    "review-unresolved-or-uncertain-mark": {
+      "writing_mode": "not safely determined",
+      "rotation_degrees": 0,
+      "fill": "not authorized",
+      "stroke": "not authorized",
+      "weight": "not safely determined",
+      "source_background": "mixed dialogue, illustration art, and detector extent",
+      "confidence": "low",
+      "notes": "Pixel-preserving review only; no glyph support, cleanup extent, or replacement text is authorized."
+    }
+  },
+  "labels": [
+    { "owner_label_id": "s83-r01", "a06_provenance": { "review_state": "unresolved", "owner_id": "unresolved", "container_id": "unresolved", "fragment_member_identity": "final OCR region a747b607-a84e-42dd-ac0e-521eff25bb45; raw members absent" }, "final_ocr_region_id": "a747b607-a84e-42dd-ac0e-521eff25bb45", "action": "review", "action_reason": "The retained final extent crosses right dialogue, central art, and other source text with raw members absent; no owner split is inferred.", "glyph_support": "not authorized; review preserves pixels and creates no cleanup or replacement text", "protected_context": "Entire broad extent, all dialogue, sound effects, character art, bedding, and every source pixel until later review.", "style_profile": "review-unresolved-or-uncertain-mark" },
+    { "owner_label_id": "s83-r02", "a06_provenance": { "review_state": "draft", "owner_id": "s83-owner-r02", "container_id": "none", "fragment_member_identity": "final OCR region 66fdd10d-5cbf-46a2-9c47-d482caf4bb93" }, "final_ocr_region_id": "66fdd10d-5cbf-46a2-9c47-d482caf4bb93", "action": "review", "action_reason": "A06 retains a local standalone mark, but its source type and a safe support boundary are not sufficiently certain for preservation or replacement.", "glyph_support": "not authorized; review preserves pixels and creates no cleanup or replacement text", "protected_context": "Entire small-mark extent, adjacent dialogue lettering, character art, bedding detail, and every source pixel until later review.", "style_profile": "review-unresolved-or-uncertain-mark" },
+    { "owner_label_id": "s83-r03", "a06_provenance": { "review_state": "draft", "owner_id": "s83-owner-r03", "container_id": "none", "fragment_member_identity": "final OCR region 19b4f103-0d59-40c0-aa58-e2bf3463676d" }, "final_ocr_region_id": "19b4f103-0d59-40c0-aa58-e2bf3463676d", "action": "replace", "action_reason": "A separately bounded left vertical dialogue field is clearly visible and remains separate from central art and right dialogue.", "glyph_support": "required if later approved; include only visible red glyphs, integral light outline, and antialiased edges within the local dialogue field", "protected_context": "Adjacent character art, bedding folds, nearby small marks, and all pixels outside approved glyph support.", "style_profile": "ja-vertical-dialogue-on-art" }
+  ],
+  "counts": { "reviewed_owner_labels": 3, "a06_draft": 2, "a06_unresolved": 1, "replace_candidate": 1, "preserve": 0, "review": 2, "explain": 0, "replace_with_required_glyph_support": 1 },
+  "final_ocr_coverage": { "a06_records": 3, "records_with_explicit_final_ocr_region_id": 3, "records_without_explicit_final_ocr_region_id": 0, "snapshot_ocr_regions": 3, "matched_explicit_snapshot_ids": 3, "unavailable_final_ocr_records": [] },
+  "coverage_findings": {
+    "provenance": "Both A06 draft records remain draft and the A06 unresolved record remains unresolved; no ownership was promoted to verified.",
+    "review_policy": "r01 remains review-only because it is fused and lacks raw membership; r02 remains review-only because its source type is uncertain.",
+    "protected_art": "Protected context is recorded per label; no cleanup mask, binary glyph asset, replacement object, translated layout, font, or implementation authorization is created.",
+    "completion": "This bounded packet is for coordinator review only and does not complete A07, G0, or any later gate."
+  }
+}

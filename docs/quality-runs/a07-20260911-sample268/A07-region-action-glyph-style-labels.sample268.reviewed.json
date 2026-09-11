@@ -1,0 +1,159 @@
+{
+  "schema_version": "a07-region-action-glyph-style-labels-reviewed/v1",
+  "task": "A07",
+  "status": "reviewed-single-fixture-packet",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "input_owner_labels": "../a06-c-20260911-controls/A06-C-owner-labels.controls.reviewed.json",
+    "review_rule": "Actions, source-style cues, and glyph-support expectations are source-pixel review annotations. They are not masks, cleanup assets, replacements, translations, or implementation authorization.",
+    "replacement_rule": "replace is an intended candidate action only. A later policy decision, approved glyph support, and validated cleanup remain required before pixels may change.",
+    "preservation_rule": "preserve forbids automatic cleanup and automatic replacement text. The retained OCR record remains usable as non-raster metadata."
+  },
+  "source": {
+    "sample": "sample268",
+    "language": "ko",
+    "script_variant": "Korean horizontal dialogue with a UI meter and directional indicator",
+    "style": "color_panel_webcomic",
+    "source_path": "corpus/gaps/pending/ko/sample268/source.jpg",
+    "source_digest": "50168dcf479c8ca0b66ac125feb7c13646cf1260b9975d6e6e62c06717bd1a7d",
+    "dimensions": { "width": 1451, "height": 2048 },
+    "review_artifacts": [
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample268-overview.png",
+      "../a06-c-20260911-controls/a06-c-review-sheets/sample268-regions.png",
+      "../a06-c-20260911-controls/a04-exports/sample268/page-snapshot.json"
+    ]
+  },
+  "shared_style_profiles": {
+    "ko-horizontal-balloon": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black solid Korean Hangul glyphs",
+      "stroke": "no separate outline observed",
+      "weight": "bold clean dialogue lettering",
+      "source_background": "white speech-balloon interior with black border",
+      "confidence": "high",
+      "notes": "The English layout remains constrained to the individual source balloon; glyph support excludes the balloon border, tail, and adjacent art."
+    },
+    "preserved-ui-meter": {
+      "writing_mode": "horizontal",
+      "rotation_degrees": 0,
+      "fill": "near-black percentage glyphs",
+      "stroke": "no separate glyph outline observed",
+      "weight": "bold UI readout",
+      "source_background": "white meter with black outline and red fill segment",
+      "confidence": "high",
+      "notes": "The meter is non-dialogue source UI and is preserved complete rather than treated as a cleanup or replacement target."
+    },
+    "preserved-direction-indicator": {
+      "writing_mode": "vertical",
+      "rotation_degrees": 0,
+      "fill": "near-black arrow mark",
+      "stroke": "integral to the drawn indicator",
+      "weight": "simple UI indicator",
+      "source_background": "white panel field beside the meter",
+      "confidence": "high",
+      "notes": "The arrow is a non-dialogue directional mark and must not become a blank cleanup plate."
+    }
+  },
+  "labels": [
+    {
+      "owner_label_id": "sample268-r001",
+      "final_ocr_region_id": "c1ac7d67-6230-4bdc-9cd4-1a0e33dd7d22",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, character hair and face, orange panel background, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample268-r002",
+      "final_ocr_region_id": "1262cb3e-7cc5-41c1-90a7-538e466da70d",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, character hair, page edge, UI meter, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample268-r003",
+      "final_ocr_region_id": "f5c6b63a-151e-4ef9-be47-e2f288eef4c6",
+      "action": "preserve",
+      "action_reason": "The percentage is a source UI meter, classified by A06-C as non-dialogue.",
+      "glyph_support": "not requested; preserve the complete percentage readout and meter rather than inferring a cleanup mask",
+      "protected_context": "Complete percentage glyphs, meter outline, red fill segment, nearby arrow, character art, and panel background.",
+      "style_profile": "preserved-ui-meter"
+    },
+    {
+      "owner_label_id": "sample268-r004",
+      "final_ocr_region_id": "41fc4366-a7fe-4b32-8d93-f2015fee1230",
+      "action": "preserve",
+      "action_reason": "The upward arrow is a source directional indicator, classified by A06-C as non-dialogue.",
+      "glyph_support": "not requested; preserve the complete arrow rather than inferring a cleanup mask",
+      "protected_context": "Complete arrow, nearby UI meter, character hair, panel background, and all adjacent art.",
+      "style_profile": "preserved-direction-indicator"
+    },
+    {
+      "owner_label_id": "sample268-r005",
+      "final_ocr_region_id": "23410663-ac68-43e2-9398-4c666f4144df",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, character hair and face, orange panel background, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample268-r006",
+      "final_ocr_region_id": "f241b770-0156-46a8-a0da-2bf6470107e9",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, horn and hair art, dotted blue background, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample268-r007",
+      "final_ocr_region_id": "8fbe614a-efec-4d5d-be53-be646fea7041",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, foreground character hair and horns, orange panel background, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample268-r008",
+      "final_ocr_region_id": "dcda9b15-1e97-4180-80bb-10031f9b606f",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, character ears, hair, face, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    },
+    {
+      "owner_label_id": "sample268-r009",
+      "final_ocr_region_id": "9c9c4999-45c5-4275-8908-75dce5726725",
+      "action": "replace",
+      "action_reason": "Independent horizontal Korean dialogue in a white bordered speech balloon.",
+      "glyph_support": "required; include only near-black source glyphs and their antialiased edges inside the white balloon interior",
+      "protected_context": "Balloon border and tail, character hair and clothing, dotted blue background, and all pixels outside approved glyph support.",
+      "style_profile": "ko-horizontal-balloon"
+    }
+  ],
+  "counts": {
+    "reviewed_owner_labels": 9,
+    "replace_candidate": 7,
+    "preserve": 2,
+    "explain": 0,
+    "review": 0,
+    "replace_with_required_glyph_support": 7,
+    "preserved_ui_meter": 1,
+    "preserved_direction_indicator": 1,
+    "outlined_glyph_owner": 0
+  },
+  "coverage_findings": {
+    "ordinary_balloon_control": "covered by seven independent Korean horizontal dialogue owners in white bordered balloons across a colored webcomic page.",
+    "preserved_non_dialogue": "r003 preserves the source meter and r004 preserves the source arrow; neither is a cleanup target.",
+    "protected_art": "recorded per label as balloon border/tail, character, panel, UI, or background exclusions; no bounded cleanup asset is created.",
+    "outlined_glyph": "not present in this fixture; no outlined-glyph support is inferred.",
+    "unresolved": "This packet supplies no binary mask, cleanup patch, font selection, replacement text, or implementation authorization. It does not complete A07."
+  }
+}
