@@ -1,0 +1,179 @@
+{
+  "format": "a08-pdf-derived-scene-fixtures/v1",
+  "status": "pre-contract acceptance input",
+  "coordinateSystem": "finite source-pixel floats; origin is the top-left of each synthetic source",
+  "provenance": {
+    "visualTrigger": {
+      "path": "corpus/gaps/unfiled/torii/translated_images_en_gpt-5.6-luna.pdf",
+      "sha256": "62fa33f5be220844a892f1b0ffaddc4ced49c54719777326fd17863666ff93bd",
+      "pages": 2,
+      "pageSizePoints": [1109.33, 1664],
+      "role": "visual regression prompt only"
+    },
+    "limits": "The PDF contains rasterized outputs, not editable project records. All source dimensions, containers, objects, masks, and expected values below are synthetic and must not be presented as recovered PDF geometry."
+  },
+  "fixtures": [
+    {
+      "id": "fractional-rotated-caption",
+      "source": { "width": 1200, "height": 1800, "kind": "synthetic-flat" },
+      "owners": [
+        {
+          "id": "caption-owner",
+          "container": { "x": 760.25, "y": 110.5, "width": 245.75, "height": 246.25, "rotation": 12.5 }
+        }
+      ],
+      "objects": [
+        {
+          "id": "caption-text",
+          "kind": "automatic-text",
+          "ownerId": "caption-owner",
+          "text": "A fractional rotated caption",
+          "geometry": { "x": 782.6109316, "y": 135.0494769, "width": 186.43, "height": 187.91, "rotation": 12.5 },
+          "style": { "fontId": "fixture-sans", "fill": "#202020", "stroke": "#ffffff", "strokeWidth": 1.25 }
+        }
+      ],
+      "assertions": [
+        { "id": "finite-floats", "measure": "all geometry values are finite floats", "expected": true },
+        { "id": "archive-round-trip-width", "measure": "restored width", "expected": 186.43, "tolerancePx": 0.01 },
+        { "id": "archive-round-trip-height", "measure": "restored height", "expected": 187.91, "tolerancePx": 0.01 },
+        { "id": "archive-round-trip-angle", "measure": "restored rotation", "expected": 12.5, "toleranceDegrees": 0.1 }
+      ]
+    },
+    {
+      "id": "blank-automatic-and-manual-cleanup",
+      "source": { "width": 1000, "height": 1000, "kind": "synthetic-flat" },
+      "owners": [
+        {
+          "id": "automatic-owner",
+          "container": { "x": 100, "y": 120, "width": 280, "height": 150, "rotation": 0 }
+        },
+        {
+          "id": "manual-owner",
+          "container": { "x": 590, "y": 600, "width": 180, "height": 120, "rotation": 0 }
+        }
+      ],
+      "objects": [
+        {
+          "id": "automatic-blank",
+          "kind": "automatic-text",
+          "ownerId": "automatic-owner",
+          "action": "replace",
+          "text": "   ",
+          "geometry": { "x": 116, "y": 136, "width": 248, "height": 118, "rotation": 0 }
+        },
+        {
+          "id": "manual-plate",
+          "kind": "manual-cleanup",
+          "ownerId": "manual-owner",
+          "cleanup": { "id": "manual-plate-cleanup", "kind": "manual", "x": 600, "y": 610, "width": 160, "height": 100 },
+          "geometry": null
+        }
+      ],
+      "assertions": [
+        { "id": "automatic-blank-has-no-plate", "measure": "automatic cleanup/text asset count for whitespace-only text", "expected": 0 },
+        { "id": "automatic-blank-preserves-source", "measure": "changed pixels in automatic-owner container", "expected": 0 },
+        { "id": "manual-cleanup-remains-visible", "measure": "active manual cleanup asset count", "expected": 1 },
+        { "id": "manual-cleanup-has-no-glyph", "measure": "glyph object count for manual plate", "expected": 0 }
+      ]
+    },
+    {
+      "id": "padded-normal-selection-frame",
+      "source": { "width": 1200, "height": 800, "kind": "synthetic-flat" },
+      "owners": [
+        {
+          "id": "padded-owner",
+          "container": { "x": 240, "y": 180, "width": 360, "height": 210, "rotation": 0 }
+        }
+      ],
+      "objects": [
+        {
+          "id": "padded-text",
+          "kind": "automatic-text",
+          "ownerId": "padded-owner",
+          "text": "Padding must constrain fitting, not selection.",
+          "geometry": { "x": 240, "y": 180, "width": 360, "height": 210, "rotation": 0 },
+          "padding": { "top": 18, "right": 24, "bottom": 18, "left": 24 },
+          "selection": { "mode": "normal", "handleCount": 4 }
+        }
+      ],
+      "assertions": [
+        { "id": "inner-fitting-rectangle", "measure": "resolved fitting rectangle", "expected": { "x": 264, "y": 198, "width": 312, "height": 174 }, "tolerancePx": 0.01 },
+        { "id": "normal-selection-handles", "measure": "normal-mode selection handle count", "expected": 4 },
+        { "id": "handles-not-content", "measure": "selection handles included in content scene", "expected": false }
+      ]
+    },
+    {
+      "id": "narrow-connected-independent-containers",
+      "source": { "width": 1200, "height": 900, "kind": "synthetic-flat" },
+      "owners": [
+        {
+          "id": "left-owner",
+          "container": { "x": 100, "y": 150, "width": 96, "height": 330, "rotation": 0 }
+        },
+        {
+          "id": "right-owner",
+          "container": { "x": 184, "y": 150, "width": 96, "height": 330, "rotation": 0 }
+        }
+      ],
+      "objects": [
+        {
+          "id": "left-text",
+          "kind": "automatic-text",
+          "ownerId": "left-owner",
+          "text": "This narrow column cannot borrow the neighboring container.",
+          "geometry": { "x": 108, "y": 158, "width": 80, "height": 314, "rotation": 0 }
+        },
+        {
+          "id": "right-text",
+          "kind": "automatic-text",
+          "ownerId": "right-owner",
+          "text": "This separate owner deliberately overlaps the first container by twelve pixels.",
+          "geometry": { "x": 176, "y": 158, "width": 80, "height": 314, "rotation": 0 }
+        }
+      ],
+      "assertions": [
+        { "id": "no-owner-merge", "measure": "resolved text owner count", "expected": 2 },
+        { "id": "no-container-expansion", "measure": "resolved text bounds outside each owner container", "expected": 0, "tolerancePx": 1 },
+        { "id": "impossible-fit-is-visible", "measure": "overflow result when minimum readable size cannot fit", "expected": "review" }
+      ]
+    },
+    {
+      "id": "overlapping-cleanup-active-set",
+      "source": { "width": 900, "height": 900, "kind": "synthetic-checker" },
+      "owners": [
+        {
+          "id": "upper-owner",
+          "container": { "x": 250, "y": 250, "width": 220, "height": 130, "rotation": 0 }
+        },
+        {
+          "id": "lower-owner",
+          "container": { "x": 390, "y": 320, "width": 220, "height": 130, "rotation": 0 }
+        }
+      ],
+      "objects": [
+        {
+          "id": "upper-text",
+          "kind": "automatic-text",
+          "ownerId": "upper-owner",
+          "action": "replace",
+          "text": "First replacement",
+          "cleanup": { "id": "upper-cleanup", "maskBounds": { "x": 280, "y": 275, "width": 160, "height": 74 } }
+        },
+        {
+          "id": "lower-text",
+          "kind": "automatic-text",
+          "ownerId": "lower-owner",
+          "action": "replace",
+          "text": "Second replacement",
+          "cleanup": { "id": "lower-cleanup", "maskBounds": { "x": 410, "y": 310, "width": 160, "height": 74 } }
+        }
+      ],
+      "assertions": [
+        { "id": "overlap-is-explicit", "measure": "cleanup mask overlap bounds", "expected": { "x": 410, "y": 310, "width": 30, "height": 39 }, "tolerancePx": 0.01 },
+        { "id": "joint-active-set", "measure": "cleanup dependencies while both objects are visible", "expected": ["upper-cleanup", "lower-cleanup"] },
+        { "id": "hide-recomposes", "measure": "active cleanup assets after upper-text is hidden", "expected": ["lower-cleanup"] },
+        { "id": "outside-support-is-source", "measure": "changed pixels outside active cleanup support", "expected": 0 }
+      ]
+    }
+  ]
+}

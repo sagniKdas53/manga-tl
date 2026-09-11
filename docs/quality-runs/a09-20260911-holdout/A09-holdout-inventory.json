@@ -1,0 +1,64 @@
+{
+  "format": "a09-holdout-inventory/v1",
+  "status": "blocked",
+  "date": "2026-09-11",
+  "heads": {
+    "app": "e7b811040f6b37bc28a9b4a1f8fbf995f2bacca4",
+    "worker": "7b54f8c1c516eb445e869b2776ffa62e4ee2762b",
+    "corpus": "ed9b191da255e4d3d132a2d050ab8fffa1815e26"
+  },
+  "requirements": {
+    "pages": 24,
+    "perLanguage": 8,
+    "multiPanelConventionalBalloonPerLanguage": 4,
+    "jaBlackAndWhitePanelPages": 4,
+    "independentFamiliesPerLanguage": 4,
+    "maximumPagesPerFamily": 2
+  },
+  "shortlist": {
+    "ja": [
+      { "id": "sample27", "path": "corpus/samples/ja/sample27/source.jpeg", "sha256": "d584c8d0a690ac60c81a36ec236281147b4a60d6f8da6bfe48240b1da1c4b83a", "dimensions": [813, 1198], "lane": "active", "style": "conventional B&W dialogue manga", "multiPanel": true, "blackAndWhite": true, "familyEvidence": "no creator or series metadata; visually distinct only" },
+      { "id": "sample38", "path": "corpus/samples/ja/sample38/source.jpg", "sha256": "3593c47ed6c1592fee4afcd462604e7112eb4a31ec7a6bf1e4193f2c20e277b3", "dimensions": [900, 1280], "lane": "active", "style": "conventional B&W panel dialogue", "multiPanel": true, "blackAndWhite": true, "familyEvidence": "no creator or series metadata; visually distinct only" },
+      { "id": "sample41", "path": "corpus/samples/ja/sample41/source.png", "sha256": "e1fecbaf7858ab89e5905a2a9d98dc87e5c1ab720dac2d089a8453123a83cf23", "dimensions": [1536, 2048], "lane": "active", "style": "colored two-panel dialogue", "multiPanel": true, "blackAndWhite": false, "familyEvidence": "no creator or series metadata; visually distinct only" },
+      { "id": "sample49", "path": "corpus/samples/ja/sample49/source.jpeg", "sha256": "428c6dc729781f3c26584495db5efeac3b7b504bb0ab1b0f24d7e74ed600d860", "dimensions": [1320, 3960], "lane": "active", "style": "colored vertical four-panel strip", "multiPanel": true, "blackAndWhite": false, "familyEvidence": "no creator or series metadata; visually distinct only" },
+      { "id": "sample57", "path": "corpus/samples/ja/sample57/source.jpg", "sha256": "d5a15dbb21ebe61a9722f04d5167469d05f676792c84f28668c076b99f75185a", "dimensions": [1448, 2048], "lane": "active", "style": "colored four-panel dialogue with SFX", "multiPanel": true, "blackAndWhite": false, "familyEvidence": "no creator or series metadata; visually distinct only" },
+      { "id": "sample128", "path": "corpus/samples/ja/sample128/source.jpg", "sha256": "2f6180b43cb842aed5b1aad4bac6d777453eedc83d9cd60a1b7f720edccc509c", "dimensions": [1079, 1532], "lane": "active", "style": "B&W festival dialogue page", "multiPanel": true, "blackAndWhite": true, "familyEvidence": "no creator or series metadata; visually distinct only" },
+      { "id": "sample131", "path": "corpus/samples/ja/sample131/source.jpg", "sha256": "6500adc9e6892220e3d34d57485f3c03aaa5f710eadfa4a45a14ef2bcf7ff72d", "dimensions": [2016, 2688], "lane": "active", "style": "B&W dialogue composition", "multiPanel": false, "blackAndWhite": true, "familyEvidence": "no creator or series metadata; visually distinct only" },
+      { "id": "sample141", "path": "corpus/samples/ja/sample141/source.jpg", "sha256": "ef4d670d1951ca806b96462624b46a1c820fe96bac3ea13998078b33c8c07f1f", "dimensions": [4299, 6071], "lane": "active", "style": "B&W serialized manga dialogue", "multiPanel": true, "blackAndWhite": true, "familyEvidence": "metadata identifies kusaba_eru_happy_crystal / sousou_no_frieren; no observed relation to development sample134" }
+    ],
+    "ko": [
+      { "id": "sample179", "path": "corpus/samples/ko/sample179/source.jpg", "sha256": "061ed70fc8be0126ec47fabe163da5736d43252f89218101ed2683f2b9113759", "dimensions": [4800, 6400], "lane": "active", "style": "colored single-scene balloon dialogue", "multiPanel": false, "blackAndWhite": false, "familyEvidence": "no creator or series metadata" },
+      { "id": "sample196", "path": "corpus/samples/ko/sample196/source.jpg", "sha256": "d3236fb65296ffcd278a23a8da30bb42ef9ef365bdeaddbf0cef6770f51c5c1b", "dimensions": [519, 1200], "lane": "active", "style": "four-panel comedy strip", "multiPanel": true, "blackAndWhite": false, "familyEvidence": "no creator or series metadata" },
+      { "id": "sample225", "path": "corpus/samples/ko/sample225/source.png", "sha256": "5a590fb38f2f9a8a0b8f6c794df30bc2556a9858c5a82d5a985aa20cfe7cdacd", "dimensions": [1900, 2450], "lane": "active", "style": "conventional multi-panel dialogue", "multiPanel": true, "blackAndWhite": false, "familyEvidence": "no creator or series metadata" },
+      { "id": "sample253", "path": "corpus/samples/ko/sample253/source.png", "sha256": "5164c3b464397918135aab5cedbf61c00b13d437f13bdc328f365e8a5edff80e", "dimensions": [625, 587], "lane": "active", "style": "colored two-panel dialogue", "multiPanel": true, "blackAndWhite": false, "familyEvidence": "no creator or series metadata" },
+      { "id": "sample273", "path": "corpus/gaps/pending/ko/sample273/source.jpg", "sha256": "7e9e0c55e2ac8a1f8ebd983d710ccd5b8670ca4331b68aa523a32a643e06ae28", "dimensions": [1471, 2048], "lane": "pending", "style": "single-scene dialogue", "multiPanel": false, "blackAndWhite": false, "familyEvidence": "caption suggests box_head5; unverified" },
+      { "id": "sample321", "path": "corpus/gaps/pending/ko/sample321/source.jpg", "sha256": "e09301c28e8a1e9d6fc57a08cde921e508b9161d63329f845f35e2fa30f9db5e", "dimensions": [1443, 2048], "lane": "pending", "style": "B&W multi-panel dialogue", "multiPanel": true, "blackAndWhite": true, "familyEvidence": "caption suggests te0hyang; unverified" },
+      { "id": "sample349", "path": "corpus/gaps/pending/ko/sample349/source.jpg", "sha256": "928b258745ce15150ac3ec1ae5a344a149a24c64050174c8dba060ccb67e4ff4", "dimensions": [1443, 2048], "lane": "pending", "style": "B&W multi-panel dialogue", "multiPanel": true, "blackAndWhite": true, "familyEvidence": "caption suggests Sunahi230400; unverified" },
+      { "id": "sample372", "path": "corpus/gaps/pending/ko/sample372/source.jpg", "sha256": "00ed99553f5f8e40ca4676a444874e1d23a2442745d25f6435709f2bd87c6be7", "dimensions": [1443, 2048], "lane": "pending", "style": "B&W multi-panel dialogue", "multiPanel": true, "blackAndWhite": true, "familyEvidence": "caption suggests te0hyang; no more than two candidate pages from this family" }
+    ],
+    "zh": [
+      { "id": "sample201", "path": "corpus/samples/zh/sample201/source.jpg", "sha256": "985c08ab68442a6e9de8c9ba58c9ef9c95886a112b69575e55c21e8892e58477", "dimensions": [1720, 2428], "lane": "active", "style": "three-panel Chinese balloon narrative", "multiPanel": true, "blackAndWhite": false, "familyEvidence": "no creator or series metadata; visually distinct only" },
+      { "id": "sample205", "path": "corpus/samples/zh/sample205/source.jpg", "sha256": "4d0723fbb4f589036a6fcbc5aed37087bc25bfefb816a34b9739930aa6dbe0b6", "dimensions": [1870, 2732], "lane": "active", "style": "three-panel Chinese conventional dialogue", "multiPanel": true, "blackAndWhite": false, "familyEvidence": "no creator or series metadata; visually distinct only" }
+    ]
+  },
+  "blockers": [
+    "Only two source-reviewed candidate ZH pages meet the required multi-panel conventional-balloon stratum; four are required.",
+    "The prospective shortlist lacks reviewed labels and frozen thresholds, both required before a holdout manifest may freeze.",
+    "Most candidate family assignments lack creator/series provenance; visual distinction alone does not establish the required independent-family quota."
+  ],
+  "requiredAcquisition": [
+    "At least two Chinese-dialogue, multi-panel conventional-balloon pages outside every development family and the documented 208/209, 226/227/230/231, and 457-family clusters.",
+    "At least two independently verifiable creator or series families for those additions, while preserving at least four families and no more than two pages per family across the final ZH set.",
+    "Source review, ownership/action labels, and frozen evaluation thresholds for every selected holdout page before any tuning."
+  ],
+  "exclusions": {
+    "development": {
+      "ja": ["sample7", "sample39", "sample47", "sample61", "sample83", "sample93", "sample99", "sample123", "sample134", "sample139", "sample150", "sample172", "sample177", "sample222"],
+      "ko": ["sample192", "sample197", "sample199", "sample268", "sample289", "sample320", "sample360", "sample416"],
+      "zh": ["sample206", "sample208", "sample226", "sample261", "sample457", "sample609", "sample611", "sample612"]
+    },
+    "wrongLanguageOrEnglish": ["sample4", "sample204", "sample266", "sample300", "sample312", "sample361", "sample409", "sample138"],
+    "exactDuplicate": ["sample258", "sample637"],
+    "relatedToDevelopment": ["sample122", "sample124", "sample125", "sample209", "sample227", "sample230", "sample231"]
+  }
+}

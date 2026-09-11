@@ -1,0 +1,187 @@
+{
+  "schema_version": "a07-user-reviewed-container-and-reference-corrections/v1",
+  "task": "A07",
+  "status": "supplemental-evidence-only-correction",
+  "date": "2026-09-11",
+  "scope": {
+    "does_not_modify": [
+      "retained A06 labels",
+      "historical OCR/translation metadata",
+      "immutable sources",
+      "A07 aggregate label accounting"
+    ],
+    "does_not_authorize": [
+      "cleanup",
+      "replacement objects",
+      "glyph masks",
+      "raw-fragment membership inference"
+    ]
+  },
+  "reference_precedence": {
+    "order": [
+      "human-authored reference image or review",
+      "immutable source image",
+      "Torii reference image",
+      "Ichigo/mangatranslator.ai reference image"
+    ],
+    "rule": "A machine reference is comparative evidence only and cannot override a human-reviewed source interpretation."
+  },
+  "sample61": {
+    "source": {
+      "path": "corpus/samples/ja/sample61/source.jpg",
+      "sha256": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76",
+      "snapshot": "../a03a04-20260910-retained/a04-exports/sample61/page-snapshot.json",
+      "machine_references": [
+        "corpus/samples/ja/sample61/ref-torii.png",
+        "corpus/samples/ja/sample61/ref-mangatranslator.ai.jpg"
+      ]
+    },
+    "review_correction": "The source visibly contains four separate dark document containers. All 50 snapshot OCR regions belong to one of those containers; the two regions beyond the conservative lower-left A06 bounding box remain inside the visible lower-left container.",
+    "grouping_constraints": {
+      "container_boundary_is_hard": true,
+      "paragraph_rule": "Treat each final OCR region as a local paragraph candidate. Future raw-fragment grouping may join nearby lines only when they are visibly part of one paragraph in the same listed container.",
+      "forbidden_edges": [
+        "between different dark containers",
+        "across a panel boundary",
+        "across page/spread boundaries"
+      ],
+      "owner_rule": "Container membership does not promote the retained A06 draft records to verified text owners."
+    },
+    "container_membership": [
+      {
+        "container_id": "s61-container-upper-left",
+        "count": 8,
+        "final_ocr_region_ids": [
+          "ec47f216-19f3-4fa7-94c8-fcf8aa898453",
+          "947dbee6-2517-461b-9982-6de9247e6a7b",
+          "b3178bdf-def2-49d4-b5d5-3ed1fabdb49a",
+          "c66092a4-4a01-476f-ae5a-d05566c8d4b9",
+          "3a0d457e-44f8-4e08-ad19-3bcefa021156",
+          "c33f0b26-3bbe-4f81-a2f5-970231c0c30a",
+          "d0d44938-3c4c-49ad-8ed6-9af1f2b77171",
+          "359183e7-638b-43d4-91d9-43340a4c0bb0"
+        ]
+      },
+      {
+        "container_id": "s61-container-upper-middle",
+        "count": 11,
+        "final_ocr_region_ids": [
+          "56930395-bc79-40d3-b4ce-f48df3f58517",
+          "8c738e73-82f4-4c50-a3cd-d8527db7eb85",
+          "baa15713-f5a8-4802-bc2e-dda4f538786d",
+          "be55c0ac-b3bb-47d4-9390-d367d37baab6",
+          "fbc65c87-cab1-427c-a9e9-825a056fb909",
+          "e44081af-ef63-46eb-b0b6-67bad11a70fd",
+          "440613b4-b652-434e-a18b-736c64ee5d53",
+          "c18dca3f-7a1f-4bed-9521-ba483c66cc4b",
+          "9a7aa5b0-5716-4b8a-bf9e-79429e995013",
+          "8cbed672-d3dc-4852-a481-93a532e269ec",
+          "833a7012-a2d5-4c98-aea2-70b3c4c5a113"
+        ]
+      },
+      {
+        "container_id": "s61-container-lower-left",
+        "count": 21,
+        "final_ocr_region_ids": [
+          "882668d4-b4a0-482d-965e-9cc5a230898e",
+          "dc809db0-360e-4847-bea4-1a3cf3a0e525",
+          "a5615e5b-4cb8-4d44-9804-4c0c24e8bdf8",
+          "fa7f33ca-2c52-43c6-9d89-14712ba9a36f",
+          "eb0973bf-b7d8-421f-bec6-c0243b26fc56",
+          "c9f76b9b-19b3-40ab-abe0-168c6f25a079",
+          "feb3b73f-bb00-4162-9a8a-d134d552bb9a",
+          "cd181f4a-be5d-4fb9-bfc3-5083c61f696a",
+          "eb5fe6c3-9ab1-4463-93b1-5ea3871d5e8c",
+          "2e95d66d-d8ea-401a-9f34-739d44036d05",
+          "c663e853-f201-4f9e-b00b-47d0e6d339c6",
+          "07a3cc29-bc52-4e7e-835b-eb4883577aaf",
+          "67805037-88c9-40d2-b9fe-d1a17acf4bba",
+          "a2823a16-1dec-46a0-a246-e3b60e6aab3d",
+          "a2efb681-dfb6-44e7-b393-e72df01ca40f",
+          "b8ee3176-fca1-487b-89ed-2d9338178cdd",
+          "6f7dc0fe-816e-4399-a9b4-43d2ec7cb6be",
+          "c4299994-227d-4047-9a91-4f4ade02508f",
+          "628498a3-c440-4213-945a-153b1d5de591",
+          "4b861afb-7bd6-48ba-a5bc-98b84f6063ec",
+          "b7f30e20-fb0a-4455-8442-721febf19701"
+        ]
+      },
+      {
+        "container_id": "s61-container-right",
+        "count": 10,
+        "final_ocr_region_ids": [
+          "87ff4205-95fc-43d7-9e26-ee3e81676bb1",
+          "543338eb-2166-4e3d-a7da-63b7ecc2924e",
+          "082be9b6-816a-4b90-bbe2-cbfba7392b61",
+          "a00bd0b0-c801-4840-aa0c-1b6d07a5af5a",
+          "9462cebb-2f52-4125-87c6-70e15f89faff",
+          "85adfe21-6184-43a9-afa7-9913d4209a27",
+          "4c5eec65-62af-4d3a-8837-7b6417d9589d",
+          "166e66dd-3b0e-4d8c-abfa-5f21f2700a81",
+          "2c0b344c-a6f0-4e0a-ad6b-d9ad95e3eb58",
+          "4418ff7c-1519-4d4f-af81-a8a1993d0dc6"
+        ]
+      }
+    ],
+    "coverage": {
+      "snapshot_final_ocr_regions": 50,
+      "assigned_to_visible_container": 50,
+      "unassigned": 0,
+      "raw_fragment_membership_available": false
+    }
+  },
+  "sample117": {
+    "source": {
+      "path": "corpus/samples/ja/sample117/source.jpg",
+      "sha256": "4ef28cf56d2bd9b00377055195aa6be2afa2467e30545a5b45f2c008c6707e7f",
+      "project": "corpus/samples/ja/sample117/project/project.json",
+      "machine_references": [
+        "corpus/samples/ja/sample117/ref-torii.png",
+        "corpus/samples/ja/sample117/ref-mangatranslator.ai.jpg"
+      ],
+      "human_reference_available": false
+    },
+    "review_correction": "User review identifies five source regions: three speech-bubble dialogues, one lower-left free-standing dialogue, and one top-right free-standing SFX. Torii and Ichigo/mangatranslator.ai both leave the SFX untranslated.",
+    "labels": [
+      {
+        "final_ocr_region_id": "903580ad-f53a-4e27-9c41-4dfb06044c81",
+        "project_region_id": "903580ad-f53a-4e27-9c41-4dfb06044c81",
+        "source_role": "speech-bubble dialogue",
+        "action": "replace_candidate",
+        "protected_context": "Bubble outline, tail, white interior outside glyph support, and adjacent character art."
+      },
+      {
+        "final_ocr_region_id": "8ef0ad01-4a2b-4992-b02c-be35c1f3e71a",
+        "source_role": "speech-bubble dialogue",
+        "action": "replace_candidate",
+        "protected_context": "Bubble outline, tail, white interior outside glyph support, and adjacent character art."
+      },
+      {
+        "final_ocr_region_id": "b991aee8-cd8a-408f-93ff-18db62f1818a",
+        "source_role": "speech-bubble dialogue",
+        "action": "replace_candidate",
+        "protected_context": "Bubble outline, tail, white interior outside glyph support, and adjacent character art."
+      },
+      {
+        "final_ocr_region_id": "2afaa8d4-bfa1-47bf-b186-afc119f7f551",
+        "source_role": "lower-left free-standing dialogue",
+        "action": "replace_candidate",
+        "protected_context": "Free-standing text's local background and all nearby line art."
+      },
+      {
+        "final_ocr_region_id": "78075b2c-63e3-495a-92a2-290b5aa4b811",
+        "source_role": "top-right free-standing SFX",
+        "action": "preserve",
+        "action_reason": "User review and both available machine references agree that this SFX remains untranslated.",
+        "protected_context": "All stylized SFX glyphs, local background, and adjacent art."
+      }
+    ],
+    "coverage": {
+      "source_regions": 5,
+      "replace_candidates": 4,
+      "preserve": 1,
+      "historical_translation_metadata_regions": 4,
+      "reconciliation": "The historical regions.json excludes the SFX, while the historical project records all five OCR regions and hides its SFX translation element. This supplemental policy retains both historical artifacts unchanged."
+    }
+  }
+}

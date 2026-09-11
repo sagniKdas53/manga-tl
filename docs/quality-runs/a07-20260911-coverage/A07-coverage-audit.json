@@ -71,7 +71,7 @@
     {
       "sample": "sample61",
       "count": 50,
-      "description": "A06 retains 50 final OCR regions with no raw fragments or safe region-to-container membership. The four visible container labels are review-only and these 50 final regions remain explicitly unassigned."
+      "description": "Retained A06 has no raw fragments or per-container IDs, but supplemental user review assigns all 50 final OCR regions to four visible containers (8/11/21/10). Future paragraph grouping is constrained to one container; raw-fragment membership remains unavailable."
     },
     {
       "sample": "sample177",
@@ -84,5 +84,5 @@
       "description": "Review is an explicit pixel-preserving decision, not an absent label, translation failure, cleanup authorization, or passed replacement."
     }
   ],
-  "task_result": "A07 is complete as curation: every A06/A06-C label record has an action/style/protected-context annotation or an explicit retained review state. This does not pass G0, create glyph masks, authorize cleanup, resolve unknown ownership, or permit later quality gates to treat review as translated."
+  "task_result": "A07 is complete as curation: every A06/A06-C label record has an action/style/protected-context annotation or an explicit retained review state. The supplemental user review records sample61 container membership and sample117's five-region policy without changing the 30-packet A06/A06-C accounting. This does not pass G0, create glyph masks, authorize cleanup, resolve unknown ownership, or permit later quality gates to treat review as translated."
 }
