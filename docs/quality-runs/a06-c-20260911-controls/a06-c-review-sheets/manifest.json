@@ -1,0 +1,29 @@
+{
+  "labels": "docs/quality-runs/a06-c-20260911-controls/A06-C-owner-labels.controls.draft.json",
+  "sources": [
+    "sample139",
+    "sample39",
+    "sample47",
+    "sample123",
+    "sample134",
+    "sample150",
+    "sample172",
+    "sample192",
+    "sample197",
+    "sample199",
+    "sample268",
+    "sample289",
+    "sample320",
+    "sample360",
+    "sample416",
+    "sample206",
+    "sample208",
+    "sample226",
+    "sample261",
+    "sample457",
+    "sample609",
+    "sample611",
+    "sample612"
+  ],
+  "purpose": "source-pixel review sheets; final OCR boxes only; no OCR or rendering mutation"
+}

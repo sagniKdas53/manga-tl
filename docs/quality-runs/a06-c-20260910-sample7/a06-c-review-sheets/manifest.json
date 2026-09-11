@@ -1,0 +1,7 @@
+{
+  "labels": "docs/quality-runs/a06-c-20260910-sample7/A06-C-owner-labels.sample7.draft.json",
+  "sources": [
+    "sample7"
+  ],
+  "purpose": "source-pixel review sheets; final OCR boxes only; no OCR or rendering mutation"
+}

@@ -116,6 +116,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL_WORKER:-INFO}
       LOG_PAYLOAD_MAX_CHARS: ${LOG_PAYLOAD_MAX_CHARS:-2000}
       RENDER_CACHE_DIR: /app/rendered_cache
+      OCR_CAPTURE_DIR: ${OCR_CAPTURE_DIR:-}
     secrets: [minio_password, internal_api_token, worker_api_secret, api_keys]
     volumes:
       - ./config/providers.json:/app/config/providers.json:ro

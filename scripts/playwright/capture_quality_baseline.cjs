@@ -21,6 +21,33 @@ const FIXTURES = [
   ["sample83", "corpus/samples/ja/sample83/source.jpg"],
 ];
 
+const CONVENTIONAL_CONTROLS = [
+  ["sample7", "corpus/samples/ja/sample7/source.jpeg"],
+  ["sample139", "corpus/samples/ja/sample139/source.png"],
+  ["sample39", "corpus/samples/ja/sample39/source.jpg"],
+  ["sample47", "corpus/samples/ja/sample47/source.jpg"],
+  ["sample123", "corpus/samples/ja/sample123/source.jpg"],
+  ["sample134", "corpus/samples/ja/sample134/source.jpg"],
+  ["sample150", "corpus/samples/ja/sample150/source.jpg"],
+  ["sample172", "corpus/samples/ja/sample172/source.jpeg"],
+  ["sample192", "corpus/samples/ko/sample192/source.jpg", "ko"],
+  ["sample197", "corpus/samples/ko/sample197/source.png", "ko"],
+  ["sample199", "corpus/samples/ko/sample199/source.png", "ko"],
+  ["sample268", "corpus/gaps/pending/ko/sample268/source.jpg", "ko"],
+  ["sample289", "corpus/gaps/pending/ko/sample289/source.jpg", "ko"],
+  ["sample320", "corpus/gaps/pending/ko/sample320/source.jpg", "ko"],
+  ["sample360", "corpus/gaps/pending/ko/sample360/source.jpg", "ko"],
+  ["sample416", "corpus/gaps/pending/ko/sample416/source.jpg", "ko"],
+  ["sample206", "corpus/samples/zh/sample206/source.png", "zh"],
+  ["sample208", "corpus/samples/zh/sample208/source.png", "zh"],
+  ["sample226", "corpus/samples/zh/sample226/source.jpg", "zh"],
+  ["sample261", "corpus/samples/zh/sample261/source.png", "zh"],
+  ["sample457", "corpus/gaps/pending/zh/sample457/source.jpg", "zh"],
+  ["sample609", "corpus/gaps/pending/zh/sample609/source.jpg", "zh"],
+  ["sample611", "corpus/gaps/pending/zh/sample611/source.jpg", "zh"],
+  ["sample612", "corpus/gaps/pending/zh/sample612/source.jpg", "zh"],
+];
+
 const PIPELINE_TIMEOUT_MS = 30 * 60 * 1000;
 const DOWNLOAD_TIMEOUT_MS = 3 * 60 * 1000;
 const EXPORT_PNG = "Export Page (PNG)";
@@ -35,6 +62,7 @@ function parseArgs(argv) {
     password: process.env.TLHUB_PASSWORD || "",
     register: false,
     headed: false,
+    fixtures: [],
   };
   for (let index = 2; index < argv.length; index++) {
     const value = argv[index];
@@ -46,6 +74,7 @@ function parseArgs(argv) {
       case "--password": args.password = next(); break;
       case "--register": args.register = true; break;
       case "--headed": args.headed = true; break;
+      case "--fixture": args.fixtures.push(next()); break;
       case "-h":
       case "--help": args.help = true; break;
       default: throw new Error(`unknown argument: ${value}`);
@@ -193,6 +222,7 @@ capture_quality_baseline.cjs — fresh A03 pipeline data plus A04 browser export
   --email <email>          existing account, or TLHUB_EMAIL
   --password <password>    existing account, or TLHUB_PASSWORD
   --headed                 show the browser
+  --fixture <sample>       run a named fixture; repeat for multiple isolated pages
 `;
 
 (async () => {
@@ -211,6 +241,12 @@ capture_quality_baseline.cjs — fresh A03 pipeline data plus A04 browser export
     throw new Error(`refusing non-empty run directory: ${out}`);
   }
   fs.mkdirSync(out, { recursive: true });
+  const fixtures = args.fixtures.length
+    ? [...FIXTURES, ...CONVENTIONAL_CONTROLS].filter(([sample]) => args.fixtures.includes(sample))
+    : FIXTURES;
+  if (!fixtures.length || (args.fixtures.length && fixtures.length !== args.fixtures.length)) {
+    throw new Error(`unknown fixture: ${args.fixtures.join(", ")}`);
+  }
   const chromium = loadChromium();
   const browser = await chromium.launch({ headless: !args.headed });
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 }, acceptDownloads: true });
@@ -225,33 +261,38 @@ capture_quality_baseline.cjs — fresh A03 pipeline data plus A04 browser export
     await login(page, args.base, credentials);
     const token = await tokenFor(page, args.base, credentials);
 
-    const series = await requestJson(page.request, `${args.base}/api/series`, {
-      method: "POST",
-      headers: auth(token),
-      data: {
-        title: `A03 retained baselines ${new Date().toISOString()}`,
-        originalLanguage: "ja",
-        sourceLanguage: "ja",
-        targetLanguage: "en",
-        readingDirection: "rightToLeft",
-        ocrProvider: "local",
-        ocrModel: "PP-OCRv6",
-        tlProvider: "openrouter",
-        tlModel: "openai/gpt-5.6-luna",
-        qaProvider: "openrouter",
-        qaLlmModel: "openai/gpt-5.6-luna",
-        qaVlmModel: "google/gemini-3.1-flash-lite",
-        qaMode: "auto",
-        useFallbackModels: false,
-      },
-    });
-    manifest.series_id = series.id || series.seriesId;
+    const seriesByLanguage = new Map();
 
-    for (let index = 0; index < FIXTURES.length; index++) {
-      const [sample, sourceRelativePath] = FIXTURES[index];
+    for (let index = 0; index < fixtures.length; index++) {
+      const [sample, sourceRelativePath, fixtureLanguage = "ja"] = fixtures[index];
+      let seriesId = seriesByLanguage.get(fixtureLanguage);
+      if (!seriesId) {
+        const series = await requestJson(page.request, `${args.base}/api/series`, {
+          method: "POST",
+          headers: auth(token),
+          data: {
+            title: `A03 retained baselines ${fixtureLanguage} ${new Date().toISOString()}`,
+            originalLanguage: fixtureLanguage,
+            sourceLanguage: fixtureLanguage,
+            targetLanguage: "en",
+            readingDirection: "rightToLeft",
+            ocrProvider: "local",
+            ocrModel: "PP-OCRv6",
+            tlProvider: "openrouter",
+            tlModel: "openai/gpt-5.6-luna",
+            qaProvider: "openrouter",
+            qaLlmModel: "openai/gpt-5.6-luna",
+            qaVlmModel: "google/gemini-3.1-flash-lite",
+            qaMode: "auto",
+            useFallbackModels: false,
+          },
+        });
+        seriesId = series.id || series.seriesId;
+        seriesByLanguage.set(fixtureLanguage, seriesId);
+      }
       const sourcePath = path.resolve(sourceRelativePath);
       const source = fs.readFileSync(sourcePath);
-      const chapter = await requestJson(page.request, `${args.base}/api/series/${manifest.series_id}/chapters`, {
+      const chapter = await requestJson(page.request, `${args.base}/api/series/${seriesId}/chapters`, {
         method: "POST",
         headers: auth(token),
         data: {
@@ -287,6 +328,8 @@ capture_quality_baseline.cjs — fresh A03 pipeline data plus A04 browser export
         sample,
         source_path: sourceRelativePath,
         source_sha256: sha256(source),
+        source_language: fixtureLanguage,
+        series_id: seriesId,
         chapter_id: chapterId,
         page_id: upload.pageId,
         image_id: upload.imageId,
@@ -308,7 +351,7 @@ capture_quality_baseline.cjs — fresh A03 pipeline data plus A04 browser export
     for (const name of ["a03-manifest.partial.json", "a04-manifest.partial.json"]) {
       fs.rmSync(path.join(out, name), { force: true });
     }
-    console.log(`completed six retained baselines and exports: ${out}`);
+    console.log(`completed ${fixtures.length} retained baseline(s) and exports: ${out}`);
   } finally {
     await browser.close();
   }

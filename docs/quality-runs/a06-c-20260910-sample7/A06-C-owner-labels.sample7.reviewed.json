@@ -1,0 +1,526 @@
+{
+  "schema_version": "a06-c-owner-labels-reviewed/v1",
+  "task": "A06-C",
+  "status": "reviewed-with-explicit-blockers",
+  "label_policy": {
+    "coordinate_space": "source-pixels",
+    "confidence_interpretation": "Confidence describes support for this draft label, not a verified grouping truth.",
+    "verification_rule": "Each final OCR region received source-pixel review. A final-region owner is only a local source extent, not a claim about unavailable raw A02 fragment membership. Shared detector IDs, panels, conversations, and proximity never establish a shared owner.",
+    "review_requirement": "A coordinator visually reviewed the exact source and editor capture. Draft labels remain draft until source fragments and owner grouping evidence are available."
+  },
+  "sources": [
+    {
+      "sample": "sample7",
+      "language": "ja",
+      "style": "bw_panel_manga",
+      "source_path": "corpus/samples/ja/sample7/source.jpeg",
+      "source_digest": "7e23ae0c9e7ffbec45221c2820a35dcde2e81aae99d34eb922d71f25855f71e9",
+      "dimensions": {
+        "width": 1299,
+        "height": 1831
+      },
+      "current_ocr_artifact": "a04-exports/sample7/page-snapshot.json",
+      "final_ocr_region_count": 24,
+      "raw_a02_fragment_capture": "absent",
+      "control_checks": {
+        "ordinary_white_bubble_interiors": "reviewed; nine speech records remain separate and locally bounded",
+        "bubble_borders_and_tails": "reviewed from the immutable source; labels are source-space extents only, not cleanup authorization",
+        "gutters_and_adjacent_art": "reviewed; no owner spans the three detected panels or claims adjacent art",
+        "sfx_and_decorative_marks": "retained as independent or unresolved non-dialogue records; no replacement policy is inferred"
+      },
+      "labels": [
+        {
+          "id": "s7-r01",
+          "owner_id": "s7-owner-r01",
+          "container_id": "source-local:s7-r01",
+          "fragment_member_identity": "final OCR region ecf30bc1-76bb-46ae-8bba-f9dc675c5f41; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              143,
+              59,
+              153,
+              223
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies one locally bounded dialogue extent. Its border/tail or local text area is independent of nearby balloons, gutters, and art; no raw fragment membership is inferred.",
+          "review_state": "reviewed",
+          "classification": "reviewed-independent-dialogue"
+        },
+        {
+          "id": "s7-r02",
+          "owner_id": "s7-owner-r02",
+          "container_id": "source-local:s7-r02",
+          "fragment_member_identity": "final OCR region f194ce7a-a27d-4112-9ae9-3417f82b728f; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              64,
+              223,
+              77,
+              188
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies one locally bounded dialogue extent. Its border/tail or local text area is independent of nearby balloons, gutters, and art; no raw fragment membership is inferred.",
+          "review_state": "reviewed",
+          "classification": "reviewed-independent-dialogue"
+        },
+        {
+          "id": "s7-r03",
+          "owner_id": "s7-owner-r03",
+          "container_id": "source-local:s7-r03",
+          "fragment_member_identity": "final OCR region 4aff3d28-0413-4007-b62e-10bcd39ca709; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              203,
+              409,
+              83,
+              163
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies one locally bounded dialogue extent. Its border/tail or local text area is independent of nearby balloons, gutters, and art; no raw fragment membership is inferred.",
+          "review_state": "reviewed",
+          "classification": "reviewed-independent-dialogue"
+        },
+        {
+          "id": "s7-r04",
+          "owner_id": "s7-owner-r04",
+          "container_id": "source-local:s7-r04",
+          "fragment_member_identity": "final OCR region 29e64e78-5a58-4e9f-9abe-2ee024e865e1; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              48,
+              534,
+              123,
+              188
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies one locally bounded dialogue extent. Its border/tail or local text area is independent of nearby balloons, gutters, and art; no raw fragment membership is inferred.",
+          "review_state": "reviewed",
+          "classification": "reviewed-independent-dialogue"
+        },
+        {
+          "id": "s7-r05",
+          "owner_id": "s7-owner-r05",
+          "container_id": "source-local:s7-r05",
+          "fragment_member_identity": "final OCR region 3a8c1d7b-b542-4687-b291-bb5b25be28d5; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              877,
+              384,
+              79,
+              270
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies one locally bounded dialogue extent. Its border/tail or local text area is independent of nearby balloons, gutters, and art; no raw fragment membership is inferred.",
+          "review_state": "reviewed",
+          "classification": "reviewed-independent-dialogue"
+        },
+        {
+          "id": "s7-r06",
+          "owner_id": "s7-owner-r06",
+          "container_id": "source-local:s7-r06",
+          "fragment_member_identity": "final OCR region 73ec0ade-fa44-4a74-9b6f-ee20ea3dd6a0; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              244,
+              835,
+              183,
+              202
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies one locally bounded dialogue extent. Its border/tail or local text area is independent of nearby balloons, gutters, and art; no raw fragment membership is inferred.",
+          "review_state": "reviewed",
+          "classification": "reviewed-independent-dialogue"
+        },
+        {
+          "id": "s7-r07",
+          "owner_id": "s7-owner-r07",
+          "container_id": "source-local:s7-r07",
+          "fragment_member_identity": "final OCR region f604ab63-7b34-4411-ba50-8f81e06a329a; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              897,
+              822,
+              152,
+              240
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies one locally bounded dialogue extent. Its border/tail or local text area is independent of nearby balloons, gutters, and art; no raw fragment membership is inferred.",
+          "review_state": "reviewed",
+          "classification": "reviewed-independent-dialogue"
+        },
+        {
+          "id": "s7-r08",
+          "owner_id": "s7-owner-r08",
+          "container_id": "source-local:s7-r08",
+          "fragment_member_identity": "final OCR region 9fe9579b-7b85-4c61-b94b-353e75392d85; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              202,
+              1122,
+              114,
+              249
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies one locally bounded dialogue extent. Its border/tail or local text area is independent of nearby balloons, gutters, and art; no raw fragment membership is inferred.",
+          "review_state": "reviewed",
+          "classification": "reviewed-independent-dialogue"
+        },
+        {
+          "id": "s7-r09",
+          "owner_id": "s7-owner-r09",
+          "container_id": "source-local:s7-r09",
+          "fragment_member_identity": "final OCR region 476c3294-6f9b-4888-bbce-669a51f3b8cb; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              391,
+              1124,
+              152,
+              220
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies one locally bounded dialogue extent. Its border/tail or local text area is independent of nearby balloons, gutters, and art; no raw fragment membership is inferred.",
+          "review_state": "reviewed",
+          "classification": "reviewed-independent-dialogue"
+        },
+        {
+          "id": "s7-r10",
+          "owner_id": "s7-owner-r10",
+          "container_id": "source-local:s7-r10",
+          "fragment_member_identity": "final OCR region 7a1400db-f168-41db-8cbb-6f9ceec776a6; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              836,
+              1174,
+              138,
+              127
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies one locally bounded dialogue extent. Its border/tail or local text area is independent of nearby balloons, gutters, and art; no raw fragment membership is inferred.",
+          "review_state": "reviewed",
+          "classification": "reviewed-independent-dialogue"
+        },
+        {
+          "id": "s7-r11",
+          "owner_id": "none",
+          "container_id": "none",
+          "fragment_member_identity": "final OCR region 003756f6-04a9-41f1-8e30-d65f13c0e957; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              988,
+              118,
+              120,
+              162
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies this as SFX, a decorative mark, a credit, a logo, a counter, or another non-dialogue element. It is not assigned a dialogue owner or cleanup target.",
+          "review_state": "reviewed",
+          "classification": "reviewed-non-dialogue"
+        },
+        {
+          "id": "s7-r12",
+          "owner_id": "s7-owner-r12",
+          "container_id": "none",
+          "fragment_member_identity": "final OCR region dcaa4e25-2497-4c46-9722-960917ba0286; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              384,
+              575,
+              46,
+              99
+            ]
+          },
+          "confidence": 0.9,
+          "evidence_basis": "Source-pixel review identifies one locally bounded free-standing caption or narration extent. It has no speech-balloon container and is not merged by proximity.",
+          "review_state": "reviewed",
+          "classification": "reviewed-free-standing-caption"
+        },
+        {
+          "id": "s7-r13",
+          "owner_id": "s7-owner-r13",
+          "container_id": "none",
+          "fragment_member_identity": "final OCR region 12ef55a0-29d8-4fa4-809a-effd1a8c6dc6; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              747,
+              826,
+              79,
+              159
+            ]
+          },
+          "confidence": 0.9,
+          "evidence_basis": "Source-pixel review identifies one locally bounded free-standing caption or narration extent. It has no speech-balloon container and is not merged by proximity.",
+          "review_state": "reviewed",
+          "classification": "reviewed-free-standing-caption"
+        },
+        {
+          "id": "s7-r14",
+          "owner_id": "s7-owner-r14",
+          "container_id": "source-local:s7-r14",
+          "fragment_member_identity": "final OCR region 1e82592a-945d-43a2-9c30-42ee9604290a; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              98,
+              849,
+              118,
+              159
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies one locally bounded dialogue extent. Its border/tail or local text area is independent of nearby balloons, gutters, and art; no raw fragment membership is inferred.",
+          "review_state": "reviewed",
+          "classification": "reviewed-independent-dialogue"
+        },
+        {
+          "id": "s7-r15",
+          "owner_id": "s7-owner-r15",
+          "container_id": "source-local:s7-r15",
+          "fragment_member_identity": "final OCR region 423e0ca3-0080-4612-96e6-e16196989d83; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              128,
+              1621,
+              81,
+              131
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies one locally bounded dialogue extent. Its border/tail or local text area is independent of nearby balloons, gutters, and art; no raw fragment membership is inferred.",
+          "review_state": "reviewed",
+          "classification": "reviewed-independent-dialogue"
+        },
+        {
+          "id": "s7-r16",
+          "owner_id": "none",
+          "container_id": "none",
+          "fragment_member_identity": "final OCR region 1ec53758-476e-46e5-9c2c-ebb80d5d15c2; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              511,
+              26,
+              62,
+              92
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies this as SFX, a decorative mark, a credit, a logo, a counter, or another non-dialogue element. It is not assigned a dialogue owner or cleanup target.",
+          "review_state": "reviewed",
+          "classification": "reviewed-non-dialogue"
+        },
+        {
+          "id": "s7-r17",
+          "owner_id": "none",
+          "container_id": "none",
+          "fragment_member_identity": "final OCR region 809fb667-f1cc-4633-bfd4-5054cc2db366; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              219,
+              826,
+              33,
+              37
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies this as SFX, a decorative mark, a credit, a logo, a counter, or another non-dialogue element. It is not assigned a dialogue owner or cleanup target.",
+          "review_state": "reviewed",
+          "classification": "reviewed-non-dialogue"
+        },
+        {
+          "id": "s7-r18",
+          "owner_id": "none",
+          "container_id": "none",
+          "fragment_member_identity": "final OCR region c6209abc-23fb-4a81-8553-92c14e8e89c4; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              42,
+              827,
+              31,
+              33
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies this as SFX, a decorative mark, a credit, a logo, a counter, or another non-dialogue element. It is not assigned a dialogue owner or cleanup target.",
+          "review_state": "reviewed",
+          "classification": "reviewed-non-dialogue"
+        },
+        {
+          "id": "s7-r19",
+          "owner_id": "none",
+          "container_id": "none",
+          "fragment_member_identity": "final OCR region 26584517-9ef1-48fa-b344-d2d19944b42c; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              1110,
+              827,
+              32,
+              38
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies this as SFX, a decorative mark, a credit, a logo, a counter, or another non-dialogue element. It is not assigned a dialogue owner or cleanup target.",
+          "review_state": "reviewed",
+          "classification": "reviewed-non-dialogue"
+        },
+        {
+          "id": "s7-r20",
+          "owner_id": "none",
+          "container_id": "none",
+          "fragment_member_identity": "final OCR region 4f1bc4f5-c1bc-4821-9a39-99f7f73bab90; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              1113,
+              1004,
+              26,
+              31
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies this as SFX, a decorative mark, a credit, a logo, a counter, or another non-dialogue element. It is not assigned a dialogue owner or cleanup target.",
+          "review_state": "reviewed",
+          "classification": "reviewed-non-dialogue"
+        },
+        {
+          "id": "s7-r21",
+          "owner_id": "none",
+          "container_id": "none",
+          "fragment_member_identity": "final OCR region 1a714d73-c16e-4b21-9116-8ef79f19592f; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              754,
+              1003,
+              32,
+              34
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies this as SFX, a decorative mark, a credit, a logo, a counter, or another non-dialogue element. It is not assigned a dialogue owner or cleanup target.",
+          "review_state": "reviewed",
+          "classification": "reviewed-non-dialogue"
+        },
+        {
+          "id": "s7-r22",
+          "owner_id": "none",
+          "container_id": "none",
+          "fragment_member_identity": "final OCR region b521502a-d380-4d0b-aac3-80d15fba1b47; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              219,
+              1003,
+              33,
+              34
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies this as SFX, a decorative mark, a credit, a logo, a counter, or another non-dialogue element. It is not assigned a dialogue owner or cleanup target.",
+          "review_state": "reviewed",
+          "classification": "reviewed-non-dialogue"
+        },
+        {
+          "id": "s7-r23",
+          "owner_id": "none",
+          "container_id": "none",
+          "fragment_member_identity": "final OCR region 17d5141b-a06f-4579-bf8b-cb82d83448f6; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              42,
+              1003,
+              31,
+              34
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies this as SFX, a decorative mark, a credit, a logo, a counter, or another non-dialogue element. It is not assigned a dialogue owner or cleanup target.",
+          "review_state": "reviewed",
+          "classification": "reviewed-non-dialogue"
+        },
+        {
+          "id": "s7-r24",
+          "owner_id": "s7-owner-r24",
+          "container_id": "source-local:s7-r24",
+          "fragment_member_identity": "final OCR region 7e150a8c-6a93-46d0-ab85-d71ac5f3ad41; raw members absent",
+          "geometry": {
+            "coordinate_space": "source-pixels",
+            "role": "final OCR bbox",
+            "bbox": [
+              73,
+              1162,
+              87,
+              188
+            ]
+          },
+          "confidence": 0.95,
+          "evidence_basis": "Source-pixel review identifies one locally bounded dialogue extent. Its border/tail or local text area is independent of nearby balloons, gutters, and art; no raw fragment membership is inferred.",
+          "review_state": "reviewed",
+          "classification": "reviewed-independent-dialogue"
+        }
+      ]
+    }
+  ],
+  "counts": {
+    "final_ocr_regions": 24,
+    "reviewed": 24,
+    "blocking": 0,
+    "classifications": {
+      "reviewed-independent-dialogue": 13,
+      "reviewed-non-dialogue": 9,
+      "reviewed-free-standing-caption": 2
+    },
+    "fragment_accounting": "Raw A02 fragment memberships remain unavailable. All retained final OCR regions are source-pixel reviewed; 0 fused final boxes remain explicit blockers."
+  }
+}
