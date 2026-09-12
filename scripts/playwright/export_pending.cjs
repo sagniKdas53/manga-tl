@@ -322,7 +322,7 @@ async function getOrCreateSeries(page, args, smartConfig, run) {
       tlModel: smartConfig.tlModel,
       qaProvider: smartConfig.qaProvider,
       qaMode: smartConfig.qaMode,
-      useFallbackModels: true,
+      useFallbackModels: false,
     },
   });
   if (!createRes.ok()) {
@@ -357,7 +357,7 @@ async function getOrCreateChapter(page, args, seriesId, sampleId, smartConfig, r
   // Putting the shard label in the title gives each runner its own chapter, so page 1 is private
   // again and cleanupScratch still only deletes what this process created.
   const shardSuffix = args.shard ? ` #${args.shard}` : "";
-  const title = `${SCRATCH_PREFIX} ${smartConfig.ocrModel} ${smartConfig.tlModel}${shardSuffix}`;
+  const title = `${SCRATCH_PREFIX} ${smartConfig.ocrModel} ${smartConfig.tlModel} [no fallback]${shardSuffix}`;
   const listChapters = async () => {
     const res = await page.request.get(`${args.base}/api/series/${seriesId}/chapters?size=200`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -399,7 +399,7 @@ async function getOrCreateChapter(page, args, seriesId, sampleId, smartConfig, r
         qaProvider: smartConfig.qaProvider,
         qaMode: smartConfig.qaMode,
         useContextMemory: true,
-        useFallbackModels: true,
+        useFallbackModels: false,
       },
     });
     if (createRes.status() !== 409) break;
@@ -506,6 +506,7 @@ async function uploadSource(page, chapterId, sourcePath, args, run) {
 async function waitForPipeline(page, pageId, args, timeoutMs = 180_000) {
   const token = await getAuthToken(page, args);
   const start = Date.now();
+  let lastState = "page did not return a readable layer list";
   console.log(`Waiting for pipeline to complete on page ${pageId}...`);
   while (Date.now() - start < timeoutMs) {
     try {
@@ -515,17 +516,24 @@ async function waitForPipeline(page, pageId, args, timeoutMs = 180_000) {
       if (res.ok()) {
         const data = await res.json().catch(() => ({}));
         const layers = data.layers || [];
+        const ocrLayer = layers.find(l => (l.layer?.type || l.type) === "ocr");
         const tlLayer = layers.find(l => (l.layer?.type || l.type) === "translation");
-        if (tlLayer && tlLayer.elements && tlLayer.elements.length > 0) {
-          console.log(`Pipeline complete: ${tlLayer.elements.length} translation elements generated`);
-          return true;
+        const ocrCount = Array.isArray(ocrLayer?.elements) ? ocrLayer.elements.length : 0;
+        const tlCount = Array.isArray(tlLayer?.elements) ? tlLayer.elements.length : 0;
+        if (ocrCount > 0 && tlCount > 0) {
+          console.log(`Pipeline complete: ${ocrCount} OCR regions, ${tlCount} translation elements generated`);
+          return;
         }
+        lastState = `OCR regions=${ocrCount}, translation elements=${tlCount}`;
+      } else {
+        lastState = `page request returned ${res.status()}`;
       }
-    } catch (e) {}
+    } catch (e) {
+      lastState = e.message || String(e);
+    }
     await page.waitForTimeout(3000);
   }
-  console.warn(`Pipeline wait timed out after ${timeoutMs}ms, proceeding to Reader`);
-  return false;
+  throw new Error(`Pipeline did not complete after ${timeoutMs}ms (${lastState}); refusing to export`);
 }
 
 async function waitForReader(page, settleMs) {
