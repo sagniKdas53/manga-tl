@@ -1,0 +1,39 @@
+{
+  "app_head": "8363bf2f330fd36bc48d69b77c0f6e49b2048d1d",
+  "corpus_head": "c332f78eb04d089c9b540003d96b313a5fdf7a5c",
+  "worker_head": "7b54f8c1c516eb445e869b2776ffa62e4ee2762b",
+  "language_count_basis": "Declared metadata, not a corpus-wide linguistic verification",
+  "counts": {
+    "active/ja": 211,
+    "active/ko": 29,
+    "active/zh": 22,
+    "pending/ja": 24,
+    "pending/ko": 192,
+    "pending/zh": 169
+  },
+  "duplicate_source_bytes": [
+    [
+      "sample258",
+      "sample637"
+    ]
+  ],
+  "errors": [],
+  "selection_counts": {
+    "holdout-candidate/zh": 4
+  },
+  "selection_styles": {
+    "black-and-white four-panel domestic dialogue comic": 1,
+    "black-and-white six-panel school sports dialogue page": 1,
+    "colored five-panel game fan-comic with conventional dialogue balloons": 1,
+    "colored four-panel game fan-comic with conventional dialogue balloons": 1
+  },
+  "selection_tags": {
+    "conventional-balloon": 4,
+    "human-en-reference": 4,
+    "multi-panel": 4,
+    "rebuilt-luna-output": 4
+  },
+  "selection_lanes": {
+    "pending": 4
+  }
+}

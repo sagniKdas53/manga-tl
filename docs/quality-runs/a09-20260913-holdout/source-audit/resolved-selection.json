@@ -1,0 +1,243 @@
+{
+  "format": "a09-zh-candidate-selection/v1",
+  "status": "candidate-review",
+  "date": "2026-09-13",
+  "purpose": "Replace the sparse/weak prior ZH candidate pair with four visually reviewed, rebuilt Chinese-dialogue multi-panel conventional-balloon candidates. This is not a frozen A09 holdout manifest.",
+  "requirements_addressed": {
+    "multiPanelConventionalBalloonPerLanguage": 4,
+    "selectedZhCandidates": 4
+  },
+  "replaces": [
+    {
+      "id": "sample201",
+      "reason": "Sparse dialogue; it is not retained as one of the four ordinary multi-panel ZH candidates."
+    },
+    {
+      "id": "sample205",
+      "reason": "Visual review finds a single dominant scene rather than a useful conventional multi-panel control."
+    }
+  ],
+  "retained_regression_ids": [
+    "sample177",
+    "sample222",
+    "sample61",
+    "sample99",
+    "sample93",
+    "sample83"
+  ],
+  "excluded_sources": [
+    {
+      "id": "sample206",
+      "reason": "ZH development control"
+    },
+    {
+      "id": "sample208",
+      "reason": "ZH development control"
+    },
+    {
+      "id": "sample226",
+      "reason": "ZH development control"
+    },
+    {
+      "id": "sample261",
+      "reason": "ZH development control"
+    },
+    {
+      "id": "sample457",
+      "reason": "ZH development control"
+    },
+    {
+      "id": "sample609",
+      "reason": "ZH development control"
+    },
+    {
+      "id": "sample611",
+      "reason": "ZH development control"
+    },
+    {
+      "id": "sample612",
+      "reason": "ZH development control"
+    },
+    {
+      "id": "sample209",
+      "reason": "Related to development sample208"
+    },
+    {
+      "id": "sample227",
+      "reason": "Related to development sample226"
+    },
+    {
+      "id": "sample230",
+      "reason": "Related to development sample226"
+    },
+    {
+      "id": "sample231",
+      "reason": "Related to development sample226"
+    }
+  ],
+  "samples": [
+    {
+      "id": "sample639",
+      "language": "zh",
+      "lane": "pending",
+      "source": "corpus/gaps/pending/zh/sample639/source.jpg",
+      "sha256": "c7c6f6b31e28bc8a8f7ac12efad0d2d2d4d42d8424f73eb634117aa9183a85a5",
+      "width": 1316,
+      "height": 2048,
+      "origin": {
+        "previous_path": "corpus/gaps/chinese-manga-sampls/one",
+        "pair_method": "explicit user-provided Chinese/English filenames"
+      },
+      "gap_category": null,
+      "provenance_metadata": {},
+      "contact_sheet": "pending-zh-04.jpg",
+      "dimensions": [
+        1316,
+        2048
+      ],
+      "split": "holdout-candidate",
+      "style": "colored five-panel game fan-comic with conventional dialogue balloons",
+      "tags": [
+        "multi-panel",
+        "conventional-balloon",
+        "human-en-reference",
+        "rebuilt-luna-output"
+      ],
+      "reviewed_panel_count": 5,
+      "ocr_elements": 12,
+      "translation_elements": 12,
+      "translation_model": "openai/gpt-5.6-luna",
+      "family_evidence": "Visible dialogue names identify the Zenless Zone Zero setting; supplied Japanese and human-English reference pair. Creator/series provenance remains unverified."
+    },
+    {
+      "id": "sample641",
+      "language": "zh",
+      "lane": "pending",
+      "source": "corpus/gaps/pending/zh/sample641/source.webp",
+      "sha256": "7b3c483d51b1f4cf983bf04a7f9adf1119ce3df2a739a636a2de1e4f9730ba66",
+      "width": 1280,
+      "height": 1810,
+      "origin": {
+        "previous_path": "corpus/gaps/chinese-manga-sampls/three",
+        "pair_method": "explicit user-provided Chinese/English filenames"
+      },
+      "gap_category": null,
+      "provenance_metadata": {},
+      "contact_sheet": "pending-zh-04.jpg",
+      "dimensions": [
+        1280,
+        1810
+      ],
+      "split": "holdout-candidate",
+      "style": "black-and-white four-panel domestic dialogue comic",
+      "tags": [
+        "multi-panel",
+        "conventional-balloon",
+        "human-en-reference",
+        "rebuilt-luna-output"
+      ],
+      "reviewed_panel_count": 4,
+      "ocr_elements": 12,
+      "translation_elements": 12,
+      "translation_model": "openai/gpt-5.6-luna",
+      "family_evidence": "Visually distinct domestic cooking scene. Creator/series provenance remains unverified."
+    },
+    {
+      "id": "sample642",
+      "language": "zh",
+      "lane": "pending",
+      "source": "corpus/gaps/pending/zh/sample642/source.webp",
+      "sha256": "7b0e8ee98ff6d8ccb38e2ca10f70aa7a502ff23ca1ebf63799b907fc2f16259c",
+      "width": 1080,
+      "height": 1557,
+      "origin": {
+        "previous_path": "corpus/gaps/chinese-manga-sampls/four",
+        "pair_method": "explicit user-provided Chinese/English filenames"
+      },
+      "gap_category": null,
+      "provenance_metadata": {},
+      "contact_sheet": "pending-zh-04.jpg",
+      "dimensions": [
+        1080,
+        1557
+      ],
+      "split": "holdout-candidate",
+      "style": "black-and-white six-panel school sports dialogue page",
+      "tags": [
+        "multi-panel",
+        "conventional-balloon",
+        "human-en-reference",
+        "rebuilt-luna-output"
+      ],
+      "reviewed_panel_count": 6,
+      "ocr_elements": 15,
+      "translation_elements": 15,
+      "translation_model": "openai/gpt-5.6-luna",
+      "family_evidence": "Visually distinct swimming/competition scene. Creator/series provenance remains unverified."
+    },
+    {
+      "id": "sample644",
+      "language": "zh",
+      "lane": "pending",
+      "source": "corpus/gaps/pending/zh/sample644/source.webp",
+      "sha256": "1fc14957ff2eb870f82b1bb4bfa4d92ff0f2765625a3dc333b3cbe472b48d6f9",
+      "width": 1280,
+      "height": 1793,
+      "origin": {
+        "previous_path": "corpus/gaps/chinese-manga-sampls/six",
+        "pair_method": "explicit user-provided Chinese/English filenames"
+      },
+      "gap_category": null,
+      "provenance_metadata": {},
+      "contact_sheet": "pending-zh-04.jpg",
+      "dimensions": [
+        1280,
+        1793
+      ],
+      "split": "holdout-candidate",
+      "style": "colored four-panel game fan-comic with conventional dialogue balloons",
+      "tags": [
+        "multi-panel",
+        "conventional-balloon",
+        "human-en-reference",
+        "rebuilt-luna-output"
+      ],
+      "reviewed_panel_count": 4,
+      "ocr_elements": 9,
+      "translation_elements": 9,
+      "translation_model": "openai/gpt-5.6-luna",
+      "family_evidence": "Visible dialogue identifies Furina / Genshin Impact, distinct from the Zenless Zone Zero candidate. Creator/series provenance remains unverified."
+    }
+  ],
+  "not_selected": [
+    {
+      "id": "sample640",
+      "reason": "Likely related to sample641 by recurring characters and domestic setting; retain one pending provenance review."
+    },
+    {
+      "id": "sample643",
+      "reason": "Adult sexual content; not an ordinary conventional-dialogue control."
+    },
+    {
+      "id": "sample645",
+      "reason": "Sexualized school gag; not an ordinary conventional-dialogue control."
+    },
+    {
+      "id": "sample646",
+      "reason": "Caption-led character composition rather than conventional speech-balloon coverage."
+    },
+    {
+      "id": "sample647",
+      "reason": "Adult sexual content; not an ordinary conventional-dialogue control."
+    },
+    {
+      "id": "sample648",
+      "reason": "Adult sexual content and one dominant scene; not an ordinary multi-panel conventional control."
+    }
+  ],
+  "blockers": [
+    "The four chosen sources meet the visual multi-panel/conventional-balloon stratum but have no verified creator or series provenance; they cannot prove the four-independent-family quota.",
+    "A full A09 holdout still needs eight ZH pages, eight JA pages, eight KO pages, family/near-duplicate review, reviewed ownership/action labels, and frozen acceptance thresholds.",
+    "No holdout result may be used for tuning before those requirements are resolved."
+  ]
+}

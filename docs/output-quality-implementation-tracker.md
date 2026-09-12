@@ -24,7 +24,7 @@ Planning evidence is complete: [investigation](output-quality-investigation.md),
 
 ## Tracker and execution order
 
-Task statuses: `TODO`, `READY`, `ACTIVE`, `REVIEW`, `DONE`, `BLOCKED`. A01–A08, source-only A06-C0 and A06-C are `DONE`; A09 and G0 are `BLOCKED` by the independent ZH holdout stratum and missing holdout labels/thresholds. The coordinator advances later tasks after their dependencies and the applicable entry gate pass. A milestone checkbox means its exit gate has passed, with evidence linked here. An unresolved or unexecuted gate is not a pass.
+Task statuses: `TODO`, `READY`, `ACTIVE`, `REVIEW`, `DONE`, `BLOCKED`. A01–A08, source-only A06-C0 and A06-C are `DONE`; A09 and G0 remain `BLOCKED` by unresolved holdout source-family/near-duplicate provenance, the incomplete eight-page ZH roster, and missing holdout labels/thresholds. The four visually reviewed rebuilt ZH candidates in [the 2026-09-13 selection](quality-runs/a09-20260913-holdout/A09-zh-candidate-selection.json) replace the weak `sample201` / `sample205` provisional pair; visual eligibility alone does not pass A09.
 
 | Complete | Milestone | Task IDs | Entry condition | Exit gate | Checkpoint |
 | --- | --- | --- | --- | --- | --- |
