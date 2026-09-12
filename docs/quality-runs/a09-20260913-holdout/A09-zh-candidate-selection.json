@@ -7,6 +7,7 @@
     "multiPanelConventionalBalloonPerLanguage": 4,
     "selectedZhCandidates": 4
   },
+  "content_policy": "Adult material is admissible for A09; source identity, family separation, language, layout, labels, and thresholds determine eligibility.",
   "replaces": [
     {
       "id": "sample201",
@@ -99,12 +100,12 @@
     }
   ],
   "not_selected": [
-    {"id": "sample640", "reason": "Likely related to sample641 by recurring characters and domestic setting; retain one pending provenance review."},
-    {"id": "sample643", "reason": "Adult sexual content; not an ordinary conventional-dialogue control."},
-    {"id": "sample645", "reason": "Sexualized school gag; not an ordinary conventional-dialogue control."},
-    {"id": "sample646", "reason": "Caption-led character composition rather than conventional speech-balloon coverage."},
-    {"id": "sample647", "reason": "Adult sexual content; not an ordinary conventional-dialogue control."},
-    {"id": "sample648", "reason": "Adult sexual content and one dominant scene; not an ordinary multi-panel conventional control."}
+    {"id": "sample640", "reason": "Not in the four primary candidates; it belongs to the same unattributed domestic-comic family as sample641, which is capped at two pages."},
+    {"id": "sample643", "reason": "Adult material is admissible; it is not in the four primary candidates because it belongs to the Genshin Impact series-family cluster and lacks original-creator provenance."},
+    {"id": "sample645", "reason": "Adult material is admissible; it is not in the four primary candidates because original creator/series provenance is absent."},
+    {"id": "sample646", "reason": "Caption-led composition and a third member of the Genshin Impact series-family cluster, which is capped at two pages pending creator attribution."},
+    {"id": "sample647", "reason": "Adult material is admissible; it is a third member of the Genshin Impact series-family cluster, which is capped at two pages pending creator attribution."},
+    {"id": "sample648", "reason": "Adult material is admissible; it is a fourth member of the Genshin Impact series-family cluster, which is capped at two pages pending creator attribution."}
   ],
   "blockers": [
     "The four chosen sources meet the visual multi-panel/conventional-balloon stratum but have no verified creator or series provenance; they cannot prove the four-independent-family quota.",

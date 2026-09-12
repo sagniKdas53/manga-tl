@@ -1,0 +1,120 @@
+{
+  "format": "a09-family-provenance-review/v1",
+  "date": "2026-09-13",
+  "scope": {
+    "candidate_pool": "The eight JA and eight KO rows from a09-20260911-holdout plus sample201, sample205, and sample639 through sample648.",
+    "content_policy": "Adult material is admissible. Content rating is not an A09 exclusion criterion; source identity, language, layout, family separation, labels, and thresholds remain the criteria.",
+    "not_a_holdout_manifest": true
+  },
+  "source_provenance_review": {
+    "ja": {
+      "verified_or_attributed_creator_evidence": [
+        {
+          "id": "sample27",
+          "creator": "@yuyuyuyu9250",
+          "evidence": "Its retained English reference attributes the original as ‘OG @yuyuyuyu9250’. The original post URL is absent."
+        },
+        {
+          "id": "sample128",
+          "creator": "まやふふ(賢)",
+          "source_url": "https://www.pixiv.net/en/artworks/146785119",
+          "evidence": "The Pixiv page metadata names the creator and pins the exact artwork ID."
+        },
+        {
+          "id": "sample131",
+          "creator": "牛骨てゑる",
+          "source_url": "https://www.pixiv.net/en/artworks/146399159",
+          "evidence": "The Pixiv page metadata names the creator and pins the exact artwork ID."
+        },
+        {
+          "id": "sample141",
+          "creator": "kusaba_eru_happy_crystal",
+          "series": "sousou_no_frieren",
+          "evidence": "Corpus provenance metadata pins both artist and series."
+        }
+      ],
+      "unverified_ids": ["sample38", "sample41", "sample49", "sample57"],
+      "finding": "Four distinct creator identifiers are available, but half of the candidate pages still lack source-family provenance."
+    },
+    "ko": {
+      "verified_or_attributed_creator_evidence": [
+        {
+          "id": "sample273",
+          "creator": "BoxHeaD (@box_head5)",
+          "series_or_franchise": "Blue Archive",
+          "source_url": "https://x.com/i/status/2072247261837611425",
+          "evidence": "The original source post is attributed by Nitter to BoxHeaD and carries #ブルアカ."
+        },
+        {
+          "id": "sample321",
+          "creator": "Feita (@Feita602)",
+          "source_url": "https://x.com/i/status/2077700409670742451",
+          "evidence": "The source-post ID resolves to Feita. The retained translator caption mentioning te0hyang is not creator evidence."
+        },
+        {
+          "id": "sample349",
+          "creator": "터향 (@te0hyang)",
+          "source_url": "https://x.com/i/status/2080873817019474252",
+          "evidence": "The source-post ID resolves to 터향. The translator caption’s Sunahi230400 link conflicts and is not used as source attribution."
+        },
+        {
+          "id": "sample372",
+          "creator": "터향 (@te0hyang)",
+          "source_url": "https://x.com/i/status/2083357860772339869",
+          "evidence": "The source-post ID resolves to 터향; this is the second and final page allowed for that creator family."
+        }
+      ],
+      "unverified_ids": ["sample179", "sample196", "sample225", "sample253"],
+      "known_family_counts": {"BoxHeaD": 1, "Feita": 1, "te0hyang": 2},
+      "finding": "Three distinct creator families are proven. One additional independently sourced Korean creator is still required; translation-account captions are insufficient and can conflict with source-post authorship."
+    },
+    "zh": {
+      "verified_or_attributed_creator_evidence": [
+        {
+          "id": "sample639",
+          "creator": "琉樹 (@ruki6248ta)",
+          "evidence": "Visible page watermark and bottom-right credit read ‘作者：琉樹@ruki6248ta’."
+        }
+      ],
+      "visual_or_textual_clusters_not_creator_proof": [
+        {
+          "members": ["sample640", "sample641"],
+          "basis": "Same recurring characters, domestic cooking setup, line treatment, and translated dialogue context; treat as one unattributed family, capped at two pages."
+        },
+        {
+          "members": ["sample643", "sample644", "sample646", "sample647", "sample648"],
+          "basis": "Visible character names identify the Genshin Impact source franchise: Furina in 643/644/646 and Hu Tao/Yanfei in 647/648. Treat as one series-family cluster, capped at two pages until individual original creators are proven."
+        }
+      ],
+      "unverified_ids": ["sample201", "sample205", "sample640", "sample641", "sample642", "sample643", "sample644", "sample645", "sample646", "sample647", "sample648"],
+      "finding": "Only one candidate has an identifiable original creator. Allowing adult pages adds material but does not create four independently proven Chinese creator/series families."
+    }
+  },
+  "near_duplicate_review": {
+    "exact_byte_sha256_duplicate_pairs": [],
+    "visual_probe": {
+      "algorithm": "256-bit grayscale difference hash (17x16 resized source; adjacent-pixel comparisons)",
+      "candidate_pair_count": 378,
+      "threshold": "distance <= 28 of 256 bits",
+      "matching_pairs": [],
+      "lowest_observed_distance": {"left": "sample196", "right": "sample349", "distance": 100},
+      "result": "No exact-byte or strong visual near-duplicate pair was found in the reviewed candidate pool."
+    },
+    "limitation": "Different pages by the same creator, adjacent chapter pages, recolors, and alternate-language typesetting can be visually dissimilar. This probe is evidence against direct image duplication, not proof of source-family independence."
+  },
+  "A09_gate_verdict": {
+    "status": "blocked",
+    "adult_content_admission_changes_status": false,
+    "passed": [
+      "The four visually reviewed new ZH pages satisfy the required four-page multi-panel/conventional-balloon stratum.",
+      "No exact source-byte duplicate or close dHash duplicate was found in the reviewed candidate pool.",
+      "Known KO creator family te0hyang is bounded to two pages."
+    ],
+    "blocking": [
+      "The candidate pool does not establish four independently proven ZH creator/series families; one is proven and two clusters remain unattributed.",
+      "The KO pool establishes only three independent creators and contains conflicting translator-caption versus source-post attribution.",
+      "A09 has no frozen 24-page source/label/threshold manifest. The existing A07 labels apply only to development fixtures and cannot be reused for holdout candidates.",
+      "No selected holdout roster may be reported as complete or used for tuning until the unresolved provenance and required labels/thresholds are reviewed."
+    ]
+  }
+}
