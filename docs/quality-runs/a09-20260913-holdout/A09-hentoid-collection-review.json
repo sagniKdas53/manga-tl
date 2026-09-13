@@ -1,0 +1,198 @@
+{
+  "format": "a09-hentoid-collection-review/v1",
+  "date": "2026-09-13",
+  "scope": {
+    "root": "/home/sagnik/Documents/syncthing/phone/Hentoid",
+    "read_only": true,
+    "content_policy": "Adult material is admissible; no content was copied, moved, deleted, or processed."
+  },
+  "metadata_inventory": {
+    "galleries": 1440,
+    "sites": {
+      "NHENTAI": 1197,
+      "PIXIV": 60,
+      "EHENTAI": 39,
+      "PURURIN": 6,
+      "HITOMI": 123,
+      "HENTAIFOX": 15
+    },
+    "declared_languages": {
+      "english": 1015,
+      "translated": 892,
+      "japanese": 284,
+      "chinese": 71,
+      "korean": 2,
+      "spanish": 1
+    },
+    "chinese_galleries": 71,
+    "chinese_pages_hashed": 3562
+  },
+  "exact_source_matches": {
+    "count": 9,
+    "corpus_samples": [
+      "sample640",
+      "sample641",
+      "sample642",
+      "sample643",
+      "sample644",
+      "sample645",
+      "sample646",
+      "sample647",
+      "sample648"
+    ],
+    "evidence_location": "A09-family-provenance-review.json#source_provenance_review.zh.hentoid_exact_byte_matches",
+    "interpretation": "Exact bytes establish the local source-galleries for nine corpus pages. Gallery artist metadata is useful attribution context; it does not gate A09."
+  },
+  "visually_reviewed_candidates": [
+    {
+      "gallery_index": 9,
+      "gallery_path": "nhentai3/kotorakku - Bijutsubu no Kyonyuu Kouhai ga Nude Model ni Natta Kekka Amari ni Ero Sugite Or[547200]",
+      "page": "28.webp",
+      "site": "NHENTAI",
+      "gallery_url": "/547200/",
+      "declared_languages": [
+        "translated",
+        "chinese"
+      ],
+      "role": "B&W conventional multi-panel baseline with dense vertical dialogue and clean gutters"
+    },
+    {
+      "gallery_index": 26,
+      "gallery_path": "nhentai3/marugoshi - Hataya Misuzu no P Ikusei Nisshi  秦谷美铃的制作人育成日志 - [619253]",
+      "page": "09.webp",
+      "site": "NHENTAI",
+      "gallery_url": "/619253/",
+      "declared_languages": [
+        "translated",
+        "chinese"
+      ],
+      "role": "high-density vertical bubbles, nested text and overlapping SFX"
+    },
+    {
+      "gallery_index": 28,
+      "gallery_path": "nhentai2/kawamura tsukasa - Higuchi Madoka Nurse Cosplay Manga - [450892]",
+      "page": "08.jpg",
+      "site": "NHENTAI",
+      "gallery_url": "/450892/",
+      "declared_languages": [
+        "translated",
+        "chinese"
+      ],
+      "role": "conventional four-panel page with varied balloon placement and stroke weights"
+    },
+    {
+      "gallery_index": 32,
+      "gallery_path": "nhentai4/vel - Hu Tao Possession - [663934]",
+      "page": "07.webp",
+      "site": "NHENTAI",
+      "gallery_url": "/663934/",
+      "declared_languages": [
+        "translated",
+        "chinese"
+      ],
+      "role": "flat-color contrast with large horizontal dialogue bubbles"
+    },
+    {
+      "gallery_index": 35,
+      "gallery_path": "nhentai3/kumada - Ijime Ijirare - [236186]",
+      "page": "09.jpg",
+      "site": "NHENTAI",
+      "gallery_url": "/236186/",
+      "declared_languages": [
+        "translated",
+        "chinese"
+      ],
+      "role": "dense five-panel page with thin balloons, narration boxes and screentones"
+    },
+    {
+      "gallery_index": 36,
+      "gallery_path": "nhentai4/nagasode - Ima kara Anata wa Onanie Ningyou desu - [435450]",
+      "page": "14.jpg",
+      "site": "NHENTAI",
+      "gallery_url": "/435450/",
+      "declared_languages": [
+        "translated",
+        "chinese"
+      ],
+      "role": "full-color page with graphical UI labels and stylized SFX"
+    },
+    {
+      "gallery_index": 40,
+      "gallery_path": "nhentai4/jukkaku komado - Konna Kibun mo Natsu da yo ne - [672710]",
+      "page": "36.webp",
+      "site": "NHENTAI",
+      "gallery_url": "/672710/",
+      "declared_languages": [
+        "translated",
+        "chinese"
+      ],
+      "role": "narrative panels combined with interface diagrams, prompts and arrows"
+    },
+    {
+      "gallery_index": 48,
+      "gallery_path": "nhentai3/hikarino - Otatomo ga Razoku Datte Kedo Osouwanai Yakusoku de Tomatta Kekka  宅友是裸族但約好不襲擊她了結[655300]",
+      "page": "23.webp",
+      "site": "NHENTAI",
+      "gallery_url": "/655300/",
+      "declared_languages": [
+        "translated",
+        "chinese"
+      ],
+      "role": "traditional B&W grid with dense vertical dialogue bubbles"
+    },
+    {
+      "gallery_index": 53,
+      "gallery_path": "nhentai3/fetio - Seitei Gakuen Soccer-bu no Nichijou Kouhen - [581020]",
+      "page": "072.webp",
+      "site": "NHENTAI",
+      "gallery_url": "/581020/",
+      "declared_languages": [
+        "translated",
+        "chinese"
+      ],
+      "role": "high-contrast multi-panel page with clean vertical East-Asian dialogue"
+    },
+    {
+      "gallery_index": 60,
+      "gallery_path": "nhentai3/kok - Takagi-san SwingingNTS Play (Karakai Jouzu no - [553357]",
+      "page": "12.webp",
+      "site": "NHENTAI",
+      "gallery_url": "/553357/",
+      "declared_languages": [
+        "translated",
+        "chinese"
+      ],
+      "role": "non-standard composition with dense scattered captions and annotations"
+    },
+    {
+      "gallery_index": 65,
+      "gallery_path": "nhentai3/saki rinku - キャラクタープロフィール - [672682]",
+      "page": "4.webp",
+      "site": "NHENTAI",
+      "gallery_url": "/672682/",
+      "declared_languages": [
+        "english",
+        "chinese",
+        "japanese"
+      ],
+      "role": "structured profile/interview text with small panel inserts and fine print"
+    },
+    {
+      "gallery_index": 69,
+      "gallery_path": "nhentai3/imo ichirou - 占いギャルと - [671880]",
+      "page": "26.webp",
+      "site": "NHENTAI",
+      "gallery_url": "/671880/",
+      "declared_languages": [
+        "translated",
+        "chinese"
+      ],
+      "role": "full-color multi-panel narrative with inset boxes and many dialogue bubbles"
+    }
+  ],
+  "selection_caveats": [
+    "Declared metadata language is inventory evidence, not a complete linguistic review.",
+    "Candidates require per-page source review, hash pinning, ownership/action labels, and quality thresholds before corpus inclusion or holdout freezing.",
+    "Downsample repeated layouts and direct chapter/creator clusters even though creator provenance is non-blocking."
+  ]
+}

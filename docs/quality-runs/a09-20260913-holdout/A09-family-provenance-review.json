@@ -74,20 +74,79 @@
           "id": "sample639",
           "creator": "琉樹 (@ruki6248ta)",
           "evidence": "Visible page watermark and bottom-right credit read ‘作者：琉樹@ruki6248ta’."
+        },
+        {
+          "ids": ["sample640", "sample641"],
+          "creator": "syamonabe",
+          "evidence": "Exact source-byte matches to NHentai gallery /597379/; its local Hentoid contentV2 metadata records ARTIST `syamonabe`."
+        },
+        {
+          "ids": ["sample642", "sample645"],
+          "creator": "jukkaku komado",
+          "evidence": "Exact source-byte matches to NHentai gallery /673296/; its local Hentoid contentV2 metadata records ARTIST `jukkaku komado`."
+        },
+        {
+          "ids": ["sample643", "sample644", "sample646"],
+          "creator": "mda starou",
+          "evidence": "Exact source-byte matches to NHentai gallery /560733/; its local Hentoid contentV2 metadata records ARTIST `mda starou`."
+        },
+        {
+          "ids": ["sample647", "sample648"],
+          "creator": "oonami sashimi",
+          "evidence": "Exact source-byte matches to NHentai gallery /672406/; its local Hentoid contentV2 metadata records ARTIST `oonami sashimi`."
+        }
+      ],
+      "hentoid_exact_byte_matches": [
+        {
+          "gallery": {"site": "NHENTAI", "url": "/597379/", "artist": "syamonabe", "local_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/syamonabe - Ano Natsu, Himitsu no Confiture - Secret summer days with Suu and Ririka  那个夏天、[597379]"},
+          "matches": [
+            {"id": "sample640", "page": "008.webp", "sha256": "4c78142fd5c45a2204dec921bd383c619b49aa206e9802eeb4ba0ee720f772db"},
+            {"id": "sample641", "page": "007.webp", "sha256": "7b3c483d51b1f4cf983bf04a7f9adf1119ce3df2a739a636a2de1e4f9730ba66"}
+          ]
+        },
+        {
+          "gallery": {"site": "NHENTAI", "url": "/673296/", "artist": "jukkaku komado", "local_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/jukkaku komado - 想一直聊下去  Nanjikan demo Hanashite itai - [673296]"},
+          "matches": [
+            {"id": "sample642", "page": "11.webp", "sha256": "7b0e8ee98ff6d8ccb38e2ca10f70aa7a502ff23ca1ebf63799b907fc2f16259c"},
+            {"id": "sample645", "page": "03.webp", "sha256": "10a6c6b0bcdaef48405bf05d59b7a881fc91afc6326d5fce80c7e037a0ac7c1c"}
+          ]
+        },
+        {
+          "gallery": {"site": "NHENTAI", "url": "/560733/", "artist": "mda starou", "local_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/mda starou - Furina-sama Wakatte masu yo ne - [560733]"},
+          "matches": [
+            {"id": "sample643", "page": "32.webp", "sha256": "8842a0ab607b56f645940218cd87e66774998e9464de14144efff2731c2820df"},
+            {"id": "sample644", "page": "33.webp", "sha256": "1fc14957ff2eb870f82b1bb4bfa4d92ff0f2765625a3dc333b3cbe472b48d6f9"},
+            {"id": "sample646", "page": "04.webp", "sha256": "5f359e1e7a67ebf17287af17a10c7b54755bcd25b84e3f2eaed1a2066b9e3a8c"}
+          ]
+        },
+        {
+          "gallery": {"site": "NHENTAI", "url": "/672406/", "artist": "oonami sashimi", "local_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/oonami sashimi - entao. - [672406]"},
+          "matches": [
+            {"id": "sample647", "page": "03.webp", "sha256": "788dc01115e153784abc3240874b8f174287bc5b0aa91a659559fb6f68ce9834"},
+            {"id": "sample648", "page": "04.webp", "sha256": "c20a249606ab364f70d22c8a084b503997325a49f006abb5fff3810528a359fa"}
+          ]
         }
       ],
       "visual_or_textual_clusters_not_creator_proof": [
         {
           "members": ["sample640", "sample641"],
-          "basis": "Same recurring characters, domestic cooking setup, line treatment, and translated dialogue context; treat as one unattributed family, capped at two pages."
+          "basis": "Exact matches identify two pages by syamonabe; keep their repeated domestic-comic visual template together when selecting."
         },
         {
-          "members": ["sample643", "sample644", "sample646", "sample647", "sample648"],
-          "basis": "Visible character names identify the Genshin Impact source franchise: Furina in 643/644/646 and Hu Tao/Yanfei in 647/648. Treat as one series-family cluster, capped at two pages until individual original creators are proven."
+          "members": ["sample642", "sample645"],
+          "basis": "Exact matches identify two pages by jukkaku komado; treat as one creator/style cluster."
+        },
+        {
+          "members": ["sample643", "sample644", "sample646"],
+          "basis": "Exact matches identify three pages by mda starou; do not use them to inflate visual diversity."
+        },
+        {
+          "members": ["sample647", "sample648"],
+          "basis": "Exact matches identify two pages by oonami sashimi; treat as one creator/style cluster."
         }
       ],
-      "unverified_ids": ["sample201", "sample205", "sample640", "sample641", "sample642", "sample643", "sample644", "sample645", "sample646", "sample647", "sample648"],
-      "finding": "Only one candidate has an identifiable original creator. Allowing adult pages adds material but does not create four independently proven Chinese creator/series families."
+      "unverified_ids": ["sample201", "sample205"],
+      "finding": "Nine exact source-byte matches add four gallery-metadata artist attributions to the direct sample639 watermark attribution. This provenance is useful source context and a visual-cluster warning, not an A09 eligibility gate."
     }
   },
   "near_duplicate_review": {
@@ -103,18 +162,21 @@
     "limitation": "Different pages by the same creator, adjacent chapter pages, recolors, and alternate-language typesetting can be visually dissimilar. This probe is evidence against direct image duplication, not proof of source-family independence."
   },
   "A09_gate_verdict": {
-    "status": "blocked",
+    "status": "informational",
     "adult_content_admission_changes_status": false,
     "passed": [
       "The four visually reviewed new ZH pages satisfy the required four-page multi-panel/conventional-balloon stratum.",
-      "No exact source-byte duplicate or close dHash duplicate was found in the reviewed candidate pool.",
+      "No exact source-byte or close dHash duplicate was found in the reviewed candidate pool.",
       "Known KO creator family te0hyang is bounded to two pages."
     ],
-    "blocking": [
-      "The candidate pool does not establish four independently proven ZH creator/series families; one is proven and two clusters remain unattributed.",
+    "non_blocking_context": [
+      "Nine exact source-byte matches establish four NHentai gallery-metadata artist attributions for the current ZH candidate pool, in addition to sample639's visible creator watermark.",
       "The KO pool establishes only three independent creators and contains conflicting translator-caption versus source-post attribution.",
+      "Creator, series, uploader and translator provenance remains useful source context but is not an A09 eligibility or blocking criterion."
+    ],
+    "remaining_quality_blockers": [
       "A09 has no frozen 24-page source/label/threshold manifest. The existing A07 labels apply only to development fixtures and cannot be reused for holdout candidates.",
-      "No selected holdout roster may be reported as complete or used for tuning until the unresolved provenance and required labels/thresholds are reviewed."
+      "No selected holdout roster may be reported as complete or used for tuning until required labels, thresholds and fresh-stage quality evidence are reviewed."
     ]
   }
 }

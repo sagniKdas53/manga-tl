@@ -1,0 +1,126 @@
+{
+  "format": "a09-zh-diversity-selection/v1",
+  "status": "candidate-review",
+  "date": "2026-09-13",
+  "purpose": "Restore the accidentally excluded sample201 and sample205 and select an eight-page Chinese candidate roster for visual quality diversity. This is not a frozen A09 holdout manifest.",
+  "requirements_addressed": {
+    "selectedZhCandidates": 8,
+    "multiPanelConventionalBalloonCandidates": 6,
+    "singlePanelOrIllustrativeCandidates": 2,
+    "colorCandidates": 4,
+    "monochromeCandidates": 2
+  },
+  "selection_policy": "A09 evaluates output quality across visibly different layouts, dialogue densities, palettes, text treatments, and art styles. Exact or near-duplicate sources and known direct development relatives remain excluded. Creator, series, uploader, and translator provenance is retained when available but is not an A09 eligibility or blocking criterion.",
+  "restored_from_the_previous_four_page_filter": [
+    {
+      "id": "sample201",
+      "reason": "Colored three-panel dialogue page with a distinct saturated palette and conventional vertical balloons. Sparse text is useful coverage, not an exclusion."
+    },
+    {
+      "id": "sample205",
+      "reason": "Single-panel painterly dialogue illustration with six conventional balloons. It supplies a deliberate single-panel quality slice and does not count toward the multi-panel minimum."
+    }
+  ],
+  "retained_regression_ids": ["sample177", "sample222", "sample61", "sample99", "sample93", "sample83"],
+  "excluded_sources": [
+    {"id": "sample206", "reason": "ZH development control"},
+    {"id": "sample208", "reason": "ZH development control"},
+    {"id": "sample226", "reason": "ZH development control"},
+    {"id": "sample261", "reason": "ZH development control"},
+    {"id": "sample457", "reason": "ZH development control"},
+    {"id": "sample609", "reason": "ZH development control"},
+    {"id": "sample611", "reason": "ZH development control"},
+    {"id": "sample612", "reason": "ZH development control"},
+    {"id": "sample209", "reason": "Direct development-relative page"},
+    {"id": "sample227", "reason": "Direct development-relative page"},
+    {"id": "sample230", "reason": "Direct development-relative page"},
+    {"id": "sample231", "reason": "Direct development-relative page"}
+  ],
+  "samples": [
+    {
+      "id": "sample201",
+      "language": "zh",
+      "source": "corpus/samples/zh/sample201/source.jpg",
+      "sha256": "985c08ab68442a6e9de8c9ba58c9ef9c95886a112b69575e55c21e8892e58477",
+      "lane": "active",
+      "split": "holdout-candidate",
+      "style": "colored three-panel Chinese dialogue comic",
+      "tags": ["multi-panel", "conventional-balloon", "colored", "sparse-dialogue", "vertical-text"]
+    },
+    {
+      "id": "sample205",
+      "language": "zh",
+      "source": "corpus/samples/zh/sample205/source.jpg",
+      "sha256": "4d0723fbb4f589036a6fcbc5aed37087bc25bfefb816a34b9739930aa6dbe0b6",
+      "lane": "active",
+      "split": "holdout-candidate",
+      "style": "single-panel painterly Chinese dialogue illustration",
+      "tags": ["single-panel", "conventional-balloon", "painterly", "sparse-dialogue", "style-diversity"]
+    },
+    {
+      "id": "sample229",
+      "language": "zh",
+      "source": "corpus/samples/zh/sample229/source.jpg",
+      "sha256": "13786c579119e73bdf1b32c552d9bbe750a42155fb35a20e343b55fafe75c236",
+      "lane": "active",
+      "split": "holdout-candidate",
+      "style": "neon illustrated Chinese narrative with vertical caption boxes",
+      "tags": ["single-panel", "colored", "caption-box", "decorated-text", "style-diversity"]
+    },
+    {
+      "id": "sample527",
+      "language": "zh",
+      "source": "corpus/gaps/pending/zh/sample527/source.jpg",
+      "sha256": "81a462e2886803d5cec2dee8f63b6ac3d8bf61ec1fd7c50b74371b9c13e82a3f",
+      "lane": "pending",
+      "split": "holdout-candidate",
+      "style": "high-saturation chibi Chinese multi-panel strip",
+      "tags": ["multi-panel", "conventional-balloon", "colored", "chibi", "integrated-sfx"]
+    },
+    {
+      "id": "sample639",
+      "language": "zh",
+      "source": "corpus/gaps/pending/zh/sample639/source.jpg",
+      "sha256": "c7c6f6b31e28bc8a8f7ac12efad0d2d2d4d42d8424f73eb634117aa9183a85a5",
+      "lane": "pending",
+      "split": "holdout-candidate",
+      "style": "colored five-panel game fan-comic with conventional dialogue balloons",
+      "tags": ["multi-panel", "conventional-balloon", "colored", "human-en-reference", "rebuilt-luna-output"]
+    },
+    {
+      "id": "sample641",
+      "language": "zh",
+      "source": "corpus/gaps/pending/zh/sample641/source.webp",
+      "sha256": "7b3c483d51b1f4cf983bf04a7f9adf1119ce3df2a739a636a2de1e4f9730ba66",
+      "lane": "pending",
+      "split": "holdout-candidate",
+      "style": "black-and-white four-panel domestic dialogue comic",
+      "tags": ["multi-panel", "conventional-balloon", "monochrome", "human-en-reference", "rebuilt-luna-output"]
+    },
+    {
+      "id": "sample642",
+      "language": "zh",
+      "source": "corpus/gaps/pending/zh/sample642/source.webp",
+      "sha256": "7b0e8ee98ff6d8ccb38e2ca10f70aa7a502ff23ca1ebf63799b907fc2f16259c",
+      "lane": "pending",
+      "split": "holdout-candidate",
+      "style": "black-and-white six-panel school sports dialogue page",
+      "tags": ["multi-panel", "conventional-balloon", "monochrome", "human-en-reference", "rebuilt-luna-output"]
+    },
+    {
+      "id": "sample644",
+      "language": "zh",
+      "source": "corpus/gaps/pending/zh/sample644/source.webp",
+      "sha256": "1fc14957ff2eb870f82b1bb4bfa4d92ff0f2765625a3dc333b3cbe472b48d6f9",
+      "lane": "pending",
+      "split": "holdout-candidate",
+      "style": "four-panel game fan-comic with conventional dialogue balloons",
+      "tags": ["multi-panel", "conventional-balloon", "human-en-reference", "rebuilt-luna-output"]
+    }
+  ],
+  "remaining_quality_work": [
+    "Create reviewed ownership and action labels for every holdout candidate; development labels cannot be reused.",
+    "Freeze quality thresholds before any holdout evaluation and do not tune on holdout outputs or labels.",
+    "Run fresh current-checkout stages for pending candidates and record the resulting quality evidence."
+  ]
+}
