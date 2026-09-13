@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample444",
+  "language": "ko",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ko",
+    "provenance": "x:2091012488339038385"
+  },
+  "references": [
+    {
+      "file": "ref-human.jpg",
+      "lang": "en",
+      "provenance": "human",
+      "attribution": "@RagingAsn_ — https://x.com/RagingAsn_/status/2091024158821945621"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "gaps/pending/ko/sample444",
+    "slug": "gap_ko220_tweet_2091012488339038385"
+  },
+  "provenance_metadata": {
+    "handle": "RagingAsn_",
+    "tweet_url": "https://x.com/RagingAsn_/status/2091024158821945621",
+    "created_at": "2026-08-22T04:46:23.000Z",
+    "lang_pair": "kr-en",
+    "caption": "EN Translation by @RagingAsn_ \n\nToday's comic is Ep. 999.\nOMO/샤독 has been saying he'll end all his comics once he hits Ep. 1000. \n\nThis is the English translation! \nSee you next time! x.com/Oo12271547"
+  },
+  "notes": "Human-translated pair scraped from x.com; no app run yet (output pending)."
+}

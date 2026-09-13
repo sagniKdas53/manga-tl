@@ -1,0 +1,43 @@
+{
+  "sample_id": "sample205",
+  "language": "zh",
+  "source": {
+    "file": "source.jpg",
+    "lang": "zh",
+    "provenance": "desktop_samples:reading-order-kinda-messed-up-detection-okay.jpg"
+  },
+  "references": [
+    {
+      "file": "ref-mangatranslator.ai.jpg",
+      "lang": "en",
+      "provenance": "mangatranslator.ai"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "samples/zh/sample205",
+    "slug": "sample_gap_zh9_two_speaker_dense_dialogue"
+  },
+  "gap_category": "Chinese SFW Two-Speaker Dense Dialogue with Competitor Reference",
+  "page_profile": {
+    "width": 1870,
+    "height": 2732,
+    "megapixels": 5.1,
+    "ocr_regions": 6,
+    "ocr_chars": 83
+  },
+  "provenance_metadata": {
+    "original_sample_file": "reading-order-kinda-messed-up-detection-okay.jpg",
+    "recovered_from": "gaps/Uncategorized/Chinese/sample_gap_zh5_reading_order_stress/ (deleted+re-added catalog, see gaps/README.md)"
+  },
+  "notes": "Fully-clothed two-character conversational scene, five dialogue bubbles at varying heights around both characters' heads - a clean SFW baseline case, and a fifth distinct source artist for the Chinese set. This filename matched gaps/Uncategorized/a/en-reading-order-kinda-messed-up-detection-okay.jpg, a competitor machine translation of this exact page (all four bubbles translated) - the only backfill match found among the six new Korean and five new Chinese samples added in this pass. Machine-translated, not hand-verified ground truth."
+}

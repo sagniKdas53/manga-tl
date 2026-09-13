@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample679",
+  "language": "ja",
+  "source": {
+    "file": "source.png",
+    "lang": "ja",
+    "provenance": "pixiv",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_148834914_20260829_120641.png",
+    "sha256": "2864198190749fb4af6ddaf1ac40102bbd1817614d0bd36eddf549729ff09026",
+    "width": 1447,
+    "height": 2047,
+    "format": "PNG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "pixiv",
+    "reserve_tag": "px-res-11",
+    "origin_id": "148834914",
+    "previous_path": "gaps/pending/ja/sample679"
+  },
+  "notes": "A09 reserve candidate. heavy dialogue, narrative captions and dense SFX integration",
+  "language_verification": "provisional-visual"
+}

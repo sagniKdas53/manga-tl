@@ -1,0 +1,39 @@
+{
+  "sample_id": "sample196",
+  "language": "ko",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ko",
+    "provenance": "immich:ea118cab-da86-40fe-87e9-1d1282ec5065"
+  },
+  "references": [
+    {
+      "file": "ref-mangatranslator.ai.jpg",
+      "lang": "en",
+      "provenance": "mangatranslator.ai"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "samples/ko/sample196",
+    "slug": "sample_gap_ko19_4panel_comedy_strip"
+  },
+  "gap_category": "4-Panel Comedy Strip Flow (Korean)",
+  "page_profile": {
+    "width": 519,
+    "height": 1200,
+    "megapixels": 0.6,
+    "ocr_regions": 9,
+    "ocr_chars": 93
+  },
+  "notes": "Sourced from a Twitter/X image drop (no Pixiv URL recoverable), thumbnail-scale resolution (519x1200). Clean 4-panel vertical comic strip titled '<조크 조크>', no adult content - the only Hangul equivalent of the Japanese 4-koma structural category in this suite. Small like sample_gap22/gap5/gap7 in the Japanese set; kept for structural diversity, not resolution testing."
+}

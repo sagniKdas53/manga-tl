@@ -1,0 +1,38 @@
+{
+  "sample_id": "sample655",
+  "language": "zh",
+  "source": {
+    "file": "source.jpg",
+    "lang": "zh",
+    "provenance": "x-scrape-2026-09-13",
+    "source_path": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2098784580417560959.jpg",
+    "sha256": "e7c3c797dc1dc72934d34f48728a01fd3c7d8d2f5a6227a08f6fe156f7a93a19",
+    "width": 1558,
+    "height": 2048,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "x-scrape-2026-09-13",
+    "roster_label": "zh-x7",
+    "provenance": {
+      "creator": "Windwin69369561",
+      "series": "Genshin Impact",
+      "source_url": "https://x.com/Windwin69369561/status/2098784580417560959",
+      "pair_confidence": "high"
+    },
+    "previous_path": "gaps/pending/zh/sample655"
+  },
+  "notes": "dynamic Chinese webtoon with jagged action balloons and rotated SFX"
+}

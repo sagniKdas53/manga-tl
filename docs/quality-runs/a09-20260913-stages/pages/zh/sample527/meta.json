@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample527",
+  "language": "zh",
+  "source": {
+    "file": "source.jpg",
+    "lang": "zh",
+    "provenance": "x:2034627057729376526"
+  },
+  "references": [
+    {
+      "file": "ref-human.jpg",
+      "lang": "en",
+      "provenance": "human",
+      "attribution": "@ArcSSS90 — https://x.com/ArcSSS90/status/2034606390342545706"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "gaps/pending/zh/sample527",
+    "slug": "gap_zh99_tweet_2034627057729376526"
+  },
+  "provenance_metadata": {
+    "handle": "ArcSSS90",
+    "tweet_url": "https://x.com/ArcSSS90/status/2034606390342545706",
+    "created_at": "2026-03-19T12:22:19.000Z",
+    "lang_pair": "zh-en",
+    "caption": "staring intently at the wings"
+  },
+  "notes": "Human-translated pair scraped from x.com; no app run yet (output pending)."
+}

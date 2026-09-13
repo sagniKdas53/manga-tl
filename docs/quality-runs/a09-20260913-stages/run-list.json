@@ -1,0 +1,464 @@
+[
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample27",
+    "sample_id": "sample27",
+    "language": "ja",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample38",
+    "sample_id": "sample38",
+    "language": "ja",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample41",
+    "sample_id": "sample41",
+    "language": "ja",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample49",
+    "sample_id": "sample49",
+    "language": "ja",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample57",
+    "sample_id": "sample57",
+    "language": "ja",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample128",
+    "sample_id": "sample128",
+    "language": "ja",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample131",
+    "sample_id": "sample131",
+    "language": "ja",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample141",
+    "sample_id": "sample141",
+    "language": "ja",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample649",
+    "sample_id": "sample649",
+    "language": "ja",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample650",
+    "sample_id": "sample650",
+    "language": "ja",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ko/sample179",
+    "sample_id": "sample179",
+    "language": "ko",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ko/sample196",
+    "sample_id": "sample196",
+    "language": "ko",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ko/sample225",
+    "sample_id": "sample225",
+    "language": "ko",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample273",
+    "sample_id": "sample273",
+    "language": "ko",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample321",
+    "sample_id": "sample321",
+    "language": "ko",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample349",
+    "sample_id": "sample349",
+    "language": "ko",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample372",
+    "sample_id": "sample372",
+    "language": "ko",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample299",
+    "sample_id": "sample299",
+    "language": "ko",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample433",
+    "sample_id": "sample433",
+    "language": "ko",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample439",
+    "sample_id": "sample439",
+    "language": "ko",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/zh/sample201",
+    "sample_id": "sample201",
+    "language": "zh",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/zh/sample205",
+    "sample_id": "sample205",
+    "language": "zh",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/zh/sample229",
+    "sample_id": "sample229",
+    "language": "zh",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample527",
+    "sample_id": "sample527",
+    "language": "zh",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample639",
+    "sample_id": "sample639",
+    "language": "zh",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample641",
+    "sample_id": "sample641",
+    "language": "zh",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample642",
+    "sample_id": "sample642",
+    "language": "zh",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample644",
+    "sample_id": "sample644",
+    "language": "zh",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample654",
+    "sample_id": "sample654",
+    "language": "zh",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample655",
+    "sample_id": "sample655",
+    "language": "zh",
+    "role": "roster"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample656",
+    "sample_id": "sample656",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample657",
+    "sample_id": "sample657",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample658",
+    "sample_id": "sample658",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample659",
+    "sample_id": "sample659",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample660",
+    "sample_id": "sample660",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample661",
+    "sample_id": "sample661",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample662",
+    "sample_id": "sample662",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample663",
+    "sample_id": "sample663",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample664",
+    "sample_id": "sample664",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample665",
+    "sample_id": "sample665",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample666",
+    "sample_id": "sample666",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample667",
+    "sample_id": "sample667",
+    "language": "ko",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample668",
+    "sample_id": "sample668",
+    "language": "ko",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample327",
+    "sample_id": "sample327",
+    "language": "ko",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample357",
+    "sample_id": "sample357",
+    "language": "ko",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample376",
+    "sample_id": "sample376",
+    "language": "ko",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample393",
+    "sample_id": "sample393",
+    "language": "ko",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample403",
+    "sample_id": "sample403",
+    "language": "ko",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample444",
+    "sample_id": "sample444",
+    "language": "ko",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample669",
+    "sample_id": "sample669",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample670",
+    "sample_id": "sample670",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample671",
+    "sample_id": "sample671",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample672",
+    "sample_id": "sample672",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample673",
+    "sample_id": "sample673",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample674",
+    "sample_id": "sample674",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample675",
+    "sample_id": "sample675",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample676",
+    "sample_id": "sample676",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample677",
+    "sample_id": "sample677",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample678",
+    "sample_id": "sample678",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample679",
+    "sample_id": "sample679",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample680",
+    "sample_id": "sample680",
+    "language": "ja",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample681",
+    "sample_id": "sample681",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample682",
+    "sample_id": "sample682",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample683",
+    "sample_id": "sample683",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample684",
+    "sample_id": "sample684",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample685",
+    "sample_id": "sample685",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample686",
+    "sample_id": "sample686",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample687",
+    "sample_id": "sample687",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample688",
+    "sample_id": "sample688",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample689",
+    "sample_id": "sample689",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample690",
+    "sample_id": "sample690",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample691",
+    "sample_id": "sample691",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample692",
+    "sample_id": "sample692",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample693",
+    "sample_id": "sample693",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample694",
+    "sample_id": "sample694",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample695",
+    "sample_id": "sample695",
+    "language": "zh",
+    "role": "reserve"
+  },
+  {
+    "dir": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample696",
+    "sample_id": "sample696",
+    "language": "zh",
+    "role": "reserve"
+  }
+]

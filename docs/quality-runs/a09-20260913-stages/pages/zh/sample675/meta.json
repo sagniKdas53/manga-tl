@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample675",
+  "language": "zh",
+  "source": {
+    "file": "source.jpg",
+    "lang": "zh",
+    "provenance": "pixiv",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_148310832_20260816_174534.jpg",
+    "sha256": "f4d8df9de0ccfc0df58c529c235931c10c4cdd0d1ce6c500867c777ca3e68caf",
+    "width": 644,
+    "height": 900,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "pixiv",
+    "reserve_tag": "px-res-7",
+    "origin_id": "148310832",
+    "previous_path": "gaps/pending/zh/sample675"
+  },
+  "notes": "A09 reserve candidate. Chinese-text full-color multi-panel layout",
+  "language_verification": "provisional-visual"
+}

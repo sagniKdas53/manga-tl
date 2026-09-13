@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample687",
+  "language": "zh",
+  "source": {
+    "file": "source.webp",
+    "lang": "zh",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/jukkaku komado - Konna Kibun mo Natsu da yo ne - [672710]/36.webp",
+    "sha256": "097136d73241228966b5d69bae06597816c407fdf64cacaa47b114d108e41296",
+    "width": 1280,
+    "height": 1810,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "zh-res-7",
+    "origin_id": "/672710/36.webp",
+    "previous_path": "gaps/pending/zh/sample687"
+  },
+  "notes": "A09 reserve candidate. narrative panels combined with interface diagrams, prompts and arrows",
+  "language_verification": "provisional-visual"
+}

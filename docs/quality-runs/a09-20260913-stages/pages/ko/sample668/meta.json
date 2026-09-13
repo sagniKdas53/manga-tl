@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample668",
+  "language": "ko",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ko",
+    "provenance": "x-scrape-2026-09-13",
+    "source_path": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2077243532373590463.jpg",
+    "sha256": "fee05644cda53f47b0a89f572fe3dcb2ef693ded568194ee323b2c57a6f45fda",
+    "width": 600,
+    "height": 1388,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "x-scrape-2026-09-13",
+    "reserve_tag": "ko-res-x2",
+    "origin_id": "https://x.com/RagingAsn_/status/2077243532373590463",
+    "previous_path": "gaps/pending/ko/sample668"
+  },
+  "notes": "A09 reserve candidate. four-panel strip with tiny out-of-bubble side notes",
+  "language_verification": "provisional-visual"
+}

@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample688",
+  "language": "zh",
+  "source": {
+    "file": "source.webp",
+    "lang": "zh",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/hikarino - Otatomo ga Razoku Datte Kedo Osouwanai Yakusoku de Tomatta Kekka  宅友是裸族但約好不襲擊她了結[655300]/23.webp",
+    "sha256": "28c5c2c201a75fc0466f03101b9459c0d7e4585627ceb33ff75fd5b6f288b4f2",
+    "width": 1280,
+    "height": 1785,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "zh-res-8",
+    "origin_id": "/655300/23.webp",
+    "previous_path": "gaps/pending/zh/sample688"
+  },
+  "notes": "A09 reserve candidate. traditional B&W grid with dense vertical dialogue bubbles",
+  "language_verification": "provisional-visual"
+}

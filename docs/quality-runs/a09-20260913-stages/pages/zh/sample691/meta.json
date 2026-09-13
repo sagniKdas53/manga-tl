@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample691",
+  "language": "zh",
+  "source": {
+    "file": "source.webp",
+    "lang": "zh",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/saki rinku - キャラクタープロフィール - [672682]/4.webp",
+    "sha256": "68747e8e382484c59e9694484b6eaf419285216bb21a64d29928f69309a236ba",
+    "width": 1280,
+    "height": 1807,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "zh-res-11",
+    "origin_id": "/672682/4.webp",
+    "previous_path": "gaps/pending/zh/sample691"
+  },
+  "notes": "A09 reserve candidate. structured profile/interview text with small panel inserts and fine print",
+  "language_verification": "provisional-visual"
+}

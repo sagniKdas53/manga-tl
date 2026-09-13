@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample664",
+  "language": "ja",
+  "source": {
+    "file": "source.webp",
+    "lang": "ja",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/yamada rimuru - Toki o Wataru Doukeshi Astrea Omake - [648258]/10.webp",
+    "sha256": "50923039f4a931ad502a553528c8c0469624e0f0ece7b4321465f008c1c1c13d",
+    "width": 1280,
+    "height": 1707,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "ja-res-10",
+    "origin_id": "/648258/",
+    "previous_path": "gaps/pending/ja/sample664"
+  },
+  "notes": "A09 reserve candidate. high-density small-to-medium balloons with side text",
+  "language_verification": "provisional-visual"
+}

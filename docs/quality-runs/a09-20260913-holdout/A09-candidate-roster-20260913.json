@@ -1,5 +1,5 @@
 {
-  "format": "a09-candidate-roster/v2",
+  "format": "a09-candidate-roster/v3",
   "status": "candidate-review",
   "date": "2026-09-13",
   "purpose": "Ten visually reviewed candidate pages per language for A09 confirmation. Not a frozen holdout manifest.",
@@ -19,61 +19,77 @@
         "origin": "corpus",
         "source": "corpus/samples/ja/sample27/source.jpeg",
         "caption": "conventional B&W dialogue manga",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "d584c8d0a690ac60c81a36ec236281147b4a60d6f8da6bfe48240b1da1c4b83a",
+        "dimensions": "813x1198"
       },
       {
         "label": "sample38",
         "origin": "corpus",
         "source": "corpus/samples/ja/sample38/source.jpg",
         "caption": "conventional B&W panel dialogue",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "3593c47ed6c1592fee4afcd462604e7112eb4a31ec7a6bf1e4193f2c20e277b3",
+        "dimensions": "900x1280"
       },
       {
         "label": "sample41",
         "origin": "corpus",
         "source": "corpus/samples/ja/sample41/source.png",
         "caption": "colored two-panel dialogue",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "e1fecbaf7858ab89e5905a2a9d98dc87e5c1ab720dac2d089a8453123a83cf23",
+        "dimensions": "1536x2048"
       },
       {
         "label": "sample49",
         "origin": "corpus",
         "source": "corpus/samples/ja/sample49/source.jpeg",
         "caption": "colored vertical four-panel strip",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "428c6dc729781f3c26584495db5efeac3b7b504bb0ab1b0f24d7e74ed600d860",
+        "dimensions": "1320x3960"
       },
       {
         "label": "sample57",
         "origin": "corpus",
         "source": "corpus/samples/ja/sample57/source.jpg",
         "caption": "colored four-panel dialogue with SFX",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "d5a15dbb21ebe61a9722f04d5167469d05f676792c84f28668c076b99f75185a",
+        "dimensions": "1448x2048"
       },
       {
         "label": "sample128",
         "origin": "corpus",
         "source": "corpus/samples/ja/sample128/source.jpg",
         "caption": "B&W festival dialogue page",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "2f6180b43cb842aed5b1aad4bac6d777453eedc83d9cd60a1b7f720edccc509c",
+        "dimensions": "1079x1532"
       },
       {
         "label": "sample131",
         "origin": "corpus",
         "source": "corpus/samples/ja/sample131/source.jpg",
         "caption": "B&W dialogue composition",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "6500adc9e6892220e3d34d57485f3c03aaa5f710eadfa4a45a14ef2bcf7ff72d",
+        "dimensions": "2016x2688"
       },
       {
         "label": "sample141",
         "origin": "corpus",
         "source": "corpus/samples/ja/sample141/source.jpg",
         "caption": "B&W serialized manga dialogue",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "ef4d670d1951ca806b96462624b46a1c820fe96bac3ea13998078b33c8c07f1f",
+        "dimensions": "4299x6071"
       },
       {
-        "label": "ja-x8",
-        "origin": "x-scrape-2026-09-13",
-        "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2083162208490705260.jpg",
+        "label": "sample649",
+        "origin": "corpus-pending (new intake)",
+        "source": "corpus/gaps/pending/ja/sample649/source.jpg",
         "caption": "colored six-panel Japanese page, varied fonts, side text and high dialogue density",
         "provenance": {
           "creator": "Windwin69369561",
@@ -81,18 +97,24 @@
           "source_url": "https://x.com/Windwin69369561/status/2083162208490705260",
           "pair_confidence": "medium"
         },
-        "reference": "none in archive; Torii API reference required"
+        "reference": "none; Torii API reference required",
+        "roster_tag": "ja-x8",
+        "sha256": "831a71075c0fbb8780752bfb42ca35cf5e43fa65b91223194a09e1584482c6a7",
+        "dimensions": "1473x2048"
       },
       {
-        "label": "ja-res-1",
-        "origin": "hentoid",
-        "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/hitomi/sirotategosha - ピノコニー乱〇パーティー - [4016110]/4.webp",
+        "label": "sample650",
+        "origin": "corpus-pending (new intake)",
+        "source": "corpus/gaps/pending/ja/sample650/source.webp",
         "caption": "multi-panel with dense balloons plus UI/video overlay text",
         "provenance": {
           "gallery": "/home/sagnik/Documents/syncthing/phone/Hentoid/hitomi/sirotategosha - ピノコニー乱〇パーティー - [4016110]",
           "url": "/4016110.html"
         },
-        "reference": "none; Torii API reference required"
+        "reference": "none; Torii API reference required",
+        "roster_tag": "ja-res-1",
+        "sha256": "f95424bfcef022cf5d4a17d5f995bdd08df1c24b233eb9fa72df7e88581d000f",
+        "dimensions": "2880x2774"
       }
     ],
     "ko": [
@@ -101,54 +123,68 @@
         "origin": "corpus",
         "source": "corpus/samples/ko/sample179/source.jpg",
         "caption": "colored single-scene balloon dialogue",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "061ed70fc8be0126ec47fabe163da5736d43252f89218101ed2683f2b9113759",
+        "dimensions": "4800x6400"
       },
       {
         "label": "sample196",
         "origin": "corpus",
         "source": "corpus/samples/ko/sample196/source.jpg",
         "caption": "four-panel comedy strip",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "d3236fb65296ffcd278a23a8da30bb42ef9ef365bdeaddbf0cef6770f51c5c1b",
+        "dimensions": "519x1200"
       },
       {
         "label": "sample225",
         "origin": "corpus",
         "source": "corpus/samples/ko/sample225/source.png",
         "caption": "conventional multi-panel dialogue",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "5a590fb38f2f9a8a0b8f6c794df30bc2556a9858c5a82d5a985aa20cfe7cdacd",
+        "dimensions": "1900x2450"
       },
       {
         "label": "sample273",
         "origin": "corpus",
         "source": "corpus/gaps/pending/ko/sample273/source.jpg",
         "caption": "single-scene dialogue",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "7e9e0c55e2ac8a1f8ebd983d710ccd5b8670ca4331b68aa523a32a643e06ae28",
+        "dimensions": "1471x2048"
       },
       {
         "label": "sample321",
         "origin": "corpus",
         "source": "corpus/gaps/pending/ko/sample321/source.jpg",
         "caption": "B&W multi-panel dialogue",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "e09301c28e8a1e9d6fc57a08cde921e508b9161d63329f845f35e2fa30f9db5e",
+        "dimensions": "1443x2048"
       },
       {
         "label": "sample349",
         "origin": "corpus",
         "source": "corpus/gaps/pending/ko/sample349/source.jpg",
         "caption": "B&W multi-panel dialogue",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "928b258745ce15150ac3ec1ae5a344a149a24c64050174c8dba060ccb67e4ff4",
+        "dimensions": "1443x2048"
       },
       {
         "label": "sample372",
         "origin": "corpus",
         "source": "corpus/gaps/pending/ko/sample372/source.jpg",
         "caption": "B&W multi-panel dialogue",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "00ed99553f5f8e40ca4676a444874e1d23a2442745d25f6435709f2bd87c6be7",
+        "dimensions": "1443x2048"
       },
       {
-        "label": "ko-x4",
-        "origin": "x-scrape-2026-09-13",
-        "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2075067420608229847.jpg",
+        "label": "sample299",
+        "origin": "corpus-pending (X-scrape intake)",
+        "source": "corpus/gaps/pending/ko/sample299/source.jpg",
         "caption": "Korean four-panel strip with clustered bubbles and small out-of-bubble side notes",
         "provenance": {
           "creator": "RagingAsn_",
@@ -156,18 +192,21 @@
           "source_url": "https://x.com/RagingAsn_/status/2075067420608229847",
           "pair_confidence": "high"
         },
-        "reference": "human English post in archive",
+        "reference": "human English reference in corpus",
         "reference_images": [
           "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2075077941965336771.jpg"
         ],
         "reference_urls": [
           "https://x.com/RagingAsn_/status/2075077941965336771"
-        ]
+        ],
+        "roster_tag": "ko-x4",
+        "sha256": "7a96ff566a2c21405067c7c2a49eb9cf2b490bd05b41b9f02e2201e269f2d3de",
+        "dimensions": "600x1388"
       },
       {
-        "label": "ko-x14",
-        "origin": "x-scrape-2026-09-13",
-        "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2089990197186601432.jpg",
+        "label": "sample433",
+        "origin": "corpus-pending (X-scrape intake)",
+        "source": "corpus/gaps/pending/ko/sample433/source.jpg",
         "caption": "Korean three-panel color page with integrated drawn SFX and minor English signage",
         "provenance": {
           "creator": "RagingAsn_",
@@ -175,18 +214,21 @@
           "source_url": "https://x.com/RagingAsn_/status/2089990197186601432",
           "pair_confidence": "high"
         },
-        "reference": "human English post in archive",
+        "reference": "human English reference in corpus",
         "reference_images": [
           "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2089996301329220017.jpg"
         ],
         "reference_urls": [
           "https://x.com/RagingAsn_/status/2089996301329220017"
-        ]
+        ],
+        "roster_tag": "ko-x14",
+        "sha256": "e29449afd31fa7c1a6aa71baba5314b890a8021e30aeb0bc5ec5d985fce1be65",
+        "dimensions": "1456x2048"
       },
       {
-        "label": "ko-x15",
-        "origin": "x-scrape-2026-09-13",
-        "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2090650097226756496.jpg",
+        "label": "sample439",
+        "origin": "corpus-pending (X-scrape intake)",
+        "source": "corpus/gaps/pending/ko/sample439/source.jpg",
         "caption": "clean Korean four-panel strip with stacked bubbles and tight typesetting",
         "provenance": {
           "creator": "RagingAsn_",
@@ -194,13 +236,16 @@
           "source_url": "https://x.com/RagingAsn_/status/2090650097226756496",
           "pair_confidence": "high"
         },
-        "reference": "human English post in archive",
+        "reference": "human English reference in corpus",
         "reference_images": [
           "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2090659474381918576.jpg"
         ],
         "reference_urls": [
           "https://x.com/RagingAsn_/status/2090659474381918576"
-        ]
+        ],
+        "roster_tag": "ko-x15",
+        "sha256": "749c08e01bd59b49f566b84356e32dda73ed2665af91c573aa3f724451b9bccc",
+        "dimensions": "600x1388"
       }
     ],
     "zh": [
@@ -209,61 +254,77 @@
         "origin": "corpus",
         "source": "corpus/samples/zh/sample201/source.jpg",
         "caption": "colored three-panel Chinese dialogue comic",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "985c08ab68442a6e9de8c9ba58c9ef9c95886a112b69575e55c21e8892e58477",
+        "dimensions": "1720x2428"
       },
       {
         "label": "sample205",
         "origin": "corpus",
         "source": "corpus/samples/zh/sample205/source.jpg",
         "caption": "single-panel painterly Chinese dialogue illustration",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "4d0723fbb4f589036a6fcbc5aed37087bc25bfefb816a34b9739930aa6dbe0b6",
+        "dimensions": "1870x2732"
       },
       {
         "label": "sample229",
         "origin": "corpus",
         "source": "corpus/samples/zh/sample229/source.jpg",
         "caption": "neon illustrated Chinese narrative with vertical caption boxes",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "13786c579119e73bdf1b32c552d9bbe750a42155fb35a20e343b55fafe75c236",
+        "dimensions": "1266x1950"
       },
       {
         "label": "sample527",
         "origin": "corpus",
         "source": "corpus/gaps/pending/zh/sample527/source.jpg",
         "caption": "high-saturation chibi Chinese multi-panel strip",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "81a462e2886803d5cec2dee8f63b6ac3d8bf61ec1fd7c50b74371b9c13e82a3f",
+        "dimensions": "700x990"
       },
       {
         "label": "sample639",
         "origin": "corpus",
         "source": "corpus/gaps/pending/zh/sample639/source.jpg",
         "caption": "colored five-panel game fan-comic with conventional dialogue balloons",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "c7c6f6b31e28bc8a8f7ac12efad0d2d2d4d42d8424f73eb634117aa9183a85a5",
+        "dimensions": "1316x2048"
       },
       {
         "label": "sample641",
         "origin": "corpus",
         "source": "corpus/gaps/pending/zh/sample641/source.webp",
         "caption": "black-and-white four-panel domestic dialogue comic",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "7b3c483d51b1f4cf983bf04a7f9adf1119ce3df2a739a636a2de1e4f9730ba66",
+        "dimensions": "1280x1810"
       },
       {
         "label": "sample642",
         "origin": "corpus",
         "source": "corpus/gaps/pending/zh/sample642/source.webp",
         "caption": "black-and-white six-panel school sports dialogue page",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "7b0e8ee98ff6d8ccb38e2ca10f70aa7a502ff23ca1ebf63799b907fc2f16259c",
+        "dimensions": "1080x1557"
       },
       {
         "label": "sample644",
         "origin": "corpus",
         "source": "corpus/gaps/pending/zh/sample644/source.webp",
         "caption": "four-panel game fan-comic with conventional dialogue balloons",
-        "reference": "corpus reference lane"
+        "reference": "corpus reference lane",
+        "sha256": "1fc14957ff2eb870f82b1bb4bfa4d92ff0f2765625a3dc333b3cbe472b48d6f9",
+        "dimensions": "1280x1793"
       },
       {
-        "label": "zh-x4",
-        "origin": "x-scrape-2026-09-13",
-        "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2091520208779567336.jpg",
+        "label": "sample654",
+        "origin": "corpus-pending (new intake)",
+        "source": "corpus/gaps/pending/zh/sample654/source.jpg",
         "caption": "monochrome screentone Chinese page with tightly packed bubbles and tails",
         "provenance": {
           "creator": "Windwin69369561",
@@ -271,18 +332,21 @@
           "source_url": "https://x.com/Windwin69369561/status/2091520208779567336",
           "pair_confidence": "high"
         },
-        "reference": "human English post in archive",
+        "reference": "human English reference in corpus",
         "reference_images": [
           "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2091513431845478430.jpg"
         ],
         "reference_urls": [
           "https://x.com/Windwin69369561/status/2091513431845478430"
-        ]
+        ],
+        "roster_tag": "zh-x4",
+        "sha256": "8bb0a8ae4f1787f1a9b643d0286b37bd1777e4b8c9d6855f3864be70b4c2a20b",
+        "dimensions": "1410x2048"
       },
       {
-        "label": "zh-x7",
-        "origin": "x-scrape-2026-09-13",
-        "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2098784580417560959.jpg",
+        "label": "sample655",
+        "origin": "corpus-pending (new intake)",
+        "source": "corpus/gaps/pending/zh/sample655/source.jpg",
         "caption": "dynamic Chinese webtoon with jagged action balloons and rotated SFX",
         "provenance": {
           "creator": "Windwin69369561",
@@ -290,12 +354,15 @@
           "source_url": "https://x.com/Windwin69369561/status/2098784580417560959",
           "pair_confidence": "high"
         },
-        "reference": "none in archive; Torii API reference required",
+        "reference": "none; Torii API reference required",
         "reference_images": [],
         "reference_urls": [
           "https://x.com/Windwin69369561/status/2098752933848580270",
           "https://x.com/Windwin69369561/status/2098793204783218816"
-        ]
+        ],
+        "roster_tag": "zh-x7",
+        "sha256": "e7c3c797dc1dc72934d34f48728a01fd3c7d8d2f5a6227a08f6fe156f7a93a19",
+        "dimensions": "1558x2048"
       }
     ]
   },
@@ -309,5 +376,71 @@
     "Create holdout-specific ownership and action labels; development labels cannot be reused.",
     "Freeze quality thresholds before evaluation; do not tune on holdout outputs or labels.",
     "Obtain references for pages without a human translation, via the Torii API, and never treat an untranslated machine reference as a translation pass."
-  ]
+  ],
+  "intake": {
+    "new_corpus_pages": [
+      {
+        "sample_id": "sample649",
+        "language": "ja",
+        "label": "ja-x8",
+        "path": "corpus/gaps/pending/ja/sample649",
+        "sha256": "831a71075c0fbb8780752bfb42ca35cf5e43fa65b91223194a09e1584482c6a7",
+        "dimensions": "1473x2048",
+        "format": "JPEG",
+        "human_reference_count": 0
+      },
+      {
+        "sample_id": "sample650",
+        "language": "ja",
+        "label": "ja-res-1",
+        "path": "corpus/gaps/pending/ja/sample650",
+        "sha256": "f95424bfcef022cf5d4a17d5f995bdd08df1c24b233eb9fa72df7e88581d000f",
+        "dimensions": "2880x2774",
+        "format": "WEBP",
+        "human_reference_count": 0
+      },
+      {
+        "sample_id": "sample654",
+        "language": "zh",
+        "label": "zh-x4",
+        "path": "corpus/gaps/pending/zh/sample654",
+        "sha256": "8bb0a8ae4f1787f1a9b643d0286b37bd1777e4b8c9d6855f3864be70b4c2a20b",
+        "dimensions": "1410x2048",
+        "format": "JPEG",
+        "human_reference_count": 1
+      },
+      {
+        "sample_id": "sample655",
+        "language": "zh",
+        "label": "zh-x7",
+        "path": "corpus/gaps/pending/zh/sample655",
+        "sha256": "e7c3c797dc1dc72934d34f48728a01fd3c7d8d2f5a6227a08f6fe156f7a93a19",
+        "dimensions": "1558x2048",
+        "format": "JPEG",
+        "human_reference_count": 0
+      }
+    ],
+    "already_present_in_corpus": [
+      {
+        "roster_tag": "ko-x4",
+        "sample_id": "sample299",
+        "note": "Exact source-byte match to an existing pending X-scrape page; reused instead of re-imported."
+      },
+      {
+        "roster_tag": "ko-x14",
+        "sample_id": "sample433",
+        "note": "Exact source-byte match to an existing pending X-scrape page; reused instead of re-imported."
+      },
+      {
+        "roster_tag": "ko-x15",
+        "sample_id": "sample439",
+        "note": "Exact source-byte match to an existing pending X-scrape page; reused instead of re-imported."
+      }
+    ],
+    "xscrape_overlap": {
+      "sources_in_archive": 33,
+      "already_in_corpus": 17,
+      "new_to_corpus": 16
+    }
+  }
 }

@@ -70,15 +70,15 @@
       "language": "ja",
       "tiles": [
         {
-          "tag": "ja-9  ja-x8",
-          "id": "ja-x8",
-          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2083162208490705260.jpg",
+          "tag": "ja-9  sample649",
+          "id": "sample649",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample649/source.jpg",
           "caption": "colored six-panel Japanese page, varied fonts, side text and high dialogue density"
         },
         {
-          "tag": "ja-10  ja-res-1",
-          "id": "ja-res-1",
-          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/hitomi/sirotategosha - ピノコニー乱〇パーティー - [4016110]/4.webp",
+          "tag": "ja-10  sample650",
+          "id": "sample650",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ja/sample650/source.webp",
           "caption": "multi-panel with dense balloons plus UI/video overlay text"
         }
       ]
@@ -138,9 +138,9 @@
           "caption": "B&W multi-panel dialogue"
         },
         {
-          "tag": "ko-8  ko-x4",
-          "id": "ko-x4",
-          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2075067420608229847.jpg",
+          "tag": "ko-8  sample299",
+          "id": "sample299",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample299/source.jpg",
           "caption": "Korean four-panel strip with clustered bubbles and small out-of-bubble side notes"
         }
       ]
@@ -151,15 +151,15 @@
       "language": "ko",
       "tiles": [
         {
-          "tag": "ko-9  ko-x14",
-          "id": "ko-x14",
-          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2089990197186601432.jpg",
+          "tag": "ko-9  sample433",
+          "id": "sample433",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample433/source.jpg",
           "caption": "Korean three-panel color page with integrated drawn SFX and minor English signage"
         },
         {
-          "tag": "ko-10  ko-x15",
-          "id": "ko-x15",
-          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2090650097226756496.jpg",
+          "tag": "ko-10  sample439",
+          "id": "sample439",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample439/source.jpg",
           "caption": "clean Korean four-panel strip with stacked bubbles and tight typesetting"
         }
       ]
@@ -232,15 +232,15 @@
       "language": "zh",
       "tiles": [
         {
-          "tag": "zh-9  zh-x4",
-          "id": "zh-x4",
-          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2091520208779567336.jpg",
+          "tag": "zh-9  sample654",
+          "id": "sample654",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample654/source.jpg",
           "caption": "monochrome screentone Chinese page with tightly packed bubbles and tails"
         },
         {
-          "tag": "zh-10  zh-x7",
-          "id": "zh-x7",
-          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2098784580417560959.jpg",
+          "tag": "zh-10  sample655",
+          "id": "sample655",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample655/source.jpg",
           "caption": "dynamic Chinese webtoon with jagged action balloons and rotated SFX"
         }
       ]

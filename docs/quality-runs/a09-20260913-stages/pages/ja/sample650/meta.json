@@ -1,0 +1,36 @@
+{
+  "sample_id": "sample650",
+  "language": "ja",
+  "source": {
+    "file": "source.webp",
+    "lang": "ja",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/hitomi/sirotategosha - ピノコニー乱〇パーティー - [4016110]/4.webp",
+    "sha256": "f95424bfcef022cf5d4a17d5f995bdd08df1c24b233eb9fa72df7e88581d000f",
+    "width": 2880,
+    "height": 2774,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "roster_label": "ja-res-1",
+    "provenance": {
+      "gallery": "/home/sagnik/Documents/syncthing/phone/Hentoid/hitomi/sirotategosha - ピノコニー乱〇パーティー - [4016110]",
+      "url": "/4016110.html"
+    },
+    "previous_path": "gaps/pending/ja/sample650"
+  },
+  "notes": "multi-panel with dense balloons plus UI/video overlay text"
+}

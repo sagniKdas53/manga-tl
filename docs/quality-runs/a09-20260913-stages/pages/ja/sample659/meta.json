@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample659",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/nagasode - Futari wa Choukyou Game no Ejiki ni Narimashita. - [344406]/18.jpg",
+    "sha256": "070a03d6fe2c568eaa93ef7ae44f7fd648eb2877c02684bd04406d3a950db4c4",
+    "width": 1280,
+    "height": 1807,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "ja-res-5",
+    "origin_id": "/344406/",
+    "previous_path": "gaps/pending/ja/sample659"
+  },
+  "notes": "A09 reserve candidate. full-color page with non-standard pink balloons and caption boxes",
+  "language_verification": "provisional-visual"
+}

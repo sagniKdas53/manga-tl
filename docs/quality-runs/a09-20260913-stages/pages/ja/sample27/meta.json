@@ -1,0 +1,35 @@
+{
+  "sample_id": "sample27",
+  "language": "ja",
+  "source": {
+    "file": "source.jpeg",
+    "lang": "ja"
+  },
+  "references": [
+    {
+      "file": "ref-human.jpeg",
+      "lang": "en",
+      "provenance": "human",
+      "attribution": "OG @yuyuyuyu9250, TL @Wertyuiop14 & @Player1_Please"
+    },
+    {
+      "file": "ref-mangatranslator.ai.jpeg",
+      "lang": "en",
+      "provenance": "mangatranslator.ai"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "samples/ja/sample27"
+  },
+  "notes": ""
+}

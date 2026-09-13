@@ -1,0 +1,421 @@
+{
+  "page": {
+    "id": "47951b84-96d2-42ed-9361-1947ff332e2d",
+    "pageNumber": 1,
+    "imageId": "f4ecaedf-47ea-4b07-a53d-cc02a63d29a1",
+    "chapterId": "347ac0ff-495e-4d1d-aaae-7307e3899732"
+  },
+  "image": {
+    "id": "f4ecaedf-47ea-4b07-a53d-cc02a63d29a1",
+    "createdAt": "2026-09-13T08:08:09.444216Z",
+    "filename": "source.jpg",
+    "hash": "dad76737612ab40abbb345c724cd5366c2ce133a38522e1fb2d4b1f961bdf0cc",
+    "height": 2048,
+    "width": 1460,
+    "lastEditedAt": null,
+    "lastRenderedAt": "2026-09-13T08:08:24.992037Z",
+    "storagePath": "originals/e441cce9-26c6-4de0-bf43-3af596aefe1e.jpg",
+    "thumbnailStoragePath": "thumbnails/f4ecaedf-47ea-4b07-a53d-cc02a63d29a1.webp",
+    "readerStoragePath": null,
+    "createdBy": "a2eeb779-4036-40bf-9945-ce1dc13b27e3"
+  },
+  "url": "/tlhub/api/images/f4ecaedf-47ea-4b07-a53d-cc02a63d29a1/file",
+  "panels": [
+    {
+      "id": "167dfd41-9bf9-4b80-988c-6d0f23617e88",
+      "bboxX": 0,
+      "bboxY": 0,
+      "bboxW": 1460,
+      "bboxH": 2048,
+      "gridCol": 0,
+      "gridRow": 0,
+      "readingOrder": 1,
+      "imageId": "f4ecaedf-47ea-4b07-a53d-cc02a63d29a1"
+    }
+  ],
+  "ocrRegions": [
+    {
+      "id": "5ce26d36-a471-4d06-b685-5b7903b932aa",
+      "approved": null,
+      "backgroundColor": "#575958",
+      "bboxX": 1096,
+      "bboxY": 1748,
+      "bboxW": 272,
+      "bboxH": 152,
+      "bubbleX": 1096,
+      "bubbleY": 1748,
+      "bubbleW": 272,
+      "bubbleH": 152,
+      "bubbleId": "direct_text_1",
+      "bubbleReadingOrder": 2,
+      "confidence": 0.9282301068305968,
+      "detectedLanguage": "en",
+      "detectionConfidence": 0,
+      "maskPolygon": "[[1389,1744],[1395,1766],[1395,1882],[1389,1904],[1382,1914],[1372,1921],[1350,1927],[1114,1927],[1092,1921],[1082,1914],[1075,1904],[1069,1882],[1069,1766],[1075,1744],[1082,1734],[1092,1727],[1114,1721],[1350,1721],[1372,1727],[1382,1734]]",
+      "ocrScore": 0.9282301068305968,
+      "panelReadingOrder": 1,
+      "qaFeedback": "The Korean text translates to 'Miyako, emergency inspection, beginning now.' The OCR transcription includes an unnecessary 'A' and the punctuation is slightly awkward. Needs a clean English translation.",
+      "qaScore": 0,
+      "qaStatus": "failed",
+      "regionType": "speech",
+      "rotation": 0,
+      "safeTextX": 1096,
+      "safeTextY": 1748,
+      "safeTextW": 272,
+      "safeTextH": 152,
+      "text": "미야코 긴급 점검, 시작하겠습니다.",
+      "translatedText": "",
+      "translationFailed": false,
+      "translationScore": 1,
+      "pageId": "47951b84-96d2-42ed-9361-1947ff332e2d",
+      "panelId": "167dfd41-9bf9-4b80-988c-6d0f23617e88"
+    },
+    {
+      "id": "4d73c24b-c545-419b-bd54-6a64721d66c0",
+      "approved": null,
+      "backgroundColor": "#989999",
+      "bboxX": 108,
+      "bboxY": 1182,
+      "bboxW": 368,
+      "bboxH": 206,
+      "bubbleX": 108,
+      "bubbleY": 1182,
+      "bubbleW": 368,
+      "bubbleH": 206,
+      "bubbleId": "direct_text_0",
+      "bubbleReadingOrder": 1,
+      "confidence": 0.9524209797382356,
+      "detectedLanguage": "en",
+      "detectionConfidence": 0,
+      "maskPolygon": "[[505,1176],[511,1191],[513,1207],[513,1363],[511,1379],[505,1394],[495,1407],[482,1417],[467,1423],[451,1425],[133,1425],[117,1423],[102,1417],[89,1407],[79,1394],[73,1379],[71,1363],[71,1207],[73,1191],[79,1176],[89,1163],[102,1153],[117,1147],[133,1145],[451,1145],[467,1147],[482,1153],[495,1163]]",
+      "ocrScore": 0.9524209797382356,
+      "panelReadingOrder": 1,
+      "qaFeedback": "The original Korean text translates to 'Moe, let's see the face of the cheeky rabbit who dug a burrow in a place like this~?'. The current transcription includes the Korean text but needs a direct translation into English to be readable by the intended audience.",
+      "qaScore": 0,
+      "qaStatus": "failed",
+      "regionType": "speech",
+      "rotation": 0,
+      "safeTextX": 108,
+      "safeTextY": 1182,
+      "safeTextW": 368,
+      "safeTextH": 206,
+      "text": "이런 곳에굴을파놓은 발칙한 토끼가 누군지 낯짝을 좀 볼까~? 모에",
+      "translatedText": "",
+      "translationFailed": false,
+      "translationScore": 1,
+      "pageId": "47951b84-96d2-42ed-9361-1947ff332e2d",
+      "panelId": "167dfd41-9bf9-4b80-988c-6d0f23617e88"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "d9669f52-92a7-4d9d-8822-2d51b0349855",
+      "sceneType": "monologue",
+      "regions": [
+        {
+          "regionId": "4d73c24b-c545-419b-bd54-6a64721d66c0",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "id": "4e214e8a-e14f-42cb-a7c0-4e10be6a924d",
+      "sceneType": "monologue",
+      "regions": [
+        {
+          "regionId": "5ce26d36-a471-4d06-b685-5b7903b932aa",
+          "position": 1
+        }
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "layer": {
+        "id": "e8a5f0b6-88be-4bc9-aed0-0323197586a1",
+        "createdAt": "2026-09-13T08:08:18.286654Z",
+        "metadataJson": {
+          "time": "2026-09-13T08:08:18.288250104+00:00",
+          "model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+          "provider": "OCR Worker",
+          "confidence": 0.9403255432844162,
+          "layer_name": "OCR",
+          "layer_order": 1,
+          "last_modified": "2026-09-13T08:08:18.288465177+00:00"
+        },
+        "targetLanguage": null,
+        "type": "ocr",
+        "visible": true,
+        "zOrder": 1,
+        "pageId": "47951b84-96d2-42ed-9361-1947ff332e2d"
+      },
+      "elements": [
+        {
+          "id": "358e7a4f-000e-48e3-a78a-abe40afa5d05",
+          "autoSize": null,
+          "backgroundColor": null,
+          "boxShape": null,
+          "editedAt": null,
+          "font": null,
+          "fontStyle": null,
+          "fontWeight": null,
+          "isManuallyEdited": null,
+          "maskPolygon": null,
+          "maxHeight": 206,
+          "maxWidth": 368,
+          "overflow": null,
+          "rotation": null,
+          "size": null,
+          "text": "이런 곳에굴을파놓은 발칙한 토끼가 누군지 낯짝을 좀 볼까~? 모에",
+          "textColor": null,
+          "visible": true,
+          "wordWrap": true,
+          "x": 108,
+          "y": 1182,
+          "layerId": "e8a5f0b6-88be-4bc9-aed0-0323197586a1",
+          "regionId": "4d73c24b-c545-419b-bd54-6a64721d66c0"
+        },
+        {
+          "id": "b9decbb0-cef3-4d95-986c-ede0ad3d0839",
+          "autoSize": null,
+          "backgroundColor": null,
+          "boxShape": null,
+          "editedAt": null,
+          "font": null,
+          "fontStyle": null,
+          "fontWeight": null,
+          "isManuallyEdited": null,
+          "maskPolygon": null,
+          "maxHeight": 152,
+          "maxWidth": 272,
+          "overflow": null,
+          "rotation": null,
+          "size": null,
+          "text": "A 미야코 급점검, 작하겠습니다.",
+          "textColor": null,
+          "visible": true,
+          "wordWrap": true,
+          "x": 1096,
+          "y": 1748,
+          "layerId": "e8a5f0b6-88be-4bc9-aed0-0323197586a1",
+          "regionId": "5ce26d36-a471-4d06-b685-5b7903b932aa"
+        }
+      ]
+    },
+    {
+      "layer": {
+        "id": "49de7f14-d939-46c6-baef-d6cbd9c500ae",
+        "createdAt": "2026-09-13T08:08:21.612157Z",
+        "metadataJson": {
+          "qa": {
+            "cost": {
+              "currency": "USD",
+              "breakdown": [
+                {
+                  "model": "google/gemini-3.1-flash-lite",
+                  "stage": "qa",
+                  "currency": "USD",
+                  "provider": "openrouter",
+                  "cost_source": "authoritative",
+                  "duration_ms": 4652,
+                  "total_tokens": 2839,
+                  "cached_tokens": 0,
+                  "generation_id": "gen-1789286906-ke3dZWOC5FYfgnP7L0bJ",
+                  "prompt_tokens": 2440,
+                  "estimated_cost": 0.0012085,
+                  "model_resolved": "google/gemini-3.1-flash-lite",
+                  "completion_tokens": 399,
+                  "upstream_provider": "Google AI Studio",
+                  "cache_write_tokens": 0
+                }
+              ],
+              "priced_calls": 1,
+              "cached_tokens": 0,
+              "prompt_tokens": 2440,
+              "unknown_calls": 0,
+              "estimated_cost": 0.0012085,
+              "completion_tokens": 399
+            },
+            "failed": 2,
+            "passed": 0,
+            "status": "partial_pass",
+            "avg_score": 0,
+            "direct_fix": 0,
+            "last_qa_at": "2026-09-13T08:08:30.614920282+00:00",
+            "retries_used": 0,
+            "manual_review": 0,
+            "total_regions": 2,
+            "failed_regions": [
+              {
+                "qaScore": 0,
+                "qaStatus": "failed",
+                "regionId": "4d73c24b-c545-419b-bd54-6a64721d66c0",
+                "escalation": {
+                  "ocrBad": false,
+                  "orderBad": false,
+                  "needsReOcr": false,
+                  "correctedSourceText": "",
+                  "needsManualIntervention": false,
+                  "suggestedReadingOrderIndex": 0
+                },
+                "qaFeedback": "The original Korean text translates to 'Moe, let's see the face of the cheeky rabbit who dug a burrow in a place like this~?'. The current transcription includes the Korean text but needs a direct translation into English to be readable by the intended audience.",
+                "bubbleReadingOrder": 1
+              },
+              {
+                "qaScore": 0,
+                "qaStatus": "failed",
+                "regionId": "5ce26d36-a471-4d06-b685-5b7903b932aa",
+                "escalation": {
+                  "ocrBad": true,
+                  "orderBad": false,
+                  "needsReOcr": false,
+                  "correctedSourceText": "미야코 긴급 점검, 시작하겠습니다.",
+                  "needsManualIntervention": false,
+                  "suggestedReadingOrderIndex": 0
+                },
+                "qaFeedback": "The Korean text translates to 'Miyako, emergency inspection, beginning now.' The OCR transcription includes an unnecessary 'A' and the punctuation is slightly awkward. Needs a clean English translation.",
+                "bubbleReadingOrder": 2
+              }
+            ]
+          },
+          "time": "2026-09-13T08:08:21.611074893+00:00",
+          "model": "openai/gpt-5.6-luna",
+          "provider": "openrouter",
+          "confidence": 1,
+          "layer_name": "Translation",
+          "layer_order": 2,
+          "last_modified": "2026-09-13T08:08:21.611656975+00:00"
+        },
+        "targetLanguage": "en",
+        "type": "translation",
+        "visible": false,
+        "zOrder": 2,
+        "pageId": "47951b84-96d2-42ed-9361-1947ff332e2d"
+      },
+      "elements": [
+        {
+          "id": "840d4331-6739-4cf6-8335-df616334c125",
+          "autoSize": true,
+          "backgroundColor": "#989999",
+          "boxShape": "elliptical",
+          "editedAt": null,
+          "font": "Comic Neue",
+          "fontStyle": null,
+          "fontWeight": "bold",
+          "isManuallyEdited": null,
+          "maskPolygon": "[[505,1176],[511,1191],[513,1207],[513,1363],[511,1379],[505,1394],[495,1407],[482,1417],[467,1423],[451,1425],[133,1425],[117,1423],[102,1417],[89,1407],[79,1394],[73,1379],[71,1363],[71,1207],[73,1191],[79,1176],[89,1163],[102,1153],[117,1147],[133,1145],[451,1145],[467,1147],[482,1153],[495,1163]]",
+          "maxHeight": 226,
+          "maxWidth": 388,
+          "overflow": null,
+          "rotation": null,
+          "size": null,
+          "text": "",
+          "textColor": "#000000",
+          "visible": true,
+          "wordWrap": true,
+          "x": 98,
+          "y": 1172,
+          "layerId": "49de7f14-d939-46c6-baef-d6cbd9c500ae",
+          "regionId": "4d73c24b-c545-419b-bd54-6a64721d66c0"
+        },
+        {
+          "id": "a611e57d-6d49-44b6-b3ae-edc0510a14e0",
+          "autoSize": true,
+          "backgroundColor": "#575958",
+          "boxShape": "elliptical",
+          "editedAt": null,
+          "font": "Comic Neue",
+          "fontStyle": null,
+          "fontWeight": "bold",
+          "isManuallyEdited": null,
+          "maskPolygon": "[[1389,1744],[1395,1766],[1395,1882],[1389,1904],[1382,1914],[1372,1921],[1350,1927],[1114,1927],[1092,1921],[1082,1914],[1075,1904],[1069,1882],[1069,1766],[1075,1744],[1082,1734],[1092,1727],[1114,1721],[1350,1721],[1372,1727],[1382,1734]]",
+          "maxHeight": 172,
+          "maxWidth": 292,
+          "overflow": null,
+          "rotation": null,
+          "size": null,
+          "text": "",
+          "textColor": "#ffffff",
+          "visible": true,
+          "wordWrap": true,
+          "x": 1086,
+          "y": 1738,
+          "layerId": "49de7f14-d939-46c6-baef-d6cbd9c500ae",
+          "regionId": "5ce26d36-a471-4d06-b685-5b7903b932aa"
+        }
+      ]
+    },
+    {
+      "layer": {
+        "id": "d80a3bdc-8fdf-4a2d-94ae-5b637183dae4",
+        "createdAt": "2026-09-13T08:08:31.693586Z",
+        "metadataJson": {
+          "time": "2026-09-13T08:08:31.692981970+00:00",
+          "model": "openai/gpt-5.6-luna",
+          "provider": "openrouter",
+          "confidence": 1,
+          "layer_name": "Translation (qa-re-translate)",
+          "layer_order": 3,
+          "last_modified": "2026-09-13T08:08:31.693470951+00:00"
+        },
+        "targetLanguage": "en",
+        "type": "translation",
+        "visible": true,
+        "zOrder": 3,
+        "pageId": "47951b84-96d2-42ed-9361-1947ff332e2d"
+      },
+      "elements": [
+        {
+          "id": "e1c8655d-f55c-4645-adca-bfd821350349",
+          "autoSize": true,
+          "backgroundColor": "#575958",
+          "boxShape": "elliptical",
+          "editedAt": null,
+          "font": "Comic Neue",
+          "fontStyle": null,
+          "fontWeight": "bold",
+          "isManuallyEdited": null,
+          "maskPolygon": "[[1389,1744],[1395,1766],[1395,1882],[1389,1904],[1382,1914],[1372,1921],[1350,1927],[1114,1927],[1092,1921],[1082,1914],[1075,1904],[1069,1882],[1069,1766],[1075,1744],[1082,1734],[1092,1727],[1114,1721],[1350,1721],[1372,1727],[1382,1734]]",
+          "maxHeight": 172,
+          "maxWidth": 292,
+          "overflow": null,
+          "rotation": null,
+          "size": null,
+          "text": "",
+          "textColor": "#ffffff",
+          "visible": true,
+          "wordWrap": true,
+          "x": 1086,
+          "y": 1738,
+          "layerId": "d80a3bdc-8fdf-4a2d-94ae-5b637183dae4",
+          "regionId": "5ce26d36-a471-4d06-b685-5b7903b932aa"
+        },
+        {
+          "id": "cfaee686-26cd-44d4-9f3d-b73f2d3ae7f4",
+          "autoSize": true,
+          "backgroundColor": "#989999",
+          "boxShape": "elliptical",
+          "editedAt": null,
+          "font": "Comic Neue",
+          "fontStyle": null,
+          "fontWeight": "bold",
+          "isManuallyEdited": null,
+          "maskPolygon": "[[505,1176],[511,1191],[513,1207],[513,1363],[511,1379],[505,1394],[495,1407],[482,1417],[467,1423],[451,1425],[133,1425],[117,1423],[102,1417],[89,1407],[79,1394],[73,1379],[71,1363],[71,1207],[73,1191],[79,1176],[89,1163],[102,1153],[117,1147],[133,1145],[451,1145],[467,1147],[482,1153],[495,1163]]",
+          "maxHeight": 226,
+          "maxWidth": 388,
+          "overflow": null,
+          "rotation": null,
+          "size": null,
+          "text": "",
+          "textColor": "#000000",
+          "visible": true,
+          "wordWrap": true,
+          "x": 98,
+          "y": 1172,
+          "layerId": "d80a3bdc-8fdf-4a2d-94ae-5b637183dae4",
+          "regionId": "4d73c24b-c545-419b-bd54-6a64721d66c0"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "sample_id": "sample299",
+  "language": "ko",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ko",
+    "provenance": "x:2075067420608229847"
+  },
+  "references": [
+    {
+      "file": "ref-human.jpg",
+      "lang": "en",
+      "provenance": "human",
+      "attribution": "@RagingAsn_ — https://x.com/RagingAsn_/status/2075077941965336771"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "gaps/pending/ko/sample299",
+    "slug": "gap_ko75_tweet_2075067420608229847"
+  },
+  "provenance_metadata": {
+    "handle": "RagingAsn_",
+    "tweet_url": "https://x.com/RagingAsn_/status/2075077941965336771",
+    "created_at": "2026-07-09T04:41:49.000Z",
+    "lang_pair": "kr-en",
+    "caption": "EN Translation by @RagingAsn_\n\nEnglish translation! \nSee you next time! x.com/Oo12271547/sta…"
+  },
+  "notes": "Human-translated pair scraped from x.com; no app run yet (output pending)."
+}

@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample684",
+  "language": "zh",
+  "source": {
+    "file": "source.webp",
+    "lang": "zh",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/vel - Hu Tao Possession - [663934]/07.webp",
+    "sha256": "cf41f43d9ad934d516daadc854e56553e67333300dcb26b0d5803a24e7a78392",
+    "width": 1280,
+    "height": 1811,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "zh-res-4",
+    "origin_id": "/663934/07.webp",
+    "previous_path": "gaps/pending/zh/sample684"
+  },
+  "notes": "A09 reserve candidate. flat-color contrast with large horizontal dialogue bubbles",
+  "language_verification": "provisional-visual"
+}

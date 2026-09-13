@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample681",
+  "language": "zh",
+  "source": {
+    "file": "source.webp",
+    "lang": "zh",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/kotorakku - Bijutsubu no Kyonyuu Kouhai ga Nude Model ni Natta Kekka Amari ni Ero Sugite Or[547200]/28.webp",
+    "sha256": "ea327ecc6aa7312d3738b64b1a5c16e6291d94a7ffb6d555276de103f4490d44",
+    "width": 1280,
+    "height": 1790,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "zh-res-1",
+    "origin_id": "/547200/28.webp",
+    "previous_path": "gaps/pending/zh/sample681"
+  },
+  "notes": "A09 reserve candidate. B&W conventional multi-panel baseline with dense vertical dialogue and clean gutters",
+  "language_verification": "provisional-visual"
+}

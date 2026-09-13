@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample661",
+  "language": "ja",
+  "source": {
+    "file": "source.webp",
+    "lang": "ja",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/z-ton - Joutei Koubi - [545982]/14.webp",
+    "sha256": "f0b52b96af650614abeaa119eed399dc42ab73aec7195d816d7e1228c841138f",
+    "width": 1280,
+    "height": 1807,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "ja-res-7",
+    "origin_id": "/545982/",
+    "previous_path": "gaps/pending/ja/sample661"
+  },
+  "notes": "A09 reserve candidate. standard, thought and scream shapes plus narration box",
+  "language_verification": "provisional-visual"
+}

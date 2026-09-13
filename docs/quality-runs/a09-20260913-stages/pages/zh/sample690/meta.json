@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample690",
+  "language": "zh",
+  "source": {
+    "file": "source.webp",
+    "lang": "zh",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/kok - Takagi-san SwingingNTS Play (Karakai Jouzu no - [553357]/12.webp",
+    "sha256": "80664661d5d863b0ac24ddd9b61ff07dc39aa877fc3877e98eea0312b53c5420",
+    "width": 1280,
+    "height": 1811,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "zh-res-10",
+    "origin_id": "/553357/12.webp",
+    "previous_path": "gaps/pending/zh/sample690"
+  },
+  "notes": "A09 reserve candidate. non-standard composition with dense scattered captions and annotations",
+  "language_verification": "provisional-visual"
+}

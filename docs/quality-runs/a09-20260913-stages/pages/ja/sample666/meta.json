@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample666",
+  "language": "ja",
+  "source": {
+    "file": "source.webp",
+    "lang": "ja",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/remora - 旅館でイチャイチャ3 - [567060]/5.webp",
+    "sha256": "ef6979d75feb9f18538f5b0fa0ee33b94c0664d5033122864586df1b151dda33",
+    "width": 1075,
+    "height": 1518,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "ja-res-12",
+    "origin_id": "/567060/",
+    "previous_path": "gaps/pending/ja/sample666"
+  },
+  "notes": "A09 reserve candidate. vertical balloons over patterned busy background",
+  "language_verification": "provisional-visual"
+}

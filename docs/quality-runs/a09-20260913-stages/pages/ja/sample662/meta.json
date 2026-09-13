@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample662",
+  "language": "ja",
+  "source": {
+    "file": "source.webp",
+    "lang": "ja",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/maeshima ryou - Neko Cos wa Kanzen Fukujuu no Akashi - [673681]/31.webp",
+    "sha256": "e8c51b3ec3992122051db3183e79a0064ae489bde81d88906bf7963f9a5ec816",
+    "width": 1057,
+    "height": 1500,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "ja-res-8",
+    "origin_id": "/673681/",
+    "previous_path": "gaps/pending/ja/sample662"
+  },
+  "notes": "A09 reserve candidate. cluttered noisy screentone layout, overlapping dialogue",
+  "language_verification": "provisional-visual"
+}

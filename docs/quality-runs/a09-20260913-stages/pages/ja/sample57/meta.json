@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample57",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja"
+  },
+  "references": [
+    {
+      "file": "ref-human.jpg",
+      "lang": "en",
+      "provenance": "human"
+    },
+    {
+      "file": "ref-mangatranslator.ai.jpg",
+      "lang": "en",
+      "provenance": "mangatranslator.ai"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "samples/ja/sample57"
+  },
+  "notes": "20260625_210625.jpg is a photo of a hand-made human translation of the same page."
+}

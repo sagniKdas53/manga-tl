@@ -1,0 +1,103 @@
+{
+  "format": "a09-quality-thresholds/v1",
+  "status": "frozen-pending-coordinator-approval",
+  "date": "2026-09-13",
+  "derivation": {
+    "source": "Measured on the 24 A06-C conventional-control development baselines (228 reviewed regions, 202 visible translated elements) captured on this checkout.",
+    "anti_overfitting": "Thresholds are derived only from development controls and are frozen before any holdout page is scored. No holdout output or label may change them. Per the canvas plan, no global merge threshold, page-area cap, or whole-image Torii similarity is used as a quality criterion.",
+    "measured_baseline": {
+      "pages": 24,
+      "total_regions": 228,
+      "total_visible_text_elements": 202,
+      "max_overflow_px": 20,
+      "pages_with_overflow": 18,
+      "max_pair_overlap_ratio": 0.2065,
+      "pages_with_overlap": 5,
+      "orphans": 0,
+      "visible_empty": 1,
+      "rejected_regions_rendered": 0,
+      "min_font_size_observed": 24,
+      "element_overflow_rate": 0.2178,
+      "element_overflow_p95_px": 10
+    }
+  },
+  "hard_invariants": [
+    {
+      "id": "HI-1",
+      "metric": "rendered_preserved_or_review_regions",
+      "rule": "== 0",
+      "rationale": "Preserve/explain/review regions keep source pixels; rendering replacement text over them violates the region-action contract. Development baseline: 0."
+    },
+    {
+      "id": "HI-2",
+      "metric": "orphan_translation_elements",
+      "rule": "== 0",
+      "rationale": "Every visible translated element must map to exactly one reviewed owner region. Development baseline: 0."
+    },
+    {
+      "id": "HI-3",
+      "metric": "visible_empty_text_elements",
+      "rule": "== 0",
+      "rationale": "A visible element with empty text authorizes cleanup with nothing to show. Development baseline: 1 occurrence, already a known defect, so the holdout gate does not inherit it."
+    },
+    {
+      "id": "HI-4",
+      "metric": "canvas_dimensions",
+      "rule": "exported canvas width/height == source width/height",
+      "rationale": "Output must stay in source pixel space; scaling invalidates every geometric measure."
+    },
+    {
+      "id": "HI-5",
+      "metric": "merged_owner_elements",
+      "rule": "== 0",
+      "rationale": "Two reviewed independent owners may never share one rendered element; proximity is not ownership evidence."
+    }
+  ],
+  "bounded_metrics": [
+    {
+      "id": "BM-1",
+      "metric": "max_overflow_px_beyond_safe_text_rect",
+      "threshold": "<= 20",
+      "baseline": 20,
+      "rationale": "No holdout element may exceed the worst development overflow."
+    },
+    {
+      "id": "BM-2",
+      "metric": "element_overflow_rate",
+      "threshold": "<= 0.22",
+      "baseline": 0.2178,
+      "rationale": "Overflow frequency may not regress beyond the measured development rate."
+    },
+    {
+      "id": "BM-3",
+      "metric": "max_pairwise_element_overlap_ratio",
+      "threshold": "<= 0.21",
+      "baseline": 0.2065,
+      "rationale": "Overlap of the smaller box area; the development worst case bounds the holdout."
+    },
+    {
+      "id": "BM-4",
+      "metric": "min_rendered_font_size_px",
+      "threshold": ">= 24",
+      "baseline": 24,
+      "rationale": "Readability floor observed across every development control."
+    },
+    {
+      "id": "BM-5",
+      "metric": "pages_with_any_overlapping_pair",
+      "threshold": "<= 0.21 of scored pages",
+      "baseline": "5/24 = 0.2083",
+      "rationale": "Page-level overlap incidence may not regress."
+    }
+  ],
+  "reporting_requirements": [
+    "Report every metric per language and per page; a language or style failure may not be hidden by the aggregate.",
+    "Record stage time, tokens, retries, effective fonts, models and runtime with each scored page.",
+    "A hard-invariant failure blocks promotion; a bounded-metric failure returns to the responsible task with a new regression case."
+  ],
+  "not_quality_criteria": [
+    "QA status is a pipeline signal, not a quality pass.",
+    "Whole-image similarity to Torii or any other reference renderer.",
+    "Global merge thresholds or page-area caps."
+  ]
+}

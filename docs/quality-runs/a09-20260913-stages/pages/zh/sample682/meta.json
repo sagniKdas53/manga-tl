@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample682",
+  "language": "zh",
+  "source": {
+    "file": "source.webp",
+    "lang": "zh",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/marugoshi - Hataya Misuzu no P Ikusei Nisshi  秦谷美铃的制作人育成日志 - [619253]/09.webp",
+    "sha256": "312414bb391353e62f7194a0a0688bf83931d8416ed0fb2a958d248face592b3",
+    "width": 1280,
+    "height": 1808,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "zh-res-2",
+    "origin_id": "/619253/09.webp",
+    "previous_path": "gaps/pending/zh/sample682"
+  },
+  "notes": "A09 reserve candidate. high-density vertical bubbles, nested text and overlapping SFX",
+  "language_verification": "provisional-visual"
+}

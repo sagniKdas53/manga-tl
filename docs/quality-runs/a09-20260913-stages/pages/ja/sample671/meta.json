@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample671",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja",
+    "provenance": "pixiv",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_143064070_20260818_190952.jpg",
+    "sha256": "d47518007d8cdc2a122b4e5e45fcdbd15a3ec1fe6e33401e1172e1cee96a79e3",
+    "width": 1748,
+    "height": 2480,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "pixiv",
+    "reserve_tag": "px-res-3",
+    "origin_id": "143064070",
+    "previous_path": "gaps/pending/ja/sample671"
+  },
+  "notes": "A09 reserve candidate. black-bordered balloons and embedded SFX across panel sizes",
+  "language_verification": "provisional-visual"
+}

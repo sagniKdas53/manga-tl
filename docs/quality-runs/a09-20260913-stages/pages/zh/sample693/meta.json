@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample693",
+  "language": "zh",
+  "source": {
+    "file": "source.jpg",
+    "lang": "zh",
+    "provenance": "x-scrape-2026-09-13",
+    "source_path": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2083193923460296829.jpg",
+    "sha256": "0c97fa503a7c90f30c75ed8f00ec73fd74af3c190c363b2e36f10f86fed05959",
+    "width": 1473,
+    "height": 2048,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "x-scrape-2026-09-13",
+    "reserve_tag": "zh-res-x1",
+    "origin_id": "https://x.com/Windwin69369561/status/2083193923460296829",
+    "previous_path": "gaps/pending/zh/sample693"
+  },
+  "notes": "A09 reserve candidate. four-panel color page with nested bubbles, expressive fonts and SFX",
+  "language_verification": "provisional-visual"
+}

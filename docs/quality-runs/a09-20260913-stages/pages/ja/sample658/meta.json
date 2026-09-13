@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample658",
+  "language": "ja",
+  "source": {
+    "file": "source.webp",
+    "lang": "ja",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/echihiro - Ecchi na Onsen Report no Oshigoto - [556423]/3.webp",
+    "sha256": "661ed385bda0049d74bf74324197a82064bfdd310f68d2f958fe6651a3a829ac",
+    "width": 1280,
+    "height": 1795,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "ja-res-4",
+    "origin_id": "/556423/",
+    "previous_path": "gaps/pending/ja/sample658"
+  },
+  "notes": "A09 reserve candidate. round balloons, whisper asides and rectangular narration boxes",
+  "language_verification": "provisional-visual"
+}

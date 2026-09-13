@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample676",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja",
+    "provenance": "pixiv",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_132022758_20260701_022946.jpg",
+    "sha256": "47543122596909b4e98d6579c61eeee4a310609d843a59018a04795dac0fb3e3",
+    "width": 4299,
+    "height": 6071,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "pixiv",
+    "reserve_tag": "px-res-8",
+    "origin_id": "132022758",
+    "previous_path": "gaps/pending/ja/sample676"
+  },
+  "notes": "A09 reserve candidate. B&W multi-panel with vertical balloons and diverse panel sizes",
+  "language_verification": "provisional-visual"
+}

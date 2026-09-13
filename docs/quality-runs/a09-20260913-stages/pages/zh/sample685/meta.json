@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample685",
+  "language": "zh",
+  "source": {
+    "file": "source.jpg",
+    "lang": "zh",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/kumada - Ijime Ijirare - [236186]/09.jpg",
+    "sha256": "30d4887dc784c6b9752ab2175c63027a3ca460c9ed7f53b2ca48870d4039f274",
+    "width": 1021,
+    "height": 1500,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "zh-res-5",
+    "origin_id": "/236186/09.jpg",
+    "previous_path": "gaps/pending/zh/sample685"
+  },
+  "notes": "A09 reserve candidate. dense five-panel page with thin balloons, narration boxes and screentones",
+  "language_verification": "provisional-visual"
+}

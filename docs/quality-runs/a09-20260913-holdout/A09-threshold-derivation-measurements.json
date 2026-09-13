@@ -1,0 +1,561 @@
+{
+  "schema_version": "page-quality-measurement/v1",
+  "measurement_set": "A06-C development controls (24 pages)",
+  "totals": {
+    "pages": 24,
+    "regions": 228,
+    "visible_text_elements": 202,
+    "orphan_translation_elements": 0,
+    "visible_empty_text_elements": 1,
+    "rendered_preserved_or_review_regions": 0,
+    "merged_owner_elements": 0,
+    "max_overflow_px": 20,
+    "element_overflow_rate": 0.2178,
+    "max_pairwise_element_overlap_ratio": 0.2065,
+    "pages_with_any_overlapping_pair": 5,
+    "min_rendered_font_size_px": 24
+  },
+  "pages": [
+    {
+      "page": "sample7",
+      "snapshot": "docs/quality-runs/a06-c-20260910-sample7/a04-exports/sample7/page-snapshot.json",
+      "metrics": {
+        "regions": 24,
+        "translation_elements": 24,
+        "visible_text_elements": 15,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 10,
+        "elements_overflowing": 1,
+        "element_overflow_rate": 0.0667,
+        "max_pairwise_element_overlap_ratio": 0.0705,
+        "overlapping_pairs": 1,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 15,
+          "reject_sfx": 9
+        }
+      }
+    },
+    {
+      "page": "sample123",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample123/page-snapshot.json",
+      "metrics": {
+        "regions": 14,
+        "translation_elements": 14,
+        "visible_text_elements": 11,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 4,
+        "elements_overflowing": 2,
+        "element_overflow_rate": 0.1818,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 11,
+          "reject_sfx": 3
+        }
+      }
+    },
+    {
+      "page": "sample134",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample134/page-snapshot.json",
+      "metrics": {
+        "regions": 6,
+        "translation_elements": 6,
+        "visible_text_elements": 3,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 1,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 10,
+        "elements_overflowing": 2,
+        "element_overflow_rate": 0.6667,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 4,
+          "reject_sfx": 2
+        }
+      }
+    },
+    {
+      "page": "sample139",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample139/page-snapshot.json",
+      "metrics": {
+        "regions": 13,
+        "translation_elements": 13,
+        "visible_text_elements": 13,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 10,
+        "elements_overflowing": 3,
+        "element_overflow_rate": 0.2308,
+        "max_pairwise_element_overlap_ratio": 0.1204,
+        "overlapping_pairs": 2,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 13
+        }
+      }
+    },
+    {
+      "page": "sample150",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample150/page-snapshot.json",
+      "metrics": {
+        "regions": 10,
+        "translation_elements": 10,
+        "visible_text_elements": 10,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 10,
+        "elements_overflowing": 2,
+        "element_overflow_rate": 0.2,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 10
+        }
+      }
+    },
+    {
+      "page": "sample172",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample172/page-snapshot.json",
+      "metrics": {
+        "regions": 11,
+        "translation_elements": 11,
+        "visible_text_elements": 9,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 0,
+        "elements_overflowing": 0,
+        "element_overflow_rate": 0.0,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 9,
+          "reject_sfx": 2
+        }
+      }
+    },
+    {
+      "page": "sample192",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample192/page-snapshot.json",
+      "metrics": {
+        "regions": 3,
+        "translation_elements": 3,
+        "visible_text_elements": 3,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 8,
+        "elements_overflowing": 1,
+        "element_overflow_rate": 0.3333,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 3
+        }
+      }
+    },
+    {
+      "page": "sample197",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample197/page-snapshot.json",
+      "metrics": {
+        "regions": 14,
+        "translation_elements": 14,
+        "visible_text_elements": 13,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 10,
+        "elements_overflowing": 7,
+        "element_overflow_rate": 0.5385,
+        "max_pairwise_element_overlap_ratio": 0.0158,
+        "overlapping_pairs": 1,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 13,
+          "reject_sfx": 1
+        }
+      }
+    },
+    {
+      "page": "sample199",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample199/page-snapshot.json",
+      "metrics": {
+        "regions": 4,
+        "translation_elements": 4,
+        "visible_text_elements": 4,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 0,
+        "elements_overflowing": 0,
+        "element_overflow_rate": 0.0,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 4
+        }
+      }
+    },
+    {
+      "page": "sample206",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample206/page-snapshot.json",
+      "metrics": {
+        "regions": 3,
+        "translation_elements": 3,
+        "visible_text_elements": 3,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 0,
+        "elements_overflowing": 0,
+        "element_overflow_rate": 0.0,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 3
+        }
+      }
+    },
+    {
+      "page": "sample208",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample208/page-snapshot.json",
+      "metrics": {
+        "regions": 10,
+        "translation_elements": 10,
+        "visible_text_elements": 10,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 0,
+        "elements_overflowing": 0,
+        "element_overflow_rate": 0.0,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 10
+        }
+      }
+    },
+    {
+      "page": "sample226",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample226/page-snapshot.json",
+      "metrics": {
+        "regions": 7,
+        "translation_elements": 7,
+        "visible_text_elements": 7,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 0,
+        "elements_overflowing": 0,
+        "element_overflow_rate": 0.0,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 7
+        }
+      }
+    },
+    {
+      "page": "sample261",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample261/page-snapshot.json",
+      "metrics": {
+        "regions": 12,
+        "translation_elements": 12,
+        "visible_text_elements": 12,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 10,
+        "elements_overflowing": 3,
+        "element_overflow_rate": 0.25,
+        "max_pairwise_element_overlap_ratio": 0.1208,
+        "overlapping_pairs": 1,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 12
+        }
+      }
+    },
+    {
+      "page": "sample268",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample268/page-snapshot.json",
+      "metrics": {
+        "regions": 9,
+        "translation_elements": 9,
+        "visible_text_elements": 8,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 0,
+        "elements_overflowing": 0,
+        "element_overflow_rate": 0.0,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 8,
+          "reject_sfx": 1
+        }
+      }
+    },
+    {
+      "page": "sample289",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample289/page-snapshot.json",
+      "metrics": {
+        "regions": 13,
+        "translation_elements": 13,
+        "visible_text_elements": 12,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 10,
+        "elements_overflowing": 5,
+        "element_overflow_rate": 0.4167,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 12,
+          "reject_sfx": 1
+        }
+      }
+    },
+    {
+      "page": "sample320",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample320/page-snapshot.json",
+      "metrics": {
+        "regions": 6,
+        "translation_elements": 6,
+        "visible_text_elements": 6,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 10,
+        "elements_overflowing": 1,
+        "element_overflow_rate": 0.1667,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 6
+        }
+      }
+    },
+    {
+      "page": "sample360",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample360/page-snapshot.json",
+      "metrics": {
+        "regions": 9,
+        "translation_elements": 9,
+        "visible_text_elements": 9,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 10,
+        "elements_overflowing": 3,
+        "element_overflow_rate": 0.3333,
+        "max_pairwise_element_overlap_ratio": 0.2065,
+        "overlapping_pairs": 1,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 9
+        }
+      }
+    },
+    {
+      "page": "sample39",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample39/page-snapshot.json",
+      "metrics": {
+        "regions": 13,
+        "translation_elements": 13,
+        "visible_text_elements": 10,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 10,
+        "elements_overflowing": 1,
+        "element_overflow_rate": 0.1,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 10,
+          "reject_sfx": 3
+        }
+      }
+    },
+    {
+      "page": "sample416",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample416/page-snapshot.json",
+      "metrics": {
+        "regions": 6,
+        "translation_elements": 6,
+        "visible_text_elements": 6,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 10,
+        "elements_overflowing": 1,
+        "element_overflow_rate": 0.1667,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": 35,
+        "qa_statuses": {
+          "passed": 5,
+          "fixed": 1
+        }
+      }
+    },
+    {
+      "page": "sample457",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample457/page-snapshot.json",
+      "metrics": {
+        "regions": 7,
+        "translation_elements": 7,
+        "visible_text_elements": 6,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 20,
+        "elements_overflowing": 3,
+        "element_overflow_rate": 0.5,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 6,
+          "reject_sfx": 1
+        }
+      }
+    },
+    {
+      "page": "sample47",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample47/page-snapshot.json",
+      "metrics": {
+        "regions": 12,
+        "translation_elements": 12,
+        "visible_text_elements": 11,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 20,
+        "elements_overflowing": 4,
+        "element_overflow_rate": 0.3636,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 11,
+          "reject_sfx": 1
+        }
+      }
+    },
+    {
+      "page": "sample609",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample609/page-snapshot.json",
+      "metrics": {
+        "regions": 10,
+        "translation_elements": 10,
+        "visible_text_elements": 10,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 20,
+        "elements_overflowing": 2,
+        "element_overflow_rate": 0.2,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": 24,
+        "qa_statuses": {
+          "passed": 7,
+          "fixed": 3
+        }
+      }
+    },
+    {
+      "page": "sample611",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample611/page-snapshot.json",
+      "metrics": {
+        "regions": 4,
+        "translation_elements": 4,
+        "visible_text_elements": 4,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 10,
+        "elements_overflowing": 2,
+        "element_overflow_rate": 0.5,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 4
+        }
+      }
+    },
+    {
+      "page": "sample612",
+      "snapshot": "docs/quality-runs/a06-c-20260911-controls/a04-exports/sample612/page-snapshot.json",
+      "metrics": {
+        "regions": 8,
+        "translation_elements": 8,
+        "visible_text_elements": 7,
+        "orphan_translation_elements": 0,
+        "visible_empty_text_elements": 0,
+        "rendered_preserved_or_review_regions": 0,
+        "merged_owner_elements": 0,
+        "max_overflow_px": 10,
+        "elements_overflowing": 1,
+        "element_overflow_rate": 0.1429,
+        "max_pairwise_element_overlap_ratio": 0.0,
+        "overlapping_pairs": 0,
+        "min_rendered_font_size_px": null,
+        "qa_statuses": {
+          "passed": 7,
+          "reject_sfx": 1
+        }
+      }
+    }
+  ]
+}

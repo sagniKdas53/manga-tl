@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample393",
+  "language": "ko",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ko",
+    "provenance": "x:2086014562009264359"
+  },
+  "references": [
+    {
+      "file": "ref-human.jpg",
+      "lang": "en",
+      "provenance": "human",
+      "attribution": "@RagingAsn_ — https://x.com/RagingAsn_/status/2086105934850322623"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "gaps/pending/ko/sample393",
+    "slug": "gap_ko169_tweet_2086014562009264359"
+  },
+  "provenance_metadata": {
+    "handle": "RagingAsn_",
+    "tweet_url": "https://x.com/RagingAsn_/status/2086105934850322623",
+    "created_at": "2026-08-08T15:03:07.000Z",
+    "lang_pair": "kr-en",
+    "caption": "EN Translation by @RagingAsn_\nArtist Comment: Kivotos Tactics Manual - AR, Shiroko Terror\n\nDue to personal circumstances, Flukhan will be ending the 'Kivotos Tactics Manual' series with this page like"
+  },
+  "notes": "Human-translated pair scraped from x.com; no app run yet (output pending)."
+}

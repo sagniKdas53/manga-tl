@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample696",
+  "language": "zh",
+  "source": {
+    "file": "source.jpg",
+    "lang": "zh",
+    "provenance": "x-scrape-2026-09-13",
+    "source_path": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2098083130683080992.jpg",
+    "sha256": "f2ce230ad93f13675e3f507a53839f4b657cfc36296d40257109323a89781756",
+    "width": 1539,
+    "height": 2047,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "x-scrape-2026-09-13",
+    "reserve_tag": "zh-res-x4",
+    "origin_id": "https://x.com/Windwin69369561/status/2098083130683080992",
+    "previous_path": "gaps/pending/zh/sample696"
+  },
+  "notes": "A09 reserve candidate. oversized decorative header type, colored callouts and phone-screen text",
+  "language_verification": "provisional-visual"
+}

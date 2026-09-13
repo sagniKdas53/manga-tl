@@ -1,0 +1,460 @@
+{
+  "page": {
+    "id": "fcde2121-049c-43df-96bc-e39708527c41",
+    "pageNumber": 1,
+    "imageId": "5d09094f-b8df-4209-ac50-67183a4dbeb3",
+    "chapterId": "94e4417c-309b-4c26-9c80-453122ddaef4"
+  },
+  "image": {
+    "id": "5d09094f-b8df-4209-ac50-67183a4dbeb3",
+    "createdAt": "2026-09-13T07:39:46.064190Z",
+    "filename": "source.jpg",
+    "hash": "13786c579119e73bdf1b32c552d9bbe750a42155fb35a20e343b55fafe75c236",
+    "height": 1950,
+    "width": 1266,
+    "lastEditedAt": null,
+    "lastRenderedAt": "2026-09-13T07:40:18.793097Z",
+    "storagePath": "originals/84f38596-c8db-4640-9c60-2b3ea629b00c.jpg",
+    "thumbnailStoragePath": "thumbnails/5d09094f-b8df-4209-ac50-67183a4dbeb3.webp",
+    "readerStoragePath": null,
+    "createdBy": "a2eeb779-4036-40bf-9945-ce1dc13b27e3"
+  },
+  "url": "/tlhub/api/images/5d09094f-b8df-4209-ac50-67183a4dbeb3/file",
+  "panels": [
+    {
+      "id": "023abbb3-03d6-4a1a-a531-d63c4990e01b",
+      "bboxX": 0,
+      "bboxY": 0,
+      "bboxW": 1266,
+      "bboxH": 1950,
+      "gridCol": 0,
+      "gridRow": 0,
+      "readingOrder": 1,
+      "imageId": "5d09094f-b8df-4209-ac50-67183a4dbeb3"
+    }
+  ],
+  "ocrRegions": [
+    {
+      "id": "9b74e551-222b-4a76-ac06-c52ef01dfa9a",
+      "approved": null,
+      "backgroundColor": "#ffffff",
+      "bboxX": 1039,
+      "bboxY": 47,
+      "bboxW": 141,
+      "bboxH": 448,
+      "bubbleX": 1032,
+      "bubbleY": 26,
+      "bubbleW": 155,
+      "bubbleH": 480,
+      "bubbleId": "bubble_1",
+      "bubbleReadingOrder": 1,
+      "confidence": 0.9507602751255037,
+      "detectedLanguage": "zh-TW",
+      "detectionConfidence": 0.9620077610015868,
+      "maskPolygon": "[[1036,25],[1034,502],[1040,505],[1189,505],[1192,502],[1192,27],[1189,24]]",
+      "ocrScore": 0.9507602751255037,
+      "panelReadingOrder": 1,
+      "qaFeedback": "The translation is accurate and natural for the context. Typesetting fits the bubble well.",
+      "qaScore": 1,
+      "qaStatus": "passed",
+      "regionType": "speech",
+      "rotation": 0,
+      "safeTextX": 1037,
+      "safeTextY": 27,
+      "safeTextW": 153,
+      "safeTextH": 476,
+      "text": "因为工作和弗洛洛约会退到",
+      "translatedText": "My date with Flolo was pushed back because of work...",
+      "translationFailed": false,
+      "translationScore": 0.86,
+      "pageId": "fcde2121-049c-43df-96bc-e39708527c41",
+      "panelId": "023abbb3-03d6-4a1a-a531-d63c4990e01b"
+    },
+    {
+      "id": "003e8b74-8890-4d2f-863c-5d1af670869b",
+      "approved": null,
+      "backgroundColor": "#3c4469",
+      "bboxX": 874,
+      "bboxY": 982,
+      "bboxW": 358,
+      "bboxH": 210,
+      "bubbleX": 874,
+      "bubbleY": 982,
+      "bubbleW": 358,
+      "bubbleH": 210,
+      "bubbleId": "direct_text_0",
+      "bubbleReadingOrder": 2,
+      "confidence": 0.9203266700108846,
+      "detectedLanguage": "zh-TW",
+      "detectionConfidence": 0,
+      "maskPolygon": "[[1258,975],[1266,1007],[1266,1167],[1258,1199],[1248,1212],[1235,1222],[1203,1230],[899,1230],[867,1222],[854,1212],[844,1199],[836,1167],[836,1007],[844,975],[854,962],[867,952],[899,944],[1203,944],[1235,952],[1248,962]]",
+      "ocrScore": 0.9203266700108846,
+      "panelReadingOrder": 1,
+      "qaFeedback": "The translation is missing entirely. The Chinese text '这次就原谅你 下次我不会等了...' translates to 'I'll forgive you this time, but I won't wait next time...'",
+      "qaScore": 0,
+      "qaStatus": "failed",
+      "regionType": "speech",
+      "rotation": 0,
+      "safeTextX": 874,
+      "safeTextY": 982,
+      "safeTextW": 358,
+      "safeTextH": 210,
+      "text": "这次就原谅你下次我不会等了...000",
+      "translatedText": "",
+      "translationFailed": false,
+      "translationScore": 1,
+      "pageId": "fcde2121-049c-43df-96bc-e39708527c41",
+      "panelId": "023abbb3-03d6-4a1a-a531-d63c4990e01b"
+    },
+    {
+      "id": "0251e5bc-f370-4a2e-8fff-e5e6f149cbc3",
+      "approved": null,
+      "backgroundColor": "#ffffff",
+      "bboxX": 39,
+      "bboxY": 1805,
+      "bboxW": 246,
+      "bboxH": 72,
+      "bubbleX": 31,
+      "bubbleY": 1767,
+      "bubbleW": 269,
+      "bubbleH": 143,
+      "bubbleId": "bubble_0",
+      "bubbleReadingOrder": 3,
+      "confidence": 0.998479962348938,
+      "detectedLanguage": "en",
+      "detectionConfidence": 0.9656411409378052,
+      "maskPolygon": "[[31,1769],[32,1906],[299,1904],[299,1770],[296,1767]]",
+      "ocrScore": 0.998479962348938,
+      "panelReadingOrder": 1,
+      "qaFeedback": "The translation of the timestamp is accurate.",
+      "qaScore": 1,
+      "qaStatus": "passed",
+      "regionType": "narration",
+      "rotation": 0,
+      "safeTextX": 34,
+      "safeTextY": 1770,
+      "safeTextW": 263,
+      "safeTextH": 134,
+      "text": "10:00pm",
+      "translatedText": "10:00 p.m.",
+      "translationFailed": false,
+      "translationScore": 1,
+      "pageId": "fcde2121-049c-43df-96bc-e39708527c41",
+      "panelId": "023abbb3-03d6-4a1a-a531-d63c4990e01b"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "1bdfc5a3-8edd-4769-987d-566dd633f2d4",
+      "sceneType": "monologue",
+      "regions": [
+        {
+          "regionId": "9b74e551-222b-4a76-ac06-c52ef01dfa9a",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "id": "0d7531e4-4e1c-4706-8ade-0a23613e04f8",
+      "sceneType": "monologue",
+      "regions": [
+        {
+          "regionId": "003e8b74-8890-4d2f-863c-5d1af670869b",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "id": "1c7a4263-afee-4196-9f3e-7fcac9575e5c",
+      "sceneType": "narration",
+      "regions": [
+        {
+          "regionId": "0251e5bc-f370-4a2e-8fff-e5e6f149cbc3",
+          "position": 1
+        }
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "layer": {
+        "id": "62470163-f9d7-4375-99d9-e515f30a3a6c",
+        "createdAt": "2026-09-13T07:40:04.401575Z",
+        "metadataJson": {
+          "time": "2026-09-13T07:40:04.403349119+00:00",
+          "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+          "provider": "OCR Worker",
+          "confidence": 0.9565223024951088,
+          "layer_name": "OCR",
+          "layer_order": 1,
+          "last_modified": "2026-09-13T07:40:04.403516548+00:00"
+        },
+        "targetLanguage": null,
+        "type": "ocr",
+        "visible": true,
+        "zOrder": 1,
+        "pageId": "fcde2121-049c-43df-96bc-e39708527c41"
+      },
+      "elements": [
+        {
+          "id": "cadc285a-d5f8-4263-b3b0-c6dc6bf37169",
+          "autoSize": null,
+          "backgroundColor": null,
+          "boxShape": null,
+          "editedAt": null,
+          "font": null,
+          "fontStyle": null,
+          "fontWeight": null,
+          "isManuallyEdited": null,
+          "maskPolygon": null,
+          "maxHeight": 448,
+          "maxWidth": 141,
+          "overflow": null,
+          "rotation": null,
+          "size": null,
+          "text": "因为工作和弗洛洛约会退到",
+          "textColor": null,
+          "visible": true,
+          "wordWrap": true,
+          "x": 1039,
+          "y": 47,
+          "layerId": "62470163-f9d7-4375-99d9-e515f30a3a6c",
+          "regionId": "9b74e551-222b-4a76-ac06-c52ef01dfa9a"
+        },
+        {
+          "id": "9e67e5af-7cd9-4517-9b20-ed9e3ac1e92d",
+          "autoSize": null,
+          "backgroundColor": null,
+          "boxShape": null,
+          "editedAt": null,
+          "font": null,
+          "fontStyle": null,
+          "fontWeight": null,
+          "isManuallyEdited": null,
+          "maskPolygon": null,
+          "maxHeight": 210,
+          "maxWidth": 358,
+          "overflow": null,
+          "rotation": null,
+          "size": null,
+          "text": "这次就原谅你下次我不会等了...000",
+          "textColor": null,
+          "visible": true,
+          "wordWrap": true,
+          "x": 874,
+          "y": 982,
+          "layerId": "62470163-f9d7-4375-99d9-e515f30a3a6c",
+          "regionId": "003e8b74-8890-4d2f-863c-5d1af670869b"
+        },
+        {
+          "id": "84d88ec7-f2cc-4ead-a3ca-86b7db03c986",
+          "autoSize": null,
+          "backgroundColor": null,
+          "boxShape": null,
+          "editedAt": null,
+          "font": null,
+          "fontStyle": null,
+          "fontWeight": null,
+          "isManuallyEdited": null,
+          "maskPolygon": null,
+          "maxHeight": 72,
+          "maxWidth": 246,
+          "overflow": null,
+          "rotation": null,
+          "size": null,
+          "text": "10:00pm",
+          "textColor": null,
+          "visible": true,
+          "wordWrap": true,
+          "x": 39,
+          "y": 1805,
+          "layerId": "62470163-f9d7-4375-99d9-e515f30a3a6c",
+          "regionId": "0251e5bc-f370-4a2e-8fff-e5e6f149cbc3"
+        }
+      ]
+    },
+    {
+      "layer": {
+        "id": "345898c1-f0af-4622-8766-3b83c79c8044",
+        "createdAt": "2026-09-13T07:40:15.591296Z",
+        "metadataJson": {
+          "qa": {
+            "cost": {
+              "currency": "USD",
+              "breakdown": [
+                {
+                  "model": "google/gemini-3.1-flash-lite",
+                  "stage": "qa",
+                  "currency": "USD",
+                  "provider": "openrouter",
+                  "cost_source": "authoritative",
+                  "duration_ms": 6824,
+                  "total_tokens": 3147,
+                  "cached_tokens": 0,
+                  "generation_id": "gen-1789285219-qN9gSJZzwO4k1DAQ5Z99",
+                  "prompt_tokens": 2602,
+                  "estimated_cost": 0.001468,
+                  "model_resolved": "google/gemini-3.1-flash-lite",
+                  "completion_tokens": 545,
+                  "upstream_provider": "Google AI Studio",
+                  "cache_write_tokens": 0
+                }
+              ],
+              "priced_calls": 1,
+              "cached_tokens": 0,
+              "prompt_tokens": 2602,
+              "unknown_calls": 0,
+              "estimated_cost": 0.001468,
+              "completion_tokens": 545
+            },
+            "failed": 1,
+            "passed": 2,
+            "status": "partial_pass",
+            "avg_score": 0.6666666666666666,
+            "direct_fix": 0,
+            "last_qa_at": "2026-09-13T07:40:26.223237747+00:00",
+            "retries_used": 0,
+            "manual_review": 0,
+            "total_regions": 3,
+            "failed_regions": [
+              {
+                "qaScore": 0,
+                "qaStatus": "failed",
+                "regionId": "003e8b74-8890-4d2f-863c-5d1af670869b",
+                "escalation": {
+                  "ocrBad": false,
+                  "orderBad": false,
+                  "needsReOcr": false,
+                  "correctedSourceText": "这次就原谅你下次我不会等了...",
+                  "needsManualIntervention": false,
+                  "suggestedReadingOrderIndex": 0
+                },
+                "qaFeedback": "The translation is missing entirely. The Chinese text '这次就原谅你 下次我不会等了...' translates to 'I'll forgive you this time, but I won't wait next time...'",
+                "bubbleReadingOrder": 2
+              }
+            ]
+          },
+          "tl": {
+            "cost": {
+              "currency": "USD",
+              "breakdown": [
+                {
+                  "model": "openai/gpt-5.6-luna",
+                  "stage": "translation",
+                  "currency": "USD",
+                  "provider": "openrouter",
+                  "cost_source": "authoritative",
+                  "duration_ms": 4897,
+                  "total_tokens": 1556,
+                  "cached_tokens": 0,
+                  "generation_id": "gen-1789285210-WifAIYm1YbRCg53k5QTo",
+                  "prompt_tokens": 1249,
+                  "estimated_cost": 0.0006805,
+                  "model_resolved": "openai/gpt-5.6-luna",
+                  "completion_tokens": 307,
+                  "upstream_provider": "Azure",
+                  "cache_write_tokens": 1246
+                }
+              ],
+              "priced_calls": 1,
+              "cached_tokens": 0,
+              "prompt_tokens": 1249,
+              "unknown_calls": 0,
+              "estimated_cost": 0.0006805,
+              "completion_tokens": 307
+            }
+          },
+          "time": "2026-09-13T07:40:15.585634257+00:00",
+          "model": "openai/gpt-5.6-luna",
+          "provider": "openrouter",
+          "confidence": 0.86,
+          "layer_name": "Translation",
+          "layer_order": 2,
+          "last_modified": "2026-09-13T07:40:15.586676086+00:00"
+        },
+        "targetLanguage": "en",
+        "type": "translation",
+        "visible": true,
+        "zOrder": 2,
+        "pageId": "fcde2121-049c-43df-96bc-e39708527c41"
+      },
+      "elements": [
+        {
+          "id": "9b757ebe-ef05-400b-876b-b6bce7b056c4",
+          "autoSize": true,
+          "backgroundColor": "#ffffff",
+          "boxShape": "elliptical",
+          "editedAt": null,
+          "font": "Comic Neue",
+          "fontStyle": null,
+          "fontWeight": "bold",
+          "isManuallyEdited": null,
+          "maskPolygon": "[[1036,25],[1034,502],[1040,505],[1189,505],[1192,502],[1192,27],[1189,24]]",
+          "maxHeight": 460,
+          "maxWidth": 135,
+          "overflow": null,
+          "rotation": null,
+          "size": null,
+          "text": "My date with Flolo was pushed back because of work...",
+          "textColor": "#000000",
+          "visible": true,
+          "wordWrap": true,
+          "x": 1042,
+          "y": 36,
+          "layerId": "345898c1-f0af-4622-8766-3b83c79c8044",
+          "regionId": "9b74e551-222b-4a76-ac06-c52ef01dfa9a"
+        },
+        {
+          "id": "5813bed7-49ac-43ec-b22d-d9eb9a141446",
+          "autoSize": true,
+          "backgroundColor": "#3c4469",
+          "boxShape": "elliptical",
+          "editedAt": null,
+          "font": "Comic Neue",
+          "fontStyle": null,
+          "fontWeight": "bold",
+          "isManuallyEdited": null,
+          "maskPolygon": "[[1258,975],[1266,1007],[1266,1167],[1258,1199],[1248,1212],[1235,1222],[1203,1230],[899,1230],[867,1222],[854,1212],[844,1199],[836,1167],[836,1007],[844,975],[854,962],[867,952],[899,944],[1203,944],[1235,952],[1248,962]]",
+          "maxHeight": 230,
+          "maxWidth": 378,
+          "overflow": null,
+          "rotation": null,
+          "size": null,
+          "text": "",
+          "textColor": "#ffffff",
+          "visible": true,
+          "wordWrap": true,
+          "x": 864,
+          "y": 972,
+          "layerId": "345898c1-f0af-4622-8766-3b83c79c8044",
+          "regionId": "003e8b74-8890-4d2f-863c-5d1af670869b"
+        },
+        {
+          "id": "4fb0d749-6ef0-4bf5-935a-bf0490e95adb",
+          "autoSize": true,
+          "backgroundColor": "#ffffff",
+          "boxShape": "rectangular",
+          "editedAt": null,
+          "font": "Comic Neue",
+          "fontStyle": null,
+          "fontWeight": "bold",
+          "isManuallyEdited": null,
+          "maskPolygon": "[[31,1769],[32,1906],[299,1904],[299,1770],[296,1767]]",
+          "maxHeight": 123,
+          "maxWidth": 249,
+          "overflow": null,
+          "rotation": null,
+          "size": null,
+          "text": "10:00 p.m.",
+          "textColor": "#000000",
+          "visible": true,
+          "wordWrap": true,
+          "x": 41,
+          "y": 1777,
+          "layerId": "345898c1-f0af-4622-8766-3b83c79c8044",
+          "regionId": "0251e5bc-f370-4a2e-8fff-e5e6f149cbc3"
+        }
+      ]
+    }
+  ]
+}

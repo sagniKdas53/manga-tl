@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample672",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja",
+    "provenance": "pixiv",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_148120819_20260830_174431.jpg",
+    "sha256": "e8a5f756270c83066de6f1f7f0456cede1384efca98f3b1189e24331f38ca343",
+    "width": 900,
+    "height": 750,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "pixiv",
+    "reserve_tag": "px-res-4",
+    "origin_id": "148120819",
+    "previous_path": "gaps/pending/ja/sample672"
+  },
+  "notes": "A09 reserve candidate. livestream layout: balloons plus chat overlay and UI",
+  "language_verification": "provisional-visual"
+}

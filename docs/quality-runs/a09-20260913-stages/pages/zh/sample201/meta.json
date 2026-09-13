@@ -1,0 +1,43 @@
+{
+  "sample_id": "sample201",
+  "language": "zh",
+  "source": {
+    "file": "source.jpg",
+    "lang": "zh",
+    "provenance": "desktop_samples:b513de06cce1c3df5f40552ddd3ee045.jpeg"
+  },
+  "references": [
+    {
+      "file": "ref-mangatranslator.ai.jpg",
+      "lang": "en",
+      "provenance": "mangatranslator.ai"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "samples/zh/sample201",
+    "slug": "sample_gap_zh2_dense_hanzi_story"
+  },
+  "gap_category": "Chinese Dense Narrative & Multi-Speaker Dialogue",
+  "page_profile": {
+    "width": 1720,
+    "height": 2428,
+    "megapixels": 4.2,
+    "ocr_regions": 8,
+    "ocr_chars": 146
+  },
+  "provenance_metadata": {
+    "original_sample_file": "b513de06cce1c3df5f40552ddd3ee045.jpeg",
+    "source_path": "/home/sagnik/Desktop/Samples/Chinese/b513de06cce1c3df5f40552ddd3ee045.jpeg"
+  },
+  "notes": "High-density Chinese manhua page testing long expository text bubbles and Hanzi stroke segmentation."
+}

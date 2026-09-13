@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample670",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja",
+    "provenance": "pixiv",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_141708984_20260705_003553.jpg",
+    "sha256": "6cd3ea36912c403bc039ac82a8fc3867e19200b677cc683cf3ab0c1bbfbb2380",
+    "width": 1275,
+    "height": 1812,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "pixiv",
+    "reserve_tag": "px-res-2",
+    "origin_id": "141708984",
+    "previous_path": "gaps/pending/ja/sample670"
+  },
+  "notes": "A09 reserve candidate. clean oval balloons, multiple speakers, background board text",
+  "language_verification": "provisional-visual"
+}

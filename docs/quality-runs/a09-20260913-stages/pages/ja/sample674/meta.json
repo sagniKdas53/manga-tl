@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample674",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja",
+    "provenance": "pixiv",
+    "source_path": "/home/sagnik/Downloads/pixiv_downloads/102738340_6461216__0-12_/102738340-6.jpg",
+    "sha256": "051ce9f435a3a78d98352f9b15412a91cfef29cab499a4afa892d71cdf79a870",
+    "width": 1380,
+    "height": 1920,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "pixiv",
+    "reserve_tag": "px-res-6",
+    "origin_id": "102738340_6461216__0-12_",
+    "previous_path": "gaps/pending/ja/sample674"
+  },
+  "notes": "A09 reserve candidate. many distinct balloons, multi-speaker varied lengths",
+  "language_verification": "provisional-visual"
+}

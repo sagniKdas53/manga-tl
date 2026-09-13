@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample677",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja",
+    "provenance": "pixiv",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_148029587_20260821_200147.jpg",
+    "sha256": "91365d185bc6d5929672c5b3241509709e9d134ff603948c9901d349c989b91e",
+    "width": 1800,
+    "height": 2400,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "pixiv",
+    "reserve_tag": "px-res-9",
+    "origin_id": "148029587",
+    "previous_path": "gaps/pending/ja/sample677"
+  },
+  "notes": "A09 reserve candidate. high dialogue density across vertical bubbles and cuts",
+  "language_verification": "provisional-visual"
+}

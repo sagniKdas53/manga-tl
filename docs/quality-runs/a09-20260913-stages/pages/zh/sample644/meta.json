@@ -1,0 +1,35 @@
+{
+  "sample_id": "sample644",
+  "language": "zh",
+  "source": {
+    "file": "source.webp",
+    "lang": "zh",
+    "provenance": "user-curated",
+    "source_path": "corpus/gaps/chinese-manga-sampls/six/chinese.webp",
+    "sha256": "1fc14957ff2eb870f82b1bb4bfa4d92ff0f2765625a3dc333b3cbe472b48d6f9"
+  },
+  "references": [
+    {
+      "file": "ref-curated-en.webp",
+      "lang": "en",
+      "provenance": "human",
+      "source_path": "corpus/gaps/chinese-manga-sampls/six/en.webp",
+      "sha256": "569a95810d0d4de150e6ea231d0c2b216c2a2ec3656581863fa2b51546f4789d"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "gaps/pending/zh/sample644",
+    "pair_method": "explicit user-provided Chinese/English filenames"
+  },
+  "notes": "Imported from the supplied human-translated Chinese/English pair. Source-family provenance remains unverified."
+}

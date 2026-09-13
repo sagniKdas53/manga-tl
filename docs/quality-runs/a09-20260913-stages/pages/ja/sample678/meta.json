@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample678",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja",
+    "provenance": "pixiv",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_147516820_20260809_093802.jpg",
+    "sha256": "4fa9ee44bc6c3c3f1ca536dfb5fa9c22df1e2551a5103c0f3846c2609be647d4",
+    "width": 2000,
+    "height": 2781,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "pixiv",
+    "reserve_tag": "px-res-10",
+    "origin_id": "147516820",
+    "previous_path": "gaps/pending/ja/sample678"
+  },
+  "notes": "A09 reserve candidate. traditional B&W page, dense varied balloon dialogue",
+  "language_verification": "provisional-visual"
+}

@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample663",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/guglielmo - Seikyouiku Tokubetsu Jisshuu - [495298]/22.jpg",
+    "sha256": "6b1b0f39e97e679b8181cbba7aa031a7f48da4423d729ce236ff18b8afbb5eee",
+    "width": 1280,
+    "height": 1808,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "ja-res-9",
+    "origin_id": "/495298/",
+    "previous_path": "gaps/pending/ja/sample663"
+  },
+  "notes": "A09 reserve candidate. formal classroom dialogue, sharp panel borders",
+  "language_verification": "provisional-visual"
+}

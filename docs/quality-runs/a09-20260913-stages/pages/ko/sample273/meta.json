@@ -1,0 +1,49 @@
+{
+  "sample_id": "sample273",
+  "language": "ko",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ko",
+    "provenance": "x:2072247261837611425"
+  },
+  "references": [
+    {
+      "file": "ref-human.jpg",
+      "lang": "en",
+      "provenance": "human",
+      "attribution": "@RagingAsn_ — https://x.com/RagingAsn_/status/2072320543471136996"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    },
+    {
+      "file": "ref-torii-2.png",
+      "lang": "en",
+      "provenance": "torii"
+    },
+    {
+      "file": "ref-torii-3.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "gaps/pending/ko/sample273",
+    "slug": "gap_ko49_tweet_2072247261837611425"
+  },
+  "provenance_metadata": {
+    "handle": "RagingAsn_",
+    "tweet_url": "https://x.com/RagingAsn_/status/2072320543471136996",
+    "created_at": "2026-07-01T14:04:54.000Z",
+    "lang_pair": "kr-en",
+    "caption": "EN Translation by @RagingAsn_\nArtist Comment: Mommy Serika's Lap Pillow\n\nThis is the English translation! \nSee you next time! x.com/box_head5/stat…"
+  },
+  "notes": "Human-translated pair scraped from x.com; no app run yet (output pending)."
+}

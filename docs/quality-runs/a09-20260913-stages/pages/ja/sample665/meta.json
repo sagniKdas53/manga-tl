@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample665",
+  "language": "ja",
+  "source": {
+    "file": "source.webp",
+    "lang": "ja",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai2/kinohara hikaru - いろ○ちゃんの挑戦（仮） pixiv ver - [644783]/07.webp",
+    "sha256": "5753248a2662cbcb8d6858a8eca184dcc20966d0ac150d580e8abf75bfb1ce4d",
+    "width": 992,
+    "height": 700,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "ja-res-11",
+    "origin_id": "/644783/",
+    "previous_path": "gaps/pending/ja/sample665"
+  },
+  "notes": "A09 reserve candidate. compressed layout, handwritten side notes, mixed font sizes",
+  "language_verification": "provisional-visual"
+}

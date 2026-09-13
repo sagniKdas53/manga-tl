@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample689",
+  "language": "zh",
+  "source": {
+    "file": "source.webp",
+    "lang": "zh",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/fetio - Seitei Gakuen Soccer-bu no Nichijou Kouhen - [581020]/072.webp",
+    "sha256": "4a15ee70ca510bd570bf8efdefa7037d14af8bb4ac16c1e575a050ef1e3e7800",
+    "width": 1280,
+    "height": 1807,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "zh-res-9",
+    "origin_id": "/581020/072.webp",
+    "previous_path": "gaps/pending/zh/sample689"
+  },
+  "notes": "A09 reserve candidate. high-contrast multi-panel page with clean vertical East-Asian dialogue",
+  "language_verification": "provisional-visual"
+}

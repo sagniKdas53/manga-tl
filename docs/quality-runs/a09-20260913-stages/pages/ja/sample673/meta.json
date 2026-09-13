@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample673",
+  "language": "ja",
+  "source": {
+    "file": "source.png",
+    "lang": "ja",
+    "provenance": "pixiv",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_134172518_20260804_181256.png",
+    "sha256": "4a634ffa9361e950da19b7b01cb1e69f26f612fe1ba766faedb4767893055028",
+    "width": 4441,
+    "height": 6213,
+    "format": "PNG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "pixiv",
+    "reserve_tag": "px-res-5",
+    "origin_id": "134172518",
+    "previous_path": "gaps/pending/ja/sample673"
+  },
+  "notes": "A09 reserve candidate. multi-panel page, multiple speakers, varied text density",
+  "language_verification": "provisional-visual"
+}

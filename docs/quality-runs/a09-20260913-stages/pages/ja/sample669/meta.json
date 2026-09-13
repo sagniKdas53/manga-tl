@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample669",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja",
+    "provenance": "pixiv",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_132464686_20260802_132729.jpg",
+    "sha256": "9fe317a5f03cb947ec1dc996435ffd3bffb8f9fa69f476398ca086fdf5729616",
+    "width": 1796,
+    "height": 2560,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "pixiv",
+    "reserve_tag": "px-res-1",
+    "origin_id": "132464686",
+    "previous_path": "gaps/pending/ja/sample669"
+  },
+  "notes": "A09 reserve candidate. traditional B&W multi-panel, dense vertical balloon text",
+  "language_verification": "unverified-pending-ocr"
+}

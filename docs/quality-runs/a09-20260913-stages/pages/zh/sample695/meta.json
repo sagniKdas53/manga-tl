@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample695",
+  "language": "zh",
+  "source": {
+    "file": "source.jpg",
+    "lang": "zh",
+    "provenance": "x-scrape-2026-09-13",
+    "source_path": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2091137515675627945.jpg",
+    "sha256": "b8ba196ae92ec5cf4c3499536e47153e5118816ac5112667cd0999bcbc4ead31",
+    "width": 1473,
+    "height": 2048,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "x-scrape-2026-09-13",
+    "reserve_tag": "zh-res-x3",
+    "origin_id": "https://x.com/Windwin69369561/status/2091137515675627945",
+    "previous_path": "gaps/pending/zh/sample695"
+  },
+  "notes": "A09 reserve candidate. three-panel color page, vertical balloons over varied backgrounds",
+  "language_verification": "provisional-visual"
+}

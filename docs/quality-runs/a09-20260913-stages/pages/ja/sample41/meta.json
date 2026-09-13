@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample41",
+  "language": "ja",
+  "source": {
+    "file": "source.png",
+    "lang": "ja"
+  },
+  "references": [
+    {
+      "file": "ref-mangatranslator.ai.png",
+      "lang": "en",
+      "provenance": "mangatranslator.ai"
+    },
+    {
+      "file": "ref-mangatranslate.com.png",
+      "lang": "en",
+      "provenance": "mangatranslate.com"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "samples/ja/sample41"
+  },
+  "notes": ""
+}

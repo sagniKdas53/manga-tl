@@ -1,0 +1,42 @@
+{
+  "sample_id": "sample639",
+  "language": "zh",
+  "source": {
+    "file": "source.jpg",
+    "lang": "zh",
+    "provenance": "user-curated",
+    "source_path": "corpus/gaps/chinese-manga-sampls/one/chinese-human-tl.jpg",
+    "sha256": "c7c6f6b31e28bc8a8f7ac12efad0d2d2d4d42d8424f73eb634117aa9183a85a5"
+  },
+  "references": [
+    {
+      "file": "ref-curated-en.jpg",
+      "lang": "en",
+      "provenance": "human",
+      "source_path": "corpus/gaps/chinese-manga-sampls/one/en-human-tl.jpg",
+      "sha256": "80228ddb6d2925f793ae281c5c710f9e7387772c747e6110f469d0632cc0c174"
+    },
+    {
+      "file": "ref-provided-ja.jpg",
+      "lang": "ja",
+      "provenance": "provided-original",
+      "source_path": "corpus/gaps/chinese-manga-sampls/one/japanese-source.jpg",
+      "sha256": "86a75911535da0a20ea4cff531b9f8197e42a7916ff8c31ecae6a438122ceec8"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "gaps/pending/zh/sample639",
+    "pair_method": "explicit user-provided Chinese/English filenames"
+  },
+  "notes": "Imported from the supplied human-translated Chinese/English pair. Source-family provenance remains unverified."
+}

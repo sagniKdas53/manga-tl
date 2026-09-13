@@ -1,0 +1,29 @@
+{
+  "sample_id": "sample38",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja"
+  },
+  "references": [
+    {
+      "file": "ref-mangatranslator.ai.jpg",
+      "lang": "en",
+      "provenance": "mangatranslator.ai"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "samples/ja/sample38"
+  },
+  "notes": ""
+}

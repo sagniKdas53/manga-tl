@@ -1,0 +1,39 @@
+{
+  "sample_id": "sample179",
+  "language": "ko",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ko",
+    "provenance": "immich:b463deba-4a15-4da6-a10b-294302610abd"
+  },
+  "references": [
+    {
+      "file": "ref-mangatranslator.ai.jpg",
+      "lang": "en",
+      "provenance": "mangatranslator.ai"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "samples/ko/sample179",
+    "slug": "sample_gap_ko2_ultra_res_penguin_story"
+  },
+  "gap_category": "Ultra High-Res Digital Manhwa Page",
+  "page_profile": {
+    "width": 4800,
+    "height": 6400,
+    "megapixels": 30.7,
+    "ocr_regions": 9,
+    "ocr_chars": 114
+  },
+  "notes": "Clean sitcom-style two-panel page (penguin costume gag), no adult content. Highest resolution Korean sample in the suite (4800x6400)."
+}

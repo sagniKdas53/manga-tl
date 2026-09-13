@@ -1,0 +1,39 @@
+{
+  "sample_id": "sample128",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja",
+    "provenance": "pixiv:146785119"
+  },
+  "references": [
+    {
+      "file": "ref-mangatranslator.ai.jpg",
+      "lang": "en",
+      "provenance": "mangatranslator.ai"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "samples/ja/sample128",
+    "slug": "sample_gap8_bw_expressive_panels"
+  },
+  "gap_category": "Expressive Character Reactions & Panel Diversity",
+  "page_profile": {
+    "width": 1079,
+    "height": 1532,
+    "megapixels": 1.7,
+    "ocr_regions": 13,
+    "ocr_chars": 197
+  },
+  "notes": "Page from a 10-page B&W indie manga chapter on Pixiv testing diverse panel framing and expressive facial reactions."
+}

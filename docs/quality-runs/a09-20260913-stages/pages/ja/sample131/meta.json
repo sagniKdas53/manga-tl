@@ -1,0 +1,39 @@
+{
+  "sample_id": "sample131",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja",
+    "provenance": "pixiv:146399159"
+  },
+  "references": [
+    {
+      "file": "ref-mangatranslator.ai.jpg",
+      "lang": "en",
+      "provenance": "mangatranslator.ai"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "samples/ja/sample131",
+    "slug": "sample_gap13_dramatic_framing"
+  },
+  "gap_category": "Dramatic Panel Framing & Close-up Reactions (2016x2688)",
+  "page_profile": {
+    "width": 2016,
+    "height": 2688,
+    "megapixels": 5.4,
+    "ocr_regions": 6,
+    "ocr_chars": 99
+  },
+  "notes": "High-contrast 2016x2688 manga page from Pixiv featuring dramatic panel cuts, emotional close-ups, and speech balloons."
+}

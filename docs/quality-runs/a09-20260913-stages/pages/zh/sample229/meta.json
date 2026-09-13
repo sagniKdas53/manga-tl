@@ -1,0 +1,43 @@
+{
+  "sample_id": "sample229",
+  "language": "zh",
+  "source": {
+    "file": "source.jpg",
+    "lang": "zh",
+    "provenance": "desktop_samples:only-able-to-detect-text-in-white-box.jpg"
+  },
+  "references": [
+    {
+      "file": "ref-mangatranslator.ai.jpg",
+      "lang": "en",
+      "provenance": "mangatranslator.ai"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "samples/zh/sample229",
+    "slug": "sample_gap_zh17_sparse_caption_illustration"
+  },
+  "gap_category": "Chinese Sparse Caption + Short Dialogue on Painterly Illustration",
+  "page_profile": {
+    "width": 1266,
+    "height": 1950,
+    "megapixels": 2.5,
+    "ocr_regions": 3,
+    "ocr_chars": 38
+  },
+  "provenance_metadata": {
+    "original_sample_file": "only-able-to-detect-text-in-white-box.jpg",
+    "recovered_from": "gaps/Uncategorized/Chinese/sample_gap_zh4_borderless_text_stress/ (deleted+re-added catalog, see gaps/README.md)"
+  },
+  "notes": "Single rich illustration carrying only three short text elements: a borderless white-box header caption ('late for the date, because of work and Froloro'), a one-word speech bubble ('meow!'), and one closing dialogue line. Deliberately thin on text relative to the rest of this suite - included because the borderless caption vs. bordered bubble contrast is real and useful, but this is a minimal case, not a dense one; do not expand this category without also adding denser Chinese pages."
+}

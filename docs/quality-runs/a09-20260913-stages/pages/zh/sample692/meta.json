@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample692",
+  "language": "zh",
+  "source": {
+    "file": "source.webp",
+    "lang": "zh",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/imo ichirou - 占いギャルと - [671880]/26.webp",
+    "sha256": "5d0df918820a5ff40bed3438284c831258c78dd698ff0b7ee54b79590c2f7e7b",
+    "width": 1280,
+    "height": 1810,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "zh-res-12",
+    "origin_id": "/671880/26.webp",
+    "previous_path": "gaps/pending/zh/sample692"
+  },
+  "notes": "A09 reserve candidate. full-color multi-panel narrative with inset boxes and many dialogue bubbles",
+  "language_verification": "provisional-visual"
+}

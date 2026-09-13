@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample657",
+  "language": "ja",
+  "source": {
+    "file": "source.webp",
+    "lang": "ja",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/niea - Clean Me Softly - [639304]/26.webp",
+    "sha256": "be8377462809bece286c8c8d96dc87d723b67ceafb2692e5384c4892cd6be8a4",
+    "width": 1072,
+    "height": 1500,
+    "format": "WEBP"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "ja-res-3",
+    "origin_id": "/639304/",
+    "previous_path": "gaps/pending/ja/sample657"
+  },
+  "notes": "A09 reserve candidate. clean vertical three-panel strip, basic reading order",
+  "language_verification": "provisional-visual"
+}

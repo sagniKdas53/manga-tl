@@ -1,0 +1,38 @@
+{
+  "sample_id": "sample225",
+  "language": "ko",
+  "source": {
+    "file": "source.png",
+    "lang": "ko"
+  },
+  "references": [
+    {
+      "file": "ref-mangatranslator.ai.png",
+      "lang": "en",
+      "provenance": "mangatranslator.ai"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "samples/ko/sample225",
+    "slug": "sample_gap_ko21_dense_dialogue"
+  },
+  "gap_category": "Dense dialogue",
+  "page_profile": {
+    "width": 1900,
+    "height": 2450,
+    "megapixels": 4.7,
+    "ocr_regions": 14,
+    "ocr_chars": 199
+  },
+  "notes": "1900x2450 (4.7 MP) ko page; 14 OCR regions, 199 characters recognised."
+}

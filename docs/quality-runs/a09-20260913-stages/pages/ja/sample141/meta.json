@@ -1,0 +1,44 @@
+{
+  "sample_id": "sample141",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja",
+    "provenance": "desktop_newest:kusaba_eru"
+  },
+  "references": [
+    {
+      "file": "ref-mangatranslator.ai.jpg",
+      "lang": "en",
+      "provenance": "mangatranslator.ai"
+    },
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "previous_path": "samples/ja/sample141",
+    "slug": "sample_gap25_ultra_res_manga_frieren"
+  },
+  "gap_category": "Ultra-High Resolution Manga Page (4299x6071)",
+  "page_profile": {
+    "width": 4299,
+    "height": 6071,
+    "megapixels": 26.1,
+    "ocr_regions": 11,
+    "ocr_chars": 76
+  },
+  "provenance_metadata": {
+    "artist": "kusaba_eru_happy_crystal",
+    "series": "sousou_no_frieren",
+    "resolution": "4299x6071"
+  },
+  "notes": "Ultra-high definition 4299x6071 Japanese multi-panel page testing dense screentones and text line sharpness."
+}

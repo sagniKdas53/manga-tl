@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample680",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja",
+    "provenance": "pixiv",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_138812456_20260909_220145.jpg",
+    "sha256": "a80d93bec98341ea34c61a0f5f8a9ea3cdb060147d75f7c388991ed411fb1fb9",
+    "width": 1054,
+    "height": 1488,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "pixiv",
+    "reserve_tag": "px-res-12",
+    "origin_id": "138812456",
+    "previous_path": "gaps/pending/ja/sample680"
+  },
+  "notes": "A09 reserve candidate. color multi-panel, overlapping tails and many speakers",
+  "language_verification": "provisional-visual"
+}

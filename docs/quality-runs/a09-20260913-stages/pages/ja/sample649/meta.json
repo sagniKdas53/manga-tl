@@ -1,0 +1,38 @@
+{
+  "sample_id": "sample649",
+  "language": "ja",
+  "source": {
+    "file": "source.jpg",
+    "lang": "ja",
+    "provenance": "x-scrape-2026-09-13",
+    "source_path": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2083162208490705260.jpg",
+    "sha256": "831a71075c0fbb8780752bfb42ca35cf5e43fa65b91223194a09e1584482c6a7",
+    "width": 1473,
+    "height": 2048,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "x-scrape-2026-09-13",
+    "roster_label": "ja-x8",
+    "provenance": {
+      "creator": "Windwin69369561",
+      "series": null,
+      "source_url": "https://x.com/Windwin69369561/status/2083162208490705260",
+      "pair_confidence": "medium"
+    },
+    "previous_path": "gaps/pending/ja/sample649"
+  },
+  "notes": "colored six-panel Japanese page, varied fonts, side text and high dialogue density"
+}

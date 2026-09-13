@@ -1,0 +1,41 @@
+{
+  "sample_id": "sample654",
+  "language": "zh",
+  "source": {
+    "file": "source.jpg",
+    "lang": "zh",
+    "provenance": "x-scrape-2026-09-13",
+    "source_path": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2091520208779567336.jpg",
+    "sha256": "8bb0a8ae4f1787f1a9b643d0286b37bd1777e4b8c9d6855f3864be70b4c2a20b",
+    "width": 1410,
+    "height": 2048,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-human-en-1.jpg",
+      "lang": "en",
+      "provenance": "human",
+      "source_path": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2091513431845478430.jpg",
+      "sha256": "eee8d104494a0f6de5a044b415087754821a1482c5daef8ac8d08671ed8348ba",
+      "source_url": "https://x.com/Windwin69369561/status/2091513431845478430"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "x-scrape-2026-09-13",
+    "roster_label": "zh-x4",
+    "provenance": {
+      "creator": "Windwin69369561",
+      "series": null,
+      "source_url": "https://x.com/Windwin69369561/status/2091520208779567336",
+      "pair_confidence": "high"
+    },
+    "previous_path": "gaps/pending/zh/sample654"
+  },
+  "notes": "monochrome screentone Chinese page with tightly packed bubbles and tails"
+}

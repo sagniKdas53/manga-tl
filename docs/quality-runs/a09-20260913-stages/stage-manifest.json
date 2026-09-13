@@ -1,0 +1,1278 @@
+{
+  "schema_version": "a09-stage-run/v1",
+  "run": "20260913-a09-stages",
+  "date": "2026-09-13",
+  "purpose": "Fresh current-checkout pipeline stages for every A09 roster and reserve page, captured for ownership/action labelling and later holdout evaluation.",
+  "stack": {
+    "compose_project": "manga-quality-a09",
+    "base_url": "http://localhost:18084/tlhub",
+    "isolated": true,
+    "fallback_models_disabled": true
+  },
+  "pinned_models": {
+    "translation": {
+      "provider": "openrouter",
+      "model": "openai/gpt-5.6-luna"
+    },
+    "ocr": {
+      "provider": "local",
+      "ja_zh": "PP-OCRv6_medium_rec",
+      "ko": "korean_PP-OCRv5_mobile_rec"
+    }
+  },
+  "runtime": {
+    "host": "Linux 5.15.0-181-generic x86_64, Intel Core i5-7200U",
+    "docker_server": "29.8.0"
+  },
+  "totals": {
+    "pages": 77,
+    "roster_pages": 30,
+    "reserve_pages": 47,
+    "ocr_regions": 977,
+    "translation_elements": 979,
+    "pages_with_empty_ocr": 0,
+    "pages_with_empty_translation": 0
+  },
+  "references": {
+    "human_only": 13,
+    "torii_only": 56,
+    "human_and_torii": 8,
+    "pages_without_reference": 0,
+    "torii_translator": "gpt-5.6-luna via OpenRouter BYOK"
+  },
+  "retention": "page-snapshot.json, export.png and render.png are retained in-tree. project.zip, unpacked project/, copied sources and references are gitignored; their digests are pinned below.",
+  "pages": [
+    {
+      "sample_id": "sample128",
+      "language": "ja",
+      "source_sha256": "2f6180b43cb842aed5b1aad4bac6d777453eedc83d9cd60a1b7f720edccc509c",
+      "ocr_regions": 13,
+      "translation_elements": 13,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "3d360b615165566d6ef0d0b219b1ce3e8697ef3ef4f610418cf1fb7fda6384f7",
+        "render.png": "cd9ac18a34ed52259cf61932becf3a4f52f107da6e2b5896e90ec595c8f1bcfa",
+        "project.zip": "5ca80e71a3404754656617e1782190219bef1568543ad218ef144edec6883326",
+        "page-snapshot.json": "36481d61bf35fa117f9c2645445c5792ce956579a418ab572b657e8ce139ddab"
+      }
+    },
+    {
+      "sample_id": "sample131",
+      "language": "ja",
+      "source_sha256": "6500adc9e6892220e3d34d57485f3c03aaa5f710eadfa4a45a14ef2bcf7ff72d",
+      "ocr_regions": 6,
+      "translation_elements": 6,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "298767f08239875c4302231946c13a957129870729b95582472430f7af5036dd",
+        "render.png": "702b6e5b7f488736a062938dde6dbebb956622dc15b56c5f2a03a673245758e3",
+        "project.zip": "468d7d70688e66024f70e37e4fe716b21dd896dee8dbef31ff45c54e0c2d57c9",
+        "page-snapshot.json": "6744a08d4e30a5b19e11f4f33ebbe29623cb0c05d2310c6341a215d00e4d56f5"
+      }
+    },
+    {
+      "sample_id": "sample141",
+      "language": "ja",
+      "source_sha256": "ef4d670d1951ca806b96462624b46a1c820fe96bac3ea13998078b33c8c07f1f",
+      "ocr_regions": 11,
+      "translation_elements": 11,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "5d42550aba7bcc8e38f3b3563cb8baa642e298a21e93f575020b4e00bf7fca21",
+        "render.png": "d96a45e9708f0362c8ea02fbfb51cc7dfe6bcee744d042a77924f00c3d4ff15e",
+        "project.zip": "fd4faa12db92d893d96d673988c50b546f9a9dbe55dc01fd1fd58bdf75e49fdd",
+        "page-snapshot.json": "b87c52e85b9a591efc4834bbbfa56455ba75bbcd5099c5f2c260d21d115070ed"
+      }
+    },
+    {
+      "sample_id": "sample27",
+      "language": "ja",
+      "source_sha256": "d584c8d0a690ac60c81a36ec236281147b4a60d6f8da6bfe48240b1da1c4b83a",
+      "ocr_regions": 20,
+      "translation_elements": 20,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "b69dc5d5eb275b5d8bc243b324680b4ff27189da7dd8bf6426ea8a8c61e09774",
+        "render.png": "b43950269d6571b5554e116fc84f09b57cbcdac78abed6fccec943e726fe5a7d",
+        "project.zip": "9ab00db75d726cd6612460f94f075ea04969476e1c5ce4dd18e8181f0f80c4fc",
+        "page-snapshot.json": "b44ca47ef5465e3b6001e93c3b9fcf50228acc2678089bd755679d0e8688361d"
+      }
+    },
+    {
+      "sample_id": "sample38",
+      "language": "ja",
+      "source_sha256": "3593c47ed6c1592fee4afcd462604e7112eb4a31ec7a6bf1e4193f2c20e277b3",
+      "ocr_regions": 11,
+      "translation_elements": 11,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "f3aae1e1d44b34de6fe8403007e0ecac901cff7e4d18d537793ab0b9a5d475df",
+        "render.png": "b058407d5d137dd8aec7f3aa5547c0b0ad4482712d647677a1d2b3c3ce6a6d15",
+        "project.zip": "7c659df5773796998bebb0806563d6146f2739fe11071496c1d9d8c7126e993c",
+        "page-snapshot.json": "14aa3e5909e69c953eafdb3d8a4929fc0f80fdf2733d7d42d8a931fe0c7a3e27"
+      }
+    },
+    {
+      "sample_id": "sample41",
+      "language": "ja",
+      "source_sha256": "e1fecbaf7858ab89e5905a2a9d98dc87e5c1ab720dac2d089a8453123a83cf23",
+      "ocr_regions": 8,
+      "translation_elements": 8,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "6ac1a3bd5a0ae3af1ad25aa8996241097c7de49816699748f6bc58adcc87795d",
+        "render.png": "f97e6b3ecd48b42be04e2438d30c80b51bdb264d0801a41fee44859984038c08",
+        "project.zip": "884bd3aab74dcb850c8a15e6bd4aba60f2acfe5531335b8dc6bdc7a110b0e328",
+        "page-snapshot.json": "090c1769926d0c717a5ff74034e37bdef2874c7ebf3085c995523dfd0ded76ba"
+      }
+    },
+    {
+      "sample_id": "sample49",
+      "language": "ja",
+      "source_sha256": "428c6dc729781f3c26584495db5efeac3b7b504bb0ab1b0f24d7e74ed600d860",
+      "ocr_regions": 10,
+      "translation_elements": 10,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "26ebc0447ccad75f68667e833af2a845473bfa6e98b995d6fd5fb51bc71fae80",
+        "render.png": "96e264c27dcfb85b005d4b798c1354ad7631b31fbd44990f3ac77af48a233f09",
+        "project.zip": "4c2e2982008ea69c2e637db6f7667c28404d8010827fd016284898b887494a55",
+        "page-snapshot.json": "6d4332db42cd13913b03152b0d6324d695282ad74cf694ccefec4c8de16accb3"
+      }
+    },
+    {
+      "sample_id": "sample57",
+      "language": "ja",
+      "source_sha256": "d5a15dbb21ebe61a9722f04d5167469d05f676792c84f28668c076b99f75185a",
+      "ocr_regions": 14,
+      "translation_elements": 14,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "dbd14a075c43f4e9400a9d9d2459594a5acff07f69381aca101636f2b7f9e95d",
+        "render.png": "29ddd9aa4982a4668803fe32b7cb9b4ea23cda2db40714bd88efbf9f2a2a6293",
+        "project.zip": "180d1c429b7e52d1292ed1f9319b4dcda4c4ddbfaf10469001e9639bc1c95243",
+        "page-snapshot.json": "dcd4adb0dfc8c409bf55b3aff78d8e21b203e7df947b595184b0f5d8453c8d22"
+      }
+    },
+    {
+      "sample_id": "sample649",
+      "language": "ja",
+      "source_sha256": "831a71075c0fbb8780752bfb42ca35cf5e43fa65b91223194a09e1584482c6a7",
+      "ocr_regions": 20,
+      "translation_elements": 20,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "91d69f7e2718f6f5acb91e45cfb89f6cc0165da93c91d305793b3a3df3fbf83b",
+        "render.png": "480ad8b00b908907b2977d539782c3624e4092f18dc85fbdcfffda2a2e2ea872",
+        "project.zip": "ddb0aa583e6eb23dc263d1b7d2d5ffcfeba8de6e0dc787e4a296d009deee27be",
+        "page-snapshot.json": "356b0dbe806ba28683102b39eca57fdd1d7bd6866dc2451382ca0101e8f549ef"
+      }
+    },
+    {
+      "sample_id": "sample650",
+      "language": "ja",
+      "source_sha256": "f95424bfcef022cf5d4a17d5f995bdd08df1c24b233eb9fa72df7e88581d000f",
+      "ocr_regions": 37,
+      "translation_elements": 37,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "4e19e77424da9d83e8b91c06a98aa20a0573111f6a6dcce71d77cc9ecedc6550",
+        "render.png": "0626de31f40e88fa66cac79c35a57bbaefeb241d3b7f5f588c8699070f4faebf",
+        "project.zip": "60185a869409af78789b502af677da212532021a2886a17588a8c12abe1029c8",
+        "page-snapshot.json": "c6dcf11c005293c9a7ccf807d4025589f7e8bb5aec4c44b40ad54164d6beefdd"
+      }
+    },
+    {
+      "sample_id": "sample656",
+      "language": "ja",
+      "source_sha256": "f4984bb51268f671a3a6b8aced1d000e2c2b0e61d25c79912eae9a046725b825",
+      "ocr_regions": 20,
+      "translation_elements": 20,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "1edfbabbcbcaedda70d4a594aed67165e7f47128200e1c5bcc8ad0033d09ea05",
+        "render.png": "f172054afc61a79b87b9d70ce6a955e68cf3ca033f783c3adc01698d75dc935e",
+        "project.zip": "8639cfa3d5256430e93b90eb6589b498604cc893b0a40c37cf91181b83b0fd60",
+        "page-snapshot.json": "e31ad38a244de9de56ad63d8eb231a012d3a48bf0f97dc311a72d557aa1be41c"
+      }
+    },
+    {
+      "sample_id": "sample657",
+      "language": "ja",
+      "source_sha256": "be8377462809bece286c8c8d96dc87d723b67ceafb2692e5384c4892cd6be8a4",
+      "ocr_regions": 10,
+      "translation_elements": 10,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "8ee4588a19082b57ca00606f3819cf220655ed9a9b058b42ed461b8f6f334cef",
+        "render.png": "8648ddd0b4288f94a86231ac8db32cadb4f9aeedd1533ee83580392d80300a03",
+        "project.zip": "ecb0346f98696d174f28b80578db70e212a71eb1726764c2e38299d6d27e107a",
+        "page-snapshot.json": "12a7caa31405342722e03a2e72290384c4ee848441916bb4d523ccd5449b36ce"
+      }
+    },
+    {
+      "sample_id": "sample658",
+      "language": "ja",
+      "source_sha256": "661ed385bda0049d74bf74324197a82064bfdd310f68d2f958fe6651a3a829ac",
+      "ocr_regions": 37,
+      "translation_elements": 37,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "1f413215ae7cddac62da59a4db85db3dfc63f71a37a8a02f18c3e305cc2f5170",
+        "render.png": "e9e29aadaf87e724dac3c963bf5afdab83a7f76c48c9fb1d85929365b4440b16",
+        "project.zip": "17556ff2c97c14f330a210c0b87dd1aecbe2ce9b00a0dc63a5b673a1f7ff309d",
+        "page-snapshot.json": "5b870a2575cd70f18b822c77eef40453f504046a46276d9957e6c1fdfc24f3b2"
+      }
+    },
+    {
+      "sample_id": "sample659",
+      "language": "ja",
+      "source_sha256": "070a03d6fe2c568eaa93ef7ae44f7fd648eb2877c02684bd04406d3a950db4c4",
+      "ocr_regions": 10,
+      "translation_elements": 10,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "b2db001d2a4af71a458dff4dbddc7c2fa43ff473b1d780d823bcdff1908144f9",
+        "render.png": "b7b82e897d7758c74690f836940bcbe818f384a54a53f5895f2d9fd80fc789b9",
+        "project.zip": "4bdbff63d00f2b90a075ea4a3ac75671ce755230a8b215259f99804d37b1098b",
+        "page-snapshot.json": "13cde92e0bfb013b6d01f093c8c4592b287b4200b680524aa7dd20404096f24d"
+      }
+    },
+    {
+      "sample_id": "sample660",
+      "language": "ja",
+      "source_sha256": "17b8c5231fba970f31e6faafc533a5aa75ff68b95a58f83e152fb51070341392",
+      "ocr_regions": 15,
+      "translation_elements": 15,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "dd87605d14d87ce6b9a17cda17fcb7907dec5fa98ac0dff7527e33599c6d85fa",
+        "render.png": "0e7b14f6e241678a508d6bb3bc40cc41e82828cc35228ced7944cabb7112f3d3",
+        "project.zip": "104f63998dc2e80f63079a67312bb269ab150e1c8cb629c6104a41aaa5651e6b",
+        "page-snapshot.json": "99df30c1ae79a7b175a6e8f7173dad953c64c29376227c9bc78b6e6ce30377b9"
+      }
+    },
+    {
+      "sample_id": "sample661",
+      "language": "ja",
+      "source_sha256": "f0b52b96af650614abeaa119eed399dc42ab73aec7195d816d7e1228c841138f",
+      "ocr_regions": 9,
+      "translation_elements": 9,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "098a65a4a03f76244ab7b7515374cef021bb0e8d47ba0b7bdea2bbb297263718",
+        "render.png": "e4d5dfd701295a4f1b05ac627a9cd2458da138b788d2fd098df6610a86e18575",
+        "project.zip": "8bc880104b2edd78bf5e401dd82e8f3f9f647b085bce4b8b4b53584b78e95851",
+        "page-snapshot.json": "1a312ead347fb09c08d962cd35c02a5c7dd323170558b82fab71ccf774bf84a8"
+      }
+    },
+    {
+      "sample_id": "sample662",
+      "language": "ja",
+      "source_sha256": "e8c51b3ec3992122051db3183e79a0064ae489bde81d88906bf7963f9a5ec816",
+      "ocr_regions": 14,
+      "translation_elements": 14,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "162b0f03eb086358ad9891fb4f72d2483552839473df6933b8a6a95330bcc3b6",
+        "render.png": "48652b62d1fc5d16f44ca52e3a7cf07d088f1f38c4fdbdff5c1cb0ea98054c25",
+        "project.zip": "d03e727a8b1d78509dac30a6406e70a677d27bf52dcd76ec831d81d9e16f7372",
+        "page-snapshot.json": "a1bf612e51a03bbb39f6e62f154afe55a1e573487da271b59d15ad4ec2f2e8aa"
+      }
+    },
+    {
+      "sample_id": "sample663",
+      "language": "ja",
+      "source_sha256": "6b1b0f39e97e679b8181cbba7aa031a7f48da4423d729ce236ff18b8afbb5eee",
+      "ocr_regions": 11,
+      "translation_elements": 11,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "bdb689e2479b9862a0a56220102c15caee80bc6891874982560069bfe54a2b84",
+        "render.png": "bb0e40f7e7f9b7bc25134077768e56bd5daf89caadf6d09a741407e2a39ec796",
+        "project.zip": "02bc804be43c2b3a85dd7a20eaffb65e60ac4dd73baa59d913fbfd53c894d916",
+        "page-snapshot.json": "096e869abe5b0a10788037b398fddf3c10c6f85ae5ed5da40032618947063c08"
+      }
+    },
+    {
+      "sample_id": "sample664",
+      "language": "ja",
+      "source_sha256": "50923039f4a931ad502a553528c8c0469624e0f0ece7b4321465f008c1c1c13d",
+      "ocr_regions": 20,
+      "translation_elements": 20,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "85ea55c8a939d2e967665482a7f80149d38f09f3bb51f830f432fed516117651",
+        "render.png": "6d15eddd8b75c95f35bd55b54c91993a1e0e7c6bc9908b3faf88ab83a26c2c62",
+        "project.zip": "a1267a620386624151839a82d5af6b1b28aa990d2a3f49a49d849ff188bf1ec8",
+        "page-snapshot.json": "b159f064dd8196d8416a0f5ce9fe57a4c520fd2f4ee06af8ae0aae2aeeeff0b1"
+      }
+    },
+    {
+      "sample_id": "sample665",
+      "language": "ja",
+      "source_sha256": "5753248a2662cbcb8d6858a8eca184dcc20966d0ac150d580e8abf75bfb1ce4d",
+      "ocr_regions": 58,
+      "translation_elements": 58,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "a8f1900b374afe8df93234757f3686c00bc4cdfd7c4e562ca344642dd5349db0",
+        "render.png": "2f74aeaebcd3e07389f99e0eca40edc73548c6656febd863af71ad130ef68443",
+        "project.zip": "7528a83fa99ec560a1a74d1c0fa26258273a329e1e8d70b676b4ac87fff6e109",
+        "page-snapshot.json": "b3e413ef223430140574bf4a815b0e595a4212ea43c2a847d1ae6b39da5f982d"
+      }
+    },
+    {
+      "sample_id": "sample666",
+      "language": "ja",
+      "source_sha256": "ef6979d75feb9f18538f5b0fa0ee33b94c0664d5033122864586df1b151dda33",
+      "ocr_regions": 17,
+      "translation_elements": 17,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "45954c8013c5ab82cfe9df83ce99d4a3d17b780627e484202c78041e31bd85a0",
+        "render.png": "c6c56225c7b870cdf08541db0aa8baa1f9f6625d6ffca489f3ab16d59a730933",
+        "project.zip": "e26e3ad7bc293b413712b3f8af3dbd2c104050f5450749499808ac37312ccdae",
+        "page-snapshot.json": "0c0c5f59eacba32333afd62a8fe1c1f26da2061d126aee496727e8c25ff9e592"
+      }
+    },
+    {
+      "sample_id": "sample669",
+      "language": "ja",
+      "source_sha256": "9fe317a5f03cb947ec1dc996435ffd3bffb8f9fa69f476398ca086fdf5729616",
+      "ocr_regions": 14,
+      "translation_elements": 14,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "a2004cf365b4bac1da1d222e95b44a480f8f5f56b70f0be1614cc9d2c71686a8",
+        "render.png": "90d95099eac383b27c53de00069fe544be811d6b2ceb8fed922586943122b022",
+        "project.zip": "1e5035bf91abe7987a47403b9cdf1b8a842b1f332281a8537d833236223a683d",
+        "page-snapshot.json": "ce20a7f9f9ecdf407ef94d747f8a7e25375a3bb5183b0a480e8eaf7291c5057a"
+      }
+    },
+    {
+      "sample_id": "sample670",
+      "language": "ja",
+      "source_sha256": "6cd3ea36912c403bc039ac82a8fc3867e19200b677cc683cf3ab0c1bbfbb2380",
+      "ocr_regions": 11,
+      "translation_elements": 11,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "35cc6bdb31a5fff1c901d75924c0f4f6083c7c899590dc531cf70dc411a1bce2",
+        "render.png": "943001e0d1f9a78fabbfd7093cb07360f6f3dcb3306ad4b83477bda130459faa",
+        "project.zip": "99f2e5bb0a10e37576906bcbc22cabbf52e1066014f1258cfde246aa8d867e9d",
+        "page-snapshot.json": "b0a559358e0ccafbd986a1128a5862ea129ba12afbaf97c33de3d4c48e92d8e9"
+      }
+    },
+    {
+      "sample_id": "sample671",
+      "language": "ja",
+      "source_sha256": "d47518007d8cdc2a122b4e5e45fcdbd15a3ec1fe6e33401e1172e1cee96a79e3",
+      "ocr_regions": 3,
+      "translation_elements": 3,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "d6a9ad84184bbf80aa579e1de2302bdc1e370be7a8a77ef1d1d213bb9358aaa1",
+        "render.png": "3c4d66f42cd3fd2c0e725a60d53b7ddccbb2b4a331f55bc984312bd6e67bed28",
+        "project.zip": "f3a328da866fcbf2ad97352f9d6a26b3f47b66c2e4653c725a9cd5d002d0c6c7",
+        "page-snapshot.json": "6b84dc0b453388bce5c7833f65d7eabd9dc7b3b327c93251eca9dec1ef71b539"
+      }
+    },
+    {
+      "sample_id": "sample672",
+      "language": "ja",
+      "source_sha256": "e8a5f756270c83066de6f1f7f0456cede1384efca98f3b1189e24331f38ca343",
+      "ocr_regions": 24,
+      "translation_elements": 24,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "127ea4f1264fa6e454d99f7d91ae2279cdb30c3ea76a41b543832ee24b34439d",
+        "render.png": "303599710002fc989d3cff9787804d91fc0d960e87aba66c2720de05609eec92",
+        "project.zip": "6c98678c9d5777c4af56c692e84e65c27fe71960037c20501a9652d3fd22d2de",
+        "page-snapshot.json": "84c13594dd6e3acfe7d95ef326dd69928d398129f94bb191e7aaed1bd6f69df1"
+      }
+    },
+    {
+      "sample_id": "sample673",
+      "language": "ja",
+      "source_sha256": "4a634ffa9361e950da19b7b01cb1e69f26f612fe1ba766faedb4767893055028",
+      "ocr_regions": 16,
+      "translation_elements": 16,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "7fa563c84aacb0ff4d2d5a17031d2d7cf9d575b89bc4a9a44e01fe89f5134e06",
+        "render.png": "b1edfc691fea0a9690bfcf17c1bf3ec84bf5fd4417134593b4ec20cb59667fb0",
+        "project.zip": "7479607c4603ff40464a6b5438f36c459b612f76993a2d03430d3fbf42d12a3e",
+        "page-snapshot.json": "fc832ef47f64ec857f331154b6d23facfcc8b6010b3e3b0dcc268f1250f91b2f"
+      }
+    },
+    {
+      "sample_id": "sample674",
+      "language": "ja",
+      "source_sha256": "051ce9f435a3a78d98352f9b15412a91cfef29cab499a4afa892d71cdf79a870",
+      "ocr_regions": 11,
+      "translation_elements": 11,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "21f9c6eaca49492a9497fff3099e1e24ecac89784ff9b61de981cce331322072",
+        "render.png": "38519beadd662b16bf75d3dd07aba4a7640a01e531bac1eb0f5329772f543c6d",
+        "project.zip": "f8ea4deb0c0c07399f901f61951fb78dfa8ae8216d61c1a2fa44b9a87ac6a6c6",
+        "page-snapshot.json": "d3ee08d0aacde0cfad6d6cd638be71ba99b640bf1efb0e9290a6c948b43c2686"
+      }
+    },
+    {
+      "sample_id": "sample676",
+      "language": "ja",
+      "source_sha256": "47543122596909b4e98d6579c61eeee4a310609d843a59018a04795dac0fb3e3",
+      "ocr_regions": 16,
+      "translation_elements": 16,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "1aee1949e1c6cea33295f4204083bed072897a971b745e462732339d53190193",
+        "render.png": "4e92b5018bbb85666e2f6295761754d06025d20a16401c3c066e28f0eac61133",
+        "project.zip": "996d73ba7b9fd79798149f849772a56a1c30683b1f513a8d3e257ce6b5b825c4",
+        "page-snapshot.json": "770dc3978596751ddf27735cd62d5be3cd6346d3c0bf7b49ce503c24d70ada9f"
+      }
+    },
+    {
+      "sample_id": "sample677",
+      "language": "ja",
+      "source_sha256": "91365d185bc6d5929672c5b3241509709e9d134ff603948c9901d349c989b91e",
+      "ocr_regions": 10,
+      "translation_elements": 10,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "a412d019e0d6362317cce86e4962fa45b36faae48ef092855447e5905102d869",
+        "render.png": "fde96f154aac62e177afa169e95ba492030c1b5a938102391545fa8434bcbf1d",
+        "project.zip": "c30cce7f6fceda28ac7e0914de4b60517e788db77dce08cad31df681f4fdef60",
+        "page-snapshot.json": "7602fe9459ae0cfde7efe096f4905ed83bbdc7ab6a22ac0f9ca95e5f0f53605d"
+      }
+    },
+    {
+      "sample_id": "sample678",
+      "language": "ja",
+      "source_sha256": "4fa9ee44bc6c3c3f1ca536dfb5fa9c22df1e2551a5103c0f3846c2609be647d4",
+      "ocr_regions": 15,
+      "translation_elements": 15,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "4f7a204e6e6f276ba75740f69f6357ec5d60f9ab200b4f3e26bdd6f5866add0a",
+        "render.png": "bc241da798e560c397eace4dfa95c1e20c2baa369c3c669449c31b97e38c0e46",
+        "project.zip": "f87ab6a277cb7018200971ff037edd6eee9f892b27418c57f56b2d7f5a2c974a",
+        "page-snapshot.json": "a5d63dbf8f86c9d636fb851b88564817815491318474be506ce5bcd10deab077"
+      }
+    },
+    {
+      "sample_id": "sample679",
+      "language": "ja",
+      "source_sha256": "2864198190749fb4af6ddaf1ac40102bbd1817614d0bd36eddf549729ff09026",
+      "ocr_regions": 18,
+      "translation_elements": 18,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "848c70acee3dd02e7f569022b02c30f764051023cba810b4078a58ac604a9c5d",
+        "render.png": "02c8054a727d94ac006d7f12e3585a507aecc7e4a1553123908c73128a4b2ae1",
+        "project.zip": "5603071c72c90adb5e0a69eab7ed9948cacb1771e395b5e5486e6f32bf1f752e",
+        "page-snapshot.json": "931b6444167587673846335f0c3cc58ccfa9ce94429f8bf9eecf05aecfe1e5e5"
+      }
+    },
+    {
+      "sample_id": "sample680",
+      "language": "ja",
+      "source_sha256": "a80d93bec98341ea34c61a0f5f8a9ea3cdb060147d75f7c388991ed411fb1fb9",
+      "ocr_regions": 12,
+      "translation_elements": 12,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "ebdf255efaf62472a3eaccc3b1ccc4729e56d3900e18a296a8dab018b4eb149e",
+        "render.png": "354b8575f70b8d2ded642ca95a4514841ada4fdcc9fdea9cd21f8674c8364910",
+        "project.zip": "f84c9da91e0801db9ca9423ba80b7b606923aaf825c44da2ca560a2243bdae5c",
+        "page-snapshot.json": "ec22f049c4496d6e5f78b478722ffacb9880d098973b85787a0e68777e40a477"
+      }
+    },
+    {
+      "sample_id": "sample179",
+      "language": "ko",
+      "source_sha256": "061ed70fc8be0126ec47fabe163da5736d43252f89218101ed2683f2b9113759",
+      "ocr_regions": 9,
+      "translation_elements": 9,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "b98c4a5a10b116af8e7f2c8cc0735658295883ca1110b90f80feeab7c053480c",
+        "render.png": "887a9638488fa8f569db1b155127e08785f6337ce09c802615a8d827f2b4ed0e",
+        "project.zip": "46fa47c6d88159aa20d3e7047a8ad9b57d1fc49a9d652144f52fab9e120023ff",
+        "page-snapshot.json": "2e723c8c4f25fc43bc7f9394aa3654593743fb63890300ac0f46d212564d1c49"
+      }
+    },
+    {
+      "sample_id": "sample196",
+      "language": "ko",
+      "source_sha256": "d3236fb65296ffcd278a23a8da30bb42ef9ef365bdeaddbf0cef6770f51c5c1b",
+      "ocr_regions": 9,
+      "translation_elements": 9,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "64aa7ba2156c7f6eb1a96145464c4ddec53cfa81f53c93bc051d553c6ec882e3",
+        "render.png": "8f0d0746633a3bdd5c8871df1914ef71c0b0c20462b57bee345d2fa5bcd9aa85",
+        "project.zip": "c070da04dbbcaf5a7af704e334384e297a1650fe4d005958da592ab8d19af9f7",
+        "page-snapshot.json": "d81c9bc6a1c80d4af4c7a095c351f99fabc2dad35e1108c2df8718bd525495f0"
+      }
+    },
+    {
+      "sample_id": "sample225",
+      "language": "ko",
+      "source_sha256": "5a590fb38f2f9a8a0b8f6c794df30bc2556a9858c5a82d5a985aa20cfe7cdacd",
+      "ocr_regions": 14,
+      "translation_elements": 14,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "fcaafec52ecd8811c48c9faf3f483d7fdfd28c966ddf59018c4eb00165ec990d",
+        "render.png": "bd4bc8cb027836f87828709f3e944d31f930674f0b00565a0dc4461409bb214e",
+        "project.zip": "2759ff811a46e5e636c121f1881e983afeff182af4dfc3ecf1fbd2dfe4917323",
+        "page-snapshot.json": "ddc25d063fddd5cd54a63d74f9a87f39e6dc0c3ecdf4f9e3a33c9005c2509a00"
+      }
+    },
+    {
+      "sample_id": "sample273",
+      "language": "ko",
+      "source_sha256": "7e9e0c55e2ac8a1f8ebd983d710ccd5b8670ca4331b68aa523a32a643e06ae28",
+      "ocr_regions": 13,
+      "translation_elements": 13,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "3133aa508cd5d8c372248fcd79f9555f3107f3f7d52bbb82d1fe3b18d0f2ecec",
+        "render.png": "82946f2d76ee8f16cefa644adfa9df9ad48d7db7a288ebc2bb0bfca802d081b3",
+        "project.zip": "d0dd92a17a5b363141ded71e6e897904498ff682d84ada1125a05656c717755d",
+        "page-snapshot.json": "f568fdc3c361888510b33eac630d36427f6846ec65866d0aebd67701f652d618"
+      }
+    },
+    {
+      "sample_id": "sample299",
+      "language": "ko",
+      "source_sha256": "7a96ff566a2c21405067c7c2a49eb9cf2b490bd05b41b9f02e2201e269f2d3de",
+      "ocr_regions": 10,
+      "translation_elements": 10,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "4ad5b8966574ce3da77e730e0d48b3995d096f01869424bf703126a6bbb0e70b",
+        "render.png": "ff6dc5df738bf3aa351d1d678359a5adf45ef71baa397bf6684bb8589a4f1223",
+        "project.zip": "d5ec53f5854604f11ad7666d78ecad8473fdd999af994594553c553c3ca8c0b9",
+        "page-snapshot.json": "f066aba15d02b84e41a0319c423bc892ddb7f3b221e0c72ff1a517c2a87259eb"
+      }
+    },
+    {
+      "sample_id": "sample321",
+      "language": "ko",
+      "source_sha256": "e09301c28e8a1e9d6fc57a08cde921e508b9161d63329f845f35e2fa30f9db5e",
+      "ocr_regions": 8,
+      "translation_elements": 8,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "ec20ec0014ae3f7989b3c3af89c8551cac39e2febde7e38dbc8abc2c95452ecb",
+        "render.png": "d6620b3f59c9209ec8a1df55f8670045d40756243794b5d8f8710ec6cb491a0b",
+        "project.zip": "f21f37bcc2d2837566abb4f80d76688f8aae3f024b779ba53b1d7266f3f24baa",
+        "page-snapshot.json": "0611e6ae32b27dead1beec3562da8fe4afdca27efb1099630b9ecf3842fd6366"
+      }
+    },
+    {
+      "sample_id": "sample327",
+      "language": "ko",
+      "source_sha256": "c7b63cd75afd65a922f9c37e30aecb592a9404b021e7e93ef18257a9519a7540",
+      "ocr_regions": 7,
+      "translation_elements": 7,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "277301deb9a9388007fb9292e9907a9b40daf78411deb48f11b05e18ceb10bec",
+        "render.png": "fed3a12d05bf2ab187b2213dce404aaf4f057b88a04dcd6aeff3e71e02a30510",
+        "project.zip": "cce9907e8afb91df2284ef6ef678ce61fe0be4a5e0ab0aaf2c362d7e021b84ff",
+        "page-snapshot.json": "99ce307710d3d55cba90302055e959cac25e58501f676aee2933a89b40c595fd"
+      }
+    },
+    {
+      "sample_id": "sample349",
+      "language": "ko",
+      "source_sha256": "928b258745ce15150ac3ec1ae5a344a149a24c64050174c8dba060ccb67e4ff4",
+      "ocr_regions": 11,
+      "translation_elements": 11,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "1931027531bda7611673ade7573777741be2e065cd2a9aea5aef4adbf806adeb",
+        "render.png": "e2d446ce92259625ee3ad1f8743310c12d4526d079ee3ef4244ffbd8b465ce78",
+        "project.zip": "ab80b636d2d76ff5b7e02d90678a2d1aab5423e9599864ee3c803775c695fa37",
+        "page-snapshot.json": "6286ec1c1f80ad53a3db09b11926f2f7f263e2dab353416a502144ee928a60d7"
+      }
+    },
+    {
+      "sample_id": "sample357",
+      "language": "ko",
+      "source_sha256": "cabfef14086a5b2b2c612792a88eb95bdff40a256bab5f84ba969a5c16cefb00",
+      "ocr_regions": 8,
+      "translation_elements": 8,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "18bede738c89840a3125101a59e6fbb1180672f2c262c384c2965edf7725a7c7",
+        "render.png": "6983632bd5151d00c32b43fc06c762bf36eaf0a8e957ae2ab85aa7e37ee3a214",
+        "project.zip": "342af108e92ffaa7cc0ea75a6e4646c74cad4503bba90d7d1c46d071e12f9e84",
+        "page-snapshot.json": "f19515abbc0b5077b744e55f98cfa835920b2d52997b3789d1f9d1be8f913916"
+      }
+    },
+    {
+      "sample_id": "sample372",
+      "language": "ko",
+      "source_sha256": "00ed99553f5f8e40ca4676a444874e1d23a2442745d25f6435709f2bd87c6be7",
+      "ocr_regions": 13,
+      "translation_elements": 13,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "ae5f92584a579bc7374b4be9ef50ec5feded8c365ac67bb387d255b23784b5fe",
+        "render.png": "ad602f7464c33b1a1710687aa646f871826b9b407296fe8c4166ad84be3caef1",
+        "project.zip": "b085039d293f289f49412fc2b2375392aff724592bce07f335843f3848bc6470",
+        "page-snapshot.json": "f145cae15c75255c12c37d2ab49f6a97f76f50f4bfb5f78f52d9a81cd414da0b"
+      }
+    },
+    {
+      "sample_id": "sample376",
+      "language": "ko",
+      "source_sha256": "d51a07beb01995d6ccb03c2ec68e40f8ccb3d00cdc158977355a8f1b263df607",
+      "ocr_regions": 8,
+      "translation_elements": 8,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "62025ae8b1425eac3c3fbc977a54a015f091c6426838fce10f60d898d58eb59a",
+        "render.png": "14da565d3cc53bceaee3f3b0830a1178734df397ddf40f0179b1f9aa043b8328",
+        "project.zip": "9a3b55b88a64e9910e3b06cd1788208a9bfd47605d363933afad4f557d39d7ee",
+        "page-snapshot.json": "df1e080088b8b6596dffccbe8bfd597862424a81f3a82215fc0c1f8be7688732"
+      }
+    },
+    {
+      "sample_id": "sample393",
+      "language": "ko",
+      "source_sha256": "dad76737612ab40abbb345c724cd5366c2ce133a38522e1fb2d4b1f961bdf0cc",
+      "ocr_regions": 2,
+      "translation_elements": 4,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "1e596ecf5ecb1de79673ccb8781f85edc90d499cb13487775bbed676445eadc8",
+        "render.png": "67b3f958ca537b9dd9139ebf3ad8467bdc0e3e9e57ceeef2262dff09614cb4cd",
+        "project.zip": "5f0add4698d8e9ca6ebc4d2269fd1556ea77a23fe0dc4183575c60fbf7f4bb76",
+        "page-snapshot.json": "58a9b58e3fd3ba98b506319a55af9efaa304707413208e7866c7b27c73273cf9"
+      }
+    },
+    {
+      "sample_id": "sample403",
+      "language": "ko",
+      "source_sha256": "824809f8448c24cf80ceae4ab1e1c9fc578498ace47ccca63b8106a3c8325860",
+      "ocr_regions": 5,
+      "translation_elements": 5,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "352ccfcd3c39bca2319a381a02544f6c4c122f89d1addd7a6d48c76adeb961b8",
+        "render.png": "1b0e03bfe8c16af81505066ea0d5132b1368f06d6b708275623bb21c6864c20f",
+        "project.zip": "aaeaf8fb5b4b21df7a7b8e29d095e31d5fe73e43c03ce485987eecf02ff0c6a7",
+        "page-snapshot.json": "eebff25570b1333fa75e2f4fb86086ba10b77a1dafbe7cd91d73cf3257ebb4f3"
+      }
+    },
+    {
+      "sample_id": "sample433",
+      "language": "ko",
+      "source_sha256": "e29449afd31fa7c1a6aa71baba5314b890a8021e30aeb0bc5ec5d985fce1be65",
+      "ocr_regions": 8,
+      "translation_elements": 8,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "f8eeba918e817a038d8c0d258fe39c0e362f7fcba64a33e3d903c9de2049fee3",
+        "render.png": "bc06e2cf92c0a60ceba84e54077bf6b3caa5e23a0180fd34862e62f5a283096b",
+        "project.zip": "f3ba67c6ef061adfd7c451ffd3875544bf672ce4107136552b5512432cef16d2",
+        "page-snapshot.json": "6c28ce6c4f220f7474b700f774f80e6cf7abf508257d6ffe12631e898470b0ff"
+      }
+    },
+    {
+      "sample_id": "sample439",
+      "language": "ko",
+      "source_sha256": "749c08e01bd59b49f566b84356e32dda73ed2665af91c573aa3f724451b9bccc",
+      "ocr_regions": 7,
+      "translation_elements": 7,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "12529e61fc4886dc94b6081310f8e8ff68d441313397e936b4256e0f33216973",
+        "render.png": "f186dfa6bfb9b1762360d3a28edbbbfab64f3f8e8277b21cc5026154651ebd42",
+        "project.zip": "6e0b2b497800b7052bfc1c424156522077f2b0380978e3c79b2f46780ce5a74f",
+        "page-snapshot.json": "4695b592c7de8ce1e8a1694fb79a2ee7e97bb719da1ba720f84337a59eeff407"
+      }
+    },
+    {
+      "sample_id": "sample444",
+      "language": "ko",
+      "source_sha256": "7f45c8e3d152353afcc40af7aba9df208a63a04f7a66219d2bdf7956e3aa5e1c",
+      "ocr_regions": 8,
+      "translation_elements": 8,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "76d0493f2d8dfa410827736359493565ca995318533505d63f805cb064bef96f",
+        "render.png": "11d45eba2bd7895f1c060a753da527bc8fc2782d30ff9d9847c43dee81b263f7",
+        "project.zip": "236c9bd04f041ff238048a172a3ac7014aa73660910b9a00cf14259e6191d102",
+        "page-snapshot.json": "76b386ac83f40cbbcea7fcc8f2ed54df9d0c9d4dd12bd16eca950d251840f6f4"
+      }
+    },
+    {
+      "sample_id": "sample667",
+      "language": "ko",
+      "source_sha256": "d792379bdf1307f9132dbf55ea9c29f5e375141e482864044c4c075c95343fe9",
+      "ocr_regions": 8,
+      "translation_elements": 8,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "2137e5add9fb008305b60e0d55f582cf6335b222b83bb816290e004b0e776744",
+        "render.png": "2f12e101a4e09d5fc6edfb6a7d3ad353a8a45b54f26d087650227ab267c0e6e8",
+        "project.zip": "cb9943c37c4505517883921e50f100b2ebb75fcf946be8d5808020d1581d0e19",
+        "page-snapshot.json": "6489261376abb27ec5928ce635f6b2308ba05ec4b8b0cf8d10b049fff777e340"
+      }
+    },
+    {
+      "sample_id": "sample668",
+      "language": "ko",
+      "source_sha256": "fee05644cda53f47b0a89f572fe3dcb2ef693ded568194ee323b2c57a6f45fda",
+      "ocr_regions": 10,
+      "translation_elements": 10,
+      "ocr_model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "a4a677ff8dc4edb2491d7a58f73356c508327b7f9c39bd0c2cbf6cfa79fc7f56",
+        "render.png": "823fa1439956b77cc3f05cbf1d95ec3ba1881ed2110386f8f213025162036a2b",
+        "project.zip": "2556f850d1fa708511b41e8f30c2c53204e25ee07e42b53dd6feddfd9db510bf",
+        "page-snapshot.json": "4ea2306d976791720e8453372a7bfabeebbd4e30186b11511ac41af17a2da4fe"
+      }
+    },
+    {
+      "sample_id": "sample201",
+      "language": "zh",
+      "source_sha256": "985c08ab68442a6e9de8c9ba58c9ef9c95886a112b69575e55c21e8892e58477",
+      "ocr_regions": 8,
+      "translation_elements": 8,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "4bccc8875d233ab8b8bd348b5f58797f0ecf8a67937b85c35acb85926d01078d",
+        "render.png": "77211bcda608e67b225c40ce135b830b0f18fd2a45349b72da614ca37e4f9106",
+        "project.zip": "5b6735c070ee1cea7d175e78e1bc6d1b77894bd5ce178499ab040172b7a9345f",
+        "page-snapshot.json": "f0dcaaf4d05484c448d8d905cf60561d3b098537825047828e55db0e1f1abeaa"
+      }
+    },
+    {
+      "sample_id": "sample205",
+      "language": "zh",
+      "source_sha256": "4d0723fbb4f589036a6fcbc5aed37087bc25bfefb816a34b9739930aa6dbe0b6",
+      "ocr_regions": 6,
+      "translation_elements": 6,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "836ada8e1556b4aa02891e4c5e61878934aecfb7db3e6b77cef4699c9c7bcd71",
+        "render.png": "ee02b7f5ebfcf42eac64a57019e363e6e2a7cc0725f0c9fa69ee96f5f6a553ac",
+        "project.zip": "ed24c4f228a0e1c7fb07d0658c7827fa43491a1e743bcea881dee57bf806455d",
+        "page-snapshot.json": "3e20256bc7cecd64ecc9dd5433d63093e4f8b4349f89b56a95cc2fc4065c781c"
+      }
+    },
+    {
+      "sample_id": "sample229",
+      "language": "zh",
+      "source_sha256": "13786c579119e73bdf1b32c552d9bbe750a42155fb35a20e343b55fafe75c236",
+      "ocr_regions": 3,
+      "translation_elements": 3,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "f80de5817b57c1c24699b735303b66b4de382f12c725f9a47d40fb95563ddf24",
+        "render.png": "a270414d14feafda47956404d3408acfb1b79f89158777cb1e53b8b100294f65",
+        "project.zip": "1aceb2658dff295db78c3bc8f6bd88c623f75bea6ae5806873b34c52fcb8ab46",
+        "page-snapshot.json": "f052dbb18c5d8f1fd2ed98aa54ddc65537beb9e7120c458165a634feaa6d9637"
+      }
+    },
+    {
+      "sample_id": "sample527",
+      "language": "zh",
+      "source_sha256": "81a462e2886803d5cec2dee8f63b6ac3d8bf61ec1fd7c50b74371b9c13e82a3f",
+      "ocr_regions": 8,
+      "translation_elements": 8,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "8607e52794614a940a5d76cb329ab1f7f28e50741678cc34875384fafca6f5d5",
+        "render.png": "808dd5529ed39ff32b0daba11f6fad2aebb62c643aefff496eaf18ef7a7a15a4",
+        "project.zip": "6a4c851abe4e32a5639bf5d052f8ef7b13753fb4f16da17f05c244664dc6f3a5",
+        "page-snapshot.json": "63af464d96e42ee4029f59e11a23ef0d043442b25e6beede6d10047e86aec8de"
+      }
+    },
+    {
+      "sample_id": "sample639",
+      "language": "zh",
+      "source_sha256": "c7c6f6b31e28bc8a8f7ac12efad0d2d2d4d42d8424f73eb634117aa9183a85a5",
+      "ocr_regions": 12,
+      "translation_elements": 12,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "248a9a9d6f0c31fd0526132aeec3b69e9d2f789d2688585e893cb4fa06050b7a",
+        "render.png": "d354d3cdc267e2e51e58811fb128f384d09b2751aa0175bb35ce34de452681ba",
+        "project.zip": "7968326b3a9b7e7fe1d8e3930a8174edf766d6452a9d8c8c4224df20396c7220",
+        "page-snapshot.json": "ebb4f1dda8c0f90890e721005e1394663a118c8a02accb65e2402784daf7062e"
+      }
+    },
+    {
+      "sample_id": "sample641",
+      "language": "zh",
+      "source_sha256": "7b3c483d51b1f4cf983bf04a7f9adf1119ce3df2a739a636a2de1e4f9730ba66",
+      "ocr_regions": 12,
+      "translation_elements": 12,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "e0001dfa97be5bf826817423199210344cc435f8a817c81c8897ab4713624d60",
+        "render.png": "1741948d3181c5f41c7b7bc568bd236e623340e3f0a9178a7e0c0c827d85d359",
+        "project.zip": "dd13741f8579864e9f1ec30918f415568ad851fea2fde3a7b8d87c80f39fbcbb",
+        "page-snapshot.json": "51dc34953d394438e5153c37caa3de7234b5620c4da6ba027b7c054f5ee612b2"
+      }
+    },
+    {
+      "sample_id": "sample642",
+      "language": "zh",
+      "source_sha256": "7b0e8ee98ff6d8ccb38e2ca10f70aa7a502ff23ca1ebf63799b907fc2f16259c",
+      "ocr_regions": 15,
+      "translation_elements": 15,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "63a13b0b20b9be19a87dc05c5d6438d5603d2d8a1c90735b05e15f662e414a67",
+        "render.png": "7a643c40dc8cfab91d4b5f8536bf0549cd682c51cfc21acfb0502baf03f51f2c",
+        "project.zip": "16a887b9d6f3ab0306fabba4a39ce66b7e61fdff6792c3df7b6d70a7165bfbe3",
+        "page-snapshot.json": "5db63bf4d14fa03d6e36a616eaa937a4bda219560820889eb0caf02e508e473c"
+      }
+    },
+    {
+      "sample_id": "sample644",
+      "language": "zh",
+      "source_sha256": "1fc14957ff2eb870f82b1bb4bfa4d92ff0f2765625a3dc333b3cbe472b48d6f9",
+      "ocr_regions": 9,
+      "translation_elements": 9,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "083189adb1d62feda66f0fe17508fe55e3ad0e2d420d6c6cc214395f2d7dd973",
+        "render.png": "5b6ab807ed3e8918846606995548e5efb7e777d082fc36e9eeb1b11a92fb8746",
+        "project.zip": "7a165d34abfc90837e1680ecf993da0f33acb442f99f8a2fe41c6e4f2de89b4c",
+        "page-snapshot.json": "e7b11840858c0ba4bf307541f308861a822fb2e41a4e471ef957959d98a1345c"
+      }
+    },
+    {
+      "sample_id": "sample654",
+      "language": "zh",
+      "source_sha256": "8bb0a8ae4f1787f1a9b643d0286b37bd1777e4b8c9d6855f3864be70b4c2a20b",
+      "ocr_regions": 10,
+      "translation_elements": 10,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "d4c2e31d228c78ecd6d9be2d615a2564d27ada9dfe5108de6483c8e4d303cae1",
+        "render.png": "93fe4e03030cdc45674b276db89b27bb0550b6f227d14adf150f85b6ad4d9305",
+        "project.zip": "ddae30b89ef599b0b0ea0c6c479878d724303ae0f43ea2566673f5cb3d2f5faa",
+        "page-snapshot.json": "2a151c59aa5d3a794211c4cb8b95ad631540b62d75303f4d2f907e46d1fbd7fb"
+      }
+    },
+    {
+      "sample_id": "sample655",
+      "language": "zh",
+      "source_sha256": "e7c3c797dc1dc72934d34f48728a01fd3c7d8d2f5a6227a08f6fe156f7a93a19",
+      "ocr_regions": 11,
+      "translation_elements": 11,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "d2110533dffbd3c256ef467f32ba212831004361afdc7ec9839e1d13a3a7d919",
+        "render.png": "806ed363de1ff3c2078fd14fafa05819e5d3592cf35d0ef46c61a1843c86b965",
+        "project.zip": "4920ca86c71c92d3d8e0d8ae6aeef9d0bb97b72703db7491307aa58f8b7df198",
+        "page-snapshot.json": "82292dedfbdf7e5f77a49aa973dcc8b19116a4e41f3fd4d0ae1f1c63a7f46e51"
+      }
+    },
+    {
+      "sample_id": "sample675",
+      "language": "zh",
+      "source_sha256": "f4d8df9de0ccfc0df58c529c235931c10c4cdd0d1ce6c500867c777ca3e68caf",
+      "ocr_regions": 11,
+      "translation_elements": 11,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "498fbcfc0f06d2b26ecb2971758e53f31abe95d512f84aad9244d74c7808d53e",
+        "render.png": "ab4422833fb87652de607ba369a6850a693dae43a343d2fefbaceb9f5ab0f918",
+        "project.zip": "6419067bd255ac0340d6f4c516541876363f85ca7e559de4277f5178b52dbda4",
+        "page-snapshot.json": "429e302c83f0ee0d43eef0ef29f5dab99668d99f842a46de5183891ce1c8b23a"
+      }
+    },
+    {
+      "sample_id": "sample681",
+      "language": "zh",
+      "source_sha256": "ea327ecc6aa7312d3738b64b1a5c16e6291d94a7ffb6d555276de103f4490d44",
+      "ocr_regions": 9,
+      "translation_elements": 9,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "54bc89227cfe016ca51c8098dad672067a5bc86d38bc145dfa64738750014c9d",
+        "render.png": "940a93d18a820b953cacdf5a252a90b62ee06876875d81ec1c25a70030a6d349",
+        "project.zip": "a102408b8b4762f9fa62f3964b12041745a45f2f86cbba4cfc8de02f811edfa1",
+        "page-snapshot.json": "b6bcad7b859a0cab0c6ff7dcdb8aba502096bcd89864e7588a2ea7b56586ebbc"
+      }
+    },
+    {
+      "sample_id": "sample682",
+      "language": "zh",
+      "source_sha256": "312414bb391353e62f7194a0a0688bf83931d8416ed0fb2a958d248face592b3",
+      "ocr_regions": 13,
+      "translation_elements": 13,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "845ffe96d2585f3b6268577a7bb3652b4db0a8c24df4998a985b9793e69b3e39",
+        "render.png": "e9f9ef50a1d6ab96851813289451220712ff9d72f40a3830f2153e861ca17b94",
+        "project.zip": "2d55b8a8a0afcd951d9cbba5ca403722d061baadb66a53ead877f0a282b2997f",
+        "page-snapshot.json": "9d8fbd77bbda17dc4124d9b27a18a0dc3ce8eda26b851a1bfc1d80cd5e5367b0"
+      }
+    },
+    {
+      "sample_id": "sample683",
+      "language": "zh",
+      "source_sha256": "4f023d424291deb15b8ae1cad85814911e42edd306d1f6395101405be0c747d1",
+      "ocr_regions": 12,
+      "translation_elements": 12,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "93017fb552fb5782b0b1fbb5ae2b3dd89ba18713d346fdeb4dd16bab351ff790",
+        "render.png": "8833e29824e0dff14b62b819fe57b1b5b52091427e633777ca268dde1a755123",
+        "project.zip": "43cc8bb1851b1f687b9e8a739a2d401dcd33ac5c842712fdecec87a1b1dbeb8b",
+        "page-snapshot.json": "896141f2cb3055075c15f702849d7c9baa2ab0f908a46b3bec5a68f53f21af5f"
+      }
+    },
+    {
+      "sample_id": "sample684",
+      "language": "zh",
+      "source_sha256": "cf41f43d9ad934d516daadc854e56553e67333300dcb26b0d5803a24e7a78392",
+      "ocr_regions": 5,
+      "translation_elements": 5,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "8fd3807d2bc788cc97438929ba63d9a87882cda15eb9db1186b550a6183b9732",
+        "render.png": "17559ea93db112c9394a766c5ed2d7fe94e7ea67d29cc82c2ae45fa9bcdfaaca",
+        "project.zip": "656c24eb21e749c86491693e6afe45375b9099a459ae5c5a71eba0f23bc2cbc6",
+        "page-snapshot.json": "7e8bab2ea5437433741cd0b90c7abedec609f563355b4bfe1f7b377dba2a7e18"
+      }
+    },
+    {
+      "sample_id": "sample685",
+      "language": "zh",
+      "source_sha256": "30d4887dc784c6b9752ab2175c63027a3ca460c9ed7f53b2ca48870d4039f274",
+      "ocr_regions": 20,
+      "translation_elements": 20,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "6e70cfc9c1638ffdb20ffe577088e8b2b8bd37d713a6d36a73839497ec61fa96",
+        "render.png": "e4004312b7964b401150e8a2fb18e7878f2ca19fbd0dc4049f257021a34afd9b",
+        "project.zip": "4cf01a209034dbe8e37c5a76cf47270aeb4c42eb9f40f1fc8a5b8da5cb1aa3a3",
+        "page-snapshot.json": "4d512cd63eda6eb85a4fc5f5621b69fb05cbf16a11f78dbe4b7c5d8d0d8119b1"
+      }
+    },
+    {
+      "sample_id": "sample686",
+      "language": "zh",
+      "source_sha256": "af009eca05af62fc69158dd4d5a166d30051ea972815b5465a878484c1a49bab",
+      "ocr_regions": 9,
+      "translation_elements": 9,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "6b17adfefaa3046f5601ca002bea102d3b7d37769adf4a5386bdb5a3ef936d19",
+        "render.png": "c4b6b89baeabca4487af37acf23d0050d0f14c7e9ecd3e22940741461b6f04f9",
+        "project.zip": "032850685ca1bde5080331368bf381aba2cd3e99f46eb2602a8e4aadb66020df",
+        "page-snapshot.json": "445cc74ec6d1177a6558d085d2e387da0850d2b7b74c2ee7c0fec79f990c45c9"
+      }
+    },
+    {
+      "sample_id": "sample687",
+      "language": "zh",
+      "source_sha256": "097136d73241228966b5d69bae06597816c407fdf64cacaa47b114d108e41296",
+      "ocr_regions": 12,
+      "translation_elements": 12,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "111ddc9ef48e722001c58b35f69f631a23de9d842f73cd6b5535a6f75f361ebd",
+        "render.png": "6e11cb35806885b921db82827ce1ae63fcbe72651c65e6f2d0eb87a1982300d3",
+        "project.zip": "0df2bf97ef1586e6f657ce4da6f63ef85e9938bc8edc53461846c6cdd91188bb",
+        "page-snapshot.json": "2743ecc7eaf2dbcbb4ef39f9c141afdc700f245720afb9e667ee3bceccc6f88e"
+      }
+    },
+    {
+      "sample_id": "sample688",
+      "language": "zh",
+      "source_sha256": "28c5c2c201a75fc0466f03101b9459c0d7e4585627ceb33ff75fd5b6f288b4f2",
+      "ocr_regions": 9,
+      "translation_elements": 9,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "f61f6dd5886e23ec7fb541ee7d27a28e3b3141477b71a17cfb9047ed62ac6114",
+        "render.png": "93eeea1924ccc3ca32c15a5073a2a375d60655ef8b3c15b9931da19ba26f51e4",
+        "project.zip": "0c42fd48a6dfd6ef2e02e1e256a9383aab110193770fb6895efdfe471e28809f",
+        "page-snapshot.json": "fa9356986b30c577b10c05a2a33063f746b60ca26784585281639898717952e1"
+      }
+    },
+    {
+      "sample_id": "sample689",
+      "language": "zh",
+      "source_sha256": "4a15ee70ca510bd570bf8efdefa7037d14af8bb4ac16c1e575a050ef1e3e7800",
+      "ocr_regions": 12,
+      "translation_elements": 12,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "9e641759d98fcc125f3b0907a85d9ab07de1661cb473d01cf6f880a5c685fa86",
+        "render.png": "d832b537513eacd2ad97d2ce6449b17ef983b2e6971d7b2472915d72da531050",
+        "project.zip": "bd71c3bae14eca43e99ba71794d7e7e88e13c9a7bf81be483d63fc0387e1e6ed",
+        "page-snapshot.json": "97a4e33c794207df986e28fd88d268f8321f6cab4ba09dba1442dcb3142a9c42"
+      }
+    },
+    {
+      "sample_id": "sample690",
+      "language": "zh",
+      "source_sha256": "80664661d5d863b0ac24ddd9b61ff07dc39aa877fc3877e98eea0312b53c5420",
+      "ocr_regions": 14,
+      "translation_elements": 14,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "76c45a05036fe897d729a46f34d7ae3d82756c1b8a80981fe624e38eb72198e2",
+        "render.png": "58d9f871c699ba0459b03b04420b93d82e94b7407ec7076aaf86c5a84b9346df",
+        "project.zip": "dcb66fdc85b274c74c162a3a9cf40ea6b9e3e99b428cb4ae1d274b8cf6d96cc8",
+        "page-snapshot.json": "f36a61a455feedd969808e574e1152d9a883366f5e58ec7bd6afff241b3f778b"
+      }
+    },
+    {
+      "sample_id": "sample691",
+      "language": "zh",
+      "source_sha256": "68747e8e382484c59e9694484b6eaf419285216bb21a64d29928f69309a236ba",
+      "ocr_regions": 10,
+      "translation_elements": 10,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "b7244607a7604b7f1316b54ebcdd4f0f0b897257b14aeff3d7a530dae5cd3ae1",
+        "render.png": "119cce18e73697937eaf1d1d93e498b278c6b615279910aec60b577dc67a62ef",
+        "project.zip": "76e06cd0d214328af08c9d242c258c0e45df5e6777907d0511bd8bd57ad3b0e5",
+        "page-snapshot.json": "834adfbdc52470a55bc9112380a1ca1ad57923f86dab3511f7d931d5adc27e1a"
+      }
+    },
+    {
+      "sample_id": "sample692",
+      "language": "zh",
+      "source_sha256": "5d0df918820a5ff40bed3438284c831258c78dd698ff0b7ee54b79590c2f7e7b",
+      "ocr_regions": 17,
+      "translation_elements": 17,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "d348e36a8f9401f373d7383558389d3d10e2ed6b7b2269441a5da329bfc50f9a",
+        "render.png": "43549c3fa9ae3d037bd011c9793a19d2e4ddbf6d3a2ed3d85769607c694d10c9",
+        "project.zip": "ecb7824c375be6042059fb2304e85f657d43d413c2251f5fbc092d16536613ec",
+        "page-snapshot.json": "4806e58b1b53f713cd086f49cd246b833cb873b8d70462bb83c5c27927c7e2ac"
+      }
+    },
+    {
+      "sample_id": "sample693",
+      "language": "zh",
+      "source_sha256": "0c97fa503a7c90f30c75ed8f00ec73fd74af3c190c363b2e36f10f86fed05959",
+      "ocr_regions": 22,
+      "translation_elements": 22,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "baf5e48db5f20506497e96cf39fdd3f3f725e69652d2a7fc74a204e4aeb974dd",
+        "render.png": "c6d8a0e63bc588d7f97857ef1842afa930c470208ff1ad8379eef0a88ac5b97d",
+        "project.zip": "041010d7ec5b8924c2a5bc2bd460c7d60879689328bc702be68e76622e14a448",
+        "page-snapshot.json": "c6f37a75c0f72e1e21ce4821489a2dbdcaf4488b69f0813c701afef52057702b"
+      }
+    },
+    {
+      "sample_id": "sample694",
+      "language": "zh",
+      "source_sha256": "0268cb7d7f32eb6961e7b1af2f919512dc9b40b5229265d19fffb7f5f8395c7f",
+      "ocr_regions": 14,
+      "translation_elements": 14,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "bf22aaba15c940b24c64590300a6e20601f81be68bb01580af0ed3ed98e7fc5b",
+        "render.png": "748a1c0a819856e22165f69bbca71b1ac70e4df10db317a4fea5ae5ae801b1d8",
+        "project.zip": "a1e4bd9ef5104ebf6942966e382b8fac8eabcd0c20bae315302431c512746cf0",
+        "page-snapshot.json": "a7ca30bf672c5e776cfd5175daad36198affca975a902eaaf26084d250a47639"
+      }
+    },
+    {
+      "sample_id": "sample695",
+      "language": "zh",
+      "source_sha256": "b8ba196ae92ec5cf4c3499536e47153e5118816ac5112667cd0999bcbc4ead31",
+      "ocr_regions": 9,
+      "translation_elements": 9,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "eb97427600b912b2e57b0215499e5b46f11fc4169b0b5fa244a5695629861a71",
+        "render.png": "ef79a92e059f321505aa52acd9f1bd710b162b713d67812a04beb8c8e3426f96",
+        "project.zip": "3d3d7b4ac8eb9894f11110010296bf8895fb95188aff9274454be536db95e462",
+        "page-snapshot.json": "1138b6d1f2ccb05f1edfc5d7aad5eedd780a5db74637567ded5e65737942cb52"
+      }
+    },
+    {
+      "sample_id": "sample696",
+      "language": "zh",
+      "source_sha256": "f2ce230ad93f13675e3f507a53839f4b657cfc36296d40257109323a89781756",
+      "ocr_regions": 6,
+      "translation_elements": 6,
+      "ocr_model": "PaddleOCR(PP-OCRv6_medium_rec)",
+      "translation_model": "openai/gpt-5.6-luna",
+      "translation_provider": "openrouter",
+      "artifact_sha256": {
+        "export.png": "e643826fae01e9d02b4fee2f31f4c3bc4ef5d3cb43681cbe89a536126af983ba",
+        "render.png": "dc7272ddecae2fc2d260d565ff22a1c07c959d5c30aad3c12ff418d40f6b886d",
+        "project.zip": "ba74ebecc5699b9a5e709878e0055f9ba9f53a9f388f1a07c89215ecf2c7f444",
+        "page-snapshot.json": "b0b88d4becba72e6fbf5ea09471d1931af183c1ab7c46218fd7378dd0143fe76"
+      }
+    }
+  ]
+}

@@ -205,6 +205,26 @@ function getImageDimensions(buf) {
       offset += 2 + len;
     }
   }
+  // WebP (RIFF): lossy VP8, lossless VP8L, extended VP8X
+  if (buf.length >= 30 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") {
+    const chunk = buf.toString("ascii", 12, 16);
+    let width = 0;
+    let height = 0;
+    if (chunk === "VP8 ") {
+      width = buf.readUInt16LE(26) & 0x3fff;
+      height = buf.readUInt16LE(28) & 0x3fff;
+    } else if (chunk === "VP8L") {
+      const bits = buf.readUInt32LE(21);
+      width = (bits & 0x3fff) + 1;
+      height = ((bits >> 14) & 0x3fff) + 1;
+    } else if (chunk === "VP8X") {
+      width = (buf.readUIntLE(24, 3) & 0xffffff) + 1;
+      height = (buf.readUIntLE(27, 3) & 0xffffff) + 1;
+    }
+    if (width > 0 && height > 0) {
+      return { width, height, type: "webp", aspectRatio: height / (width || 1) };
+    }
+  }
   return null;
 }
 
@@ -610,6 +630,16 @@ async function captureOnce(page, pendingDir, args, stats, run) {
     const r = await page.request.get(`${args.base}/api/pages/${pageId}/rendered`, { headers: { Authorization: `Bearer ${token}` }});
     if (r.ok()) fs.writeFileSync(renderPng, await r.body());
   } catch {}
+
+  // Region-level snapshot: OCR regions, translation elements, QA status. Written before the page is
+  // deleted, because ownership/action labelling needs region metadata that project.json omits.
+  try {
+    const token = await getAuthToken(page, args);
+    const r = await page.request.get(`${args.base}/api/pages/${pageId}`, { headers: { Authorization: `Bearer ${token}` }});
+    if (r.ok()) fs.writeFileSync(path.join(outDir, "page-snapshot.json"), JSON.stringify(await r.json(), null, 2));
+  } catch (e) {
+    console.warn(`${sampleId}: could not capture page snapshot: ${e.message}`);
+  }
 
   // Unpack project.json.
   //

@@ -1,0 +1,34 @@
+{
+  "sample_id": "sample686",
+  "language": "zh",
+  "source": {
+    "file": "source.jpg",
+    "lang": "zh",
+    "provenance": "hentoid",
+    "source_path": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/nagasode - Ima kara Anata wa Onanie Ningyou desu - [435450]/14.jpg",
+    "sha256": "af009eca05af62fc69158dd4d5a166d30051ea972815b5465a878484c1a49bab",
+    "width": 1280,
+    "height": 1807,
+    "format": "JPEG"
+  },
+  "references": [
+    {
+      "file": "ref-torii.png",
+      "lang": "en",
+      "provenance": "torii"
+    }
+  ],
+  "output": {
+    "frontend_export": "export.png",
+    "worker_render": "render.png",
+    "project": "project"
+  },
+  "origin": {
+    "collection": "hentoid",
+    "reserve_tag": "zh-res-6",
+    "origin_id": "/435450/14.jpg",
+    "previous_path": "gaps/pending/zh/sample686"
+  },
+  "notes": "A09 reserve candidate. full-color page with graphical UI labels and stylized SFX",
+  "language_verification": "provisional-visual"
+}
