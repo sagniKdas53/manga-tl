@@ -43,3 +43,9 @@ backend/*
 # install has to land here rather than in frontend/. Committed so the corpus run is reproducible;
 # the tree it installs is not.
 node_modules/
+
+# G0 closure retains machine-readable manifests and decisions; browser exports, source-derived
+# project archives, snapshots, and the superseded draft remain local evidence only.
+/docs/quality-runs/g0-20260913-closure/canary-sample7/a04-exports/
+/docs/quality-runs/g0-20260913-closure/continuation/a04-exports/
+/docs/quality-runs/g0-20260913-closure/A09-evaluation-correction-v2.draft.json

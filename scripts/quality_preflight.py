@@ -80,12 +80,20 @@ def check_services() -> dict:
     redis_get = compose("exec", "-T", "redis", "valkey-cli", "GET", token)
     result["services"]["redis"] = {"connected": redis.stdout.strip() == "OK" and redis_get.stdout.strip() == "ok"}
     curl = shutil.which("curl")
-    storage = {"connected": False, "note": "curl unavailable"}
+    storage = {"connected": False, "round_trip": False}
     if curl:
         health = subprocess.run([curl, "-fsS", f"http://127.0.0.1:{PORTS['minio']}/minio/health/live"], text=True, capture_output=True, check=False)
-        storage = {"connected": health.returncode == 0, "health_endpoint": "/minio/health/live"}
-        if health.returncode:
-            storage["error"] = health.stderr.strip()
+        storage["health_endpoint"] = "/minio/health/live"
+        storage["health"] = health.returncode == 0
+    token_key = f"preflight/{token}"
+    setup = compose("exec", "-T", "minio", "mc", "alias", "set", "quality", "http://localhost:9000", "quality_test", "quality_test_password", check=False)
+    create = compose("exec", "-T", "minio", "mc", "mb", "--ignore-existing", "quality/preflight", check=False)
+    put = compose("exec", "-T", "minio", "sh", "-c", f"printf %s {token!r} | mc pipe quality/preflight/{token_key}", check=False)
+    get = compose("exec", "-T", "minio", "mc", "cat", f"quality/preflight/{token_key}", check=False)
+    storage["round_trip"] = setup.returncode == create.returncode == put.returncode == get.returncode == 0 and get.stdout == token
+    storage["connected"] = bool(storage.get("health")) and storage["round_trip"]
+    if not storage["connected"]:
+        storage["note"] = "MinIO health or isolated object round trip failed"
     result["services"]["storage"] = storage
     return result
 
