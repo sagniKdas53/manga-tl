@@ -1,0 +1,2 @@
+# Regenerable review sheets: scripts/generate_a06c_review_sheets.py --labels ../A09-holdout-labels.draft.json
+*.png
