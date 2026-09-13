@@ -12,36 +12,36 @@ services:
     volumes:
       - dev-postgres:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    secrets: [db_password]
+    secrets: [ db_password ]
     healthcheck:
-      test: [CMD-SHELL, "pg_isready -U tladmin -d manga_library"]
+      test: [ CMD-SHELL, "pg_isready -U tladmin -d manga_library" ]
       interval: 5s
       timeout: 3s
       retries: 20
 
   redis:
     image: valkey/valkey:8-alpine
-    command: [valkey-server, --appendonly, "yes"]
-    volumes: ["dev-redis:/data"]
+    command: [ valkey-server, --appendonly, "yes" ]
+    volumes: [ "dev-redis:/data" ]
     healthcheck:
-      test: [CMD, valkey-cli, ping]
+      test: [ CMD, valkey-cli, ping ]
       interval: 5s
       timeout: 3s
       retries: 20
 
   minio:
-    image: minio/minio
+    image: purevert/minio:backup
     command: server /data --console-address :9001
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_password
-    secrets: [minio_password]
-    volumes: ["dev-minio:/data"]
+    secrets: [ minio_password ]
+    volumes: [ "dev-minio:/data" ]
     ports:
       - "127.0.0.1:${DEV_MINIO_PORT:-19000}:9000"
       - "127.0.0.1:${DEV_MINIO_CONSOLE_PORT:-19001}:9001"
     healthcheck:
-      test: [CMD, curl, -f, http://localhost:9000/minio/health/live]
+      test: [ CMD, curl, -f, http://localhost:9000/minio/health/live ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -52,7 +52,7 @@ services:
       dockerfile: backend-rust/Dockerfile
       args:
         VITE_BASE_PATH: ${CONTEXT_PATH:-/tlhub}
-    env_file: [./secrets/runtime/models.env]
+    env_file: [ ./secrets/runtime/models.env ]
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/manga_library
       SPRING_DATASOURCE_USERNAME: tladmin
@@ -69,21 +69,21 @@ services:
       WORKER_POLL_MS: ${WORKER_POLL_MS:-2000}
       CONTEXT_PATH: ${CONTEXT_PATH:-/tlhub}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    secrets: [db_password, minio_password, jwt_secret, internal_api_token, worker_api_secret]
-    ports: ["127.0.0.1:${DEV_HTTP_PORT:-18080}:8080"]
+    secrets: [ db_password, minio_password, jwt_secret, internal_api_token, worker_api_secret ]
+    ports: [ "127.0.0.1:${DEV_HTTP_PORT:-18080}:8080" ]
     depends_on:
-      db: {condition: service_healthy}
-      redis: {condition: service_healthy}
-      minio: {condition: service_healthy}
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
     healthcheck:
-      test: [CMD, /usr/local/bin/healthcheck]
+      test: [ CMD, /usr/local/bin/healthcheck ]
       interval: 10s
       timeout: 5s
       retries: 20
 
   worker:
     build: ./worker
-    env_file: [./secrets/runtime/models.env]
+    env_file: [ ./secrets/runtime/models.env ]
     environment:
       REDIS_HOST: redis
       MINIO_ENDPOINT: minio:9000
@@ -117,20 +117,20 @@ services:
       LOG_PAYLOAD_MAX_CHARS: ${LOG_PAYLOAD_MAX_CHARS:-2000}
       RENDER_CACHE_DIR: /app/rendered_cache
       OCR_CAPTURE_DIR: ${OCR_CAPTURE_DIR:-}
-    secrets: [minio_password, internal_api_token, worker_api_secret, api_keys]
+    secrets: [ minio_password, internal_api_token, worker_api_secret, api_keys ]
     volumes:
       - ./config/providers.json:/app/config/providers.json:ro
       - type: bind
         source: ./data/bootstrap/yolo11n_bubble.onnx
         target: /opt/models/yolo11n_bubble.onnx
         read_only: true
-        bind: {create_host_path: false}
+        bind: { create_host_path: false }
       # Named volumes inherit the image's UID 10001 cache ownership on first use.
       - dev-huggingface:/home/worker/.cache/huggingface
       - dev-paddlex:/home/worker/.paddlex
       - dev-rendered:/app/rendered_cache
     depends_on:
-      backend: {condition: service_healthy}
+      backend: { condition: service_healthy }
     deploy:
       resources:
         limits:
@@ -146,9 +146,9 @@ volumes:
   dev-rendered:
 
 secrets:
-  db_password: {file: ./secrets/runtime/db_password.txt}
-  minio_password: {file: ./secrets/runtime/minio_password.txt}
-  jwt_secret: {file: ./secrets/runtime/jwt_secret.txt}
-  internal_api_token: {file: ./secrets/runtime/internal_api_token.txt}
-  worker_api_secret: {file: ./secrets/runtime/worker_api_secret.txt}
-  api_keys: {file: ./secrets/runtime/api_keys.json}
+  db_password: { file: ./secrets/runtime/db_password.txt }
+  minio_password: { file: ./secrets/runtime/minio_password.txt }
+  jwt_secret: { file: ./secrets/runtime/jwt_secret.txt }
+  internal_api_token: { file: ./secrets/runtime/internal_api_token.txt }
+  worker_api_secret: { file: ./secrets/runtime/worker_api_secret.txt }
+  api_keys: { file: ./secrets/runtime/api_keys.json }
