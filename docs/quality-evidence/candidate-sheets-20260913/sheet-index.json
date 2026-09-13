@@ -1,0 +1,660 @@
+{
+  "format": "a09-candidate-sheets/v1",
+  "date": "2026-09-13",
+  "sheets": [
+    {
+      "sheet": "primary-ja-01.jpg",
+      "role": "primary-candidate",
+      "language": "ja",
+      "tiles": [
+        {
+          "tag": "ja-1  sample27",
+          "id": "sample27",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample27/source.jpeg",
+          "caption": "conventional B&W dialogue manga"
+        },
+        {
+          "tag": "ja-2  sample38",
+          "id": "sample38",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample38/source.jpg",
+          "caption": "conventional B&W panel dialogue"
+        },
+        {
+          "tag": "ja-3  sample41",
+          "id": "sample41",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample41/source.png",
+          "caption": "colored two-panel dialogue"
+        },
+        {
+          "tag": "ja-4  sample49",
+          "id": "sample49",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample49/source.jpeg",
+          "caption": "colored vertical four-panel strip"
+        }
+      ]
+    },
+    {
+      "sheet": "primary-ja-02.jpg",
+      "role": "primary-candidate",
+      "language": "ja",
+      "tiles": [
+        {
+          "tag": "ja-5  sample57",
+          "id": "sample57",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample57/source.jpg",
+          "caption": "colored four-panel dialogue with SFX"
+        },
+        {
+          "tag": "ja-6  sample128",
+          "id": "sample128",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample128/source.jpg",
+          "caption": "B&W festival dialogue page"
+        },
+        {
+          "tag": "ja-7  sample131",
+          "id": "sample131",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample131/source.jpg",
+          "caption": "B&W dialogue composition"
+        },
+        {
+          "tag": "ja-8  sample141",
+          "id": "sample141",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ja/sample141/source.jpg",
+          "caption": "B&W serialized manga dialogue"
+        }
+      ]
+    },
+    {
+      "sheet": "primary-ja-03.jpg",
+      "role": "primary-candidate",
+      "language": "ja",
+      "tiles": [
+        {
+          "tag": "ja-9  ja-x8",
+          "id": "ja-x8",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2083162208490705260.jpg",
+          "caption": "colored six-panel Japanese page, varied fonts, side text and high dialogue density"
+        },
+        {
+          "tag": "ja-10  ja-res-1",
+          "id": "ja-res-1",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/hitomi/sirotategosha - ピノコニー乱〇パーティー - [4016110]/4.webp",
+          "caption": "multi-panel with dense balloons plus UI/video overlay text"
+        }
+      ]
+    },
+    {
+      "sheet": "primary-ko-01.jpg",
+      "role": "primary-candidate",
+      "language": "ko",
+      "tiles": [
+        {
+          "tag": "ko-1  sample179",
+          "id": "sample179",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ko/sample179/source.jpg",
+          "caption": "colored single-scene balloon dialogue"
+        },
+        {
+          "tag": "ko-2  sample196",
+          "id": "sample196",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ko/sample196/source.jpg",
+          "caption": "four-panel comedy strip"
+        },
+        {
+          "tag": "ko-3  sample225",
+          "id": "sample225",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/ko/sample225/source.png",
+          "caption": "conventional multi-panel dialogue"
+        },
+        {
+          "tag": "ko-4  sample273",
+          "id": "sample273",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample273/source.jpg",
+          "caption": "single-scene dialogue"
+        }
+      ]
+    },
+    {
+      "sheet": "primary-ko-02.jpg",
+      "role": "primary-candidate",
+      "language": "ko",
+      "tiles": [
+        {
+          "tag": "ko-5  sample321",
+          "id": "sample321",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample321/source.jpg",
+          "caption": "B&W multi-panel dialogue"
+        },
+        {
+          "tag": "ko-6  sample349",
+          "id": "sample349",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample349/source.jpg",
+          "caption": "B&W multi-panel dialogue"
+        },
+        {
+          "tag": "ko-7  sample372",
+          "id": "sample372",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/ko/sample372/source.jpg",
+          "caption": "B&W multi-panel dialogue"
+        },
+        {
+          "tag": "ko-8  ko-x4",
+          "id": "ko-x4",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2075067420608229847.jpg",
+          "caption": "Korean four-panel strip with clustered bubbles and small out-of-bubble side notes"
+        }
+      ]
+    },
+    {
+      "sheet": "primary-ko-03.jpg",
+      "role": "primary-candidate",
+      "language": "ko",
+      "tiles": [
+        {
+          "tag": "ko-9  ko-x14",
+          "id": "ko-x14",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2089990197186601432.jpg",
+          "caption": "Korean three-panel color page with integrated drawn SFX and minor English signage"
+        },
+        {
+          "tag": "ko-10  ko-x15",
+          "id": "ko-x15",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2090650097226756496.jpg",
+          "caption": "clean Korean four-panel strip with stacked bubbles and tight typesetting"
+        }
+      ]
+    },
+    {
+      "sheet": "primary-zh-01.jpg",
+      "role": "primary-candidate",
+      "language": "zh",
+      "tiles": [
+        {
+          "tag": "zh-1  sample201",
+          "id": "sample201",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/zh/sample201/source.jpg",
+          "caption": "colored three-panel Chinese dialogue comic"
+        },
+        {
+          "tag": "zh-2  sample205",
+          "id": "sample205",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/zh/sample205/source.jpg",
+          "caption": "single-panel painterly Chinese dialogue illustration"
+        },
+        {
+          "tag": "zh-3  sample229",
+          "id": "sample229",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/samples/zh/sample229/source.jpg",
+          "caption": "neon illustrated Chinese narrative with vertical caption boxes"
+        },
+        {
+          "tag": "zh-4  sample527",
+          "id": "sample527",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample527/source.jpg",
+          "caption": "high-saturation chibi Chinese multi-panel strip"
+        }
+      ]
+    },
+    {
+      "sheet": "primary-zh-02.jpg",
+      "role": "primary-candidate",
+      "language": "zh",
+      "tiles": [
+        {
+          "tag": "zh-5  sample639",
+          "id": "sample639",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample639/source.jpg",
+          "caption": "colored five-panel game fan-comic with conventional dialogue balloons"
+        },
+        {
+          "tag": "zh-6  sample641",
+          "id": "sample641",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample641/source.webp",
+          "caption": "black-and-white four-panel domestic dialogue comic"
+        },
+        {
+          "tag": "zh-7  sample642",
+          "id": "sample642",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample642/source.webp",
+          "caption": "black-and-white six-panel school sports dialogue page"
+        },
+        {
+          "tag": "zh-8  sample644",
+          "id": "sample644",
+          "source": "/home/sagnik/Projects/docker-composes/manga-library/corpus/gaps/pending/zh/sample644/source.webp",
+          "caption": "four-panel game fan-comic with conventional dialogue balloons"
+        }
+      ]
+    },
+    {
+      "sheet": "primary-zh-03.jpg",
+      "role": "primary-candidate",
+      "language": "zh",
+      "tiles": [
+        {
+          "tag": "zh-9  zh-x4",
+          "id": "zh-x4",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2091520208779567336.jpg",
+          "caption": "monochrome screentone Chinese page with tightly packed bubbles and tails"
+        },
+        {
+          "tag": "zh-10  zh-x7",
+          "id": "zh-x7",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2098784580417560959.jpg",
+          "caption": "dynamic Chinese webtoon with jagged action balloons and rotated SFX"
+        }
+      ]
+    },
+    {
+      "sheet": "reserve-ja-hentoid-01.jpg",
+      "role": "reserve-candidate",
+      "language": "ja",
+      "collection": "hentoid",
+      "tiles": [
+        {
+          "tag": "ja-res-1  ja-2",
+          "id": "/4016110.html",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/hitomi/sirotategosha - ピノコニー乱〇パーティー - [4016110]/4.webp",
+          "caption": "multi-panel with dense balloons plus UI/video overlay text"
+        },
+        {
+          "tag": "ja-res-2  ja-10",
+          "id": "/321422/",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai2/yaneko uta - Arisu to Ofuro - [321422]/16.jpg",
+          "caption": "varied balloon types: burst, narration box, standard oval"
+        },
+        {
+          "tag": "ja-res-3  ja-13",
+          "id": "/639304/",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/niea - Clean Me Softly - [639304]/26.webp",
+          "caption": "clean vertical three-panel strip, basic reading order"
+        },
+        {
+          "tag": "ja-res-4  ja-22",
+          "id": "/556423/",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/echihiro - Ecchi na Onsen Report no Oshigoto - [556423]/3.webp",
+          "caption": "round balloons, whisper asides and rectangular narration boxes"
+        }
+      ]
+    },
+    {
+      "sheet": "reserve-ja-hentoid-02.jpg",
+      "role": "reserve-candidate",
+      "language": "ja",
+      "collection": "hentoid",
+      "tiles": [
+        {
+          "tag": "ja-res-5  ja-28",
+          "id": "/344406/",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/nagasode - Futari wa Choukyou Game no Ejiki ni Narimashita. - [344406]/18.jpg",
+          "caption": "full-color page with non-standard pink balloons and caption boxes"
+        },
+        {
+          "tag": "ja-res-6  ja-29",
+          "id": "/662774/",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/takara akihito - Ienaka Razoku - [662774]/17.webp",
+          "caption": "dense bubble clusters, irregular contours, overlapping SFX"
+        },
+        {
+          "tag": "ja-res-7  ja-32",
+          "id": "/545982/",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/z-ton - Joutei Koubi - [545982]/14.webp",
+          "caption": "standard, thought and scream shapes plus narration box"
+        },
+        {
+          "tag": "ja-res-8  ja-40",
+          "id": "/673681/",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/maeshima ryou - Neko Cos wa Kanzen Fukujuu no Akashi - [673681]/31.webp",
+          "caption": "cluttered noisy screentone layout, overlapping dialogue"
+        }
+      ]
+    },
+    {
+      "sheet": "reserve-ja-hentoid-03.jpg",
+      "role": "reserve-candidate",
+      "language": "ja",
+      "collection": "hentoid",
+      "tiles": [
+        {
+          "tag": "ja-res-9  ja-43",
+          "id": "/495298/",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/guglielmo - Seikyouiku Tokubetsu Jisshuu - [495298]/22.jpg",
+          "caption": "formal classroom dialogue, sharp panel borders"
+        },
+        {
+          "tag": "ja-res-10  ja-52",
+          "id": "/648258/",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/yamada rimuru - Toki o Wataru Doukeshi Astrea Omake - [648258]/10.webp",
+          "caption": "high-density small-to-medium balloons with side text"
+        },
+        {
+          "tag": "ja-res-11  ja-57",
+          "id": "/644783/",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai2/kinohara hikaru - いろ○ちゃんの挑戦（仮） pixiv ver - [644783]/07.webp",
+          "caption": "compressed layout, handwritten side notes, mixed font sizes"
+        },
+        {
+          "tag": "ja-res-12  ja-60",
+          "id": "/567060/",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/remora - 旅館でイチャイチャ3 - [567060]/5.webp",
+          "caption": "vertical balloons over patterned busy background"
+        }
+      ]
+    },
+    {
+      "sheet": "reserve-ko-xscrape-01.jpg",
+      "role": "reserve-candidate",
+      "language": "ko",
+      "collection": "x-scrape-2026-09-13",
+      "tiles": [
+        {
+          "tag": "ko-res-x1  ko-x3",
+          "id": "https://x.com/RagingAsn_/status/2074342646731219036",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2074342646731219036.jpg",
+          "caption": "four-panel strip with high-contrast scream balloon"
+        },
+        {
+          "tag": "ko-res-x2  ko-x5",
+          "id": "https://x.com/RagingAsn_/status/2077243532373590463",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2077243532373590463.jpg",
+          "caption": "four-panel strip with tiny out-of-bubble side notes"
+        },
+        {
+          "tag": "ko-res-x3  ko-x6",
+          "id": "https://x.com/RagingAsn_/status/2078117526488428739",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2078117526488428739.jpg",
+          "caption": "four-panel strip from a different series (Uma Musume)"
+        },
+        {
+          "tag": "ko-res-x4  ko-x9",
+          "id": "https://x.com/RagingAsn_/status/2081952792621584557",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2081952792621584557.jpg",
+          "caption": "four-panel strip with non-standard glow effect over text"
+        }
+      ]
+    },
+    {
+      "sheet": "reserve-ko-xscrape-02.jpg",
+      "role": "reserve-candidate",
+      "language": "ko",
+      "collection": "x-scrape-2026-09-13",
+      "tiles": [
+        {
+          "tag": "ko-res-x5  ko-x10",
+          "id": "https://x.com/RagingAsn_/status/2084127116442906719",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2084127116442906719.jpg",
+          "caption": "mixed Korean and Latin QWERTY strings inside balloons"
+        },
+        {
+          "tag": "ko-res-x6  ko-x11",
+          "id": "https://x.com/RagingAsn_/status/2086014562009264359",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2086014562009264359.jpg",
+          "caption": "single splash illustration with floating borderless overlay text"
+        },
+        {
+          "tag": "ko-res-x7  ko-x13",
+          "id": "https://x.com/RagingAsn_/status/2087388609158488478",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2087388609158488478.jpg",
+          "caption": "sparse four-panel strip using rectangular caption boxes"
+        },
+        {
+          "tag": "ko-res-x8  ko-x16",
+          "id": "https://x.com/RagingAsn_/status/2091012488339038385",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2091012488339038385.jpg",
+          "caption": "clean four-panel sibling template to the promoted ko-x15"
+        }
+      ]
+    },
+    {
+      "sheet": "reserve-pixiv-01.jpg",
+      "role": "reserve-candidate",
+      "language": "mixed",
+      "collection": "pixiv",
+      "tiles": [
+        {
+          "tag": "px-res-1  px-3",
+          "id": "132464686",
+          "source": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_132464686_20260802_132729.jpg",
+          "caption": "traditional B&W multi-panel, dense vertical balloon text"
+        },
+        {
+          "tag": "px-res-2  px-4",
+          "id": "141708984",
+          "source": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_141708984_20260705_003553.jpg",
+          "caption": "clean oval balloons, multiple speakers, background board text"
+        },
+        {
+          "tag": "px-res-3  px-7",
+          "id": "143064070",
+          "source": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_143064070_20260818_190952.jpg",
+          "caption": "black-bordered balloons and embedded SFX across panel sizes"
+        },
+        {
+          "tag": "px-res-4  px-9",
+          "id": "148120819",
+          "source": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_148120819_20260830_174431.jpg",
+          "caption": "livestream layout: balloons plus chat overlay and UI"
+        }
+      ]
+    },
+    {
+      "sheet": "reserve-pixiv-02.jpg",
+      "role": "reserve-candidate",
+      "language": "mixed",
+      "collection": "pixiv",
+      "tiles": [
+        {
+          "tag": "px-res-5  px-15",
+          "id": "134172518",
+          "source": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_134172518_20260804_181256.png",
+          "caption": "multi-panel page, multiple speakers, varied text density"
+        },
+        {
+          "tag": "px-res-6  px-23",
+          "id": "102738340_6461216__0-12_",
+          "source": "/home/sagnik/Downloads/pixiv_downloads/102738340_6461216__0-12_/102738340-6.jpg",
+          "caption": "many distinct balloons, multi-speaker varied lengths"
+        },
+        {
+          "tag": "px-res-7  px-28",
+          "id": "148310832",
+          "source": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_148310832_20260816_174534.jpg",
+          "caption": "Chinese-text full-color multi-panel layout"
+        },
+        {
+          "tag": "px-res-8  px-29",
+          "id": "132022758",
+          "source": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_132022758_20260701_022946.jpg",
+          "caption": "B&W multi-panel with vertical balloons and diverse panel sizes"
+        }
+      ]
+    },
+    {
+      "sheet": "reserve-pixiv-03.jpg",
+      "role": "reserve-candidate",
+      "language": "mixed",
+      "collection": "pixiv",
+      "tiles": [
+        {
+          "tag": "px-res-9  px-35",
+          "id": "148029587",
+          "source": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_148029587_20260821_200147.jpg",
+          "caption": "high dialogue density across vertical bubbles and cuts"
+        },
+        {
+          "tag": "px-res-10  px-45",
+          "id": "147516820",
+          "source": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_147516820_20260809_093802.jpg",
+          "caption": "traditional B&W page, dense varied balloon dialogue"
+        },
+        {
+          "tag": "px-res-11  px-58",
+          "id": "148834914",
+          "source": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_148834914_20260829_120641.png",
+          "caption": "heavy dialogue, narrative captions and dense SFX integration"
+        },
+        {
+          "tag": "px-res-12  px-72",
+          "id": "138812456",
+          "source": "/home/sagnik/Documents/syncthing/phone/Pixiv/Tab/illust_138812456_20260909_220145.jpg",
+          "caption": "color multi-panel, overlapping tails and many speakers"
+        }
+      ]
+    },
+    {
+      "sheet": "reserve-zh-hentoid-01.jpg",
+      "role": "reserve-candidate",
+      "language": "zh",
+      "collection": "hentoid",
+      "tiles": [
+        {
+          "tag": "zh-res-1  kotorakku - Bijutsubu no Kyonyuu K",
+          "id": "/547200/28.webp",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/kotorakku - Bijutsubu no Kyonyuu Kouhai ga Nude Model ni Natta Kekka Amari ni Ero Sugite Or[547200]/28.webp",
+          "caption": "B&W conventional multi-panel baseline with dense vertical dialogue and clean gutters"
+        },
+        {
+          "tag": "zh-res-2  marugoshi - Hataya Misuzu no P Iku",
+          "id": "/619253/09.webp",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/marugoshi - Hataya Misuzu no P Ikusei Nisshi  秦谷美铃的制作人育成日志 - [619253]/09.webp",
+          "caption": "high-density vertical bubbles, nested text and overlapping SFX"
+        },
+        {
+          "tag": "zh-res-3  kawamura tsukasa - Higuchi Madoka ",
+          "id": "/450892/08.jpg",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai2/kawamura tsukasa - Higuchi Madoka Nurse Cosplay Manga - [450892]/08.jpg",
+          "caption": "conventional four-panel page with varied balloon placement and stroke weights"
+        },
+        {
+          "tag": "zh-res-4  vel - Hu Tao Possession - [663934]",
+          "id": "/663934/07.webp",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/vel - Hu Tao Possession - [663934]/07.webp",
+          "caption": "flat-color contrast with large horizontal dialogue bubbles"
+        }
+      ]
+    },
+    {
+      "sheet": "reserve-zh-hentoid-02.jpg",
+      "role": "reserve-candidate",
+      "language": "zh",
+      "collection": "hentoid",
+      "tiles": [
+        {
+          "tag": "zh-res-5  kumada - Ijime Ijirare - [236186]",
+          "id": "/236186/09.jpg",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/kumada - Ijime Ijirare - [236186]/09.jpg",
+          "caption": "dense five-panel page with thin balloons, narration boxes and screentones"
+        },
+        {
+          "tag": "zh-res-6  nagasode - Ima kara Anata wa Onani",
+          "id": "/435450/14.jpg",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/nagasode - Ima kara Anata wa Onanie Ningyou desu - [435450]/14.jpg",
+          "caption": "full-color page with graphical UI labels and stylized SFX"
+        },
+        {
+          "tag": "zh-res-7  jukkaku komado - Konna Kibun mo Na",
+          "id": "/672710/36.webp",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai4/jukkaku komado - Konna Kibun mo Natsu da yo ne - [672710]/36.webp",
+          "caption": "narrative panels combined with interface diagrams, prompts and arrows"
+        },
+        {
+          "tag": "zh-res-8  hikarino - Otatomo ga Razoku Datte",
+          "id": "/655300/23.webp",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/hikarino - Otatomo ga Razoku Datte Kedo Osouwanai Yakusoku de Tomatta Kekka  宅友是裸族但約好不襲擊她了結[655300]/23.webp",
+          "caption": "traditional B&W grid with dense vertical dialogue bubbles"
+        }
+      ]
+    },
+    {
+      "sheet": "reserve-zh-hentoid-03.jpg",
+      "role": "reserve-candidate",
+      "language": "zh",
+      "collection": "hentoid",
+      "tiles": [
+        {
+          "tag": "zh-res-9  fetio - Seitei Gakuen Soccer-bu no",
+          "id": "/581020/072.webp",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/fetio - Seitei Gakuen Soccer-bu no Nichijou Kouhen - [581020]/072.webp",
+          "caption": "high-contrast multi-panel page with clean vertical East-Asian dialogue"
+        },
+        {
+          "tag": "zh-res-10  kok - Takagi-san SwingingNTS Play ",
+          "id": "/553357/12.webp",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/kok - Takagi-san SwingingNTS Play (Karakai Jouzu no - [553357]/12.webp",
+          "caption": "non-standard composition with dense scattered captions and annotations"
+        },
+        {
+          "tag": "zh-res-11  saki rinku - キャラクタープロフィール - [67268",
+          "id": "/672682/4.webp",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/saki rinku - キャラクタープロフィール - [672682]/4.webp",
+          "caption": "structured profile/interview text with small panel inserts and fine print"
+        },
+        {
+          "tag": "zh-res-12  imo ichirou - 占いギャルと - [671880]",
+          "id": "/671880/26.webp",
+          "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/nhentai3/imo ichirou - 占いギャルと - [671880]/26.webp",
+          "caption": "full-color multi-panel narrative with inset boxes and many dialogue bubbles"
+        }
+      ]
+    },
+    {
+      "sheet": "reserve-zh-xscrape-01.jpg",
+      "role": "reserve-candidate",
+      "language": "zh",
+      "collection": "x-scrape-2026-09-13",
+      "tiles": [
+        {
+          "tag": "zh-res-x1  zh-x1",
+          "id": "https://x.com/Windwin69369561/status/2083193923460296829",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2083193923460296829.jpg",
+          "caption": "four-panel color page with nested bubbles, expressive fonts and SFX"
+        },
+        {
+          "tag": "zh-res-x2  zh-x2",
+          "id": "https://x.com/Windwin69369561/status/2085312942933950826",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2085312942933950826.jpg",
+          "caption": "three-panel color page with heart glyphs and stylized pink text"
+        },
+        {
+          "tag": "zh-res-x3  zh-x3",
+          "id": "https://x.com/Windwin69369561/status/2091137515675627945",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2091137515675627945.jpg",
+          "caption": "three-panel color page, vertical balloons over varied backgrounds"
+        },
+        {
+          "tag": "zh-res-x4  zh-x8",
+          "id": "https://x.com/Windwin69369561/status/2098083130683080992",
+          "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2098083130683080992.jpg",
+          "caption": "oversized decorative header type, colored callouts and phone-screen text"
+        }
+      ]
+    }
+  ],
+  "scope": {
+    "purpose": "Visual review sheets for the ten-page-per-language A09 candidate rosters, plus reserve options from the local Hentoid, Pixiv and 2026-09-13 X-scrape collections.",
+    "primary_sources": "Corpus candidates plus promoted X-scrape and Hentoid pages; see A09-candidate-roster-20260913.json.",
+    "reserve_sources": "Read-only local collections: Hentoid, /home/sagnik/Downloads/pixiv_downloads, syncthing Pixiv, and /home/sagnik/Downloads/x_scrape_2026-09-13.",
+    "status": "Review aid only. No page is promoted, hash-pinned, labelled, or processed by this artifact."
+  },
+  "reserve_screening": {
+    "ja_hentoid_pool": 264,
+    "ja_screened": 60,
+    "ja_shortlisted": 12,
+    "zh_hentoid_shortlisted": 12,
+    "pixiv_multi_page_works": 2163,
+    "pixiv_screened": 72,
+    "pixiv_shortlisted": 12,
+    "xscrape_sources_mapped": 33,
+    "xscrape_by_language": {
+      "ko": 16,
+      "ja": 9,
+      "zh": 8
+    }
+  },
+  "known_gaps": [
+    "Korean coverage now exists but comes entirely from one translator account (RagingAsn_), and most pages share a vertical four-panel template; no more than two promoted pages share that template.",
+    "Only ja-x8 in the X-scrape archive is a Japanese-source page; ja-x1 through ja-x7 are already English-typeset translation outputs and are reference material, not sources.",
+    "Chinese X-scrape pages all come from the Windwin69369561 repost account; creator attribution for the underlying art is unresolved.",
+    "Screening used one page per work or tweet; a rejected tile does not rule out other pages in the same work."
+  ]
+}

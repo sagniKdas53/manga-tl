@@ -1,0 +1,313 @@
+{
+  "format": "a09-candidate-roster/v2",
+  "status": "candidate-review",
+  "date": "2026-09-13",
+  "purpose": "Ten visually reviewed candidate pages per language for A09 confirmation. Not a frozen holdout manifest.",
+  "selection_policy": "Quality-first selection across layouts, dialogue densities, palettes, text treatments and art styles. Direct duplicates and development relatives stay excluded. Provenance is recorded when available but does not gate eligibility.",
+  "rejected": [
+    {
+      "id": "sample253",
+      "language": "ko",
+      "previous_tag": "ko-4",
+      "reason": "Coordinator review: low-resolution 625x587 page, trivial two-panel layout, and source text already overflowing its dialogue box."
+    }
+  ],
+  "languages": {
+    "ja": [
+      {
+        "label": "sample27",
+        "origin": "corpus",
+        "source": "corpus/samples/ja/sample27/source.jpeg",
+        "caption": "conventional B&W dialogue manga",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample38",
+        "origin": "corpus",
+        "source": "corpus/samples/ja/sample38/source.jpg",
+        "caption": "conventional B&W panel dialogue",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample41",
+        "origin": "corpus",
+        "source": "corpus/samples/ja/sample41/source.png",
+        "caption": "colored two-panel dialogue",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample49",
+        "origin": "corpus",
+        "source": "corpus/samples/ja/sample49/source.jpeg",
+        "caption": "colored vertical four-panel strip",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample57",
+        "origin": "corpus",
+        "source": "corpus/samples/ja/sample57/source.jpg",
+        "caption": "colored four-panel dialogue with SFX",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample128",
+        "origin": "corpus",
+        "source": "corpus/samples/ja/sample128/source.jpg",
+        "caption": "B&W festival dialogue page",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample131",
+        "origin": "corpus",
+        "source": "corpus/samples/ja/sample131/source.jpg",
+        "caption": "B&W dialogue composition",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample141",
+        "origin": "corpus",
+        "source": "corpus/samples/ja/sample141/source.jpg",
+        "caption": "B&W serialized manga dialogue",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "ja-x8",
+        "origin": "x-scrape-2026-09-13",
+        "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2083162208490705260.jpg",
+        "caption": "colored six-panel Japanese page, varied fonts, side text and high dialogue density",
+        "provenance": {
+          "creator": "Windwin69369561",
+          "series": null,
+          "source_url": "https://x.com/Windwin69369561/status/2083162208490705260",
+          "pair_confidence": "medium"
+        },
+        "reference": "none in archive; Torii API reference required"
+      },
+      {
+        "label": "ja-res-1",
+        "origin": "hentoid",
+        "source": "/home/sagnik/Documents/syncthing/phone/Hentoid/hitomi/sirotategosha - ピノコニー乱〇パーティー - [4016110]/4.webp",
+        "caption": "multi-panel with dense balloons plus UI/video overlay text",
+        "provenance": {
+          "gallery": "/home/sagnik/Documents/syncthing/phone/Hentoid/hitomi/sirotategosha - ピノコニー乱〇パーティー - [4016110]",
+          "url": "/4016110.html"
+        },
+        "reference": "none; Torii API reference required"
+      }
+    ],
+    "ko": [
+      {
+        "label": "sample179",
+        "origin": "corpus",
+        "source": "corpus/samples/ko/sample179/source.jpg",
+        "caption": "colored single-scene balloon dialogue",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample196",
+        "origin": "corpus",
+        "source": "corpus/samples/ko/sample196/source.jpg",
+        "caption": "four-panel comedy strip",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample225",
+        "origin": "corpus",
+        "source": "corpus/samples/ko/sample225/source.png",
+        "caption": "conventional multi-panel dialogue",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample273",
+        "origin": "corpus",
+        "source": "corpus/gaps/pending/ko/sample273/source.jpg",
+        "caption": "single-scene dialogue",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample321",
+        "origin": "corpus",
+        "source": "corpus/gaps/pending/ko/sample321/source.jpg",
+        "caption": "B&W multi-panel dialogue",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample349",
+        "origin": "corpus",
+        "source": "corpus/gaps/pending/ko/sample349/source.jpg",
+        "caption": "B&W multi-panel dialogue",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample372",
+        "origin": "corpus",
+        "source": "corpus/gaps/pending/ko/sample372/source.jpg",
+        "caption": "B&W multi-panel dialogue",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "ko-x4",
+        "origin": "x-scrape-2026-09-13",
+        "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2075067420608229847.jpg",
+        "caption": "Korean four-panel strip with clustered bubbles and small out-of-bubble side notes",
+        "provenance": {
+          "creator": "RagingAsn_",
+          "series": "Blue Archive",
+          "source_url": "https://x.com/RagingAsn_/status/2075067420608229847",
+          "pair_confidence": "high"
+        },
+        "reference": "human English post in archive",
+        "reference_images": [
+          "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2075077941965336771.jpg"
+        ],
+        "reference_urls": [
+          "https://x.com/RagingAsn_/status/2075077941965336771"
+        ]
+      },
+      {
+        "label": "ko-x14",
+        "origin": "x-scrape-2026-09-13",
+        "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2089990197186601432.jpg",
+        "caption": "Korean three-panel color page with integrated drawn SFX and minor English signage",
+        "provenance": {
+          "creator": "RagingAsn_",
+          "series": "Blue Archive",
+          "source_url": "https://x.com/RagingAsn_/status/2089990197186601432",
+          "pair_confidence": "high"
+        },
+        "reference": "human English post in archive",
+        "reference_images": [
+          "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2089996301329220017.jpg"
+        ],
+        "reference_urls": [
+          "https://x.com/RagingAsn_/status/2089996301329220017"
+        ]
+      },
+      {
+        "label": "ko-x15",
+        "origin": "x-scrape-2026-09-13",
+        "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2090650097226756496.jpg",
+        "caption": "clean Korean four-panel strip with stacked bubbles and tight typesetting",
+        "provenance": {
+          "creator": "RagingAsn_",
+          "series": "Blue Archive",
+          "source_url": "https://x.com/RagingAsn_/status/2090650097226756496",
+          "pair_confidence": "high"
+        },
+        "reference": "human English post in archive",
+        "reference_images": [
+          "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2090659474381918576.jpg"
+        ],
+        "reference_urls": [
+          "https://x.com/RagingAsn_/status/2090659474381918576"
+        ]
+      }
+    ],
+    "zh": [
+      {
+        "label": "sample201",
+        "origin": "corpus",
+        "source": "corpus/samples/zh/sample201/source.jpg",
+        "caption": "colored three-panel Chinese dialogue comic",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample205",
+        "origin": "corpus",
+        "source": "corpus/samples/zh/sample205/source.jpg",
+        "caption": "single-panel painterly Chinese dialogue illustration",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample229",
+        "origin": "corpus",
+        "source": "corpus/samples/zh/sample229/source.jpg",
+        "caption": "neon illustrated Chinese narrative with vertical caption boxes",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample527",
+        "origin": "corpus",
+        "source": "corpus/gaps/pending/zh/sample527/source.jpg",
+        "caption": "high-saturation chibi Chinese multi-panel strip",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample639",
+        "origin": "corpus",
+        "source": "corpus/gaps/pending/zh/sample639/source.jpg",
+        "caption": "colored five-panel game fan-comic with conventional dialogue balloons",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample641",
+        "origin": "corpus",
+        "source": "corpus/gaps/pending/zh/sample641/source.webp",
+        "caption": "black-and-white four-panel domestic dialogue comic",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample642",
+        "origin": "corpus",
+        "source": "corpus/gaps/pending/zh/sample642/source.webp",
+        "caption": "black-and-white six-panel school sports dialogue page",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "sample644",
+        "origin": "corpus",
+        "source": "corpus/gaps/pending/zh/sample644/source.webp",
+        "caption": "four-panel game fan-comic with conventional dialogue balloons",
+        "reference": "corpus reference lane"
+      },
+      {
+        "label": "zh-x4",
+        "origin": "x-scrape-2026-09-13",
+        "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2091520208779567336.jpg",
+        "caption": "monochrome screentone Chinese page with tightly packed bubbles and tails",
+        "provenance": {
+          "creator": "Windwin69369561",
+          "series": null,
+          "source_url": "https://x.com/Windwin69369561/status/2091520208779567336",
+          "pair_confidence": "high"
+        },
+        "reference": "human English post in archive",
+        "reference_images": [
+          "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2091513431845478430.jpg"
+        ],
+        "reference_urls": [
+          "https://x.com/Windwin69369561/status/2091513431845478430"
+        ]
+      },
+      {
+        "label": "zh-x7",
+        "origin": "x-scrape-2026-09-13",
+        "source": "/home/sagnik/Downloads/x_scrape_2026-09-13/images/2098784580417560959.jpg",
+        "caption": "dynamic Chinese webtoon with jagged action balloons and rotated SFX",
+        "provenance": {
+          "creator": "Windwin69369561",
+          "series": "Genshin Impact",
+          "source_url": "https://x.com/Windwin69369561/status/2098784580417560959",
+          "pair_confidence": "high"
+        },
+        "reference": "none in archive; Torii API reference required",
+        "reference_images": [],
+        "reference_urls": [
+          "https://x.com/Windwin69369561/status/2098752933848580270",
+          "https://x.com/Windwin69369561/status/2098793204783218816"
+        ]
+      }
+    ]
+  },
+  "counts": {
+    "ja": 10,
+    "ko": 10,
+    "zh": 10
+  },
+  "remaining_quality_work": [
+    "Hash-pin and source-review every promoted external page before corpus intake.",
+    "Create holdout-specific ownership and action labels; development labels cannot be reused.",
+    "Freeze quality thresholds before evaluation; do not tune on holdout outputs or labels.",
+    "Obtain references for pages without a human translation, via the Torii API, and never treat an untranslated machine reference as a translation pass."
+  ]
+}
