@@ -1,0 +1,13 @@
+{
+  "schema_version": "g0-provider-usage/v1",
+  "source": "page-snapshot layers metadataJson tl/qa cost and qa retries_used",
+  "estimated_cost_usd": "0.1819514999999999996",
+  "prompt_tokens": 222219,
+  "completion_tokens": 90903,
+  "priced_calls": 75,
+  "unknown_calls": 1,
+  "qa_retries_used": 3,
+  "pages": 30,
+  "budget_cap_usd": 3,
+  "cap_within_estimated_cost": true
+}

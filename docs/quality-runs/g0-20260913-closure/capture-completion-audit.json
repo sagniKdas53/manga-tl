@@ -1,0 +1,352 @@
+{
+  "schema_version": "g0-capture-completion-audit/v1",
+  "run": "G0 evidence closure",
+  "pages": [
+    {
+      "id": "sample177",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample177"
+    },
+    {
+      "id": "sample222",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample222"
+    },
+    {
+      "id": "sample61",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample61"
+    },
+    {
+      "id": "sample99",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample99"
+    },
+    {
+      "id": "sample93",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample93"
+    },
+    {
+      "id": "sample83",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample83"
+    },
+    {
+      "id": "sample7",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/canary-sample7/a04-exports/sample7"
+    },
+    {
+      "id": "sample139",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample139"
+    },
+    {
+      "id": "sample39",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample39"
+    },
+    {
+      "id": "sample47",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample47"
+    },
+    {
+      "id": "sample123",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample123"
+    },
+    {
+      "id": "sample134",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample134"
+    },
+    {
+      "id": "sample150",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample150"
+    },
+    {
+      "id": "sample172",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample172"
+    },
+    {
+      "id": "sample192",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample192"
+    },
+    {
+      "id": "sample197",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample197"
+    },
+    {
+      "id": "sample199",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample199"
+    },
+    {
+      "id": "sample268",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample268"
+    },
+    {
+      "id": "sample289",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample289"
+    },
+    {
+      "id": "sample320",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample320"
+    },
+    {
+      "id": "sample360",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample360"
+    },
+    {
+      "id": "sample416",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample416"
+    },
+    {
+      "id": "sample206",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample206"
+    },
+    {
+      "id": "sample208",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample208"
+    },
+    {
+      "id": "sample226",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample226"
+    },
+    {
+      "id": "sample261",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample261"
+    },
+    {
+      "id": "sample457",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample457"
+    },
+    {
+      "id": "sample609",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample609"
+    },
+    {
+      "id": "sample611",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample611"
+    },
+    {
+      "id": "sample612",
+      "source_sha256_match": true,
+      "source_dimensions_match": true,
+      "export_dimensions_match": true,
+      "rendered_dimensions_match": true,
+      "artifact_hashes_match": true,
+      "project_zip_integrity": true,
+      "runtime_provenance_present": true,
+      "path": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample612"
+    }
+  ],
+  "totals": {
+    "expected": 30,
+    "verified_complete": 30,
+    "failed": 0
+  },
+  "spend": {
+    "estimated_cost_usd": "0.1819514999999999996",
+    "prompt_tokens": 222219,
+    "completion_tokens": 90903,
+    "priced_calls": 75,
+    "unknown_calls": 1,
+    "qa_retries_used": 3,
+    "pages": 30,
+    "budget_cap_usd": 3,
+    "cap_within_estimated_cost": true
+  }
+}

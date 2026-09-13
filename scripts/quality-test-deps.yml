@@ -32,7 +32,7 @@ services:
       retries: 30
 
   minio:
-    image: minio/minio
+    image: purevert/minio:backup
     command: server /data
     environment:
       MINIO_ROOT_USER: quality_test

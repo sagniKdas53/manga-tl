@@ -1,0 +1,61 @@
+{
+  "schema_version": "a09-evaluation-correction/v2",
+  "status": "approved-successor-protocol-for-future-J02",
+  "purpose": "Versioned successor protocol only; the frozen A09 inputs remain immutable and no A09 output has been scored.",
+  "immutable_predecessors": [
+    {
+      "path": "docs/quality-runs/a09-20260913-holdout/A09-holdout-manifest.json",
+      "sha256": "f6ca4f868ea55add25ff43f1f5a87e8434530f89be8edcd1456f91f969133d33"
+    },
+    {
+      "path": "docs/quality-runs/a09-20260913-holdout/A09-holdout-labels.reviewed.json",
+      "sha256": "43c32fea8789027710ff00c04dfbf7527b1fc1f0c3c5ea0ee2510c4fad705189"
+    },
+    {
+      "path": "docs/quality-runs/a09-20260913-holdout/A09-quality-thresholds.json",
+      "sha256": "08fb1233e2631309b8598db81bd397bdfb70483285c26a69e4d683f63ae55af5"
+    }
+  ],
+  "development_inputs": {
+    "closure_manifest": "G0-closure-manifest.json",
+    "reconciliation": "G0-reviewed-reconciliation.json",
+    "population_rule": "24 conventional controls derive any baseline bounds; six originals remain separate defect evidence.",
+    "baseline_status": "fresh 30-page capture complete and completion-audit validated; 267 source action associations explicitly unresolved for this baseline, and mandatory resolved source-pixel mapping is deferred to future J02 candidate evaluation",
+    "provider_usage_summary": "docs/quality-runs/g0-20260913-closure/provider-usage-summary.json",
+    "historical_current_delta": "docs/quality-runs/g0-20260913-closure/historical-current-delta.json"
+  },
+  "candidate_protocol": {
+    "scope": "Future J02 candidate outputs only; never recurse through historical A09 stage output and never include reserves by default.",
+    "command_template": "./.venv/bin/python scripts/score_page_quality.py --manifest <frozen-roster-manifest> --candidates <candidate-manifest> --reconciliation <reviewed-current-mapping> --thresholds docs/quality-runs/g0-20260913-closure/A09-quality-thresholds-v2.approved.json --out <measurement.json>",
+    "fail_closed": [
+      "exact selected IDs only",
+      "exact source SHA-256",
+      "matching app/worker/corpus revisions",
+      "snapshot source identity and dimensions",
+      "required editor/export/ZIP artifacts with matching hashes",
+      "duplicates, missing pages, stale candidates and extraneous reserves fail before measurement"
+    ]
+  },
+  "measurement_definitions": {
+    "safe_rect_metrics": "Geometry proxies only; name them safe-rectangle overflow and element-rectangle overlap. They do not measure glyph pixels, rotation, source container boundaries, cleanup or style.",
+    "ownership_policy": "Require explicit source-reviewed owner/action -> fresh candidate region association. Unresolved mapping is reported and cannot pass.",
+    "font": "Final fitted font size is unknown unless the capture surface exposes measured glyph fit; configured element size is retained separately and cannot satisfy a readability floor.",
+    "dimensions": "Source and exported PNG dimensions must match exactly before a candidate is measured.",
+    "reporting": "Report per page, JA/KO/ZH and reviewed style/layout slice; controls and originals remain separate."
+  },
+  "future_gate_methods": {
+    "G5 ownership": "Source-reviewed owner/container associations and explicit fresh mapping; unresolved many-to-one mappings block acceptance.",
+    "G6 cleanup": "Later reviewed glyph-mask and source-difference measurement with fixed support/boundary tolerance; unavailable in G0.",
+    "G7 glyph/layout": "Later browser/native-resolution glyph-bounds and visual review; rectangle proxies cannot satisfy it."
+  },
+  "approval": {
+    "status": "approved",
+    "approved_by": "project coordinator via user-directed G0 closure",
+    "approved_on": "2026-09-14",
+    "decision": "Approve the v2 successor protocol and its development-control baseline bounds. Explicitly unresolved development identities remain recorded; future J02 candidate evaluation fails unless every fresh association is resolved by source-pixel review."
+  },
+  "approved_thresholds": {
+    "path": "A09-quality-thresholds-v2.approved.json",
+    "sha256": "5039b506abf17ee7270c15fe1bac2bc572c7d8fd3ee1566b97ce3721676a2800"
+  }
+}

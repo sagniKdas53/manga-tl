@@ -1,0 +1,106 @@
+{
+  "schema_version": "a09-quality-thresholds/v2",
+  "status": "approved-for-future-J02-candidate-evaluation",
+  "approval": {
+    "approved_by": "project coordinator via user-directed G0 closure",
+    "approved_on": "2026-09-14",
+    "scope": "Candidate-only J02 evaluation after G1-G8. This approval does not score A09 and does not alter its frozen inputs."
+  },
+  "derivation": {
+    "development_measurement": "development-measurement.json",
+    "development_population": "24 conventional controls only",
+    "original_defect_population": "excluded from baseline bounds; reported separately",
+    "method": "Exact observed current-control baseline extrema/rates. These are baseline non-regression bounds, not final readability, cleanup, glyph, ownership, or style acceptance."
+  },
+  "hard_invariants": [
+    {
+      "id": "J02-H1",
+      "metric": "source_export_dimensions",
+      "rule": "== exact",
+      "rationale": "Candidate source and export PNG dimensions must match before measurement."
+    },
+    {
+      "id": "J02-H2",
+      "metric": "candidate_identity",
+      "rule": "== exact",
+      "rationale": "Roster ID, source SHA-256, revisions, snapshot and artifact hashes must match the selected candidate manifest."
+    },
+    {
+      "id": "J02-H3",
+      "metric": "reviewed_owner_action_mapping",
+      "rule": "== complete",
+      "rationale": "Every source-reviewed owner/action must have a fresh source-pixel-reviewed association. Explicitly unresolved associations fail candidate evaluation."
+    },
+    {
+      "id": "J02-H4",
+      "metric": "missing_expected_replacement_text",
+      "rule": "== 0",
+      "rationale": "A reviewed replacement owner may not disappear silently."
+    },
+    {
+      "id": "J02-H5",
+      "metric": "rendered_preserved_or_review_regions",
+      "rule": "== 0",
+      "rationale": "Preserve/review/explain source pixels may not acquire rendered replacement text."
+    },
+    {
+      "id": "J02-H6",
+      "metric": "merged_owner_elements",
+      "rule": "== 0",
+      "rationale": "Multiple reviewed owners may not be silently merged onto one candidate region."
+    }
+  ],
+  "bounded_metrics": [
+    {
+      "id": "J02-B1",
+      "metric": "max_overflow_px_beyond_safe_text_rect",
+      "rule": "<= 10",
+      "derivation": "24-control maximum"
+    },
+    {
+      "id": "J02-B2",
+      "metric": "element_overflow_rate",
+      "rule": "<= 0.1523",
+      "derivation": "24-control observed rate"
+    },
+    {
+      "id": "J02-B3",
+      "metric": "max_pairwise_element_overlap_ratio",
+      "rule": "<= 1.0",
+      "derivation": "24-control maximum; intentionally non-quality-dispositive pending G7 glyph/layout work"
+    },
+    {
+      "id": "J02-B4",
+      "metric": "pages_with_any_overlapping_pair",
+      "rule": "<= 0.25 of scored pages",
+      "derivation": "6/24 conventional controls"
+    },
+    {
+      "id": "J02-B5",
+      "metric": "orphan_translation_elements",
+      "rule": "== 0",
+      "derivation": "24-control observed total"
+    },
+    {
+      "id": "J02-B6",
+      "metric": "visible_empty_text_elements",
+      "rule": "<= 8",
+      "derivation": "24-control observed total; candidate report must also retain page-level count"
+    }
+  ],
+  "not-yet-measurable": [
+    {
+      "metric": "final_fitted_font_size_px",
+      "status": "not-executed",
+      "required_gate": "G7",
+      "method": "Browser/native-resolution glyph bounds plus visual review; stored element size is not a substitute."
+    },
+    {
+      "metric": "glyph_mask_cleanup_accuracy",
+      "status": "not-executed",
+      "required_gate": "G6",
+      "method": "Reviewed glyph-mask/source-difference measurement with fixed support and boundary tolerance."
+    }
+  ],
+  "candidate_command": "./.venv/bin/python scripts/score_page_quality.py --manifest <frozen-roster-manifest> --candidates <candidate-manifest> --reconciliation <reviewed-current-mapping> --thresholds docs/quality-runs/g0-20260913-closure/A09-quality-thresholds-v2.approved.json --out <measurement.json>"
+}

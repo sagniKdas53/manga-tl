@@ -1,0 +1,3136 @@
+{
+  "schema_version": "g0-closure-run/v1",
+  "task": "G0 evidence closure",
+  "status": "active-all-development-captured-pending-reconciliation-and-measurement",
+  "active_packet": "G0-R4",
+  "created_at": "2026-09-13T16:11:00Z",
+  "input_revisions": {
+    "app": "8f9d88a75f75ed8b2776929a2a2ce589ab8e62ac",
+    "worker": "7b54f8c1c516eb445e869b2776ffa62e4ee2762b",
+    "corpus": "27de7499f0c4c142763116bfcbcfd0afd9709cbf"
+  },
+  "scope_assessment": {
+    "runtime_paths": [
+      "backend-rust/",
+      "frontend/",
+      "worker/",
+      "docker-compose.dev.yml"
+    ],
+    "observation_tools": [
+      "scripts/playwright/capture_quality_baseline.cjs",
+      "scripts/score_page_quality.py",
+      "scripts/dev_setup.py"
+    ],
+    "uncommitted_paths_observed_before_closure": [
+      "AGENTS.md",
+      "CLAUDE.md",
+      "docs/output-quality-implementation-tracker.md",
+      "docs/quality-checkpoints/A09.md",
+      "docs/quality-checkpoints/G0-terra-handoff.md",
+      "docs/quality-checkpoints/G0.md"
+    ],
+    "note": "Pre-existing user documentation work is preserved; no reset or reuse claim is made."
+  },
+  "run_plan": {
+    "isolation": "amd64 docker-compose.dev.yml project with separate DB, Redis, MinIO/storage and volumes",
+    "models": {
+      "ja_zh_ocr": "PP-OCRv6",
+      "ko_ocr": "PP-OCRv5",
+      "translation": "openai/gpt-5.6-luna via OpenRouter",
+      "fallback_models": false
+    },
+    "paid_work_authorization": {
+      "limit_usd": 3,
+      "approved_by_user": "2026-09-13",
+      "spent_usd": {
+        "estimated_cost_usd": "0.1819514999999999996",
+        "prompt_tokens": 222219,
+        "completion_tokens": 90903,
+        "priced_calls": 75,
+        "unknown_calls": 1,
+        "qa_retries_used": 3,
+        "pages": 30,
+        "budget_cap_usd": 3,
+        "cap_within_estimated_cost": true
+      },
+      "stop_conditions": [
+        "limit reached",
+        "canary provenance/integrity failure",
+        "required stage/export failure"
+      ]
+    },
+    "execution_order": [
+      "one source-to-export canary after preflight",
+      "remaining 29 source-to-export pages one at a time",
+      "corrected development-only measurement and reconciliation"
+    ],
+    "forbidden": [
+      "A09 roster/reserve scoring",
+      "source acquisition",
+      "pipeline behavior changes",
+      "B01"
+    ]
+  },
+  "pages": [
+    {
+      "id": "sample177",
+      "population": "original_defect_case",
+      "source_path": "corpus/samples/ja/sample177/source.jpg",
+      "source_sha256": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        2048,
+        1910
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "8c610bdcec8538f412011b3ab8097f813832917356e0c57d2b0036ff3e28f382",
+        "page_id": "ab946afb-6769-43ec-bebf-8e0e27db02b0",
+        "pipeline": {
+          "started_at": "2026-09-13T17:12:13.792Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.004486,
+            "prompt_tokens": 6914,
+            "completion_tokens": 1897,
+            "priced_calls": 3,
+            "unknown_calls": 0,
+            "qa_retries_used": 1
+          },
+          "completed_at": "2026-09-13T17:13:16.545Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:13:16.549Z",
+          "completed_at": "2026-09-13T17:13:21.966Z",
+          "editor_png_sha256": "4b82535bb29f288f004c4b6cd27b4c1b578d95658677fe8e58b92fe2b33e1633",
+          "export_png_sha256": "a68830aad70717c99d92e09a1f1946158d4507509ca15a7a4a1e81b4d205a476",
+          "rendered_png_sha256": "ffc7907e59bc8de5dd9828604c7e8a5524f88ad2815c45ea61a7c367db44a6b7",
+          "project_zip_sha256": "b919756e6105cfbe55d39accca16d4839b3375f3a720498d7b0120f7b8a76f14",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ],
+      "language": "ja",
+      "style": "adversarial_regression"
+    },
+    {
+      "id": "sample222",
+      "population": "original_defect_case",
+      "source_path": "corpus/samples/ja/sample222/source.png",
+      "source_sha256": "990b1c3b2032e628d4aa6f737d539dd39ae325771369651a3b7c975bbb594738",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        4093,
+        2894
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "990b1c3b2032e628d4aa6f737d539dd39ae325771369651a3b7c975bbb594738",
+        "page_id": "2d3cf205-f9f4-4586-89da-0525f513df5a",
+        "pipeline": {
+          "started_at": "2026-09-13T17:13:22.084Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.001368,
+            "prompt_tokens": 2352,
+            "completion_tokens": 520,
+            "priced_calls": 1,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:14:18.896Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:14:18.901Z",
+          "completed_at": "2026-09-13T17:14:24.893Z",
+          "editor_png_sha256": "51c9067c0bcf820ccce2dc25a5df04ea47efecc784dcac4b1148ff5a18c1fd27",
+          "export_png_sha256": "549df074b052db4386ac33cfaddceb755882d1fb5a561b473d75ac5c4c886f18",
+          "rendered_png_sha256": "d11908de0cc23d2071afd76110eb6b6ce9e1aeb8a1e3c2511143a474b53fd26a",
+          "project_zip_sha256": "102ab3f019518bf59f72d61296c22f1d0d7ddf4c780e48b432aa5d1e9994c03c",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ],
+      "language": "ja",
+      "style": "adversarial_regression"
+    },
+    {
+      "id": "sample61",
+      "population": "original_defect_case",
+      "source_path": "corpus/samples/ja/sample61/source.jpg",
+      "source_sha256": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        2000,
+        2000
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "ab92e5f5a52afc54f6c85902faa4403b599c90da1b2a5de7610f9fe5cbb09c76",
+        "page_id": "1d6c382f-64cc-4ea8-b9a6-261636f5cee3",
+        "pipeline": {
+          "started_at": "2026-09-13T17:14:25.012Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.020581,
+            "prompt_tokens": 28663,
+            "completion_tokens": 9150,
+            "priced_calls": 3,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:20:15.416Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:20:15.420Z",
+          "completed_at": "2026-09-13T17:20:21.136Z",
+          "editor_png_sha256": "28050e9819e5eb91e8cb51485a41e5935a97fa045472653fb6e2bea762f4f976",
+          "export_png_sha256": "6af13b04b0bc295edecc7518533a1e05ef7e3dc7d3b2e35e76ccd336a8765f00",
+          "rendered_png_sha256": "f0d09f923f1181ab7f2c1c9f5251e926d22331600cf147c0671971b2a2931606",
+          "project_zip_sha256": "6e98bb0bddee6d58a091b521aabe4b490152e4ac48e22eb325209c781a3e68dc",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ],
+      "language": "ja",
+      "style": "adversarial_regression"
+    },
+    {
+      "id": "sample99",
+      "population": "original_defect_case",
+      "source_path": "corpus/samples/ja/sample99/source.jpg",
+      "source_sha256": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        3219,
+        2932
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "47a74974f97b32ca477046bc971ed2bf2b426d1aa1f6c5fdb244c03940905ac0",
+        "page_id": "54d06659-762b-42bd-a41e-64208142ceaa",
+        "pipeline": {
+          "started_at": "2026-09-13T17:20:21.235Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.005285,
+            "prompt_tokens": 5896,
+            "completion_tokens": 2719,
+            "priced_calls": 2,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:21:38.233Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:21:38.239Z",
+          "completed_at": "2026-09-13T17:21:44.250Z",
+          "editor_png_sha256": "2f6ed3dac7e69699be8e2f35a3e7b45980a1f2a8dbbe42521ce0ba0d4c7e3c73",
+          "export_png_sha256": "99c400e8d64e6ce27a80abc27b34d52e40ac889071c7c10ec4a9e6600e99693a",
+          "rendered_png_sha256": "e2cff743b805750a113fc7305d633824c6d7f0800d0fa17ed5a3a23f11ac8aac",
+          "project_zip_sha256": "1a06685acf9c2387d0baf060fcfd07c8d422cf914711db0a93835781cce9ba82",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ],
+      "language": "ja",
+      "style": "adversarial_regression"
+    },
+    {
+      "id": "sample93",
+      "population": "original_defect_case",
+      "source_path": "corpus/samples/ja/sample93/source.png",
+      "source_sha256": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        6764,
+        4961
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "127b2463b5fbd188dda061b9e8c53b2ddfcdd749359a6d4408c78710a183d38b",
+        "page_id": "d96c65b6-3da1-43cb-90c2-b1da8e98f055",
+        "pipeline": {
+          "started_at": "2026-09-13T17:21:44.455Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.004679,
+            "prompt_tokens": 5617,
+            "completion_tokens": 2243,
+            "priced_calls": 2,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:23:22.721Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:23:22.732Z",
+          "completed_at": "2026-09-13T17:23:36.753Z",
+          "editor_png_sha256": "d1054834b0401ed8fb36cfc4fa5e27fb58ea3defe48cff9b544db3cce8bbe1c0",
+          "export_png_sha256": "502b89baaa14ad565bb33b1b1c3ecdc74f6b0a20d64d687f17858a9a99e2b4ee",
+          "rendered_png_sha256": "9d8036e9cf9dd7809ec55fcfeaef909cb71cf54e9e0a16731d2999219e3fe5a8",
+          "project_zip_sha256": "5cb58340ac71fd4e6bdd5617e997783b9cb1b6f8987f2c3a392cb1f65f93c7a7",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ],
+      "language": "ja",
+      "style": "adversarial_regression"
+    },
+    {
+      "id": "sample83",
+      "population": "original_defect_case",
+      "source_path": "corpus/samples/ja/sample83/source.jpg",
+      "source_sha256": "508d4269d36317c7e38f263b84398fdf10ad36d2c1441097969cf8e0cff0e8ab",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1412,
+        2000
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "508d4269d36317c7e38f263b84398fdf10ad36d2c1441097969cf8e0cff0e8ab",
+        "page_id": "58bf0730-c86f-4f30-b171-fd80a6d0cf21",
+        "pipeline": {
+          "started_at": "2026-09-13T17:23:37.143Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": ""
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "priced_calls": 0,
+            "unknown_calls": 1,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:24:19.843Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:24:19.851Z",
+          "completed_at": "2026-09-13T17:24:24.287Z",
+          "editor_png_sha256": "5b535c5beb9e1ab6d68757a20b7e34cca52de90c149960ac3344bf497428e840",
+          "export_png_sha256": "e2d84a32c40991ff066f38741f01ef93039dcec5166d3cb5332139622ed5c128",
+          "rendered_png_sha256": "5ec319723a4256ea9733ce7333d345e0648f218866c754779fb2ce6829ac3800",
+          "project_zip_sha256": "5acf42d9ee26465dc1004caa9b8daefe02ab1c3c046c443c2e2db3de69101bcf",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ],
+      "language": "ja",
+      "style": "adversarial_regression"
+    },
+    {
+      "id": "sample7",
+      "population": "conventional_control",
+      "language": "ja",
+      "style": "bw_panel_manga",
+      "source_path": "corpus/samples/ja/sample7/source.jpeg",
+      "source_sha256": "7e23ae0c9e7ffbec45221c2820a35dcde2e81aae99d34eb922d71f25855f71e9",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1299,
+        1831
+      ],
+      "attempts": [
+        {
+          "kind": "canary",
+          "path": "canary-sample7",
+          "capture_manifest_sha256": "4ddb1b9877e740f1f57049b7794a911325f6e2f7791b3bb345cde68c32efbe16",
+          "outcome": "completed",
+          "review": "Browser editor/export/ZIP capture visibly completed. Output quality remains baseline evidence only; visual page defects belong to later M5/M6/G7 work and were not altered."
+        }
+      ],
+      "fresh_capture": {
+        "attempt_path": "canary-sample7",
+        "source_sha256": "7e23ae0c9e7ffbec45221c2820a35dcde2e81aae99d34eb922d71f25855f71e9",
+        "page_id": "b8470276-8740-403d-89c2-de37de6a4236",
+        "pipeline": {
+          "started_at": "2026-09-13T17:06:40.931Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.012271,
+            "prompt_tokens": 12082,
+            "completion_tokens": 6643,
+            "priced_calls": 3,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:08:34.304Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:08:34.312Z",
+          "completed_at": "2026-09-13T17:08:42.150Z",
+          "editor_png_sha256": "c9432047340f81ecc50b9e5e59e972de879e14166c9ea6bade66ff463a7156c7",
+          "export_png_sha256": "d30d0b32ab154ec88ab50198f0df8d4e49336b0817742522365f6f41025636f3",
+          "rendered_png_sha256": "13e12d8c83b361c48d321f031e530d8d25a5466ef76d11b0d0f7310ca7b61784",
+          "project_zip_sha256": "1df1bafbe1c2e2a2ff9840ba15f59477ec1e4ad450a14c907e43b7f441901ac7",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      }
+    },
+    {
+      "id": "sample139",
+      "population": "conventional_control",
+      "language": "ja",
+      "style": "bw_panel_manga",
+      "source_path": "corpus/samples/ja/sample139/source.png",
+      "source_sha256": "192040b01567524ea7cfb7a9c7962b2a4f98c08a6ad6e4f0201ebb024dc796db",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        800,
+        2282
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "192040b01567524ea7cfb7a9c7962b2a4f98c08a6ad6e4f0201ebb024dc796db",
+        "page_id": "6240a732-446c-4b4e-897f-ffcf97d6143b",
+        "pipeline": {
+          "started_at": "2026-09-13T17:24:24.341Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.007908,
+            "prompt_tokens": 8921,
+            "completion_tokens": 4145,
+            "priced_calls": 3,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:25:57.538Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:25:57.548Z",
+          "completed_at": "2026-09-13T17:26:01.548Z",
+          "editor_png_sha256": "fd3e1d399132477738911fe90db999768df04da641425840e21a2ad9c2acca47",
+          "export_png_sha256": "d71685a269e93c0e2a3a233eecfb0ae1528cedc7ab8ebbf5a70d22f191d70dc0",
+          "rendered_png_sha256": "4026bdf9344bd07365f19938581b2cbc0a7d531d4a0c734d643cbfb330e83722",
+          "project_zip_sha256": "9f5bc838c7d4ce694226f112cbb7a640b9ce328f4fcb721f3a6d00e92b720cfc",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample39",
+      "population": "conventional_control",
+      "language": "ja",
+      "style": "bw_panel_manga",
+      "source_path": "corpus/samples/ja/sample39/source.jpg",
+      "source_sha256": "d776a3cc203d65563edfb8c213c3196864f16738e7755876fda3dd4daf34c1f2",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        900,
+        1280
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "d776a3cc203d65563edfb8c213c3196864f16738e7755876fda3dd4daf34c1f2",
+        "page_id": "22c74510-95ec-44f2-8c92-684558bdd52a",
+        "pipeline": {
+          "started_at": "2026-09-13T17:26:01.586Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.007625,
+            "prompt_tokens": 8703,
+            "completion_tokens": 3955,
+            "priced_calls": 3,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:27:26.279Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:27:26.292Z",
+          "completed_at": "2026-09-13T17:27:30.966Z",
+          "editor_png_sha256": "ccdbafa4fd244e308b1c19a44fb103f3e4497bd46e02e92912f3e2c9f607602c",
+          "export_png_sha256": "c300d9c5e4d056beb273feb4b7b6f5a9c27186ef75ce00e2e87ab306fda4a0b5",
+          "rendered_png_sha256": "7c7b6da9154b1b029e228b0f7916b4bb924b0d4fad950b1de80163c786be70ed",
+          "project_zip_sha256": "e38e5b41b69f719e3c91e1f4462f9ef9d2a7ba263ffe933389821c9f9323f314",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample47",
+      "population": "conventional_control",
+      "language": "ja",
+      "style": "bw_panel_manga",
+      "source_path": "corpus/samples/ja/sample47/source.jpg",
+      "source_sha256": "00b19b4cd45c3410920dbdd6d16a8fc8d43f1e3692ad94af5922257d64658854",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1029,
+        1646
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "00b19b4cd45c3410920dbdd6d16a8fc8d43f1e3692ad94af5922257d64658854",
+        "page_id": "fa66f5b2-f091-4495-be2d-6f1afe309abd",
+        "pipeline": {
+          "started_at": "2026-09-13T17:27:31.005Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.007406,
+            "prompt_tokens": 8318,
+            "completion_tokens": 3906,
+            "priced_calls": 3,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:28:49.825Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:28:49.893Z",
+          "completed_at": "2026-09-13T17:28:54.776Z",
+          "editor_png_sha256": "d9d8504fe55fd23f8e74682a4883745722fd264a57168743e4fdb37f98772098",
+          "export_png_sha256": "b4c7b244d7cba6094ab3d5e373208d546318384a2abcd5596162df22ebfc7590",
+          "rendered_png_sha256": "5f2c4b81798d9445f13b11552b9184ea68ee2284c9e523e87da276e4292d0fda",
+          "project_zip_sha256": "7b5c075c31b227bb14e0e4d23a8ce309bc891c39b4a80a574589104e541d345f",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample123",
+      "population": "conventional_control",
+      "language": "ja",
+      "style": "bw_panel_manga",
+      "source_path": "corpus/samples/ja/sample123/source.jpg",
+      "source_sha256": "4d8c0bdb8e819b399210258d71e123cbb29fc4b883660b3e508cb752443a2611",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        540,
+        720
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "4d8c0bdb8e819b399210258d71e123cbb29fc4b883660b3e508cb752443a2611",
+        "page_id": "54272793-ca77-4e14-9eca-e838fac8ea4c",
+        "pipeline": {
+          "started_at": "2026-09-13T17:28:54.822Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.008129,
+            "prompt_tokens": 9034,
+            "completion_tokens": 4277,
+            "priced_calls": 3,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:30:25.619Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:30:25.691Z",
+          "completed_at": "2026-09-13T17:30:30.826Z",
+          "editor_png_sha256": "41fd296532be8830275894efc1133dbaff5fb075e23b99b452965caf2edfa427",
+          "export_png_sha256": "c19a5ad3f235205e21b67ccdcbca5262e0d59d35d2a51b4e0c75b7dd946b1747",
+          "rendered_png_sha256": "a14e0292522a1b5d08e2eedba07467ad1cfa16daa221340083cb69087726526a",
+          "project_zip_sha256": "e73f6f238cb7ecce22bc4a0403654a6a771968fe9912a90776578692c9444ee4",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample134",
+      "population": "conventional_control",
+      "language": "ja",
+      "style": "bw_panel_manga",
+      "source_path": "corpus/samples/ja/sample134/source.jpg",
+      "source_sha256": "77f11ee385bd82fd183c1856c9a6308c01e2dfb6ee7b806d6e7d041c5f4a407f",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        4299,
+        6071
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "77f11ee385bd82fd183c1856c9a6308c01e2dfb6ee7b806d6e7d041c5f4a407f",
+        "page_id": "d0022516-6cfa-4fda-82a7-9f49a88931c4",
+        "pipeline": {
+          "started_at": "2026-09-13T17:30:30.949Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.003039,
+            "prompt_tokens": 4572,
+            "completion_tokens": 1321,
+            "priced_calls": 2,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:31:51.373Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:31:51.408Z",
+          "completed_at": "2026-09-13T17:32:04.567Z",
+          "editor_png_sha256": "919eff87b05012526ff058e694a5c6e99fc12360c62f5bab587bd0b166de9d2d",
+          "export_png_sha256": "f7c4b86a9c8b4b7673054dc04b193beb43d752acfb6c02cdb11fe350ca4efceb",
+          "rendered_png_sha256": "121e059bf6b6aa5dd2f4efe702add9585f6d45f7ada8b602d14341a7a270c25a",
+          "project_zip_sha256": "61fe3520302c5ddbf5c7d382d9c409c27152b3b42aba060f06d150b023e1220e",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample150",
+      "population": "conventional_control",
+      "language": "ja",
+      "style": "color_four_panel_strip",
+      "source_path": "corpus/samples/ja/sample150/source.jpg",
+      "source_sha256": "5e49a2a275e8abe9251404c277ce6d6ded88e0b81a043e9a923b002cfd49d92d",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1460,
+        2048
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "5e49a2a275e8abe9251404c277ce6d6ded88e0b81a043e9a923b002cfd49d92d",
+        "page_id": "34357438-f274-4994-86fd-c7344c81e1ea",
+        "pipeline": {
+          "started_at": "2026-09-13T17:32:04.808Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.00588,
+            "prompt_tokens": 7644,
+            "completion_tokens": 2852,
+            "priced_calls": 3,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:33:27.741Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:33:27.754Z",
+          "completed_at": "2026-09-13T17:33:33.140Z",
+          "editor_png_sha256": "497323a6782f88c153f1708bfc3298ebd56200c1dbd6634b0113984cbf7f7eff",
+          "export_png_sha256": "64ce3d50813e3c39ab00ccc634e1054ee3506e6a128408404f8a6574a75a982e",
+          "rendered_png_sha256": "d059dae016799bb1d75785daae68154da6973bf751c150be94edd0bd1fa468b4",
+          "project_zip_sha256": "2998e81b99db5fad4bf92df384a8873bf0907fc20bfcd12ac8be0c59c5ab93aa",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample172",
+      "population": "conventional_control",
+      "language": "ja",
+      "style": "color_four_panel_strip",
+      "source_path": "corpus/samples/ja/sample172/source.jpeg",
+      "source_sha256": "0c579dfaabb65bae96b7f69e1645fd747bd4c25954769152a0601a97a79659a1",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1157,
+        2048
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "0c579dfaabb65bae96b7f69e1645fd747bd4c25954769152a0601a97a79659a1",
+        "page_id": "d69d3929-3f08-45d6-9dca-e4b3d45cd46a",
+        "pipeline": {
+          "started_at": "2026-09-13T17:33:33.235Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.006937,
+            "prompt_tokens": 7903,
+            "completion_tokens": 3642,
+            "priced_calls": 3,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:34:41.926Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:34:41.936Z",
+          "completed_at": "2026-09-13T17:34:46.418Z",
+          "editor_png_sha256": "1db6734bc205efbf26a7eef599af6578876448f65f23ac6780138aa5e73c7a9d",
+          "export_png_sha256": "d34a88d75cbeef1d0dce9b8116318b632f8a13b5219c5db29815b649aad2f077",
+          "rendered_png_sha256": "35dc07748bde6ce26d14d346fc3560d58eec341805dc466cfbf965c46d8f6923",
+          "project_zip_sha256": "f223fb07c61209e9f2fa8989cf39da4af5f5237ed5f41e722a024d5a505e6bb9",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample192",
+      "population": "conventional_control",
+      "language": "ko",
+      "style": "bw_single_panel_dialogue",
+      "source_path": "corpus/samples/ko/sample192/source.jpg",
+      "source_sha256": "177c5519f413956cdfb028c9465f6e34ac28452b123bf0c5ca84818d60d141db",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1536,
+        2048
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "177c5519f413956cdfb028c9465f6e34ac28452b123bf0c5ca84818d60d141db",
+        "page_id": "62de3834-7042-49e2-83a5-0cb3e9fe253e",
+        "pipeline": {
+          "started_at": "2026-09-13T17:34:46.498Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.002259,
+            "prompt_tokens": 3970,
+            "completion_tokens": 927,
+            "priced_calls": 2,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:35:18.934Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:35:18.973Z",
+          "completed_at": "2026-09-13T17:35:23.129Z",
+          "editor_png_sha256": "728846af40fb7db9d922b9597d2799de109375e7665240ced710d6cb72c2ef69",
+          "export_png_sha256": "e1b2ca3777686fae8ef80fa64ac33dd81e5c568c7fb61fcb513f59777126ed53",
+          "rendered_png_sha256": "081e51c4f495bfbb100c8af2a04127ef9fa0ea1c88a18010d80f11c14e62a88d",
+          "project_zip_sha256": "69e18f10eb3331484299672efbb6d28ce154ef3511198a026562f775fb81c131",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample197",
+      "population": "conventional_control",
+      "language": "ko",
+      "style": "limited_palette_panel_comic",
+      "source_path": "corpus/samples/ko/sample197/source.png",
+      "source_sha256": "f2d36d0a6629baf250ab364ba6c889edadeae29f0fdd95e5a0ee93789d7a19c4",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        3496,
+        4961
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "f2d36d0a6629baf250ab364ba6c889edadeae29f0fdd95e5a0ee93789d7a19c4",
+        "page_id": "0f49c288-dd5b-447d-af87-f4bb57eab226",
+        "pipeline": {
+          "started_at": "2026-09-13T17:35:23.214Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.008306,
+            "prompt_tokens": 9248,
+            "completion_tokens": 4380,
+            "priced_calls": 3,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:36:38.157Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:36:38.200Z",
+          "completed_at": "2026-09-13T17:36:43.595Z",
+          "editor_png_sha256": "a9076db4c859bd99b651af07174d936233ef59a6532da580b7e85a31d740675b",
+          "export_png_sha256": "fb7fe5929e6209f4cbf18b29a051e0dd9633d52cfbae18bef6a98a2bcd588c12",
+          "rendered_png_sha256": "b7f5350c5ef820929fc0bc584580dcb4f129920aadebde11b7ef9ae401f1300d",
+          "project_zip_sha256": "a50bedc04b3e57e859a52c323a37890a9129f1a6595c14ae287a2a41f276112a",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample199",
+      "population": "conventional_control",
+      "language": "ko",
+      "style": "bw_panel_manga",
+      "source_path": "corpus/samples/ko/sample199/source.png",
+      "source_sha256": "b9dcc5435eddb9087656cc8714106fd1160186acd7f495e262cad63f948e2478",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1600,
+        2400
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "b9dcc5435eddb9087656cc8714106fd1160186acd7f495e262cad63f948e2478",
+        "page_id": "fd6e6fa2-7e6f-4ba4-b336-0e3a7955d6ba",
+        "pipeline": {
+          "started_at": "2026-09-13T17:36:43.718Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.002505,
+            "prompt_tokens": 4148,
+            "completion_tokens": 1057,
+            "priced_calls": 2,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:37:14.177Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:37:14.201Z",
+          "completed_at": "2026-09-13T17:37:17.817Z",
+          "editor_png_sha256": "31eec3d6f80f6128fdc0451df660094b4caa7880729049dc4cfd028bd264b24e",
+          "export_png_sha256": "6ec1a82eb72f4a1c1fa61e9fcc6e31876417d40979489482cc2319f4a986765d",
+          "rendered_png_sha256": "5291fd83413ec5bec2795778567ffe201838e6e63e54d22ad65567fb3b0d567e",
+          "project_zip_sha256": "bd301e4debb8763141554b80c7941f6e90276cd443b6dbc9a8dd54d01153a70c",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample268",
+      "population": "conventional_control",
+      "language": "ko",
+      "style": "color_panel_webcomic",
+      "source_path": "corpus/gaps/pending/ko/sample268/source.jpg",
+      "source_sha256": "50168dcf479c8ca0b66ac125feb7c13646cf1260b9975d6e6e62c06717bd1a7d",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1451,
+        2048
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "50168dcf479c8ca0b66ac125feb7c13646cf1260b9975d6e6e62c06717bd1a7d",
+        "page_id": "182a5144-602b-4aac-b2a5-939ed8659966",
+        "pipeline": {
+          "started_at": "2026-09-13T17:37:17.853Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.005985,
+            "prompt_tokens": 5839,
+            "completion_tokens": 3361,
+            "priced_calls": 2,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:38:10.455Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:38:10.473Z",
+          "completed_at": "2026-09-13T17:38:14.830Z",
+          "editor_png_sha256": "124f60633b5fdb6ae363f23ef995768617c8bdd79d506e51e20de97687dcdd09",
+          "export_png_sha256": "97191f4a298a7bfdc07dc8a92b82ba9fc4b6e04b0520a0186f60f8e1be5da23c",
+          "rendered_png_sha256": "bab566a58c436313e0d4d7b72385904cefd13f7d6a04bc14bcd46ec2d90dc59b",
+          "project_zip_sha256": "273e6f0446483963a2311719f9103bc5537c220a358768fa3ebcd1468d021139",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample289",
+      "population": "conventional_control",
+      "language": "ko",
+      "style": "color_four_panel_strip",
+      "source_path": "corpus/gaps/pending/ko/sample289/source.jpg",
+      "source_sha256": "7d2034a3a0f487465d6c04aa20d4794fdad3ba51a684b7eec4a9403c2729132a",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1448,
+        2048
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "7d2034a3a0f487465d6c04aa20d4794fdad3ba51a684b7eec4a9403c2729132a",
+        "page_id": "a543eba6-406e-4bea-aeef-3ff4c9ad133a",
+        "pipeline": {
+          "started_at": "2026-09-13T17:38:14.904Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.007277,
+            "prompt_tokens": 8704,
+            "completion_tokens": 3654,
+            "priced_calls": 3,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:39:19.679Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:39:19.722Z",
+          "completed_at": "2026-09-13T17:39:23.939Z",
+          "editor_png_sha256": "81174cbfcd3540e1b153cf875b1d9bf12236cb347f650178586626a7ce08bd6f",
+          "export_png_sha256": "b6a98ac6288546a2400f8b127d094ae69ec60ea735ce4d1ef540ec379b7958ea",
+          "rendered_png_sha256": "e4dce8a1f43f513d872c84de50915689387c89ad9a25f8ac7304a3c3e0873bae",
+          "project_zip_sha256": "1e4c7746d53d21fe401ebfba687ddd217da8b005b0978d6e74d5f4d0d31dc142",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample320",
+      "population": "conventional_control",
+      "language": "ko",
+      "style": "color_four_panel_strip",
+      "source_path": "corpus/gaps/pending/ko/sample320/source.jpg",
+      "source_sha256": "1bf2b9de55340209f608e6fa8cf17f78bb65136305cde493cfff8385fe967316",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        600,
+        1388
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "1bf2b9de55340209f608e6fa8cf17f78bb65136305cde493cfff8385fe967316",
+        "page_id": "edafc954-8175-4e10-b95c-80213361dc89",
+        "pipeline": {
+          "started_at": "2026-09-13T17:39:24.052Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.003456,
+            "prompt_tokens": 4778,
+            "completion_tokens": 1621,
+            "priced_calls": 2,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:40:00.622Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:40:00.665Z",
+          "completed_at": "2026-09-13T17:40:04.512Z",
+          "editor_png_sha256": "ed04e1e8bb7e56255d9d41c45b6cb0ccc4b028f1be4409af37a34e2e67beddbf",
+          "export_png_sha256": "2d23d743c053596012a209e6912a224dca9c44b0d9c1d7a17ca5104f9b40d3ad",
+          "rendered_png_sha256": "3756e7ee99e1377134a4a535d82d24ac716eb24078039f07b6807e293923abbd",
+          "project_zip_sha256": "8b4b0111984e8c9e266e5ffddcb1b1c37d2d123847ed8ade0ac8b4899ad76e44",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample360",
+      "population": "conventional_control",
+      "language": "ko",
+      "style": "bw_panel_manga",
+      "source_path": "corpus/gaps/pending/ko/sample360/source.jpg",
+      "source_sha256": "a816bf10406ba91e1e2bdc00d6544de56d185257dc0fc2c9a15783d7c8caf14a",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1443,
+        2048
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "a816bf10406ba91e1e2bdc00d6544de56d185257dc0fc2c9a15783d7c8caf14a",
+        "page_id": "d6a519e1-3eca-4b82-a1e6-3ff610a0e24e",
+        "pipeline": {
+          "started_at": "2026-09-13T17:40:04.553Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.011712,
+            "prompt_tokens": 11869,
+            "completion_tokens": 6439,
+            "priced_calls": 4,
+            "unknown_calls": 0,
+            "qa_retries_used": 1
+          },
+          "completed_at": "2026-09-13T17:41:29.179Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:41:29.200Z",
+          "completed_at": "2026-09-13T17:41:33.525Z",
+          "editor_png_sha256": "66e9120e524149b8050b87cf1fd449bf6c2418ce20c3d5588aed12ff47c3168d",
+          "export_png_sha256": "85f5a0cf1232373d79084bd606f39d0563b2851d2fb68ee88feb17e030a94a6d",
+          "rendered_png_sha256": "9b401332c6b5a160a6b18e3dfb6cb98e7a5fd03c20f42bf6cac84d29650cd46e",
+          "project_zip_sha256": "905e8ac9b8d247f80a94d610097cf5d5915777e08c1fb0f153f3898d32577801",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample416",
+      "population": "conventional_control",
+      "language": "ko",
+      "style": "color_panel_webcomic",
+      "source_path": "corpus/gaps/pending/ko/sample416/source.jpg",
+      "source_sha256": "b9dfb8e7295ebdd166c1853966e9fb329a35d2d7afe5383f36a7f86893ca238f",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1051,
+        2048
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "b9dfb8e7295ebdd166c1853966e9fb329a35d2d7afe5383f36a7f86893ca238f",
+        "page_id": "87c6245c-1b48-407f-8d3d-ecb4210a0ed3",
+        "pipeline": {
+          "started_at": "2026-09-13T17:41:33.616Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(korean_PP-OCRv5_mobile_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.003432,
+            "prompt_tokens": 4652,
+            "completion_tokens": 1624,
+            "priced_calls": 2,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:42:08.098Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:42:08.135Z",
+          "completed_at": "2026-09-13T17:42:12.286Z",
+          "editor_png_sha256": "b0ea124a94e96a3149393f8d2f50194b82e2d5ad22acf917a4665978cc90e192",
+          "export_png_sha256": "8b04f8c159dd54b6aa194a35e23d0a306d92290dd0c4efe55093e25a4fef5dd1",
+          "rendered_png_sha256": "767407560cc2b33b4c8a25713981657ba3e99af5e3a305dc686600280705a87f",
+          "project_zip_sha256": "e9a1d8965d633f11ecc104f8def509818a1fcf4891b196ceff04e6c272d828a9",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample206",
+      "population": "conventional_control",
+      "language": "zh",
+      "style": "bw_panel_manga",
+      "source_path": "corpus/samples/zh/sample206/source.png",
+      "source_sha256": "ea0a4df4821cededdd8e46aeff87f88f08e7fc1893ed92012dafceb72f03c419",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        2888,
+        4093
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "ea0a4df4821cededdd8e46aeff87f88f08e7fc1893ed92012dafceb72f03c419",
+        "page_id": "4f3be811-1bf3-4084-a3a3-56609180708d",
+        "pipeline": {
+          "started_at": "2026-09-13T17:42:12.372Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.003829,
+            "prompt_tokens": 4004,
+            "completion_tokens": 2227,
+            "priced_calls": 2,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:43:11.203Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:43:11.229Z",
+          "completed_at": "2026-09-13T17:43:16.048Z",
+          "editor_png_sha256": "544d1d70c11c2d6def1ab7fd4702c698fe1e44ebc71f2525ad02c50fabd87be2",
+          "export_png_sha256": "62f843b370cb1b069022320f926dcfddba6622dde89c97afebd409a18903c816",
+          "rendered_png_sha256": "ab465ba495ba854bceafe19ffd0443b71eb37411416bb22787c15776685410df",
+          "project_zip_sha256": "b3a0abf35ec71ffaa1bf6b74b38bfc9c951b4ca4e2ad80c81ae158aefff42207",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample208",
+      "population": "conventional_control",
+      "language": "zh",
+      "style": "color_scene_collage",
+      "source_path": "corpus/samples/zh/sample208/source.png",
+      "source_sha256": "eb90fff0ffcc0d2cee63cd6a7b8acb7e5c0ccfb9ac468c9532c0c0ad55ed237e",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1080,
+        1689
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "eb90fff0ffcc0d2cee63cd6a7b8acb7e5c0ccfb9ac468c9532c0c0ad55ed237e",
+        "page_id": "bccac6d0-29ff-48d8-9082-16c75c8ad30a",
+        "pipeline": {
+          "started_at": "2026-09-13T17:43:16.174Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.006939,
+            "prompt_tokens": 8180,
+            "completion_tokens": 3604,
+            "priced_calls": 3,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:44:30.951Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:44:31.026Z",
+          "completed_at": "2026-09-13T17:44:34.861Z",
+          "editor_png_sha256": "56f9b21d1b3a3550258b1793762e1cb35f9e915a8da53f7c9278d291d3d28fec",
+          "export_png_sha256": "f3ae83a81f23ec17521e64e3f4a832e4cf023007d6ae9a9e726e02911ca0ef83",
+          "rendered_png_sha256": "7c5998b515023dde10110ef23202896964abe2f87dc1fcb0a649609d35597697",
+          "project_zip_sha256": "66e10833f6b1e76d1398b79a62b9adf8e1f562d58ec4b354893ad6032a7b6a72",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample226",
+      "population": "conventional_control",
+      "language": "zh",
+      "style": "color_panel_webcomic",
+      "source_path": "corpus/samples/zh/sample226/source.jpg",
+      "source_sha256": "71c75822e09043831f805f65d77754af0927f9f024d00764fb5d9aabbfb03bc7",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1600,
+        2265
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "71c75822e09043831f805f65d77754af0927f9f024d00764fb5d9aabbfb03bc7",
+        "page_id": "f746315e-94ea-4129-8a71-de77b354b4b2",
+        "pipeline": {
+          "started_at": "2026-09-13T17:44:34.959Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.004021,
+            "prompt_tokens": 5240,
+            "completion_tokens": 1953,
+            "priced_calls": 2,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:45:29.661Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:45:29.686Z",
+          "completed_at": "2026-09-13T17:45:34.313Z",
+          "editor_png_sha256": "22e7efe17278e7b039580681d6fdcc7b99f816e50d7bfea640fac5f6c1d7951d",
+          "export_png_sha256": "9825a79a66b9e6b91e7c501400e9d08db0cab7527124af430d0e13e30b32efa8",
+          "rendered_png_sha256": "4ee2bf0881fd6c11b5f330979817e616b0aaa690d0636784f199fee7190389a5",
+          "project_zip_sha256": "4a90bbe394c26e3ac76b370f819aff93e2b981ab45fd5325de63c28bc52091df",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample261",
+      "population": "conventional_control",
+      "language": "zh",
+      "style": "bw_single_panel_dialogue",
+      "source_path": "corpus/samples/zh/sample261/source.png",
+      "source_sha256": "ff8c69ff142d3d09f7473c3e2a4d532ec6d5a0d25eaff99e44dfde2c2aec14d3",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1240,
+        1754
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "ff8c69ff142d3d09f7473c3e2a4d532ec6d5a0d25eaff99e44dfde2c2aec14d3",
+        "page_id": "1dc8ed80-af0c-4807-a3d7-d89d784cb28e",
+        "pipeline": {
+          "started_at": "2026-09-13T17:45:34.524Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.006442,
+            "prompt_tokens": 8217,
+            "completion_tokens": 3127,
+            "priced_calls": 3,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:46:43.132Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:46:43.157Z",
+          "completed_at": "2026-09-13T17:46:47.263Z",
+          "editor_png_sha256": "7b38b4003814e525598505699f9687c456d139be5fe1e36c4da98df53b8e3c38",
+          "export_png_sha256": "9c9793cf5f9aa00cfd329a91195fb02b9a74ed28ae8397df4ca90aafd641de88",
+          "rendered_png_sha256": "e7730a07f57fc072631959f66a92ed36b592a983fe6b32c96f314a58fa3ff0a4",
+          "project_zip_sha256": "54be2562c47a015e9b6ead25e67bc2614d41816bc0b81df3a2e5a206b5712761",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample457",
+      "population": "conventional_control",
+      "language": "zh",
+      "style": "color_panel_webcomic",
+      "source_path": "corpus/gaps/pending/zh/sample457/source.jpg",
+      "source_sha256": "9d780c60ab7ba834e8e95f33cb69bb8d477a8d0ce2b4d0823e114937faff4776",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1542,
+        2048
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "9d780c60ab7ba834e8e95f33cb69bb8d477a8d0ce2b4d0823e114937faff4776",
+        "page_id": "aeaa7ab6-fbe0-4d3a-824c-1c25e335b68b",
+        "pipeline": {
+          "started_at": "2026-09-13T17:46:47.334Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.007563,
+            "prompt_tokens": 9849,
+            "completion_tokens": 3626,
+            "priced_calls": 4,
+            "unknown_calls": 0,
+            "qa_retries_used": 1
+          },
+          "completed_at": "2026-09-13T17:47:58.192Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:47:58.234Z",
+          "completed_at": "2026-09-13T17:48:02.696Z",
+          "editor_png_sha256": "50ff8f12854168d7397d0fcbc9462cf241287cba0c4541729191171ea67b3abc",
+          "export_png_sha256": "7dd00b6258917e01289176a0fd25897971c8b8799a41fade19fef5be2cc8c0e6",
+          "rendered_png_sha256": "76dcf2565ef5c346b4cf2d86ea0dfb0ed5a86b11729642b83f406704b3dcfa1a",
+          "project_zip_sha256": "fa676d38090817ca99ec615a50ccc8d6a91a8468ce8eb40372acef3b4a6d7466",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample609",
+      "population": "conventional_control",
+      "language": "zh",
+      "style": "color_panel_webcomic",
+      "source_path": "corpus/gaps/pending/zh/sample609/source.jpg",
+      "source_sha256": "dfb5a780a819a1db0982e699c50999b3fd6f2c0852384c21b9bc7122625ebb0d",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1381,
+        2048
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "dfb5a780a819a1db0982e699c50999b3fd6f2c0852384c21b9bc7122625ebb0d",
+        "page_id": "8c7fd9e1-4c0a-4cd7-97e6-7a9df6346626",
+        "pipeline": {
+          "started_at": "2026-09-13T17:48:02.801Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.005894,
+            "prompt_tokens": 7540,
+            "completion_tokens": 2895,
+            "priced_calls": 3,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:49:09.369Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:49:09.415Z",
+          "completed_at": "2026-09-13T17:49:14.754Z",
+          "editor_png_sha256": "2855b8a9d6fd7b5797870a2994883451685f5ee7b348baebe8229080e5900c26",
+          "export_png_sha256": "5140a742734a7a316488acedcb39e84f71177eded3f4edeaf04de829b284183f",
+          "rendered_png_sha256": "9f531eab5a132cb7390906a3672781473ef4cb5284bfea8e2097278ce8ce55aa",
+          "project_zip_sha256": "9befa283f6c731c6579f2998e15f50894ec33f46cbb638ac5a1b045fed9fd90c",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample611",
+      "population": "conventional_control",
+      "language": "zh",
+      "style": "bw_single_panel_dialogue",
+      "source_path": "corpus/gaps/pending/zh/sample611/source.jpg",
+      "source_sha256": "0a8d82a152fb13b8d9e0e6b85ebada0c48669a1685d09e73f3c6f471b35a7bab",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        1920,
+        1891
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "0a8d82a152fb13b8d9e0e6b85ebada0c48669a1685d09e73f3c6f471b35a7bab",
+        "page_id": "a5ee3c7b-c6e2-46a3-9fd3-2ea73acc4a3d",
+        "pipeline": {
+          "started_at": "2026-09-13T17:49:14.894Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.002405,
+            "prompt_tokens": 4056,
+            "completion_tokens": 978,
+            "priced_calls": 2,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:50:01.446Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:50:01.465Z",
+          "completed_at": "2026-09-13T17:50:05.683Z",
+          "editor_png_sha256": "2a565f1dfd79ef7197f15209717a9e86da39e97149b7ec20866c22abc5def9ea",
+          "export_png_sha256": "5875ee02ade597acf7a852683725cd4dcd17872857dfa959b051ccb01df33946",
+          "rendered_png_sha256": "13f46832a93e47ffa2e146ca1726db587f3130b750fc15f94eeeea2b76dff186",
+          "project_zip_sha256": "d597948afad3f84c4f22acf1833f4bcd35c2ebea51f19d735005edd4b044c594",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    },
+    {
+      "id": "sample612",
+      "population": "conventional_control",
+      "language": "zh",
+      "style": "color_panel_webcomic",
+      "source_path": "corpus/gaps/pending/zh/sample612/source.jpg",
+      "source_sha256": "4cce048893f940d5826085cad8b2dfb0dc7cbb33dc20a75d917c7a5c0d6b17b1",
+      "required_artifacts": [
+        "page-snapshot.json",
+        "editor.png",
+        "export.png",
+        "rendered.png",
+        "project.zip"
+      ],
+      "status": "completed",
+      "reuse": null,
+      "source_dimensions": [
+        800,
+        1131
+      ],
+      "fresh_capture": {
+        "attempt_path": "continuation",
+        "source_sha256": "4cce048893f940d5826085cad8b2dfb0dc7cbb33dc20a75d917c7a5c0d6b17b1",
+        "page_id": "e58b1f73-d341-48a3-afbc-a9ef5dc780c7",
+        "pipeline": {
+          "started_at": "2026-09-13T17:50:05.753Z",
+          "outcome": "completed",
+          "stage_outcomes": {
+            "source": "page-snapshot layer metadata",
+            "observed_layers": [
+              {
+                "layer_type": "ocr",
+                "target_language": null,
+                "models": [
+                  {
+                    "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+                    "provider": "OCR Worker"
+                  }
+                ]
+              },
+              {
+                "layer_type": "translation",
+                "target_language": "en",
+                "models": [
+                  {
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter"
+                  },
+                  {
+                    "stage": "tl",
+                    "model": "openai/gpt-5.6-luna",
+                    "provider": "openrouter",
+                    "upstream_provider": "OpenAI"
+                  },
+                  {
+                    "stage": "qa",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "openrouter",
+                    "upstream_provider": "Google AI Studio"
+                  }
+                ]
+              }
+            ]
+          },
+          "provider_calls": {
+            "estimated_cost_usd": 0.004333,
+            "prompt_tokens": 5306,
+            "completion_tokens": 2160,
+            "priced_calls": 2,
+            "unknown_calls": 0,
+            "qa_retries_used": 0
+          },
+          "completed_at": "2026-09-13T17:51:00.247Z"
+        },
+        "a04": {
+          "started_at": "2026-09-13T17:51:00.317Z",
+          "completed_at": "2026-09-13T17:51:04.060Z",
+          "editor_png_sha256": "6da225f13df3143248c9b0912205d297c51d673289c9e605098794a1c9ba02f2",
+          "export_png_sha256": "5a75168d5a9f9ba497b79d854d00681f272f466ed7acd30ab018b3d900036221",
+          "rendered_png_sha256": "6fedb38c8141a583602a8dac54ed36eada27dd5bd4a61e7d5d9c8a679d9c5c53",
+          "project_zip_sha256": "003dd6b8353d60c5c3842b274703ea7d204be5aa3b913f97a9b81dbd652ab34a",
+          "registered_font_faces": 38,
+          "loaded_font_faces": 8,
+          "effective_font_asset_count": "unavailable: loaded font URLs were not observable",
+          "final_fitted_font_data": "unknown: current editor surface does not expose measured final glyph fit"
+        }
+      },
+      "attempts": [
+        {
+          "kind": "continuation",
+          "path": "continuation",
+          "capture_manifest_sha256": "cc10a5db10fe0594f1222b164191de70f75aba7b6f48fbf164a3ea2072a0e0d7",
+          "outcome": "completed"
+        }
+      ]
+    }
+  ],
+  "progress": {
+    "expected_pages": 30,
+    "completed_pages": [
+      "sample177",
+      "sample222",
+      "sample61",
+      "sample99",
+      "sample93",
+      "sample83",
+      "sample7",
+      "sample139",
+      "sample39",
+      "sample47",
+      "sample123",
+      "sample134",
+      "sample150",
+      "sample172",
+      "sample192",
+      "sample197",
+      "sample199",
+      "sample268",
+      "sample289",
+      "sample320",
+      "sample360",
+      "sample416",
+      "sample206",
+      "sample208",
+      "sample226",
+      "sample261",
+      "sample457",
+      "sample609",
+      "sample611",
+      "sample612"
+    ],
+    "failed_pages": [],
+    "pending_pages": []
+  },
+  "verification": {
+    "r1_source_hashes_checked_at_creation": true,
+    "historical_evidence_preserved": true
+  },
+  "resume": {
+    "next_command": "./.venv/bin/python scripts/score_page_quality.py --manifest docs/quality-runs/g0-20260913-closure/G0-closure-manifest.json --candidates docs/quality-runs/g0-20260913-closure/development-candidates.json --reconciliation docs/quality-runs/g0-20260913-closure/G0-reviewed-reconciliation.json --label \"G0 current development baseline; policy mappings pending human review\" --out docs/quality-runs/g0-20260913-closure/development-measurement.json",
+    "expected_result": "All 30 source/artifact/revision candidates validate; policy coverage remains explicitly unresolved until human source-to-fresh-region mapping is reviewed.",
+    "do_not_repeat": "All 30 development pages completed. Do not repeat any successful paid capture."
+  },
+  "attempt_accounting": {
+    "abandoned_empty_paths_removed": [
+      "docs/quality-runs/g0-20260913-closure/pages/sample177",
+      "docs/quality-runs/g0-20260913-closure/pages/sample177-attempt1"
+    ],
+    "reason": "No pipeline/upload/export was created; all retained paid capture records are the explicit canary or continuation manifest entries."
+  }
+}

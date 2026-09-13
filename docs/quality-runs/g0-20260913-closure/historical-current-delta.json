@@ -1,0 +1,71 @@
+{
+  "schema_version": "g0-historical-current-delta/v1",
+  "historical_worker": "7d70b64",
+  "current_worker": "7b54f8c1c516eb445e869b2776ffa62e4ee2762b",
+  "population": "six original defect cases",
+  "pages": [
+    {
+      "id": "sample177",
+      "historical_snapshot": "docs/quality-runs/a03a04-20260910-retained/a04-exports/sample177/page-snapshot.json",
+      "current_snapshot": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample177/page-snapshot.json",
+      "historical_visible_translation_elements": 12,
+      "current_visible_translation_elements": 1,
+      "delta": -11,
+      "current_export_byte_identical_to_source": false
+    },
+    {
+      "id": "sample222",
+      "historical_snapshot": "docs/quality-runs/a03a04-20260910-retained/a04-exports/sample222/page-snapshot.json",
+      "current_snapshot": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample222/page-snapshot.json",
+      "historical_visible_translation_elements": 1,
+      "current_visible_translation_elements": 0,
+      "delta": -1,
+      "current_export_byte_identical_to_source": true
+    },
+    {
+      "id": "sample61",
+      "historical_snapshot": "docs/quality-runs/a03a04-20260910-retained/a04-exports/sample61/page-snapshot.json",
+      "current_snapshot": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample61/page-snapshot.json",
+      "historical_visible_translation_elements": 49,
+      "current_visible_translation_elements": 10,
+      "delta": -39,
+      "current_export_byte_identical_to_source": false
+    },
+    {
+      "id": "sample99",
+      "historical_snapshot": "docs/quality-runs/a03a04-20260910-retained/a04-exports/sample99/page-snapshot.json",
+      "current_snapshot": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample99/page-snapshot.json",
+      "historical_visible_translation_elements": 9,
+      "current_visible_translation_elements": 7,
+      "delta": -2,
+      "current_export_byte_identical_to_source": false
+    },
+    {
+      "id": "sample93",
+      "historical_snapshot": "docs/quality-runs/a03a04-20260910-retained/a04-exports/sample93/page-snapshot.json",
+      "current_snapshot": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample93/page-snapshot.json",
+      "historical_visible_translation_elements": 3,
+      "current_visible_translation_elements": 1,
+      "delta": -2,
+      "current_export_byte_identical_to_source": false
+    },
+    {
+      "id": "sample83",
+      "historical_snapshot": "docs/quality-runs/a03a04-20260910-retained/a04-exports/sample83/page-snapshot.json",
+      "current_snapshot": "docs/quality-runs/g0-20260913-closure/continuation/a04-exports/sample83/page-snapshot.json",
+      "historical_visible_translation_elements": 3,
+      "current_visible_translation_elements": 0,
+      "delta": -3,
+      "current_export_byte_identical_to_source": true
+    }
+  ],
+  "totals": {
+    "historical_visible_translation_elements": 77,
+    "current_visible_translation_elements": 19,
+    "exports_byte_identical_to_source": [
+      "sample222",
+      "sample83"
+    ]
+  },
+  "interpretation": "Observed baseline delta only. The current worker eligibility guard is a plausible cause, not proved by this artifact. No production behavior was changed."
+}
