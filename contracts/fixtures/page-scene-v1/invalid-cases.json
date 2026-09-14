@@ -4,6 +4,7 @@
     {"name": "unsupported-version", "operations": [{"op": "replace", "path": "/contract_version", "value": "page-scene/v0"}]},
     {"name": "invalid-geometry-type", "operations": [{"op": "replace", "path": "/objects/0/transform/x", "value": "not-a-number"}]},
     {"name": "automatic-empty-text", "operations": [{"op": "replace", "path": "/objects/0/text", "value": ""}]},
+    {"name": "invalid-blank-user-override", "operations": [{"op": "replace", "path": "/policies/0/user_override", "value": ""}]},
     {"name": "preserved-sfx-cleanup", "operations": [{"op": "replace", "path": "/policies/0/action", "value": "preserve"}]},
     {"name": "missing-cleanup-asset", "operations": [{"op": "remove", "path": "/assets/2"}]},
     {"name": "wrong-cleanup-source", "operations": [{"op": "replace", "path": "/cleanup_artifacts/0/source_sha256", "value": "9999999999999999999999999999999999999999999999999999999999999999"}]},

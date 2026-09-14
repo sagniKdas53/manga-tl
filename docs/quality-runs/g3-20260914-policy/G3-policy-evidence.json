@@ -1,0 +1,59 @@
+{
+  "schema_version": "g3-policy-evidence/v1",
+  "task": "G3",
+  "scope": "D01-D05 request and object boundaries; no source rasterization or pixel-invariance claim",
+  "revisions": {
+    "app_base": "09e4202",
+    "worker": "1c1b9e1",
+    "corpus": "27de7499f0c4c142763116bfcbcfd0afd9709cbf"
+  },
+  "classification_evidence": {
+    "source": "docs/quality-runs/d01-20260914-classifier/D01-classifier-evaluation.json",
+    "development_labels_joined": 257,
+    "unmatched_labels": 0,
+    "actions_with_explicit_ids": {"replace": 172, "preserve": 53, "explain": 5, "review": 27},
+    "sfx_classifier": {
+      "true_positive": 8,
+      "false_positive_replace_dialogue": 0,
+      "false_negative_preserve": 45,
+      "precision": 1.0,
+      "recall": 0.1509433962264151
+    },
+    "controls": ["vertical dialogue", "decorated dialogue", "zero-confidence bubble"],
+    "holdout_read": false
+  },
+  "policy_matrix": [
+    {"boundary": "layout callback", "effective_replace": "policy metadata emitted", "preserve_review_explain": "source-preserving action metadata; no replacement authorization"},
+    {"boundary": "translation target and repeated manifest", "effective_replace": "target and chunk candidate", "preserve_review_explain": "omitted from provider target IDs and raw repeated entries"},
+    {"boundary": "translation retry and fallback", "effective_replace": "retryable only after provider failure", "preserve_review_explain": "policy skip, never failure or retry candidate"},
+    {"boundary": "per-region translation QA", "effective_replace": "only ID in QA metadata and accepted QA result", "preserve_review_explain": "omitted from metadata and sanitized out of callback results"},
+    {"boundary": "page-wide visual QA", "effective_replace": "metadata target when selected", "preserve_review_explain": "original source pixels remain visible; no per-region verdict ID"},
+    {"boundary": "automatic cleanup and text object", "effective_replace": "contract validator admits non-blank authorized request", "preserve_review_explain": "validator rejects automatic cleanup/text"}
+  ],
+  "provider_payload_evidence": {
+    "test": "test_policy_skipped_regions_never_reach_provider_targets_or_manifest",
+    "input_regions": 2,
+    "selected_target_ids": ["replace-dialogue"],
+    "policy_skipped_ids": ["preserved-sfx"],
+    "preserved_sfx_target_ids": 0,
+    "preserved_sfx_raw_repeated_manifest_entries": 0,
+    "translation_chunk_count": 1,
+    "external_provider_calls": 0,
+    "provider_tokens": {"input": 0, "output": 0, "basis": "mock intercepted every provider call; no paid request was issued"},
+    "selected_dialogue_token_usage": {"status": "not-executed", "reason": "M3 is explicitly before paid work; no token count is inferred from region count"}
+  },
+  "verification": {
+    "focused_policy_tests": "27 passed",
+    "worker_full_tests": "515 passed",
+    "worker_pyright": "0 errors, 0 warnings",
+    "worker_ruff_check": "passed",
+    "worker_changed_file_format": "14 files formatted",
+    "worker_full_format": "not clean: pre-existing src/worker/schemas.py would be reformatted; untouched by M3",
+    "javascript_contract": "passed",
+    "rust_contract": "2 passed"
+  },
+  "limitations": [
+    "No provider quality, actual selected-dialogue token cost, source-pixel invariance, cleanup image, browser render, or holdout quality is claimed.",
+    "Final pixel-invariance evidence remains G6, G8, and J01 work."
+  ]
+}

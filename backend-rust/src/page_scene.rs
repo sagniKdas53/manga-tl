@@ -130,6 +130,32 @@ pub async fn current_render_artifact(
     }
 }
 
+/// Shared authorization gate for every automatic replacement artifact. A policy authorizes
+/// neither cleanup nor text unless its effective action is `replace`; automatic text is never
+/// allowed to carry an empty or whitespace-only replacement.
+fn validate_replacement_request<'a>(
+    policy_by_owner: &HashMap<String, String>,
+    owner_ids: impl IntoIterator<Item = &'a str>,
+    automatic_text: Option<&str>,
+) -> Result<(), PageSceneError> {
+    let mut has_owner = false;
+    for owner_id in owner_ids {
+        has_owner = true;
+        if policy_by_owner.get(owner_id).map(String::as_str) != Some("replace") {
+            return Err(error(
+                "automatic replacement requires effective replace policy",
+            ));
+        }
+    }
+    if !has_owner {
+        return Err(error("automatic replacement requires at least one owner"));
+    }
+    if automatic_text.is_some_and(|text| text.trim().is_empty()) {
+        return Err(error("automatic replacement text must be non-empty"));
+    }
+    Ok(())
+}
+
 pub fn validate_page_scene(document: Value) -> Result<ValidatedPageScene, PageSceneError> {
     reject_non_finite(&document)?;
     let root = object(&document, "scene")?;
@@ -288,13 +314,11 @@ pub fn validate_page_scene(document: Value) -> Result<ValidatedPageScene, PageSc
             .iter()
             .map(|value| string_value(value, "cleanup.owner_ids[]").map(str::to_owned))
             .collect::<Result<HashSet<_>, _>>()?;
-        if cleanup_owner_ids.is_empty()
-            || cleanup_owner_ids
-                .iter()
-                .any(|id| policy_by_owner.get(id).map(String::as_str) != Some("replace"))
-        {
-            return Err(error("cleanup requires replacement owners"));
-        }
+        validate_replacement_request(
+            &policy_by_owner,
+            cleanup_owner_ids.iter().map(String::as_str),
+            None,
+        )?;
         cleanup_owners.insert(cleanup_id, cleanup_owner_ids);
     }
 
@@ -322,13 +346,11 @@ pub fn validate_page_scene(document: Value) -> Result<ValidatedPageScene, PageSc
             continue;
         }
         let owner_id = string(item, "owner_id")?;
-        if policy_by_owner.get(owner_id).map(String::as_str) != Some("replace")
-            || string(item, "text")?.trim().is_empty()
-        {
-            return Err(error(
-                "automatic text requires non-empty replacement owner text",
-            ));
-        }
+        validate_replacement_request(
+            &policy_by_owner,
+            std::iter::once(owner_id),
+            Some(string(item, "text")?),
+        )?;
         for cleanup_id in array(required(item, "cleanup_ids")?, "object.cleanup_ids")? {
             let cleanup_id = string_value(cleanup_id, "object.cleanup_ids[]")?;
             if !cleanup_owners

@@ -33,7 +33,7 @@ A09 roster and reserve state. Coordinator rejected `sample253` and confirmed `sa
 | [x] | M0 — current baseline and reviewed acceptance data | A01–A09, A06-C | A01–A09 complete | G0 | Historical A01–A08/A06-C work retained; [A09 remains unscored](quality-checkpoints/A09.md); [G0 PASSED](quality-checkpoints/G0.md); approved successor protocol and independent sign-off retained |
 | [x] | M1 — new artifact and API contract | B01–B05 | G0 | G1 | **DONE** — [B01 contract](quality-checkpoints/B01.md), [B02 persistence](quality-checkpoints/B02.md), [B03 backend mapping](quality-checkpoints/B03.md), [B04 standalone worker](quality-checkpoints/B04.md), [B05 live API](quality-checkpoints/B05.md), and [G1 contract gate](quality-checkpoints/G1.md) are complete; G0/A09 evidence and explicit unresolved identities remain unchanged |
 | [x] | M2 — revision-safe output lifecycle | C01–C05 | G1 | G2 | **DONE** — [C01](quality-checkpoints/C01.md), [C02](quality-checkpoints/C02.md), [C03](quality-checkpoints/C03.md), [C04](quality-checkpoints/C04.md), [C05](quality-checkpoints/C05.md), and [G2 freshness gate](quality-checkpoints/G2.md) are complete |
-| [ ] | M3 — SFX decisions before paid/destructive work | D01–D05 | G1 | G3 | Pending |
+| [x] | M3 — SFX decisions before paid/destructive work | D01–D05 | G1 | G3 | **DONE** — [D01](quality-checkpoints/D01.md), [D02](quality-checkpoints/D02.md), [D03](quality-checkpoints/D03.md), [D04](quality-checkpoints/D04.md), [D05](quality-checkpoints/D05.md), and [G3](quality-checkpoints/G3.md); no source-pixel or holdout-quality claim |
 | [ ] | M4 — shared browser scene and render service | E01–E06 | G1; G2 before queue integration | G4 | Pending |
 | [ ] | M5 — independent owners and bounded grouping | F01–F04 | G1 | G5 | Pending |
 | [ ] | M6 — glyph masks and reconstructed backgrounds | G01–G07 | G3 and G5 | G6 | Pending |
@@ -51,6 +51,17 @@ A09 roster and reserve state. Coordinator rejected `sample253` and confirmed `sa
 | B04 | DONE | worker `5a97868`; parent `0e5c407` | [Standalone worker validation and schema digest pin](quality-checkpoints/B04.md) |
 | B05 | DONE | `701dd6d`, `963abf0` | [Live API mapping, generated TypeScript and round-trip verification](quality-checkpoints/B05.md) |
 
+
+### M3 checkpoint register
+
+| Task | Status | Commit | Evidence |
+| --- | --- | --- | --- |
+| D01 | DONE | worker `1c1b9e1` | [Development-only classifier evaluation and frozen rules](quality-checkpoints/D01.md) |
+| D02 | DONE | worker `1c1b9e1` | [Pure region policy and callback metadata](quality-checkpoints/D02.md) |
+| D03 | DONE | worker `1c1b9e1` | [Provider target and repeated-manifest exclusion](quality-checkpoints/D03.md) |
+| D04 | DONE | worker `1c1b9e1` | [Retry and per-region QA exclusion](quality-checkpoints/D04.md) |
+| D05 | DONE | worker `1c1b9e1`; parent M3 commit | [Shared automatic-replacement validation](quality-checkpoints/D05.md) |
+| G3 | PASSED | worker `1c1b9e1`; parent M3 commit | [Current request/object boundary evidence](quality-checkpoints/G3.md) |
 Default order is the table order. To conserve usage, run one Luna at a time unless two ready tasks have disjoint files and useful independent outputs. After G1, the policy, grouping and browser foundations can proceed independently; do not hold the browser prototype until cleanup is finished. No final typography features go into Pillow.
 
 ```mermaid
@@ -147,13 +158,13 @@ G2 checkpoint: **PASSED** — [real PostgreSQL/queue/storage trace](quality-chec
 
 | ID | Depends on | Bounded output / allowed seams | Task gate |
 | --- | --- | --- | --- |
-| D01 | B04 | Evaluate existing `classify_region_type` and cheap source features against A06/A06-C/A07 **development** labels only; correct zero-confidence handling in `services/layout.py` only after reproducing it. Save false positives/negatives and proposed calibrated rules. A09 roster/reserve labels and outputs are not calibration inputs. | Kana length alone never authorizes suppression. Decorated dialogue, vertical dialogue and low-confidence bubble cases appear in the report. Coordinator freezes the initial rule set. |
-| D02 | D01 | Implement pure region-action selection with explicit user override and uncertainty in a small worker policy module; wire one classification seam. | Preserve/review authorize no erasure; explain is note-only; explicit replace overrides only that region. All labelled dialogue remains accounted for. |
-| D03 | D02 | Apply policy to target selection **and repeated page manifests** in `handlers/translation.py`; retain OCR records outside provider prompts. | Captured provider payload has zero preserved-SFX target IDs/raw repeated entries. Already-filtered typed targets stay filtered. Measure tokens and chunks, not assumed per-region calls. |
-| D04 | D03 | Apply policy to retry/translation-QA scheduling in their actual handlers; separate policy skip from failed translation. | Preserved/review regions cause no translation retries or per-region translation QA calls; selected dialogue failure remains retryable. Page-wide visual QA can still inspect original SFX. |
-| D05 | D02, B05 | Add a shared contract-level validator used when creating replacement objects/cleanup requests. Cover tampered or contradictory new payloads. | `preserve/review` produces no automatic patch/text object, including re-render and new-format import. Empty/whitespace automatic translation cannot leave a blank patch. |
+| D01 (`DONE`; [checkpoint](quality-checkpoints/D01.md)) | B04 | Evaluated existing `classify_region_type` and cheap source features against A06/A06-C/A07 **development** labels only; corrected reproduced zero-confidence handling in `services/layout.py`; retained false positives/negatives and calibrated rules. A09 roster/reserve labels and outputs were not read. | Kana length alone never authorizes suppression. Decorated dialogue, vertical dialogue and low-confidence bubble cases are in the report. Coordinator rules are frozen. |
+| D02 (`DONE`; [checkpoint](quality-checkpoints/D02.md)) | D01 | Pure region-action selection has explicit user override and uncertainty in a small worker policy module and one layout seam. | Preserve/review authorize no erasure; explain is note-only; explicit replace overrides only that region. All labelled dialogue remains accounted for. |
+| D03 (`DONE`; [checkpoint](quality-checkpoints/D03.md)) | D02 | Policy filters target selection **and repeated page manifests** in `handlers/translation.py`; OCR records remain outside provider prompts. | Captured provider payload has zero preserved-SFX target IDs/raw repeated entries. Already-filtered typed targets stay filtered. Chunks are measured; live tokens are not inferred without a provider call. |
+| D04 (`DONE`; [checkpoint](quality-checkpoints/D04.md)) | D03 | Policy filters retry and per-region translation-QA scheduling in actual handlers; policy skip remains distinct from failure. | Preserved/review regions cause no translation retries or per-region translation QA calls; selected dialogue failure remains retryable. Page-wide visual QA still receives original SFX pixels. |
+| D05 (`DONE`; [checkpoint](quality-checkpoints/D05.md)) | D02, B05 | Shared contract-level authorization validates automatic replacement cleanup/text in worker and live Rust scene validation; contradictory payloads are covered. | `preserve/review` produces no automatic patch/text object, including new-format import. Empty/whitespace automatic translation cannot leave a blank patch. |
 
-G3 checkpoint: labelled classification results, provider payload/token evidence and policy matrix at the currently available request/object boundaries. Final pixel invariance is rechecked with actual cleanup/browser integration at G6/G8 and J01; it is not claimed from validator tests. Preserve metadata without rasterizing OCR. Ambiguous dialogue is visibly queued for review and counted as unresolved; it is not reported translated.
+G3 checkpoint: **PASSED** — [labelled classifier, provider-boundary/token, and policy-matrix evidence](quality-checkpoints/G3.md) covers currently available request/object boundaries. Final pixel invariance remains G6/G8/J01 integration work and is not claimed from validator tests. Preserve metadata without rasterizing OCR; ambiguous dialogue remains visibly unresolved rather than reported translated.
 
 ### M4 — one browser renderer, proven early
 
@@ -328,7 +339,7 @@ For every model/browser/batch run also persist a machine-readable manifest with 
 
 ## Resume packet
 
-> Immediate task: B01–B04 are complete. Start B05 with the frozen `page-scene/v1` contract and independently validated worker input. Preserve the frozen G0 baseline, A09 roster/reserves, and all explicit unresolved identities. Do not score A09 or regenerate the corpus.
+> Immediate task: M3 is complete. Start M4 with E01 in default order, preserving the frozen G0/A09 evidence and M3's effective-`replace` authorization boundary. Do not score A09 or regenerate the corpus.
 
 Current checkpoint: historical A01–A08/A06-C work is retained; G0 now has current all-30 evidence, explicit unresolved identity coverage, and an approved future-J02 successor protocol. The [original planning validation record](quality-evidence/implementation-plan-validation.json) remains historical; the [coverage review](quality-evidence/style-coverage-review.md) supplies language/layout/style requirements. Later milestones remain pending.
 
