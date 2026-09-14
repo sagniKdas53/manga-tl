@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://manga-library.local/contracts/page-scene-v1.schema.json",
+  "title": "Manga Library Page Scene v1",
+  "description": "New-format-only logical page scene and resolved renderer snapshot. Unsupported versions are rejected; this schema supplies no legacy conversion.",
+  "type": "object",
+  "required": ["contract_version", "scene_kind", "page", "provenance", "fragments", "owners", "policies", "assets", "cleanup_artifacts", "objects"],
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": {"const": "page-scene/v1"},
+    "scene_kind": {"enum": ["logical", "resolved"]},
+    "page": {"$ref": "#/$defs/page"},
+    "provenance": {"$ref": "#/$defs/provenance"},
+    "fragments": {"type": "array", "items": {"$ref": "#/$defs/fragment"}, "uniqueItems": true},
+    "owners": {"type": "array", "items": {"$ref": "#/$defs/owner"}, "uniqueItems": true},
+    "policies": {"type": "array", "items": {"$ref": "#/$defs/policy"}, "uniqueItems": true},
+    "assets": {"type": "array", "items": {"$ref": "#/$defs/asset"}, "uniqueItems": true},
+    "cleanup_artifacts": {"type": "array", "items": {"$ref": "#/$defs/cleanupArtifact"}, "uniqueItems": true},
+    "objects": {"type": "array", "items": {"$ref": "#/$defs/editableObject"}, "uniqueItems": true},
+    "resolved_layout": {"$ref": "#/$defs/resolvedLayout"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"scene_kind": {"const": "logical"}}},
+      "then": {"not": {"required": ["resolved_layout"]}}
+    },
+    {
+      "if": {"properties": {"scene_kind": {"const": "resolved"}}},
+      "then": {"required": ["resolved_layout"]}
+    }
+  ],
+  "$defs": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"},
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "finiteNumber": {"type": "number", "minimum": -1000000000000, "maximum": 1000000000000},
+    "point": {"type": "object", "required": ["x", "y"], "additionalProperties": false, "properties": {"x": {"$ref": "#/$defs/finiteNumber"}, "y": {"$ref": "#/$defs/finiteNumber"}}},
+    "rect": {"type": "object", "required": ["x", "y", "width", "height"], "additionalProperties": false, "properties": {"x": {"$ref": "#/$defs/finiteNumber"}, "y": {"$ref": "#/$defs/finiteNumber"}, "width": {"type": "number", "exclusiveMinimum": 0, "maximum": 1000000000000}, "height": {"type": "number", "exclusiveMinimum": 0, "maximum": 1000000000000}}},
+    "page": {"type": "object", "required": ["page_id", "revision", "source"], "additionalProperties": false, "properties": {"page_id": {"$ref": "#/$defs/id"}, "revision": {"type": "integer", "minimum": 0}, "source": {"type": "object", "required": ["sha256", "width", "height", "mime_type"], "additionalProperties": false, "properties": {"sha256": {"$ref": "#/$defs/sha256"}, "width": {"type": "integer", "minimum": 1}, "height": {"type": "integer", "minimum": 1}, "mime_type": {"enum": ["image/png", "image/jpeg", "image/webp"]}}}}},
+    "provenance": {"type": "object", "required": ["app_commit", "worker_commit", "renderer_commit", "models", "configuration_sha256", "fonts", "runtime", "timings_ms", "warnings"], "additionalProperties": false, "properties": {"app_commit": {"$ref": "#/$defs/sha256"}, "worker_commit": {"$ref": "#/$defs/sha256"}, "renderer_commit": {"$ref": "#/$defs/sha256"}, "models": {"type": "array", "items": {"type": "object", "required": ["stage", "identifier", "configuration_sha256"], "additionalProperties": false, "properties": {"stage": {"$ref": "#/$defs/id"}, "identifier": {"type": "string", "minLength": 1}, "configuration_sha256": {"$ref": "#/$defs/sha256"}}}}, "configuration_sha256": {"$ref": "#/$defs/sha256"}, "fonts": {"type": "array", "items": {"type": "object", "required": ["font_id", "sha256"], "additionalProperties": false, "properties": {"font_id": {"$ref": "#/$defs/id"}, "sha256": {"$ref": "#/$defs/sha256"}}}}, "runtime": {"type": "object", "required": ["os", "architecture", "execution_provider"], "additionalProperties": false, "properties": {"os": {"type": "string", "minLength": 1}, "architecture": {"type": "string", "minLength": 1}, "execution_provider": {"type": "string", "minLength": 1}}}, "timings_ms": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}}, "warnings": {"type": "array", "items": {"type": "string"}}}},
+    "fragment": {"type": "object", "required": ["fragment_id", "quad", "text", "confidence", "detector_to_source"], "additionalProperties": false, "properties": {"fragment_id": {"$ref": "#/$defs/id"}, "quad": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"$ref": "#/$defs/point"}}, "text": {"type": "string"}, "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "detector_to_source": {"type": "array", "minItems": 9, "maxItems": 9, "items": {"$ref": "#/$defs/finiteNumber"}}, "glyph_evidence": {"type": ["object", "null"]}}},
+    "owner": {"type": "object", "required": ["owner_id", "fragment_ids", "container_id", "panel_id", "grouping_evidence", "vetoes"], "additionalProperties": false, "properties": {"owner_id": {"$ref": "#/$defs/id"}, "fragment_ids": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/id"}, "uniqueItems": true}, "container_id": {"type": ["string", "null"]}, "panel_id": {"type": ["string", "null"]}, "grouping_evidence": {"type": "array", "items": {"type": "string"}}, "vetoes": {"type": "array", "items": {"type": "string"}}}},
+    "policy": {"type": "object", "required": ["owner_id", "kind", "confidence", "reason", "action", "user_override"], "additionalProperties": false, "properties": {"owner_id": {"$ref": "#/$defs/id"}, "kind": {"enum": ["dialogue", "sfx", "caption", "title", "other", "unknown"]}, "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "reason": {"type": "string"}, "action": {"enum": ["preserve", "explain", "replace", "review"]}, "user_override": {"type": ["string", "null"], "enum": ["preserve", "explain", "replace", "review", null]}}},
+    "asset": {"type": "object", "required": ["asset_id", "kind", "sha256", "byte_length", "mime_type"], "additionalProperties": false, "properties": {"asset_id": {"$ref": "#/$defs/id"}, "kind": {"enum": ["glyph_mask", "cleanup_patch", "manual_cleanup_patch", "font"]}, "sha256": {"$ref": "#/$defs/sha256"}, "byte_length": {"type": "integer", "minimum": 0}, "mime_type": {"enum": ["image/png", "application/octet-stream", "font/ttf", "font/otf", "font/woff2"]}}},
+    "cleanupArtifact": {"type": "object", "required": ["cleanup_id", "owner_ids", "source_sha256", "mask_asset_id", "patch_asset_id", "bounds", "generator_sha256", "active_set_dependency", "diagnostics"], "additionalProperties": false, "properties": {"cleanup_id": {"$ref": "#/$defs/id"}, "owner_ids": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/id"}, "uniqueItems": true}, "source_sha256": {"$ref": "#/$defs/sha256"}, "mask_asset_id": {"$ref": "#/$defs/id"}, "patch_asset_id": {"$ref": "#/$defs/id"}, "bounds": {"$ref": "#/$defs/rect"}, "generator_sha256": {"$ref": "#/$defs/sha256"}, "active_set_dependency": {"enum": ["independent", "joint"]}, "diagnostics": {"type": "array", "items": {"type": "string"}}}},
+    "transform": {"type": "object", "required": ["x", "y", "width", "height", "rotation_degrees"], "additionalProperties": false, "properties": {"x": {"$ref": "#/$defs/finiteNumber"}, "y": {"$ref": "#/$defs/finiteNumber"}, "width": {"type": "number", "exclusiveMinimum": 0, "maximum": 1000000000000}, "height": {"type": "number", "exclusiveMinimum": 0, "maximum": 1000000000000}, "rotation_degrees": {"$ref": "#/$defs/finiteNumber"}}},
+    "style": {"type": "object", "required": ["font_id", "fill", "stroke", "weight", "padding"], "additionalProperties": false, "properties": {"font_id": {"$ref": "#/$defs/id"}, "fill": {"type": "string", "minLength": 1}, "stroke": {"type": "string"}, "weight": {"type": "integer", "minimum": 1, "maximum": 1000}, "padding": {"$ref": "#/$defs/finiteNumber"}}},
+    "textObject": {"type": "object", "required": ["object_id", "kind", "owner_id", "cleanup_ids", "text", "allowed_container_id", "transform", "writing_mode", "alignment", "style", "visible", "z_index"], "additionalProperties": false, "properties": {"object_id": {"$ref": "#/$defs/id"}, "kind": {"enum": ["automatic_text", "manual_text"]}, "owner_id": {"type": ["string", "null"]}, "cleanup_ids": {"type": "array", "items": {"$ref": "#/$defs/id"}, "uniqueItems": true}, "text": {"type": "string"}, "allowed_container_id": {"type": ["string", "null"]}, "transform": {"$ref": "#/$defs/transform"}, "writing_mode": {"enum": ["horizontal-tb", "vertical-rl", "vertical-lr"]}, "alignment": {"enum": ["start", "center", "end", "justify"]}, "style": {"$ref": "#/$defs/style"}, "visible": {"type": "boolean"}, "z_index": {"type": "integer"}}, "allOf": [{"if": {"properties": {"kind": {"const": "automatic_text"}}}, "then": {"properties": {"owner_id": {"type": "string", "minLength": 1}, "cleanup_ids": {"minItems": 1}, "text": {"minLength": 1}}}}]},
+    "manualCleanupObject": {"type": "object", "required": ["object_id", "kind", "cleanup_ids", "visible", "z_index"], "additionalProperties": false, "properties": {"object_id": {"$ref": "#/$defs/id"}, "kind": {"const": "manual_cleanup"}, "cleanup_ids": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/id"}, "uniqueItems": true}, "visible": {"type": "boolean"}, "z_index": {"type": "integer"}}},
+    "editableObject": {"oneOf": [{"$ref": "#/$defs/textObject"}, {"$ref": "#/$defs/manualCleanupObject"}]},
+    "resolvedLayout": {"type": "object", "required": ["logical_scene_sha256", "layout_engine_version", "objects", "diagnostics"], "additionalProperties": false, "properties": {"logical_scene_sha256": {"$ref": "#/$defs/sha256"}, "layout_engine_version": {"$ref": "#/$defs/id"}, "objects": {"type": "array", "items": {"type": "object", "required": ["object_id", "bounds", "line_boxes"], "additionalProperties": false, "properties": {"object_id": {"$ref": "#/$defs/id"}, "bounds": {"$ref": "#/$defs/rect"}, "line_boxes": {"type": "array", "items": {"$ref": "#/$defs/rect"}}}}}, "diagnostics": {"type": "array", "items": {"type": "string"}}}}
+  }
+}
