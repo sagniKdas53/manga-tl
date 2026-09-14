@@ -209,7 +209,7 @@ pub async fn update_layer_element(
         .await
         .expect("layer metadata bump");
     }
-    touch_page(&state.pool, id).await;
+    touch_page(&state.pool, updated.layer_id).await;
 
     Json(updated).into_response()
 }
