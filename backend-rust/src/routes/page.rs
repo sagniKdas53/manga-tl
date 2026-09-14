@@ -926,8 +926,11 @@ pub async fn put_page_scene(
     if validated.source_page_id != page_id.to_string() {
         return error::bad_request("scene page_id does not match the route page ID", INSTANCE);
     }
-    if validated.revision != current_revision {
-        return error::bad_request("scene revision does not match the page revision", INSTANCE);
+    if validated.revision != current_revision && validated.revision != current_revision + 1 {
+        return error::bad_request(
+            "scene revision is neither the current retry nor the next page revision",
+            INSTANCE,
+        );
     }
     if source_sha256.as_deref() != Some(validated.source_sha256.as_str()) {
         return error::bad_request("scene source hash does not match the page source", INSTANCE);
@@ -956,6 +959,9 @@ pub async fn put_page_scene(
             tracing::error!("Could not inspect page-scene snapshot for {page_id}: {err}");
             return error::internal_error(INSTANCE);
         }
+    }
+    if validated.revision != current_revision + 1 {
+        return error::bad_request("new scene writes require the next page revision", INSTANCE);
     }
 
     let snapshot = validated.snapshot_for_page(page_id);
@@ -1015,6 +1021,10 @@ pub async fn put_page_scene(
             tracing::error!("Could not insert page-scene asset for {page_id}: {err}");
             return error::internal_error(INSTANCE);
         }
+    }
+    if let Err(err) = crate::page_freshness::advance_page_revision(&mut tx, page_id).await {
+        tracing::error!("Could not advance page revision for page-scene write {page_id}: {err}");
+        return error::internal_error(INSTANCE);
     }
     if let Err(err) = tx.commit().await {
         tracing::error!("Could not commit page-scene snapshot for {page_id}: {err}");

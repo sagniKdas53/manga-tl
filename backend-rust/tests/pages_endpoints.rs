@@ -1319,7 +1319,7 @@ async fn page_scene_api_round_trips_the_new_format_contract() {
     ))
     .unwrap();
     scene["page"]["page_id"] = serde_json::json!(page_id);
-    scene["page"]["revision"] = serde_json::json!(0);
+    scene["page"]["revision"] = serde_json::json!(1);
     scene["page"]["source"]["sha256"] = serde_json::json!(source_sha256);
     scene["cleanup_artifacts"][0]["source_sha256"] = scene["page"]["source"]["sha256"].clone();
 
@@ -1353,14 +1353,14 @@ async fn page_scene_api_round_trips_the_new_format_contract() {
     );
 
     let owner_count: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM page_scene_owners WHERE page_id = $1 AND revision = 0",
+        "SELECT count(*) FROM page_scene_owners WHERE page_id = $1 AND revision = 1",
     )
     .bind(Uuid::parse_str(page_id).unwrap())
     .fetch_one(&pool)
     .await
     .unwrap();
     let asset_count: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM page_scene_assets WHERE page_id = $1 AND revision = 0",
+        "SELECT count(*) FROM page_scene_assets WHERE page_id = $1 AND revision = 1",
     )
     .bind(Uuid::parse_str(page_id).unwrap())
     .fetch_one(&pool)
