@@ -1785,10 +1785,11 @@ pub async fn upload_zip_archive(
                     .await
                     .unwrap_or(None);
 
+            let mut replacement_image_id = None;
             let page = match existing_page {
                 Some(existing_page) => {
                     // Clear elements (+history) and layers, then maybe swap the image.
-                    clear_page_layers(&state.pool, existing_page.id).await;
+                    // Replacement of editable layers is committed atomically with its revision below.
                     let old_image: Option<Image> =
                         sqlx::query_as("SELECT * FROM images WHERE id = $1")
                             .bind(existing_page.image_id)
@@ -1836,15 +1837,7 @@ pub async fn upload_zip_archive(
                                 created.id
                             }
                         };
-                        sqlx::query("UPDATE pages SET image_id=$2 WHERE id=$1")
-                            .bind(existing_page.id)
-                            .bind(new_image_id)
-                            .execute(&state.pool)
-                            .await
-                            .expect("page image swap");
-                        if existing_page.page_number == 1 {
-                            recalculate_chapter_cover(&state.pool, chapter_id).await;
-                        }
+                        replacement_image_id = Some(new_image_id);
                     }
                     page_at_slot(&state.pool, chapter_id, existing_page.page_number)
                         .await
@@ -1894,11 +1887,19 @@ pub async fn upload_zip_archive(
                 },
             };
 
-            let restored = restore_project_layers(state, page.id, &project_bytes, false).await;
-            if restored.is_err() {
+            if restore_project_page(&state, page.id, &project_bytes, false, replacement_image_id)
+                .await
+                .is_err()
+            {
                 return StatusCode::INTERNAL_SERVER_ERROR.into_response();
             }
 
+            let page = page_at_slot(&state.pool, chapter_id, page.page_number)
+                .await
+                .unwrap_or(page);
+            if replacement_image_id.is_some() && page.page_number == 1 {
+                recalculate_chapter_cover(&state.pool, chapter_id).await;
+            }
             Json(UploadResponse {
                 pageId: Some(page.id),
                 imageId: Some(page.image_id),
@@ -2019,27 +2020,31 @@ fn zip_error(status: String) -> Response {
 }
 
 /// Removes a page's layer elements (+edit history) and layers before a project restore.
-async fn clear_page_layers(pool: &sqlx::PgPool, page_id: Uuid) {
+///
+/// This uses the caller's transaction so a failed restore leaves the previous editable page
+/// intact instead of committing a half-cleared replacement.
+async fn clear_page_layers(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    page_id: Uuid,
+) -> Result<(), sqlx::Error> {
     sqlx::query(
         "DELETE FROM layer_edit_history WHERE layer_element_id IN (\
              SELECT le.id FROM layer_elements le JOIN layers l ON l.id = le.layer_id WHERE l.page_id = $1)",
     )
     .bind(page_id)
-    .execute(pool)
-    .await
-    .ok();
+    .execute(&mut **tx)
+    .await?;
     sqlx::query(
         "DELETE FROM layer_elements WHERE layer_id IN (SELECT id FROM layers WHERE page_id = $1)",
     )
     .bind(page_id)
-    .execute(pool)
-    .await
-    .ok();
+    .execute(&mut **tx)
+    .await?;
     sqlx::query("DELETE FROM layers WHERE page_id = $1")
         .bind(page_id)
-        .execute(pool)
-        .await
-        .ok();
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
 }
 
 pub async fn insert_image_public(
@@ -2073,7 +2078,7 @@ fn validate_project_schema(project_json: &[u8]) -> Result<(), &'static str> {
 /// `track_manual_edits` stamps the image's last_edited_at when manual edits exist
 /// (the chapters/{id}/import-project behaviour).
 async fn restore_project_layers(
-    state: &AppState,
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     page_id: Uuid,
     project_json: &[u8],
     track_manual_edits: bool,
@@ -2125,7 +2130,7 @@ async fn restore_project_layers(
         .bind(z_order)
         .bind(&metadata_json)
         .bind(page_id)
-        .execute(&state.pool)
+        .execute(&mut **tx)
         .await
         .map_err(|_| ())?;
         imported_layers += 1;
@@ -2248,7 +2253,7 @@ async fn restore_project_layers(
             .bind(is_manually_edited)
             .bind(layer_id)
             .bind(region_id)
-            .execute(&state.pool)
+            .execute(&mut **tx)
             .await
             .map_err(|_| ())?;
             imported_elements += 1;
@@ -2258,19 +2263,44 @@ async fn restore_project_layers(
     if has_manual_edits && track_manual_edits {
         let image_id: Option<Uuid> = sqlx::query_scalar("SELECT image_id FROM pages WHERE id = $1")
             .bind(page_id)
-            .fetch_optional(&state.pool)
+            .fetch_optional(&mut **tx)
             .await
             .ok()
             .flatten();
         if let Some(image_id) = image_id {
             let _ = sqlx::query("UPDATE images SET last_edited_at = now() WHERE id = $1")
                 .bind(image_id)
-                .execute(&state.pool)
+                .execute(&mut **tx)
                 .await;
         }
     }
 
     Ok((imported_layers, imported_elements))
+}
+
+async fn restore_project_page(
+    state: &AppState,
+    page_id: Uuid,
+    project_json: &[u8],
+    track_manual_edits: bool,
+    replacement_image_id: Option<Uuid>,
+) -> Result<(usize, usize), ()> {
+    let mut tx = state.pool.begin().await.map_err(|_| ())?;
+    clear_page_layers(&mut tx, page_id).await.map_err(|_| ())?;
+    if let Some(image_id) = replacement_image_id {
+        sqlx::query("UPDATE pages SET image_id = $2 WHERE id = $1")
+            .bind(page_id)
+            .bind(image_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| ())?;
+    }
+    let counts = restore_project_layers(&mut tx, page_id, project_json, track_manual_edits).await?;
+    crate::page_freshness::advance_page_revision(&mut tx, page_id)
+        .await
+        .map_err(|_| ())?;
+    tx.commit().await.map_err(|_| ())?;
+    Ok(counts)
 }
 
 /// POST /api/chapters/{chapterId}/import-project — restore a page-level project export
@@ -2367,11 +2397,11 @@ pub async fn import_project(
             .unwrap_or(0);
     let page_number = page_count + 1;
 
-    // Slot occupied? Replace its contents; otherwise create a fresh page at that slot.
+    let mut replacement_image_id = None;
     let existing_page = page_at_slot(&state.pool, chapter_id, page_number).await;
     let page = match &existing_page {
         Some(existing_page) => {
-            clear_page_layers(&state.pool, existing_page.id).await;
+            // Replacement of editable layers is committed atomically with its revision below.
             if let Some((original_name, original_bytes)) = original {
                 let file_hash = hex::encode(sha2::Sha256::digest(&original_bytes));
                 let old_hash_matches = sqlx::query_scalar::<_, Option<String>>(
@@ -2427,15 +2457,7 @@ pub async fn import_project(
                             created.id
                         }
                     };
-                    sqlx::query("UPDATE pages SET image_id=$2 WHERE id=$1")
-                        .bind(existing_page.id)
-                        .bind(new_image_id)
-                        .execute(&state.pool)
-                        .await
-                        .expect("image swap");
-                    if existing_page.page_number == 1 {
-                        recalculate_chapter_cover(&state.pool, chapter_id).await;
-                    }
+                    replacement_image_id = Some(new_image_id);
                 }
             }
             page_at_slot(&state.pool, chapter_id, existing_page.page_number)
@@ -2489,21 +2511,20 @@ pub async fn import_project(
         }
     };
 
-    match restore_project_layers(&state, page.id, &project_bytes, true).await {
+    match restore_project_page(&state, page.id, &project_bytes, true, replacement_image_id).await {
         Ok((layers_count, elements_count)) => {
             tracing::info!(
                 "Successfully imported project ZIP to chapter {chapter_id}: {layers_count} layers and {elements_count} elements imported."
             );
+            if replacement_image_id.is_some() && page.page_number == 1 {
+                recalculate_chapter_cover(&state.pool, chapter_id).await;
+            }
             Json(json!({
                 "status": "success",
                 "pageId": page.id.to_string(),
             }))
             .into_response()
         }
-        Err(()) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "message": "failed to restore project layers" })),
-        )
-            .into_response(),
+        Err(_) => error::internal_error(INSTANCE),
     }
 }
