@@ -18,6 +18,7 @@ $COMPOSE exec -T db psql -U postgres -d manga_library -v ON_ERROR_STOP=1 -c "INS
 $COMPOSE exec -T -e PGPASSWORD=testdbpass db sh /migrations/migrate.sh >/dev/null
 $COMPOSE exec -T db psql -U postgres -d manga_library -tAc "SELECT count(*) FROM images WHERE id = '00000000-0000-0000-0000-000000000001'" | grep -qx 1
 $COMPOSE exec -T db psql -U postgres -d manga_library -tAc "SELECT count(*) FROM information_schema.tables WHERE table_name IN ('page_scene_snapshots', 'page_scene_owners', 'page_scene_assets', 'page_render_jobs')" | grep -qx 4
+$COMPOSE exec -T db psql -U postgres -d manga_library -tAc "SELECT count(*) FROM information_schema.columns WHERE (table_name, column_name) IN (('pages', 'current_render_job_id'), ('page_render_jobs', 'rendered_png_storage_path'))" | grep -qx 2
 
 # Fresh isolated DB: current init already contains the exact new storage contract.
 $COMPOSE exec -T db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE page_scene_fresh;' >/dev/null
@@ -25,5 +26,6 @@ sed -e '/^\\restrict/d' -e '/^\\unrestrict/d' -e 's/OWNER TO [a-zA-Z_]*;/OWNER T
   | $COMPOSE exec -T db psql -U postgres -d page_scene_fresh -v ON_ERROR_STOP=1 -f - >/dev/null
 $COMPOSE exec -T db psql -U postgres -d page_scene_fresh -tAc "SELECT count(*) FROM information_schema.columns WHERE table_name = 'pages' AND column_name = 'scene_revision'" | grep -qx 1
 $COMPOSE exec -T db psql -U postgres -d page_scene_fresh -tAc "SELECT count(*) FROM information_schema.tables WHERE table_name IN ('page_scene_snapshots', 'page_scene_owners', 'page_scene_assets', 'page_render_jobs')" | grep -qx 4
+$COMPOSE exec -T db psql -U postgres -d page_scene_fresh -tAc "SELECT count(*) FROM information_schema.columns WHERE (table_name, column_name) IN (('pages', 'current_render_job_id'), ('page_render_jobs', 'rendered_png_storage_path'))" | grep -qx 2
 
 echo 'page-scene migration: PASS'

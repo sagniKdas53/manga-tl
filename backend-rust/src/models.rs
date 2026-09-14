@@ -395,6 +395,7 @@ pub struct PageRenderJob {
     pub page_revision: i32,
     pub logical_scene_sha256: String,
     pub rendered_png_sha256: Option<String>,
+    pub rendered_png_storage_path: Option<String>,
     pub renderer_build_sha256: Option<String>,
     pub browser_build_sha256: Option<String>,
     pub status: String,
