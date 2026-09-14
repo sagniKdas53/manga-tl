@@ -309,7 +309,8 @@ CREATE TABLE public.pages (
     image_id uuid NOT NULL,
     last_edited_at timestamp(6) with time zone,
     last_rendered_at timestamp(6) with time zone,
-    scene_revision integer DEFAULT 0 NOT NULL
+    scene_revision integer DEFAULT 0 NOT NULL,
+    current_render_job_id character varying(255)
 );
 
 
@@ -367,6 +368,7 @@ CREATE TABLE public.page_render_jobs (
     page_revision integer NOT NULL CHECK (page_revision >= 0),
     logical_scene_sha256 character(64) NOT NULL CHECK (logical_scene_sha256 ~ '^[a-f0-9]{64}$'),
     rendered_png_sha256 character(64) CHECK (rendered_png_sha256 ~ '^[a-f0-9]{64}$'),
+    rendered_png_storage_path text,
     renderer_build_sha256 character(64),
     browser_build_sha256 character(64),
     status character varying(16) NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed')),
@@ -377,9 +379,8 @@ CREATE TABLE public.page_render_jobs (
     CONSTRAINT page_render_jobs_snapshot_fkey FOREIGN KEY (page_id, page_revision) REFERENCES public.page_scene_snapshots(page_id, revision) ON DELETE RESTRICT
 );
 
-ALTER TABLE public.page_render_jobs OWNER TO tladmin;
-
-CREATE INDEX page_render_jobs_input_idx ON public.page_render_jobs USING btree (page_id, page_revision, logical_scene_sha256);
+ALTER TABLE ONLY public.pages
+    ADD CONSTRAINT pages_current_render_job_fkey FOREIGN KEY (current_render_job_id) REFERENCES public.page_render_jobs(job_id) ON DELETE SET NULL;
 
 --
 -- Name: panels; Type: TABLE; Schema: public; Owner: tladmin

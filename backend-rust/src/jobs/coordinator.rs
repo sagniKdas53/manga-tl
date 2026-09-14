@@ -12,6 +12,7 @@
 //!   * trace ids: `pipeline:trace:{imageId}` with a 12h TTL refreshed on every enqueue.
 
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -2108,20 +2109,136 @@ async fn final_pass_flags(state: &AppState, job_id: Option<&str>) -> (bool, bool
     (flag("finalPass"), flag("completesPipeline"))
 }
 
-/// Render callback: stamp pages rendered, skip QA when manual edits exist, else queue QA.
+/// Result of applying a render callback.
 ///
-/// Returns `true` when this render is the one that finishes the page — QA's `finalPass` on a
-/// terminal pass. The caller emits "Page Processing Complete" off that, so the claim is made when
-/// the artifact actually matches the layers rather than one render job earlier.
+/// `artifact_current` is deliberately separate from pipeline completion: an old callback may be
+/// valid for its job but must never make a newer revision appear rendered.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RenderCallbackOutcome {
+    pub completes_pipeline: bool,
+    pub artifact_current: bool,
+}
+
+/// Immutable storage path for one render result. The output hash makes retries append-only even
+/// when a renderer produces different bytes for the same logical input.
+pub fn rendered_artifact_path(
+    page_id: Uuid,
+    revision: i32,
+    logical_scene_sha256: &str,
+    rendered_png_sha256: &str,
+) -> String {
+    format!(
+        "rendered/revisions/{page_id}/{revision}/{logical_scene_sha256}/{rendered_png_sha256}.png"
+    )
+}
+
+/// Render callback: copy a render result into immutable storage, then advance the current pointer
+/// only when the job's revision and logical digest still equal the page's current snapshot.
+///
+/// A missing ledger is an old pipeline callback. It can still drive its legacy QA flow, but it
+/// cannot stamp an image or page rendered because it has no immutable input/output identity.
 pub async fn handle_render_callback(
     state: &AppState,
     job_id: Option<&str>,
     image_id: Uuid,
     page_id: Option<Uuid>,
-) -> Result<bool, String> {
-    if !claim_callback(state, job_id, image_id, "render").await {
-        return Ok(false);
+) -> Result<RenderCallbackOutcome, String> {
+    let ledger: Option<(Uuid, i32, String)> = match job_id.filter(|id| !id.is_empty()) {
+        Some(job_id) => sqlx::query_as(
+            "SELECT page_id, page_revision, logical_scene_sha256 \
+             FROM page_render_jobs WHERE job_id = $1",
+        )
+        .bind(job_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|err| err.to_string())?,
+        None => None,
+    };
+
+    let artifact = if let Some((ledger_page_id, revision, logical_scene_sha256)) = &ledger {
+        if page_id.is_some_and(|reported| reported != *ledger_page_id) {
+            return Err(format!(
+                "render job belongs to page {ledger_page_id}, not reported page {}",
+                page_id.unwrap()
+            ));
+        }
+        let source_path = format!("rendered/{image_id}.png");
+        let bytes = state
+            .storage
+            .download_bytes(&source_path)
+            .await
+            .ok_or_else(|| {
+                format!(
+                    "render callback has no output at {source_path}; callback remains retryable"
+                )
+            })?;
+        let rendered_png_sha256 = hex::encode(Sha256::digest(&bytes));
+        let storage_path = rendered_artifact_path(
+            *ledger_page_id,
+            *revision,
+            logical_scene_sha256,
+            &rendered_png_sha256,
+        );
+        if !state.storage.exists(&storage_path).await {
+            state
+                .storage
+                .upload_bytes(&storage_path, bytes, "image/png")
+                .await
+                .map_err(|err| err.to_string())?;
+        }
+        Some((storage_path, rendered_png_sha256))
+    } else {
+        None
+    };
+
+    let mut tx = state.pool.begin().await.map_err(|err| err.to_string())?;
+    if !claim_callback_tx(&mut tx, job_id, image_id, "render")
+        .await
+        .map_err(|err| err.to_string())?
+    {
+        tx.rollback().await.map_err(|err| err.to_string())?;
+        return Ok(RenderCallbackOutcome::default());
     }
+
+    let mut artifact_current = false;
+    if let (
+        Some((ledger_page_id, revision, logical_scene_sha256)),
+        Some((storage_path, png_sha256)),
+    ) = (ledger, artifact)
+    {
+        let persisted = sqlx::query(
+            "UPDATE page_render_jobs \
+             SET rendered_png_sha256 = $2, rendered_png_storage_path = $3, \
+                 status = 'succeeded', completed_at = now() \
+             WHERE job_id = $1 AND status IN ('queued', 'running')",
+        )
+        .bind(job_id.expect("ledger requires job id"))
+        .bind(&png_sha256)
+        .bind(&storage_path)
+        .execute(&mut *tx)
+        .await
+        .map_err(|err| err.to_string())?;
+
+        if persisted.rows_affected() > 0 {
+            let pointer = sqlx::query(
+                "UPDATE pages SET current_render_job_id = $1, last_rendered_at = now() \
+                 WHERE id = $2 AND scene_revision = $3 \
+                   AND EXISTS ( \
+                     SELECT 1 FROM page_scene_snapshots \
+                     WHERE page_id = $2 AND revision = $3 AND logical_scene_sha256 = $4 \
+                   )",
+            )
+            .bind(job_id.expect("ledger requires job id"))
+            .bind(ledger_page_id)
+            .bind(revision)
+            .bind(logical_scene_sha256)
+            .execute(&mut *tx)
+            .await
+            .map_err(|err| err.to_string())?;
+            artifact_current = pointer.rows_affected() > 0;
+        }
+    }
+    tx.commit().await.map_err(|err| err.to_string())?;
 
     let pages: Vec<Page> = match page_id {
         Some(page_id) => sqlx::query_as("SELECT * FROM pages WHERE id = $1")
@@ -2138,14 +2255,6 @@ pub async fn handle_render_callback(
             .map_err(|e| e.to_string())?,
     };
 
-    for page in &pages {
-        sqlx::query("UPDATE pages SET last_rendered_at = now() WHERE id = $1")
-            .bind(page.id)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| e.to_string())?;
-    }
-
     let mut manual_changes_done = false;
     for page in &pages {
         let count: i64 = sqlx::query_scalar(
@@ -2161,9 +2270,6 @@ pub async fn handle_render_callback(
         }
     }
 
-    // AUDIT-B12: a render QA itself asked for must not queue QA again — that is a render/QA loop
-    // with no ceiling. The flag rides on the job payload rather than on Redis so it cannot be lost
-    // to an eviction and leave the loop live.
     let (is_final_pass, completes_pipeline) = final_pass_flags(state, job_id).await;
     if is_final_pass {
         tracing::info!(
@@ -2196,7 +2302,10 @@ pub async fn handle_render_callback(
         )
         .await;
     }
-    Ok(is_final_pass && completes_pipeline)
+    Ok(RenderCallbackOutcome {
+        completes_pipeline: is_final_pass && completes_pipeline && artifact_current,
+        artifact_current,
+    })
 }
 
 /// QA retries are counted per PAGE when known (two chapters sharing a duplicated image

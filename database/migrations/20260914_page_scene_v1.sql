@@ -53,6 +53,23 @@ CREATE TABLE IF NOT EXISTS public.page_render_jobs (
     completed_at timestamp(6) with time zone,
     FOREIGN KEY (page_id, page_revision) REFERENCES public.page_scene_snapshots(page_id, revision) ON DELETE RESTRICT
 );
+ALTER TABLE public.pages
+    ADD COLUMN IF NOT EXISTS current_render_job_id character varying(255);
+
+ALTER TABLE public.page_render_jobs
+    ADD COLUMN IF NOT EXISTS rendered_png_storage_path text;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'pages_current_render_job_fkey'
+    ) THEN
+        ALTER TABLE public.pages
+            ADD CONSTRAINT pages_current_render_job_fkey
+            FOREIGN KEY (current_render_job_id) REFERENCES public.page_render_jobs(job_id)
+            ON DELETE SET NULL;
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS page_render_jobs_input_idx
     ON public.page_render_jobs (page_id, page_revision, logical_scene_sha256);
