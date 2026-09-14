@@ -31,7 +31,7 @@ A09 roster and reserve state. Coordinator rejected `sample253` and confirmed `sa
 | Complete | Milestone | Task IDs | Entry condition | Exit gate | Checkpoint |
 | --- | --- | --- | --- | --- | --- |
 | [x] | M0 — current baseline and reviewed acceptance data | A01–A09, A06-C | A01–A09 complete | G0 | Historical A01–A08/A06-C work retained; [A09 remains unscored](quality-checkpoints/A09.md); [G0 PASSED](quality-checkpoints/G0.md); approved successor protocol and independent sign-off retained |
-| [ ] | M1 — new artifact and API contract | B01–B05 | G0 | G1 | **ACTIVE** — B01 is frozen at [its checkpoint](quality-checkpoints/B01.md); begin B02 without altering G0, A09, or explicit unresolved identities |
+| [ ] | M1 — new artifact and API contract | B01–B05 | G0 | G1 | **ACTIVE** — [B01 contract](quality-checkpoints/B01.md) and [B02 persistence](quality-checkpoints/B02.md) are complete; begin B03 without altering G0, A09, or explicit unresolved identities |
 | [ ] | M2 — revision-safe output lifecycle | C01–C05 | G1 | G2 | Pending |
 | [ ] | M3 — SFX decisions before paid/destructive work | D01–D05 | G1 | G3 | Pending |
 | [ ] | M4 — shared browser scene and render service | E01–E06 | G1; G2 before queue integration | G4 | Pending |
@@ -318,7 +318,7 @@ For every model/browser/batch run also persist a machine-readable manifest with 
 
 ## Resume packet
 
-> Immediate task: B01 is complete. Start B02 from the frozen `page-scene/v1` contract and the G0 eligibility/source-identical-export findings in [G0 review](quality-checkpoints/G0.md). Preserve the frozen G0 baseline, A09 roster/reserves, and all explicit unresolved identities. Do not score A09 or regenerate the corpus.
+> Immediate task: B01 and B02 are complete. Start B03 from the frozen `page-scene/v1` contract and persisted immutable snapshot tables. Preserve the frozen G0 baseline, A09 roster/reserves, and all explicit unresolved identities. Do not score A09 or regenerate the corpus.
 
 Current checkpoint: historical A01–A08/A06-C work is retained; G0 now has current all-30 evidence, explicit unresolved identity coverage, and an approved future-J02 successor protocol. The [original planning validation record](quality-evidence/implementation-plan-validation.json) remains historical; the [coverage review](quality-evidence/style-coverage-review.md) supplies language/layout/style requirements. Later milestones remain pending.
 
