@@ -38,7 +38,8 @@ use crate::clone::recalculate_chapter_cover;
 use crate::error;
 use crate::minio::MinioService;
 use crate::models::{
-    Chapter, Conversation, ConversationRegion, Image, Layer, LayerElement, OcrRegion, Page, Panel,
+    Chapter, Conversation, ConversationRegion, Image, Layer, LayerElement, OcrRegion, Page,
+    PageSceneSnapshot, Panel,
 };
 use crate::state::AppState;
 
@@ -848,6 +849,180 @@ pub async fn get_page(State(state): State<AppState>, Path(page_id): Path<Uuid>) 
     }
 }
 
+/// GET /api/pages/{pageId}/scene — reads the immutable logical scene at the page's current revision.
+pub async fn get_page_scene(State(state): State<AppState>, Path(page_id): Path<Uuid>) -> Response {
+    match sqlx::query_as::<_, PageSceneSnapshot>(
+        "SELECT * FROM page_scene_snapshots \
+         WHERE page_id = $1 \
+         ORDER BY revision DESC \
+         LIMIT 1",
+    )
+    .bind(page_id)
+    .fetch_optional(&state.pool)
+    .await
+    {
+        Ok(Some(snapshot)) => Json(snapshot.scene_json).into_response(),
+        Ok(None) => error::not_found(
+            &format!("Page scene not found: {page_id}"),
+            "/api/pages/{pageId}/scene",
+        ),
+        Err(err) => {
+            tracing::error!("Could not read page scene for {page_id}: {err}");
+            error::internal_error("/api/pages/{pageId}/scene")
+        }
+    }
+}
+
+/// PUT /api/pages/{pageId}/scene — stores one new-format logical scene atomically.
+///
+/// Snapshot revision advancement belongs to C02. This endpoint only accepts the current revision,
+/// makes retries with the same logical digest idempotent, and refuses to overwrite an immutable
+/// snapshot with different content.
+pub async fn put_page_scene(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(page_id): Path<Uuid>,
+    body: Result<Json<serde_json::Value>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    const INSTANCE: &str = "/api/pages/{pageId}/scene";
+    if user.role.eq_ignore_ascii_case("viewer") {
+        return error::access_denied(INSTANCE);
+    }
+    let Json(document) = match body {
+        Ok(json) => json,
+        Err(_) => return error::unreadable_body(INSTANCE),
+    };
+    let validated = match crate::page_scene::validate_page_scene(document) {
+        Ok(scene) if scene.scene_kind == "logical" => scene,
+        Ok(_) => return error::bad_request("API writes require a logical scene", INSTANCE),
+        Err(err) => return error::bad_request(&err.to_string(), INSTANCE),
+    };
+
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(err) => {
+            tracing::error!("Could not open page-scene transaction for {page_id}: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    };
+    let page_source = sqlx::query_as::<_, (i32, Option<String>)>(
+        "SELECT p.scene_revision, i.hash \
+         FROM pages p \
+         JOIN images i ON i.id = p.image_id \
+         WHERE p.id = $1 \
+         FOR UPDATE",
+    )
+    .bind(page_id)
+    .fetch_optional(&mut *tx)
+    .await;
+    let (current_revision, source_sha256) = match page_source {
+        Ok(Some(page_source)) => page_source,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(err) => {
+            tracing::error!("Could not lock page {page_id} for page-scene write: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    };
+    if validated.source_page_id != page_id.to_string() {
+        return error::bad_request("scene page_id does not match the route page ID", INSTANCE);
+    }
+    if validated.revision != current_revision {
+        return error::bad_request("scene revision does not match the page revision", INSTANCE);
+    }
+    if source_sha256.as_deref() != Some(validated.source_sha256.as_str()) {
+        return error::bad_request("scene source hash does not match the page source", INSTANCE);
+    }
+
+    let existing = sqlx::query_as::<_, PageSceneSnapshot>(
+        "SELECT * FROM page_scene_snapshots WHERE page_id = $1 AND revision = $2",
+    )
+    .bind(page_id)
+    .bind(validated.revision)
+    .fetch_optional(&mut *tx)
+    .await;
+    match existing {
+        Ok(Some(snapshot)) if snapshot.logical_scene_sha256 == validated.logical_scene_sha256 => {
+            return Json(snapshot.scene_json).into_response();
+        }
+        Ok(Some(_)) => {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({"message": "A different immutable scene already exists for this page revision"})),
+            )
+                .into_response();
+        }
+        Ok(None) => {}
+        Err(err) => {
+            tracing::error!("Could not inspect page-scene snapshot for {page_id}: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    }
+
+    let snapshot = validated.snapshot_for_page(page_id);
+    let insert_snapshot = sqlx::query(
+        "INSERT INTO page_scene_snapshots \
+         (page_id, revision, contract_version, source_sha256, logical_scene_sha256, scene_json) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(snapshot.page_id)
+    .bind(snapshot.revision)
+    .bind(&snapshot.contract_version)
+    .bind(&snapshot.source_sha256)
+    .bind(&snapshot.logical_scene_sha256)
+    .bind(&snapshot.scene_json)
+    .execute(&mut *tx)
+    .await;
+    if let Err(err) = insert_snapshot {
+        tracing::error!("Could not insert page-scene snapshot for {page_id}: {err}");
+        return error::internal_error(INSTANCE);
+    }
+    for owner in &validated.owners {
+        if let Err(err) = sqlx::query(
+            "INSERT INTO page_scene_owners \
+             (page_id, revision, owner_id, policy_kind, policy_action, policy_override) \
+             VALUES ($1, $2, $3, $4, $5, $6)",
+        )
+        .bind(page_id)
+        .bind(validated.revision)
+        .bind(&owner.owner_id)
+        .bind(&owner.policy_kind)
+        .bind(&owner.policy_action)
+        .bind(&owner.policy_override)
+        .execute(&mut *tx)
+        .await
+        {
+            tracing::error!("Could not insert page-scene owner for {page_id}: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    }
+    for asset in &validated.assets {
+        if let Err(err) = sqlx::query(
+            "INSERT INTO page_scene_assets \
+             (page_id, revision, asset_id, asset_kind, asset_sha256, byte_length, mime_type, storage_path) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        )
+        .bind(page_id)
+        .bind(validated.revision)
+        .bind(&asset.asset_id)
+        .bind(&asset.asset_kind)
+        .bind(&asset.asset_sha256)
+        .bind(asset.byte_length)
+        .bind(&asset.mime_type)
+        .bind(&asset.storage_path)
+        .execute(&mut *tx)
+        .await
+        {
+            tracing::error!("Could not insert page-scene asset for {page_id}: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    }
+    if let Err(err) = tx.commit().await {
+        tracing::error!("Could not commit page-scene snapshot for {page_id}: {err}");
+        return error::internal_error(INSTANCE);
+    }
+    Json(snapshot.scene_json).into_response()
+}
+
 /// GET /api/images/{imageId} — page payload when a Page references it; bare otherwise.
 pub async fn get_image(State(state): State<AppState>, Path(image_id): Path<Uuid>) -> Response {
     let first_page: Option<Page> =
@@ -1513,6 +1688,10 @@ pub fn router() -> Router<AppState> {
             get(get_image_rendered_thumbnail),
         )
         .route("/pages/{pageId}", get(get_page).delete(delete_page))
+        .route(
+            "/pages/{pageId}/scene",
+            get(get_page_scene).put(put_page_scene),
+        )
         .route(
             "/pages/{pageId}/number",
             axum::routing::patch(update_page_number),
