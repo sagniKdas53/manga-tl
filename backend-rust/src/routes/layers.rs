@@ -100,15 +100,8 @@ fn capture_state(el: &LayerElement) -> serde_json::Value {
     })
 }
 
-pub(crate) async fn touch_page(pool: &sqlx::PgPool, layer_id: Uuid) {
-    sqlx::query(
-        "UPDATE pages SET last_edited_at = now() WHERE id = (SELECT page_id FROM layers WHERE id = $1)",
-    )
-    .bind(layer_id)
-    .execute(pool)
-    .await
-    .expect("page touch");
-}
+// Page output freshness is advanced by the caller-owned mutation transaction via
+// `page_freshness::advance_page_revision`; never post-commit from this module.
 
 /// PUT /api/layer-elements/{id} — partial update + edit history when state changed.
 pub async fn update_layer_element(
@@ -138,6 +131,7 @@ pub async fn update_layer_element(
 
     let prev_json = serde_json::to_value(capture_state(&element)).expect("prev json");
 
+    let mut tx = state.pool.begin().await.expect("layer element transaction");
     let updated: LayerElement = sqlx::query_as(
         "UPDATE layer_elements SET \
            text = COALESCE($2, text), font = COALESCE($3, font), size = COALESCE($4, size), \
@@ -177,7 +171,7 @@ pub async fn update_layer_element(
             .and_then(crate::models::normalize_mask_polygon),
     )
     .bind(dto.regionId)
-    .fetch_one(&state.pool)
+    .fetch_one(&mut *tx)
     .await
     .expect("layer element update");
 
@@ -192,7 +186,7 @@ pub async fn update_layer_element(
         .bind(&new_json)
         .bind(user.id)
         .bind(id)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await
         .expect("edit history insert");
 
@@ -205,11 +199,19 @@ pub async fn update_layer_element(
              WHERE id = (SELECT layer_id FROM layer_elements WHERE id = $1)",
         )
         .bind(id)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await
         .expect("layer metadata bump");
     }
-    touch_page(&state.pool, updated.layer_id).await;
+    let page_id: Uuid = sqlx::query_scalar("SELECT page_id FROM layers WHERE id = $1")
+        .bind(updated.layer_id)
+        .fetch_one(&mut *tx)
+        .await
+        .expect("element owning page");
+    crate::page_freshness::advance_page_revision(&mut tx, page_id)
+        .await
+        .expect("page revision advance");
+    tx.commit().await.expect("layer element transaction commit");
 
     Json(updated).into_response()
 }
@@ -259,7 +261,11 @@ pub(crate) fn z_order_of(value: Option<&serde_json::Value>) -> Option<i32> {
     })
 }
 
-async fn insert_layer(pool: &sqlx::PgPool, page_id: Uuid, payload: &serde_json::Value) -> Layer {
+async fn insert_layer(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    page_id: Uuid,
+    payload: &serde_json::Value,
+) -> Layer {
     let layer_type = payload
         .get("type")
         .and_then(|v| v.as_str())
@@ -283,7 +289,7 @@ async fn insert_layer(pool: &sqlx::PgPool, page_id: Uuid, payload: &serde_json::
     .bind(visible)
     .bind(z_order)
     .bind(page_id)
-    .fetch_one(pool)
+    .fetch_one(&mut **tx)
     .await
     .expect("layer insert")
 }
@@ -311,8 +317,12 @@ pub async fn create_page_layer(
         return error::not_found(&format!("Page not found: {page_id}"), instance);
     }
 
-    let layer = insert_layer(&state.pool, page_id, &payload).await;
-    touch_page(&state.pool, layer.id).await;
+    let mut tx = state.pool.begin().await.expect("page layer transaction");
+    let layer = insert_layer(&mut tx, page_id, &payload).await;
+    crate::page_freshness::advance_page_revision(&mut tx, page_id)
+        .await
+        .expect("page revision advance");
+    tx.commit().await.expect("page layer transaction commit");
     Json(layer).into_response()
 }
 
@@ -340,8 +350,12 @@ pub async fn create_image_layer(
         return error::not_found(&format!("No page found for image: {image_id}"), instance);
     };
 
-    let layer = insert_layer(&state.pool, page_id, &payload).await;
-    touch_page(&state.pool, layer.id).await;
+    let mut tx = state.pool.begin().await.expect("image layer transaction");
+    let layer = insert_layer(&mut tx, page_id, &payload).await;
+    crate::page_freshness::advance_page_revision(&mut tx, page_id)
+        .await
+        .expect("page revision advance");
+    tx.commit().await.expect("image layer transaction commit");
     Json(layer).into_response()
 }
 
