@@ -13,7 +13,7 @@ use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::models::{NewPageSceneAsset, NewPageSceneOwner, NewPageSceneSnapshot};
+use crate::models::{NewPageSceneAsset, NewPageSceneOwner, NewPageSceneSnapshot, PageRenderJob};
 
 pub const CONTRACT_VERSION: &str = "page-scene/v1";
 
@@ -70,6 +70,64 @@ pub async fn current_snapshot(
     .bind(page_id)
     .fetch_optional(pool)
     .await
+}
+
+/// The only render result a reader may call current for the page's current immutable scene.
+#[derive(Debug)]
+pub enum CurrentRenderArtifact {
+    Ready(PageRenderJob),
+    Pending { revision: i32 },
+    Failed { revision: i32 },
+}
+
+/// Resolves the current page scene to either its exact completed artifact or an explicit
+/// non-ready state. A previous revision's pointer is intentionally never a fallback.
+pub async fn current_render_artifact(
+    pool: &PgPool,
+    page_id: Uuid,
+) -> Result<CurrentRenderArtifact, sqlx::Error> {
+    let revision: i32 = sqlx::query_scalar("SELECT scene_revision FROM pages WHERE id = $1")
+        .bind(page_id)
+        .fetch_one(pool)
+        .await?;
+    let Some(snapshot) = current_snapshot(pool, page_id).await? else {
+        return Ok(CurrentRenderArtifact::Pending { revision });
+    };
+
+    let artifact: Option<PageRenderJob> = sqlx::query_as(
+        "SELECT render.* \
+         FROM pages page \
+         JOIN page_scene_snapshots snapshot \
+           ON snapshot.page_id = page.id AND snapshot.revision = page.scene_revision \
+         JOIN page_render_jobs render ON render.job_id = page.current_render_job_id \
+         WHERE page.id = $1 \
+           AND render.page_revision = page.scene_revision \
+           AND render.logical_scene_sha256 = snapshot.logical_scene_sha256 \
+           AND render.status = 'succeeded' \
+           AND render.rendered_png_storage_path IS NOT NULL",
+    )
+    .bind(page_id)
+    .fetch_optional(pool)
+    .await?;
+    if let Some(artifact) = artifact {
+        return Ok(CurrentRenderArtifact::Ready(artifact));
+    }
+
+    let latest_status: Option<String> = sqlx::query_scalar(
+        "SELECT status FROM page_render_jobs \
+         WHERE page_id = $1 AND page_revision = $2 AND logical_scene_sha256 = $3 \
+         ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(page_id)
+    .bind(snapshot.revision)
+    .bind(&snapshot.logical_scene_sha256)
+    .fetch_optional(pool)
+    .await?;
+    if latest_status.as_deref() == Some("failed") {
+        Ok(CurrentRenderArtifact::Failed { revision })
+    } else {
+        Ok(CurrentRenderArtifact::Pending { revision })
+    }
 }
 
 pub fn validate_page_scene(document: Value) -> Result<ValidatedPageScene, PageSceneError> {

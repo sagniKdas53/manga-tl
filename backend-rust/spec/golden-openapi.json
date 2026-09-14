@@ -646,7 +646,23 @@
             "format": "int32",
             "type": "integer"
           },
+          "renderRevision": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "renderStatus": {
+            "enum": [
+              "ready",
+              "pending",
+              "failed"
+            ],
+            "type": "string"
+          },
           "renderedThumbnailUrl": {
+            "nullable": true,
+            "type": "string"
+          },
+          "renderedUrl": {
             "nullable": true,
             "type": "string"
           },
@@ -3048,6 +3064,21 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "revision",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sceneSha256",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3060,6 +3091,33 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "revision": {
+                      "format": "int32",
+                      "type": "integer"
+                    },
+                    "status": {
+                      "enum": [
+                        "pending",
+                        "failed"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "revision"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Current render is pending or failed"
           }
         },
         "tags": [
