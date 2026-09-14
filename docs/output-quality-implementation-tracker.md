@@ -32,7 +32,7 @@ A09 roster and reserve state. Coordinator rejected `sample253` and confirmed `sa
 | --- | --- | --- | --- | --- | --- |
 | [x] | M0 — current baseline and reviewed acceptance data | A01–A09, A06-C | A01–A09 complete | G0 | Historical A01–A08/A06-C work retained; [A09 remains unscored](quality-checkpoints/A09.md); [G0 PASSED](quality-checkpoints/G0.md); approved successor protocol and independent sign-off retained |
 | [x] | M1 — new artifact and API contract | B01–B05 | G0 | G1 | **DONE** — [B01 contract](quality-checkpoints/B01.md), [B02 persistence](quality-checkpoints/B02.md), [B03 backend mapping](quality-checkpoints/B03.md), [B04 standalone worker](quality-checkpoints/B04.md), [B05 live API](quality-checkpoints/B05.md), and [G1 contract gate](quality-checkpoints/G1.md) are complete; G0/A09 evidence and explicit unresolved identities remain unchanged |
-| [ ] | M2 — revision-safe output lifecycle | C01–C05 | G1 | G2 | **ACTIVE** — [C01 is READY](quality-checkpoints/C01.md): the real API/DB wrong-ID path is reproduced and its first caller-only correction is bounded |
+| [ ] | M2 — revision-safe output lifecycle | C01–C05 | G1 | G2 | **ACTIVE** — [C01 is DONE](quality-checkpoints/C01.md); C02 is READY to inventory the remaining render-affecting write paths |
 | [ ] | M3 — SFX decisions before paid/destructive work | D01–D05 | G1 | G3 | Pending |
 | [ ] | M4 — shared browser scene and render service | E01–E06 | G1; G2 before queue integration | G4 | Pending |
 | [ ] | M5 — independent owners and bounded grouping | F01–F04 | G1 | G5 | Pending |
@@ -135,7 +135,7 @@ G1 checkpoint: approved schema/examples and storage/API/worker mapping evidence.
 
 | ID | Depends on | Bounded output / allowed seams | Task gate |
 | --- | --- | --- | --- |
-| C01 (`READY`; [startup packet](quality-checkpoints/C01.md)) | B05 | Reproduce the wrong-ID path through real API/DB, then fix `update_layer_element` in `backend-rust/src/routes/layers.rs` to identify the correct page/layer. | Editing element X advances its owning page only. A deliberately different element/layer UUID catches the existing bug. |
+| C01 (`DONE`; [checkpoint](quality-checkpoints/C01.md)) | B05 | Reproduced the wrong-ID path through real API/DB, then corrected `update_layer_element` in `backend-rust/src/routes/layers.rs` to identify the correct page/layer. | Editing element X advances its owning page only. A deliberately different element/layer UUID catches the former bug. |
 | C02 | C01 | Inventory all render-affecting write paths and add transactional page-revision increments. Dispatch one child packet per route family (`layers.rs`, `layers_ops.rs`, page/settings as discovered). | Text, transform, cleanup, visibility, order and render-setting edits each invalidate output. No edit commits without its revision increment. |
 | C03 | C02 | In `jobs/recovery.rs` plus a scene snapshot helper, queue immutable revision/digest inputs; deduplicate same-revision jobs. | Enqueue does not mark success. Repeated debounce scans queue once; edits during a queued/running job retain a newer pending revision. |
 | C04 | C03 | In the render callback branch of `jobs/coordinator.rs`, persist revision-specific artifacts and conditionally advance the current-artifact pointer. | Old/out-of-order/duplicate callbacks cannot mark newer edits rendered. Failed jobs remain retryable; retry does not consume completion prematurely. |

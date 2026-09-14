@@ -499,6 +499,152 @@ async fn layer_and_element_lifecycle_with_gating() {
     let _ = ocr_layer;
     cleanup(&pool).await;
 }
+/// A layer-element UUID can also name an unrelated layer. The update route must resolve the
+/// element's actual parent layer instead of treating the route UUID as that layer ID.
+#[tokio::test]
+async fn element_update_touches_only_its_owning_page() {
+    let Some((app, pool, jwt)) = app().await else {
+        return;
+    };
+
+    let series_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO series (id, created_at, updated_at, title, reading_direction, original_language) \
+         VALUES ($1, now(), now(), $2, 'rightToLeft', 'ja')",
+    )
+    .bind(series_id)
+    .bind(format!("__layers-c01-{series_id}"))
+    .execute(&pool)
+    .await
+    .expect("series");
+    let chapter_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO chapters (id, chapter_number, created_at, updated_at, use_context_memory, series_id) \
+         VALUES ($1, 1, now(), now(), TRUE, $2)",
+    )
+    .bind(chapter_id)
+    .bind(series_id)
+    .execute(&pool)
+    .await
+    .expect("chapter");
+    let image_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO images (id, created_at, filename, storage_path, hash, width, height) \
+         VALUES ($1, now(), 'c01.png', $2, $3, 64, 64)",
+    )
+    .bind(image_id)
+    .bind(format!("originals/c01-{image_id}.png"))
+    .bind(format!("hash-c01-{image_id}"))
+    .execute(&pool)
+    .await
+    .expect("image");
+    let page_a = Uuid::new_v4();
+    let page_b = Uuid::new_v4();
+    for (page_id, page_number) in [(page_a, 1), (page_b, 2)] {
+        sqlx::query(
+            "INSERT INTO pages (id, page_number, chapter_id, image_id) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(page_id)
+        .bind(page_number)
+        .bind(chapter_id)
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .expect("page");
+    }
+
+    let email = format!("__layers-c01-{}@example.invalid", Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO users (id, created_at, display_name, email, password_hash, role) \
+         VALUES (uuid_generate_v4(), now(), 'Probe', $1, 'x', 'EDITOR')",
+    )
+    .bind(&email)
+    .execute(&pool)
+    .await
+    .expect("user");
+    let token = jwt.generate_token(&email).expect("token");
+
+    let owning_layer = Uuid::new_v4();
+    let element_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO layers (id, created_at, type, visible, z_order, page_id) \
+         VALUES ($1, now(), 'translation', TRUE, 0, $2)",
+    )
+    .bind(owning_layer)
+    .bind(page_a)
+    .execute(&pool)
+    .await
+    .expect("owning layer");
+    sqlx::query(
+        "INSERT INTO layer_elements (id, text, x, y, visible, layer_id) \
+         VALUES ($1, 'before', 0, 0, TRUE, $2)",
+    )
+    .bind(element_id)
+    .bind(owning_layer)
+    .execute(&pool)
+    .await
+    .expect("element");
+
+    // Separate tables permit this collision. The old handler passed element_id to touch_page,
+    // which resolved this unrelated layer and marked page B instead of page A.
+    sqlx::query(
+        "INSERT INTO layers (id, created_at, type, visible, z_order, page_id) \
+         VALUES ($1, now(), 'translation', TRUE, 0, $2)",
+    )
+    .bind(element_id)
+    .bind(page_b)
+    .execute(&pool)
+    .await
+    .expect("wrong-ID layer");
+    sqlx::query("UPDATE pages SET last_edited_at = NULL WHERE id IN ($1, $2)")
+        .bind(page_a)
+        .bind(page_b)
+        .execute(&pool)
+        .await
+        .expect("reset timestamps");
+
+    let (status, _, body) = send(
+        app,
+        "PUT",
+        &format!("/tlhub/api/layer-elements/{element_id}"),
+        Some(&token),
+        Some(r#"{"text":"after"}"#.into()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let page_a_touched: bool =
+        sqlx::query_scalar("SELECT last_edited_at IS NOT NULL FROM pages WHERE id = $1")
+            .bind(page_a)
+            .fetch_one(&pool)
+            .await
+            .expect("page A timestamp");
+    let page_b_touched: bool =
+        sqlx::query_scalar("SELECT last_edited_at IS NOT NULL FROM pages WHERE id = $1")
+            .bind(page_b)
+            .fetch_one(&pool)
+            .await
+            .expect("page B timestamp");
+    assert!(
+        page_a_touched,
+        "editing element X must touch X's owning page"
+    );
+    assert!(
+        !page_b_touched,
+        "an unrelated layer whose UUID matches X must not receive the page touch"
+    );
+
+    sqlx::query("DELETE FROM series WHERE id = $1")
+        .bind(series_id)
+        .execute(&pool)
+        .await
+        .expect("cleanup series");
+    sqlx::query("DELETE FROM users WHERE email = $1")
+        .bind(&email)
+        .execute(&pool)
+        .await
+        .expect("cleanup user");
+}
 
 /// The overlay hides the element it replaces so the two do not composite, but
 /// that flag lives on the element rather than on the overlay — so toggling the overlay off, or
