@@ -32,7 +32,7 @@ A09 roster and reserve state. Coordinator rejected `sample253` and confirmed `sa
 | --- | --- | --- | --- | --- | --- |
 | [x] | M0 — current baseline and reviewed acceptance data | A01–A09, A06-C | A01–A09 complete | G0 | Historical A01–A08/A06-C work retained; [A09 remains unscored](quality-checkpoints/A09.md); [G0 PASSED](quality-checkpoints/G0.md); approved successor protocol and independent sign-off retained |
 | [x] | M1 — new artifact and API contract | B01–B05 | G0 | G1 | **DONE** — [B01 contract](quality-checkpoints/B01.md), [B02 persistence](quality-checkpoints/B02.md), [B03 backend mapping](quality-checkpoints/B03.md), [B04 standalone worker](quality-checkpoints/B04.md), [B05 live API](quality-checkpoints/B05.md), and [G1 contract gate](quality-checkpoints/G1.md) are complete; G0/A09 evidence and explicit unresolved identities remain unchanged |
-| [ ] | M2 — revision-safe output lifecycle | C01–C05 | G1 | G2 | **ACTIVE** — [C01](quality-checkpoints/C01.md), [C02](quality-checkpoints/C02.md), [C03](quality-checkpoints/C03.md), [C04](quality-checkpoints/C04.md), and [C05](quality-checkpoints/C05.md) are DONE; G2 remains |
+| [x] | M2 — revision-safe output lifecycle | C01–C05 | G1 | G2 | **DONE** — [C01](quality-checkpoints/C01.md), [C02](quality-checkpoints/C02.md), [C03](quality-checkpoints/C03.md), [C04](quality-checkpoints/C04.md), [C05](quality-checkpoints/C05.md), and [G2 freshness gate](quality-checkpoints/G2.md) are complete |
 | [ ] | M3 — SFX decisions before paid/destructive work | D01–D05 | G1 | G3 | Pending |
 | [ ] | M4 — shared browser scene and render service | E01–E06 | G1; G2 before queue integration | G4 | Pending |
 | [ ] | M5 — independent owners and bounded grouping | F01–F04 | G1 | G5 | Pending |
@@ -141,7 +141,7 @@ G1 checkpoint: approved schema/examples and storage/API/worker mapping evidence.
 | C04 (`DONE`; [checkpoint](quality-checkpoints/C04.md)) | C03 | The render callback copies output into immutable revision/digest/hash storage, records it in the ledger, and advances `current_render_job_id` only for the current scene snapshot. | Out-of-order and duplicate callbacks cannot mark a newer edit current; failed ledger jobs retry without consuming completion. |
 | C05 (`DONE`; [checkpoint](quality-checkpoints/C05.md)) | C04 | Page lists, rendered-page reads, and chapter exports resolve only a ready artifact whose ledger revision/digest matches the current page scene. | Pending/failed states are explicit; no reader can fall back to a prior artifact or original image. |
 
-G2 checkpoint: real PostgreSQL/queue/storage trace for edit → enqueue → completion → read, including failure and out-of-order callbacks. Timestamp-only helper probes are supporting evidence, not the gate.
+G2 checkpoint: **PASSED** — [real PostgreSQL/queue/storage trace](quality-checkpoints/G2.md) covers edit → deduplicated immutable queue → callback → current-artifact read, failure/retry, and out-of-order completion. Timestamp-only helper probes remain supporting evidence, not the gate.
 
 ### M3 — preserve SFX before translation and cleanup
 

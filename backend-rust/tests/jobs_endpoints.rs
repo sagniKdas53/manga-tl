@@ -644,6 +644,27 @@ async fn recovery_reset_stale_and_debounced_render() {
         old_pointer.is_none(),
         "an old callback must not present its artifact as current"
     );
+    let pending_response = manga_backend::routes::page::get_page_rendered(
+        axum::extract::State(state.clone()),
+        axum::extract::Path(page_id),
+    )
+    .await;
+    assert_eq!(
+        pending_response.status(),
+        StatusCode::CONFLICT,
+        "the page read boundary must not expose the old callback"
+    );
+    let pending_body = pending_response
+        .into_body()
+        .collect()
+        .await
+        .expect("pending response body")
+        .to_bytes();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&pending_body).expect("pending response JSON")
+            ["status"],
+        "pending"
+    );
 
     let current_job_id: String = sqlx::query_scalar(
         "SELECT job_id FROM page_render_jobs WHERE page_id = $1 AND page_revision = 1",
@@ -686,8 +707,25 @@ async fn recovery_reset_stale_and_debounced_render() {
             .storage
             .download_bytes(artifact_path.as_deref().expect("artifact path"))
             .await,
-        Some(current_output),
+        Some(current_output.clone()),
         "the current pointer selects immutable bytes for the current revision"
+    );
+    let ready_response = manga_backend::routes::page::get_page_rendered(
+        axum::extract::State(state.clone()),
+        axum::extract::Path(page_id),
+    )
+    .await;
+    assert_eq!(ready_response.status(), StatusCode::OK);
+    assert_eq!(
+        ready_response
+            .into_body()
+            .collect()
+            .await
+            .expect("ready response body")
+            .to_bytes()
+            .to_vec(),
+        current_output,
+        "the public page read returns exactly the current immutable artifact"
     );
     let duplicate = manga_backend::jobs::coordinator::handle_render_callback(
         &state,
@@ -729,6 +767,22 @@ async fn recovery_reset_stale_and_debounced_render() {
     .execute(&pool)
     .await
     .expect("fail immutable render job");
+    let failed_response = manga_backend::routes::page::get_page_rendered(
+        axum::extract::State(state.clone()),
+        axum::extract::Path(page_id),
+    )
+    .await;
+    assert_eq!(failed_response.status(), StatusCode::CONFLICT);
+    let failed_body = failed_response
+        .into_body()
+        .collect()
+        .await
+        .expect("failed response body")
+        .to_bytes();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&failed_body).expect("failed response JSON")["status"],
+        "failed"
+    );
     manga_backend::jobs::recovery::process_pending_renders(&state).await;
     let retry_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM page_render_jobs WHERE page_id = $1 AND page_revision = 2",
@@ -738,6 +792,16 @@ async fn recovery_reset_stale_and_debounced_render() {
     .await
     .expect("retry ledger count");
     assert_eq!(retry_count, 2, "a failed render job remains retryable");
+    let retry_pending_response = manga_backend::routes::page::get_page_rendered(
+        axum::extract::State(state.clone()),
+        axum::extract::Path(page_id),
+    )
+    .await;
+    assert_eq!(
+        retry_pending_response.status(),
+        StatusCode::CONFLICT,
+        "a retry reservation remains pending until its artifact callback"
+    );
 
     sqlx::query("UPDATE pages SET current_render_job_id = NULL WHERE id = $1")
         .bind(page_id)
