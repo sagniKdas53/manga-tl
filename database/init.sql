@@ -308,11 +308,78 @@ CREATE TABLE public.pages (
     chapter_id uuid NOT NULL,
     image_id uuid NOT NULL,
     last_edited_at timestamp(6) with time zone,
-    last_rendered_at timestamp(6) with time zone
+    last_rendered_at timestamp(6) with time zone,
+    scene_revision integer DEFAULT 0 NOT NULL
 );
 
 
 ALTER TABLE public.pages OWNER TO tladmin;
+
+--
+-- Name: page_scene_snapshots; Type: TABLE; Schema: public; Owner: tladmin
+--
+
+CREATE TABLE public.page_scene_snapshots (
+    page_id uuid NOT NULL,
+    revision integer NOT NULL CHECK (revision >= 0),
+    contract_version character varying(32) NOT NULL CHECK (contract_version = 'page-scene/v1'),
+    source_sha256 character(64) NOT NULL CHECK (source_sha256 ~ '^[a-f0-9]{64}$'),
+    logical_scene_sha256 character(64) NOT NULL CHECK (logical_scene_sha256 ~ '^[a-f0-9]{64}$'),
+    scene_json jsonb NOT NULL,
+    created_at timestamp(6) with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT page_scene_snapshots_pkey PRIMARY KEY (page_id, revision),
+    CONSTRAINT page_scene_snapshots_page_id_logical_scene_sha256_key UNIQUE (page_id, logical_scene_sha256)
+);
+
+ALTER TABLE public.page_scene_snapshots OWNER TO tladmin;
+
+CREATE TABLE public.page_scene_owners (
+    page_id uuid NOT NULL,
+    revision integer NOT NULL,
+    owner_id character varying(256) NOT NULL,
+    policy_kind character varying(32) NOT NULL,
+    policy_action character varying(16) NOT NULL CHECK (policy_action IN ('preserve', 'explain', 'replace', 'review')),
+    policy_override character varying(16) CHECK (policy_override IN ('preserve', 'explain', 'replace', 'review')),
+    CONSTRAINT page_scene_owners_pkey PRIMARY KEY (page_id, revision, owner_id),
+    CONSTRAINT page_scene_owners_snapshot_fkey FOREIGN KEY (page_id, revision) REFERENCES public.page_scene_snapshots(page_id, revision) ON DELETE CASCADE
+);
+
+ALTER TABLE public.page_scene_owners OWNER TO tladmin;
+
+CREATE TABLE public.page_scene_assets (
+    page_id uuid NOT NULL,
+    revision integer NOT NULL,
+    asset_id character varying(256) NOT NULL,
+    asset_kind character varying(32) NOT NULL,
+    asset_sha256 character(64) NOT NULL CHECK (asset_sha256 ~ '^[a-f0-9]{64}$'),
+    byte_length bigint NOT NULL CHECK (byte_length >= 0),
+    mime_type character varying(128) NOT NULL,
+    storage_path text,
+    CONSTRAINT page_scene_assets_pkey PRIMARY KEY (page_id, revision, asset_id),
+    CONSTRAINT page_scene_assets_snapshot_fkey FOREIGN KEY (page_id, revision) REFERENCES public.page_scene_snapshots(page_id, revision) ON DELETE CASCADE
+);
+
+ALTER TABLE public.page_scene_assets OWNER TO tladmin;
+
+CREATE TABLE public.page_render_jobs (
+    job_id character varying(255) NOT NULL,
+    page_id uuid NOT NULL,
+    page_revision integer NOT NULL CHECK (page_revision >= 0),
+    logical_scene_sha256 character(64) NOT NULL CHECK (logical_scene_sha256 ~ '^[a-f0-9]{64}$'),
+    rendered_png_sha256 character(64) CHECK (rendered_png_sha256 ~ '^[a-f0-9]{64}$'),
+    renderer_build_sha256 character(64),
+    browser_build_sha256 character(64),
+    status character varying(16) NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed')),
+    diagnostics_json jsonb DEFAULT '[]'::jsonb NOT NULL,
+    created_at timestamp(6) with time zone DEFAULT now() NOT NULL,
+    completed_at timestamp(6) with time zone,
+    CONSTRAINT page_render_jobs_pkey PRIMARY KEY (job_id),
+    CONSTRAINT page_render_jobs_snapshot_fkey FOREIGN KEY (page_id, page_revision) REFERENCES public.page_scene_snapshots(page_id, revision) ON DELETE RESTRICT
+);
+
+ALTER TABLE public.page_render_jobs OWNER TO tladmin;
+
+CREATE INDEX page_render_jobs_input_idx ON public.page_render_jobs USING btree (page_id, page_revision, logical_scene_sha256);
 
 --
 -- Name: panels; Type: TABLE; Schema: public; Owner: tladmin
@@ -857,6 +924,20 @@ ALTER TABLE ONLY public.job_costs
 ALTER TABLE ONLY public.translation_regions
     ADD CONSTRAINT translation_regions_translation_id_fkey FOREIGN KEY (translation_id) REFERENCES public.translations(id) ON DELETE CASCADE;
 
+
+--
+-- Name: page_scene_snapshots page_scene_snapshots_page_fkey; Type: FK CONSTRAINT; Schema: public; Owner: tladmin
+--
+
+ALTER TABLE ONLY public.page_scene_snapshots
+    ADD CONSTRAINT page_scene_snapshots_page_fkey FOREIGN KEY (page_id) REFERENCES public.pages(id) ON DELETE CASCADE;
+
+--
+-- Name: page_render_jobs page_render_jobs_job_fkey; Type: FK CONSTRAINT; Schema: public; Owner: tladmin
+--
+
+ALTER TABLE ONLY public.page_render_jobs
+    ADD CONSTRAINT page_render_jobs_job_fkey FOREIGN KEY (job_id) REFERENCES public.jobs(id) ON DELETE CASCADE;
 
 --
 -- PostgreSQL database dump complete

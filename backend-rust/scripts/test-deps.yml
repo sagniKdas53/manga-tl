@@ -24,6 +24,8 @@ services:
       # Ephemeral by construction: schema is applied by scripts/test-env.sh after
       # boot (with CI's sed treatment), so no state leaks between runs.
       - /var/lib/postgresql/data
+    volumes:
+      - ../../database:/migrations:ro
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres -d manga_library" ]
       interval: 3s
