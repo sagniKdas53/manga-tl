@@ -71,9 +71,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.95526,
-              "completionPerMillion": 1.91052,
-              "cacheReadPerMillion": 0.079605
+              "promptPerMillion": 1.6,
+              "completionPerMillion": 3.2,
+              "cacheReadPerMillion": 0.135
             },
             "pinned": true
           },
@@ -84,9 +84,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.088606,
-              "completionPerMillion": 0.177212,
-              "cacheReadPerMillion": 0.0177212
+              "promptPerMillion": 0.08708,
+              "completionPerMillion": 0.17416,
+              "cacheReadPerMillion": 0.017416
             }
           },
           {
@@ -184,8 +184,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.22,
-              "completionPerMillion": 0.88
+              "promptPerMillion": 0.0875,
+              "completionPerMillion": 0.35,
+              "cacheReadPerMillion": 0.0175
             }
           },
           {
@@ -195,9 +196,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.03,
-              "completionPerMillion": 0.12,
-              "cacheReadPerMillion": 0.006
+              "promptPerMillion": 0.09,
+              "completionPerMillion": 0.36,
+              "cacheReadPerMillion": 0.018
             }
           },
           {
@@ -228,6 +229,18 @@
           {
             "id": "thinkingmachines/inkling:free",
             "name": "Thinking Machines: Inkling (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
+            "id": "inclusionai/ling-3.0-flash-vl:free",
+            "name": "inclusionAI: Ling 3.0 Flash VL (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -288,18 +301,6 @@
           {
             "id": "nex-agi/nex-n2.5-mini:free",
             "name": "Nex AGI: Nex-N2.5-Mini (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "nex-agi/nex-n2.5-pro:free",
-            "name": "Nex AGI: Nex-N2.5-Pro (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -318,9 +319,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.088606,
-              "completionPerMillion": 0.177212,
-              "cacheReadPerMillion": 0.0177212
+              "promptPerMillion": 0.08708,
+              "completionPerMillion": 0.17416,
+              "cacheReadPerMillion": 0.017416
             }
           },
           {
@@ -330,9 +331,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.95526,
-              "completionPerMillion": 1.91052,
-              "cacheReadPerMillion": 0.079605
+              "promptPerMillion": 1.6,
+              "completionPerMillion": 3.2,
+              "cacheReadPerMillion": 0.135
             },
             "pinned": true
           },
@@ -431,9 +432,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.03,
-              "completionPerMillion": 0.12,
-              "cacheReadPerMillion": 0.006
+              "promptPerMillion": 0.09,
+              "completionPerMillion": 0.36,
+              "cacheReadPerMillion": 0.018
             }
           },
           {
@@ -443,8 +444,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.22,
-              "completionPerMillion": 0.88
+              "promptPerMillion": 0.0875,
+              "completionPerMillion": 0.35,
+              "cacheReadPerMillion": 0.0175
             }
           },
           {
@@ -475,6 +477,18 @@
           {
             "id": "thinkingmachines/inkling:free",
             "name": "Thinking Machines: Inkling (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
+            "id": "inclusionai/ling-3.0-flash-vl:free",
+            "name": "inclusionAI: Ling 3.0 Flash VL (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -535,18 +549,6 @@
           {
             "id": "nex-agi/nex-n2.5-mini:free",
             "name": "Nex AGI: Nex-N2.5-Mini (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "nex-agi/nex-n2.5-pro:free",
-            "name": "Nex AGI: Nex-N2.5-Pro (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -695,6 +697,18 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
+            "id": "inclusionai/ling-3.0-flash-vl:free",
+            "name": "inclusionAI: Ling 3.0 Flash VL (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
             "id": "google/gemma-4-31b-it:free",
             "name": "Google: Gemma 4 31B (free)",
             "free": true,
@@ -721,18 +735,6 @@
           {
             "id": "nex-agi/nex-n2.5-pro:free",
             "name": "Nex AGI: Nex-N2.5-Pro (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "dots-studio/dots-3-note-preview:free",
-            "name": "Dots Studio: Dots3-Note Preview (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -916,6 +918,18 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
+            "id": "inclusionai/ling-3.0-flash-vl:free",
+            "name": "inclusionAI: Ling 3.0 Flash VL (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
             "id": "google/gemma-4-31b-it:free",
             "name": "Google: Gemma 4 31B (free)",
             "free": true,
@@ -942,18 +956,6 @@
           {
             "id": "nex-agi/nex-n2.5-pro:free",
             "name": "Nex AGI: Nex-N2.5-Pro (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "dots-studio/dots-3-note-preview:free",
-            "name": "Dots Studio: Dots3-Note Preview (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
