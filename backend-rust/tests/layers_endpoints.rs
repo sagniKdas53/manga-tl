@@ -495,6 +495,15 @@ async fn layer_and_element_lifecycle_with_gating() {
         );
     }
 
+    let page_revision: i32 = sqlx::query_scalar("SELECT scene_revision FROM pages WHERE id = $1")
+        .bind(page_id)
+        .fetch_one(&pool)
+        .await
+        .expect("page revision");
+    assert_eq!(
+        page_revision, 12,
+        "every successful layer/element mutation advances the owning page exactly once"
+    );
     // ocr layer still present until its page goes away with cleanup.
     let _ = ocr_layer;
     cleanup(&pool).await;
