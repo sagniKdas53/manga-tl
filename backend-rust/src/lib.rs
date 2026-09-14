@@ -16,6 +16,7 @@ pub mod jwt;
 pub mod logging;
 pub mod minio;
 pub mod models;
+pub mod page_scene;
 pub mod password;
 pub mod providers;
 pub mod redis_service;
