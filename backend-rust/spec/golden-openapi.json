@@ -514,6 +514,112 @@
         },
         "type": "object"
       },
+      "PageSceneDocument": {
+        "additionalProperties": false,
+        "description": "New-format-only page-scene/v1 document. The server accepts only logical scenes on writes and validates the full authoritative contract.",
+        "properties": {
+          "assets": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "cleanup_artifacts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "contract_version": {
+            "enum": [
+              "page-scene/v1"
+            ],
+            "type": "string"
+          },
+          "fragments": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "objects": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "owners": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "page": {
+            "additionalProperties": false,
+            "properties": {
+              "page_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "revision": {
+                "format": "int32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "source": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            },
+            "required": [
+              "page_id",
+              "revision",
+              "source"
+            ],
+            "type": "object"
+          },
+          "policies": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "provenance": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "resolved_layout": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "scene_kind": {
+            "enum": [
+              "logical",
+              "resolved"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "contract_version",
+          "scene_kind",
+          "page",
+          "provenance",
+          "fragments",
+          "owners",
+          "policies",
+          "assets",
+          "cleanup_artifacts",
+          "objects"
+        ],
+        "type": "object"
+      },
       "PageDto": {
         "properties": {
           "chapterId": {
@@ -2661,6 +2767,90 @@
             "description": "OK"
           }
         },
+        "tags": [
+          "Page Controller"
+        ]
+      }
+    },
+    "/api/pages/{pageId}/scene": {
+      "get": {
+        "operationId": "getPageScene",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pageId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageSceneDocument"
+                }
+              }
+            },
+            "description": "Current immutable page scene"
+          },
+          "404": {
+            "description": "Page scene not found"
+          }
+        },
+        "summary": "Read a page scene",
+        "tags": [
+          "Page Controller"
+        ]
+      },
+      "put": {
+        "operationId": "putPageScene",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pageId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PageSceneDocument"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageSceneDocument"
+                }
+              }
+            },
+            "description": "Page scene saved"
+          },
+          "400": {
+            "description": "Invalid scene"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "A different scene already exists for this revision"
+          }
+        },
+        "summary": "Save a page scene",
         "tags": [
           "Page Controller"
         ]

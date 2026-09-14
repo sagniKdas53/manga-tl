@@ -1258,3 +1258,145 @@ async fn reorder_rejects_a_list_that_is_not_a_permutation() {
 
     order_cleanup(&pool, NS, TITLE).await;
 }
+
+/// B05: the live API must retain the exact new-format logical scene, including fractional
+/// geometry and signed rotation, while binding it to the database page/source identity.
+#[tokio::test]
+async fn page_scene_api_round_trips_the_new_format_contract() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    const NS: &str = "__page-scene-api";
+    cleanup(&pool, NS).await;
+    let token = probe_user(
+        &pool,
+        &manga_backend::jwt::JwtUtils::new(SECRET.into(), 3_600_000),
+        NS,
+    )
+    .await;
+    let (_, _, body, _) = send_json(
+        app.clone(),
+        "POST",
+        "/tlhub/api/series",
+        &token,
+        r#"{"title":"Page Scene API Probe","readingDirection":"rightToLeft"}"#.to_string(),
+    )
+    .await;
+    let series_id = json_field(&body, "id");
+    let (_, _, body, _) = send_json(
+        app.clone(),
+        "POST",
+        &format!("/tlhub/api/series/{series_id}/chapters"),
+        &token,
+        r#"{"chapterNumber":1}"#.to_string(),
+    )
+    .await;
+    let chapter_id = json_field(&body, "id");
+    let (_, _, body, _) = send_multipart(
+        app.clone(),
+        "/tlhub/api/images",
+        &token,
+        multipart_body(
+            &chapter_id,
+            1,
+            "page-scene.png",
+            &seeded_png(Uuid::new_v4().as_u128() as u32),
+        ),
+    )
+    .await;
+    let uploaded: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let page_id = uploaded["pageId"].as_str().unwrap();
+    let image_id = Uuid::parse_str(uploaded["imageId"].as_str().unwrap()).unwrap();
+    let source_sha256: String = sqlx::query_scalar("SELECT hash FROM images WHERE id = $1")
+        .bind(image_id)
+        .fetch_one(&pool)
+        .await
+        .expect("page source hash");
+
+    let mut scene: serde_json::Value = serde_json::from_str(include_str!(
+        "../../contracts/fixtures/page-scene-v1/logical-valid.json"
+    ))
+    .unwrap();
+    scene["page"]["page_id"] = serde_json::json!(page_id);
+    scene["page"]["revision"] = serde_json::json!(0);
+    scene["page"]["source"]["sha256"] = serde_json::json!(source_sha256);
+    scene["cleanup_artifacts"][0]["source_sha256"] = scene["page"]["source"]["sha256"].clone();
+
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "PUT",
+        &format!("/tlhub/api/pages/{page_id}/scene"),
+        &token,
+        scene.to_string(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let saved: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(saved, scene);
+    assert_eq!(
+        saved["objects"][0]["transform"]["rotation_degrees"],
+        serde_json::json!(12.5),
+        "the API must not coerce signed fractional geometry"
+    );
+
+    let (status, _, body, _) = send_get(
+        app.clone(),
+        &format!("/tlhub/api/pages/{page_id}/scene"),
+        &token,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&body).unwrap(),
+        scene
+    );
+
+    let owner_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM page_scene_owners WHERE page_id = $1 AND revision = 0",
+    )
+    .bind(Uuid::parse_str(page_id).unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let asset_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM page_scene_assets WHERE page_id = $1 AND revision = 0",
+    )
+    .bind(Uuid::parse_str(page_id).unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        owner_count,
+        scene["owners"].as_array().unwrap().len() as i64
+    );
+    assert_eq!(
+        asset_count,
+        scene["assets"].as_array().unwrap().len() as i64
+    );
+
+    let mut different_scene = scene.clone();
+    different_scene["objects"][0]["text"] = serde_json::json!("Changed");
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "PUT",
+        &format!("/tlhub/api/pages/{page_id}/scene"),
+        &token,
+        different_scene.to_string(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+
+    let mut legacy_scene = scene;
+    legacy_scene["contract_version"] = serde_json::json!("page-scene/v0");
+    let (status, _, body, _) = send_json(
+        app,
+        "PUT",
+        &format!("/tlhub/api/pages/{page_id}/scene"),
+        &token,
+        legacy_scene.to_string(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    cleanup(&pool, NS).await;
+}

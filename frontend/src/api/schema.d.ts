@@ -736,6 +736,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/pages/{pageId}/scene": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a page scene */
+        get: operations["getPageScene"];
+        /** Save a page scene */
+        put: operations["putPageScene"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pages/{pageId}": {
         parameters: {
             query?: never;
@@ -1180,6 +1198,46 @@ export interface components {
             x?: number;
             /** Format: int32 */
             y?: number;
+        };
+        /** @description New-format-only page-scene/v1 document. The server accepts only logical scenes on writes and validates the full authoritative contract. */
+        PageSceneDocument: {
+            assets: {
+                [key: string]: unknown;
+            }[];
+            cleanup_artifacts: {
+                [key: string]: unknown;
+            }[];
+            /** @enum {string} */
+            contract_version: "page-scene/v1";
+            fragments: {
+                [key: string]: unknown;
+            }[];
+            objects: {
+                [key: string]: unknown;
+            }[];
+            owners: {
+                [key: string]: unknown;
+            }[];
+            page: {
+                /** Format: uuid */
+                page_id: string;
+                /** Format: int32 */
+                revision: number;
+                source: {
+                    [key: string]: unknown;
+                };
+            };
+            policies: {
+                [key: string]: unknown;
+            }[];
+            provenance: {
+                [key: string]: unknown;
+            };
+            resolved_layout?: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            scene_kind: "logical" | "resolved";
         };
         PageDto: {
             /** Format: uuid */
@@ -2566,6 +2624,82 @@ export interface operations {
                 content: {
                     "*/*": Record<string, never>;
                 };
+            };
+        };
+    };
+    getPageScene: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current immutable page scene */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageSceneDocument"];
+                };
+            };
+            /** @description Page scene not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    putPageScene: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageSceneDocument"];
+            };
+        };
+        responses: {
+            /** @description Page scene saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageSceneDocument"];
+                };
+            };
+            /** @description Invalid scene */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A different scene already exists for this revision */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
