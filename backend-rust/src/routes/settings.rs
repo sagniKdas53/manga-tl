@@ -134,6 +134,50 @@ async fn clamped_setting(pool: &sqlx::PgPool, key: &str, default: i32, low: i32,
         .clamp(low, high)
 }
 
+async fn save_geometry_settings_and_invalidate(
+    state: &AppState,
+    padding: Option<i32>,
+    safety: Option<i32>,
+) -> Result<(), sqlx::Error> {
+    let mut tx = state.pool.begin().await?;
+    let mut changed = false;
+
+    for (key, value) in [
+        ("textBoxPaddingPx", padding.map(|v| v.clamp(0, 64))),
+        ("textBoxSafetyPercent", safety.map(|v| v.clamp(1, 100))),
+    ] {
+        let Some(value) = value else {
+            continue;
+        };
+        let value = value.to_string();
+        let current: Option<String> = sqlx::query_scalar(
+            "SELECT setting_value FROM system_settings WHERE setting_key = $1 FOR UPDATE",
+        )
+        .bind(key)
+        .fetch_optional(&mut *tx)
+        .await?;
+        if current.as_deref() == Some(value.as_str()) {
+            continue;
+        }
+        sqlx::query(
+            "INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ($1, $2, now()) \
+             ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = now()",
+        )
+        .bind(key)
+        .bind(value)
+        .execute(&mut *tx)
+        .await?;
+        changed = true;
+    }
+
+    if changed {
+        sqlx::query("UPDATE pages SET last_edited_at = now(), scene_revision = scene_revision + 1")
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await
+}
+
 /// GET /api/settings
 pub async fn get_settings(State(state): State<AppState>, _user: AuthUser) -> Response {
     Json(build_dto(&state).await).into_response()
@@ -166,22 +210,15 @@ pub async fn update_settings(
     )
     .await;
 
-    // Absent means "not mine to change", not "reset to the default" — see the DTO fields.
-    if let Some(padding) = dto.textBoxPaddingPx {
-        save_setting(
-            &state.pool,
-            "textBoxPaddingPx",
-            &padding.clamp(0, 64).to_string(),
-        )
-        .await;
-    }
-    if let Some(safety) = dto.textBoxSafetyPercent {
-        save_setting(
-            &state.pool,
-            "textBoxSafetyPercent",
-            &safety.clamp(1, 100).to_string(),
-        )
-        .await;
+    if let Err(err) = save_geometry_settings_and_invalidate(
+        &state,
+        dto.textBoxPaddingPx,
+        dto.textBoxSafetyPercent,
+    )
+    .await
+    {
+        tracing::error!("Could not persist geometry settings and invalidate pages: {err}");
+        return crate::error::internal_error("/api/settings");
     }
 
     Json(build_dto(&state).await).into_response()
