@@ -852,10 +852,10 @@ pub async fn get_page(State(state): State<AppState>, Path(page_id): Path<Uuid>) 
 /// GET /api/pages/{pageId}/scene — reads the immutable logical scene at the page's current revision.
 pub async fn get_page_scene(State(state): State<AppState>, Path(page_id): Path<Uuid>) -> Response {
     match sqlx::query_as::<_, PageSceneSnapshot>(
-        "SELECT * FROM page_scene_snapshots \
-         WHERE page_id = $1 \
-         ORDER BY revision DESC \
-         LIMIT 1",
+        "SELECT snapshot.* \
+         FROM page_scene_snapshots snapshot \
+         JOIN pages page ON page.id = snapshot.page_id \
+         WHERE snapshot.page_id = $1 AND snapshot.revision = page.scene_revision",
     )
     .bind(page_id)
     .fetch_optional(&state.pool)
