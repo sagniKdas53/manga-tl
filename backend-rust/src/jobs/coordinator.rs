@@ -577,7 +577,13 @@ pub async fn enqueue_job_directly(
     );
 
     customize(&mut job);
-
+    // Immutable render scheduling reserves its database job ID before constructing this
+    // generic payload. Other callers retain the freshly generated ID above.
+    let job_row_id = job
+        .get("jobId")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .unwrap_or(job_row_id);
     let payload = Value::Object(job).to_string();
 
     let inserted: Result<(), sqlx::Error> = async {

@@ -13,6 +13,7 @@ use std::collections::HashSet;
 use crate::jobs::coordinator;
 use crate::jobs::{HEAVY_QUEUES, LIGHT_QUEUES};
 use crate::state::AppState;
+use uuid::Uuid;
 
 /// Boot-time reset of orphaned PROCESSING jobs, in one transaction.
 pub async fn reset_processing_jobs_to_pending(state: &AppState) {
@@ -145,6 +146,87 @@ pub async fn recover_stale_processing_jobs(state: &AppState) {
     }
 }
 
+async fn enqueue_current_snapshot_render(
+    state: &AppState,
+    page: &crate::models::Page,
+) -> Result<bool, String> {
+    let Some(snapshot) = crate::page_scene::current_snapshot(&state.pool, page.id)
+        .await
+        .map_err(|err| err.to_string())?
+    else {
+        tracing::debug!(
+            "Page {} revision {} has no immutable scene snapshot; render remains pending",
+            page.id,
+            page.scene_revision
+        );
+        return Ok(false);
+    };
+
+    let existing: Option<String> = sqlx::query_scalar(
+        "SELECT job_id FROM page_render_jobs \
+         WHERE page_id = $1 AND page_revision = $2 AND logical_scene_sha256 = $3 \
+           AND status IN ('queued', 'running', 'succeeded') \
+         ORDER BY created_at ASC LIMIT 1",
+    )
+    .bind(page.id)
+    .bind(snapshot.revision)
+    .bind(&snapshot.logical_scene_sha256)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|err| err.to_string())?;
+
+    let job_id = match existing {
+        Some(job_id) => {
+            let persisted: bool =
+                sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM jobs WHERE id = $1)")
+                    .bind(&job_id)
+                    .fetch_one(&state.pool)
+                    .await
+                    .map_err(|err| err.to_string())?;
+            if persisted {
+                return Ok(false);
+            }
+            job_id
+        }
+        None => {
+            let job_id = Uuid::new_v4().to_string();
+            sqlx::query(
+                "INSERT INTO page_render_jobs \
+                 (job_id, page_id, page_revision, logical_scene_sha256, status) \
+                 VALUES ($1, $2, $3, $4, 'queued')",
+            )
+            .bind(&job_id)
+            .bind(page.id)
+            .bind(snapshot.revision)
+            .bind(&snapshot.logical_scene_sha256)
+            .execute(&state.pool)
+            .await
+            .map_err(|err| err.to_string())?;
+            job_id
+        }
+    };
+
+    let revision = snapshot.revision;
+    let digest = snapshot.logical_scene_sha256.clone();
+    let scene = snapshot.scene_json;
+    coordinator::enqueue_job_directly(
+        state,
+        "render",
+        page.image_id,
+        Some(page.id),
+        Some(page.chapter_id),
+        "normal",
+        move |job| {
+            job.insert("jobId".into(), serde_json::json!(job_id));
+            job.insert("pageRevision".into(), serde_json::json!(revision));
+            job.insert("logicalSceneSha256".into(), serde_json::json!(digest));
+            job.insert("logicalScene".into(), scene);
+        },
+    )
+    .await;
+    Ok(true)
+}
+
 /// DebouncedRenderService port. Pages edited more than 10s ago whose last render is
 /// older than their last edit get a debounced render redo.
 pub async fn process_pending_renders(state: &AppState) {
@@ -185,15 +267,10 @@ pub async fn process_pending_renders(state: &AppState) {
         }
 
         tracing::info!("Debounced render triggered for page: {}", page.id);
-        if coordinator::trigger_page_redo(state, page.id, "render", None)
-            .await
-            .is_ok()
-        {
-            let _ = sqlx::query("UPDATE pages SET last_rendered_at = now() WHERE id = $1")
-                .bind(page.id)
-                .execute(&state.pool)
-                .await;
-            triggered += 1;
+        match enqueue_current_snapshot_render(state, &page).await {
+            Ok(true) => triggered += 1,
+            Ok(false) => {}
+            Err(err) => tracing::error!("Could not queue render for page {}: {err}", page.id),
         }
     }
     if triggered > 0 {
