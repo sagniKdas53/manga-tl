@@ -41,6 +41,7 @@ use crate::models::{
     Chapter, Conversation, ConversationRegion, Image, Layer, LayerElement, OcrRegion, Page,
     PageSceneSnapshot, Panel,
 };
+use crate::page_scene::{CurrentRenderArtifact, current_render_artifact};
 use crate::state::AppState;
 
 // ---------------------------------------------------------------------------
@@ -65,19 +66,15 @@ pub struct PageDto {
     pub filename: String,
     pub url: String,
     pub thumbnailUrl: String,
-    /// AUDIT-F26. When the pipeline last produced a rendered page, or null if it never has.
-    ///
-    /// This DTO previously carried nothing a pipeline run could change. `thumbnailUrl` is a fixed
-    /// path to the *original*'s thumbnail, and every other field is set at upload. Re-fetching
-    /// `/pages` after a translation finished therefore returned byte-identical JSON — React saw
-    /// identical props and an identical image `src`, so the grid could not update no matter how
-    /// often it asked. That is what made the AUDIT-F19 refresh a no-op.
+    /// Null unless the immutable artifact matches this page's current scene revision/digest.
     pub lastRenderedAt: Option<chrono::DateTime<chrono::Utc>>,
-    /// A thumbnail of the *rendered* page, or null when nothing has been rendered yet.
-    ///
-    /// Carries `last_rendered_at` as a cache key because `stream_cached_image` marks these
-    /// `immutable` for a year: without the key a re-render would keep serving the previous
-    /// translation out of the browser cache.
+    /// `ready`, `pending`, or `failed` for the page's current immutable scene revision.
+    pub renderStatus: String,
+    /// Current page revision, including when its artifact is pending or failed.
+    pub renderRevision: i32,
+    /// Immutable revision URL when the current artifact is ready; otherwise null.
+    pub renderedUrl: Option<String>,
+    /// No mutable image-level thumbnail is exposed as current.
     pub renderedThumbnailUrl: Option<String>,
 }
 
@@ -132,20 +129,6 @@ fn thumbnail_url(state: &AppState, image_id: Uuid) -> String {
     format!(
         "{}/api/images/{image_id}/thumbnail",
         state.config.context_path
-    )
-}
-
-/// AUDIT-F26. `?v=` is the whole point: these responses are `immutable, max-age=1y`, so a page
-/// that gets re-rendered after an edit needs a different URL or the browser never re-asks.
-fn rendered_thumbnail_url(
-    state: &AppState,
-    image_id: Uuid,
-    last_rendered_at: chrono::DateTime<chrono::Utc>,
-) -> String {
-    format!(
-        "{}/api/images/{image_id}/thumbnail/rendered?v={}",
-        state.config.context_path,
-        last_rendered_at.timestamp_millis()
     )
 }
 
@@ -701,12 +684,32 @@ pub async fn list_pages(
         chapter_id: Uuid,
         image_id: Uuid,
         filename: String,
-        // AUDIT-F26. The one column here that a pipeline run changes.
+        scene_revision: i32,
+        logical_scene_sha256: Option<String>,
         last_rendered_at: Option<chrono::DateTime<chrono::Utc>>,
+        artifact_ready: bool,
+        latest_render_status: Option<String>,
     }
     let sql = format!(
-        "SELECT p.id, p.page_number, p.chapter_id, p.image_id, p.last_rendered_at, i.filename \
-         FROM pages p JOIN images i ON i.id = p.image_id \
+        "SELECT p.id, p.page_number, p.chapter_id, p.image_id, p.scene_revision, \
+                p.last_rendered_at, i.filename, snapshot.logical_scene_sha256, \
+                (render.job_id IS NOT NULL) AS artifact_ready, latest.status AS latest_render_status \
+         FROM pages p \
+         JOIN images i ON i.id = p.image_id \
+         LEFT JOIN page_scene_snapshots snapshot \
+           ON snapshot.page_id = p.id AND snapshot.revision = p.scene_revision \
+         LEFT JOIN page_render_jobs render \
+           ON render.job_id = p.current_render_job_id \
+          AND render.page_revision = p.scene_revision \
+          AND render.logical_scene_sha256 = snapshot.logical_scene_sha256 \
+          AND render.status = 'succeeded' \
+          AND render.rendered_png_storage_path IS NOT NULL \
+         LEFT JOIN LATERAL ( \
+           SELECT status FROM page_render_jobs \
+           WHERE page_id = p.id AND page_revision = p.scene_revision \
+             AND logical_scene_sha256 = snapshot.logical_scene_sha256 \
+           ORDER BY created_at DESC LIMIT 1 \
+         ) latest ON TRUE \
          WHERE p.chapter_id = $1 ORDER BY p.page_number {direction} LIMIT {size} OFFSET {}",
         p.offset(size)
     );
@@ -721,18 +724,40 @@ pub async fn list_pages(
 
     let content: Vec<PageDto> = rows
         .into_iter()
-        .map(|r| PageDto {
-            id: r.id,
-            pageNumber: r.page_number,
-            imageId: r.image_id,
-            chapterId: r.chapter_id,
-            filename: r.filename,
-            url: image_url(&state, r.image_id),
-            thumbnailUrl: thumbnail_url(&state, r.image_id),
-            lastRenderedAt: r.last_rendered_at,
-            renderedThumbnailUrl: r
-                .last_rendered_at
-                .map(|at| rendered_thumbnail_url(&state, r.image_id, at)),
+        .map(|r| {
+            let render_status = if r.artifact_ready {
+                "ready"
+            } else if r.latest_render_status.as_deref() == Some("failed") {
+                "failed"
+            } else {
+                "pending"
+            };
+            let rendered_url = (render_status == "ready")
+                .then(|| {
+                    r.logical_scene_sha256.as_deref().map(|digest| {
+                        format!(
+                            "{}/api/pages/{}/rendered?revision={}&sceneSha256={digest}",
+                            state.config.context_path, r.id, r.scene_revision
+                        )
+                    })
+                })
+                .flatten();
+            PageDto {
+                id: r.id,
+                pageNumber: r.page_number,
+                imageId: r.image_id,
+                chapterId: r.chapter_id,
+                filename: r.filename,
+                url: image_url(&state, r.image_id),
+                thumbnailUrl: thumbnail_url(&state, r.image_id),
+                lastRenderedAt: (render_status == "ready")
+                    .then_some(r.last_rendered_at)
+                    .flatten(),
+                renderStatus: render_status.to_string(),
+                renderRevision: r.scene_revision,
+                renderedUrl: rendered_url,
+                renderedThumbnailUrl: None,
+            }
         })
         .collect();
 
@@ -1106,43 +1131,51 @@ async fn stream_cached_image(storage: &MinioService, path: &str, etag_suffix: &s
     }
 }
 
-/// GET /api/pages/{pageId}/rendered — rendered/{imageId}.png falling back to rendered/{pageId}.png.
-pub async fn get_page_rendered(
-    State(state): State<AppState>,
-    Path(page_id): Path<Uuid>,
-) -> Response {
-    let Some(page) = find_page(&state.pool, page_id).await else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
-    let primary = format!("rendered/{}.png", page.image_id);
-    let fallback = format!("rendered/{page_id}.png");
-    let path = if state.storage.exists(&primary).await {
-        primary
-    } else if state.storage.exists(&fallback).await {
-        fallback
-    } else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
-
-    match state.storage.download(&path).await {
-        Ok(stream) => {
-            let bytes = stream.collect().await.expect("body collect").to_vec();
-            (
-                StatusCode::OK,
-                [(header::CONTENT_TYPE, "image/png")],
-                Body::from(bytes),
-            )
-                .into_response()
-        }
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    }
-}
-
-/// GET /api/images/{imageId}/file — the stored original.
+/// GET /api/images/{imageId}/file — original upload.
 pub async fn get_image_file(State(state): State<AppState>, Path(image_id): Path<Uuid>) -> Response {
     match find_image(&state.pool, image_id).await {
         Some(image) => stream_cached_image(&state.storage, &image.storage_path, "orig").await,
         None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// GET /api/pages/{pageId}/rendered — only the immutable artifact for the current scene.
+pub async fn get_page_rendered(
+    State(state): State<AppState>,
+    Path(page_id): Path<Uuid>,
+) -> Response {
+    if find_page(&state.pool, page_id).await.is_none() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match current_render_artifact(&state.pool, page_id).await {
+        Ok(CurrentRenderArtifact::Ready(artifact)) => {
+            let path = artifact
+                .rendered_png_storage_path
+                .expect("ready artifact always has a storage path");
+            stream_cached_image(
+                &state.storage,
+                &path,
+                &format!(
+                    "render-{}-{}",
+                    artifact.page_revision, artifact.logical_scene_sha256
+                ),
+            )
+            .await
+        }
+        Ok(CurrentRenderArtifact::Pending { revision }) => (
+            StatusCode::CONFLICT,
+            Json(json!({ "status": "pending", "revision": revision })),
+        )
+            .into_response(),
+        Ok(CurrentRenderArtifact::Failed { revision }) => (
+            StatusCode::CONFLICT,
+            Json(json!({ "status": "failed", "revision": revision })),
+        )
+            .into_response(),
+        Err(err) => {
+            tracing::error!("Could not resolve current render for page {page_id}: {err}");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
     }
 }
 

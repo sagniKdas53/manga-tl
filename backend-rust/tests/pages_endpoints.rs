@@ -231,14 +231,18 @@ async fn upload_stream_delete_lifecycle() {
     assert_eq!(response.0, StatusCode::OK);
     assert_eq!(response.3 as usize, probe_png.len());
 
-    // --- rendered absent -> 404 (nothing rendered yet) ---
+    // --- rendered absent -> explicit pending state, never a mutable/original fallback ---
     let response = send_get(
         app.clone(),
         &format!("/tlhub/api/pages/{page_id}/rendered"),
         &token,
     )
     .await;
-    assert_eq!(response.0, StatusCode::NOT_FOUND);
+    assert_eq!(response.0, StatusCode::CONFLICT);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&response.2).unwrap()["status"],
+        "pending"
+    );
 
     // --- rich page payload keys ---
     let response = send_get(app.clone(), &format!("/tlhub/api/pages/{page_id}"), &token).await;
@@ -354,6 +358,33 @@ fn json_field(body: &str, field: &str) -> String {
 /// under test, which surfaced or hid depending on how the rest of the file happened to be timed.
 async fn cleanup(pool: &sqlx::PgPool, ns: &str) {
     sqlx::query(
+        "UPDATE pages SET current_render_job_id = NULL \
+         WHERE chapter_id IN ( \
+             SELECT c.id FROM chapters c \
+             JOIN series s ON s.id = c.series_id \
+             JOIN users u ON u.id = s.created_by \
+             WHERE u.email LIKE $1 || '-%' \
+         )",
+    )
+    .bind(ns)
+    .execute(pool)
+    .await
+    .expect("clear render pointers");
+    sqlx::query(
+        "DELETE FROM page_render_jobs WHERE page_id IN ( \
+             SELECT p.id FROM pages p \
+             JOIN chapters c ON c.id = p.chapter_id \
+             JOIN series s ON s.id = c.series_id \
+             JOIN users u ON u.id = s.created_by \
+             WHERE u.email LIKE $1 || '-%' \
+         )",
+    )
+    .bind(ns)
+    .execute(pool)
+    .await
+    .expect("render ledger cleanup");
+
+    sqlx::query(
         "DELETE FROM series WHERE created_by IN (SELECT id FROM users WHERE email LIKE $1 || '-%')",
     )
     .bind(ns)
@@ -433,9 +464,9 @@ async fn rendered_output_reaches_the_page_grid() {
     let response = send_multipart(app.clone(), "/tlhub/api/images", &token, body).await;
     let uploaded: serde_json::Value = serde_json::from_str(&response.2).unwrap();
     let page_id = uploaded["pageId"].as_str().unwrap().to_string();
-    let image_id = uploaded["imageId"].as_str().unwrap().to_string();
+    let _image_id = uploaded["imageId"].as_str().unwrap().to_string();
 
-    // --- nothing rendered yet: the grid has no render to show, and says so ---
+    // --- nothing rendered yet: the grid exposes an explicit current-revision pending state ---
     let list_pages = |app: Router, token: String, chapter_id: String| async move {
         let response = send_get(
             app,
@@ -448,126 +479,108 @@ async fn rendered_output_reaches_the_page_grid() {
     };
 
     let before = list_pages(app.clone(), token.clone(), chapter_id.clone()).await;
-    assert!(
-        before["content"][0]["lastRenderedAt"].is_null(),
-        "an unrendered page must not claim a render: {}",
-        before["content"][0]
-    );
-    assert!(
-        before["content"][0]["renderedThumbnailUrl"].is_null(),
-        "no rendered thumbnail before a render: {}",
-        before["content"][0]
+    assert_eq!(before["content"][0]["renderStatus"], "pending");
+    assert_eq!(before["content"][0]["renderRevision"], 0);
+    assert!(before["content"][0]["lastRenderedAt"].is_null());
+    assert!(before["content"][0]["renderedUrl"].is_null());
+    let response = send_get(
+        app.clone(),
+        &format!("/tlhub/api/pages/{page_id}/rendered"),
+        &token,
+    )
+    .await;
+    assert_eq!(response.0, StatusCode::CONFLICT);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&response.2).unwrap()["status"],
+        "pending"
     );
 
-    // --- the pipeline renders the page: object in MinIO, last_rendered_at stamped ---
+    // --- a succeeded ledger points the current scene at immutable artifact bytes ---
     let storage = MinioService::new(&minio_config_from_env().expect("minio env"));
     let rendered = image::RgbaImage::from_fn(64, 64, |_, _| image::Rgba([10, 200, 90, 255]));
     let mut cursor = std::io::Cursor::new(Vec::new());
     rendered
         .write_to(&mut cursor, image::ImageFormat::Png)
         .unwrap();
+    let rendered_bytes = cursor.into_inner();
+    let page_uuid = Uuid::parse_str(&page_id).unwrap();
+    let logical_sha = "b".repeat(64);
+    let png_sha = "c".repeat(64);
+    let artifact_path = format!("rendered/revisions/{page_id}/0/{logical_sha}/{png_sha}.png");
     storage
-        .upload_bytes(
-            &format!("rendered/{image_id}.png"),
-            cursor.into_inner(),
-            "image/png",
-        )
+        .upload_bytes(&artifact_path, rendered_bytes.clone(), "image/png")
         .await
-        .expect("stage rendered object");
-    sqlx::query("UPDATE pages SET last_rendered_at = now() WHERE id = $1")
-        .bind(Uuid::parse_str(&page_id).unwrap())
-        .execute(&pool)
-        .await
-        .expect("stamp last_rendered_at");
+        .expect("stage immutable rendered object");
+    let render_job_id = format!("__page-grid-render-{}", Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO page_scene_snapshots \
+         (page_id, revision, contract_version, source_sha256, logical_scene_sha256, scene_json) \
+         VALUES ($1, 0, 'page-scene/v1', repeat('a', 64), $2, '{}'::jsonb)",
+    )
+    .bind(page_uuid)
+    .bind(&logical_sha)
+    .execute(&pool)
+    .await
+    .expect("current immutable scene");
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, image_id, created_at, updated_at) \
+         VALUES ($1, 'render', 'COMPLETED', $2, now(), now())",
+    )
+    .bind(&render_job_id)
+    .bind(Uuid::parse_str(&_image_id).unwrap())
+    .execute(&pool)
+    .await
+    .expect("render job row");
 
-    // --- the same re-fetch the AUDIT-F19 watcher performs now returns different JSON ---
+    sqlx::query(
+        "INSERT INTO page_render_jobs \
+         (job_id, page_id, page_revision, logical_scene_sha256, rendered_png_sha256, \
+          rendered_png_storage_path, status, diagnostics_json, completed_at) \
+         VALUES ($1, $2, 0, $3, $4, $5, 'succeeded', '[]'::jsonb, now())",
+    )
+    .bind(&render_job_id)
+    .bind(page_uuid)
+    .bind(&logical_sha)
+    .bind(&png_sha)
+    .bind(&artifact_path)
+    .execute(&pool)
+    .await
+    .expect("immutable render ledger");
+    sqlx::query(
+        "UPDATE pages SET current_render_job_id = $1, last_rendered_at = now() WHERE id = $2",
+    )
+    .bind(&render_job_id)
+    .bind(page_uuid)
+    .execute(&pool)
+    .await
+    .expect("select current artifact");
+
     let after = list_pages(app.clone(), token.clone(), chapter_id.clone()).await;
-    assert!(
-        !after["content"][0]["lastRenderedAt"].is_null(),
-        "the refetch must surface the render: {}",
-        after["content"][0]
-    );
-    let rendered_url = after["content"][0]["renderedThumbnailUrl"]
+    assert_eq!(after["content"][0]["renderStatus"], "ready");
+    assert_eq!(after["content"][0]["renderRevision"], 0);
+    assert!(!after["content"][0]["lastRenderedAt"].is_null());
+    let rendered_url = after["content"][0]["renderedUrl"]
         .as_str()
-        .expect("rendered thumbnail url")
+        .expect("immutable rendered URL")
         .to_string();
     assert!(
-        rendered_url.contains("/thumbnail/rendered?v="),
-        "the url must carry a cache key, got {rendered_url}"
+        rendered_url.contains(&format!("/pages/{page_id}/rendered?revision=0")),
+        "the URL identifies its page revision, got {rendered_url}"
     );
-    assert_ne!(
-        before["content"][0], after["content"][0],
-        "AUDIT-F26: if the DTO is identical across a render the grid cannot update"
-    );
-
-    // And this is the reviewer's claim itself, kept as an assertion rather than a comment: on the
-    // fields the DTO carried *before* this fix, the two responses are byte-identical. Re-fetching
-    // could not have changed a single prop or image `src`, which is why AUDIT-F19's refresh fired
-    // correctly and still left the grid untranslated. If someone later drops the new fields, the
-    // assertion above fails and this one explains what was lost.
-    let legacy_only = |page: &serde_json::Value| {
-        serde_json::json!({
-            "id": page["id"],
-            "pageNumber": page["pageNumber"],
-            "imageId": page["imageId"],
-            "chapterId": page["chapterId"],
-            "filename": page["filename"],
-            "url": page["url"],
-            "thumbnailUrl": page["thumbnailUrl"],
-        })
-    };
-    assert_eq!(
-        legacy_only(&before["content"][0]),
-        legacy_only(&after["content"][0]),
-        "the pre-F26 fields cannot express a render — that was the whole defect"
-    );
-
-    // --- and it serves a real WebP, generated on demand for pages rendered before this existed ---
-    let response = send_get(
-        app.clone(),
-        &format!("/tlhub/api/images/{image_id}/thumbnail/rendered"),
-        &token,
-    )
-    .await;
-    assert_eq!(response.0, StatusCode::OK, "{}", response.2);
-    assert_eq!(response.1, "image/webp");
-    assert!(response.3 > 100, "rendered thumbnail must have real bytes");
-
-    // --- it is the *render*, not the original ---
-    //
-    // Both fixtures are 64x64 solid colours, so they encode to the same *number* of bytes; only
-    // the pixels distinguish them. The original is red, the staged render is green, and the whole
-    // point of AUDIT-F26 is that the grid stops showing the former once the latter exists.
-    let stored = storage
-        .download_bytes(&format!("thumbnails/rendered/{image_id}.webp"))
-        .await
-        .expect("rendered thumbnail object");
-    let decoded = image::load_from_memory(&stored)
-        .expect("rendered thumbnail decodes")
-        .to_rgba8();
-    let pixel = decoded
-        .get_pixel(decoded.width() / 2, decoded.height() / 2)
-        .0;
     assert!(
-        pixel[1] > pixel[0] && pixel[1] > pixel[2],
-        "the thumbnail must carry the render's pixels (green), got {pixel:?}"
+        after["content"][0]["renderedThumbnailUrl"].is_null(),
+        "the grid must not call an image-level mutable thumbnail current"
     );
+    assert_ne!(before["content"][0], after["content"][0]);
 
-    let original_stored = storage
-        .download_bytes(&format!("thumbnails/{image_id}.webp"))
-        .await
-        .expect("original thumbnail object");
-    assert_ne!(
-        stored, original_stored,
-        "the rendered thumbnail must not be a copy of the original's"
-    );
+    // The page endpoint streams the immutable bytes selected by the ledger, not the mutable
+    // rendered/{imageId}.png staging object.
+    let response = send_get(app.clone(), &rendered_url, &token).await;
+    assert_eq!(response.0, StatusCode::OK, "{}", response.2);
+    assert_eq!(response.1, "image/png");
+    assert_eq!(response.3, rendered_bytes.len());
 
-    storage
-        .delete_quietly(&format!("rendered/{image_id}.png"))
-        .await;
-    storage
-        .delete_quietly(&format!("thumbnails/rendered/{image_id}.webp"))
-        .await;
+    storage.delete_quietly(&artifact_path).await;
     cleanup(&pool, NS).await;
 }
 

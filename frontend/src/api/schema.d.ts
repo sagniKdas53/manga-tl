@@ -1251,7 +1251,12 @@ export interface components {
             lastRenderedAt?: string | null;
             /** Format: int32 */
             pageNumber?: number;
+            /** Format: int32 */
+            renderRevision?: number;
+            /** @enum {string} */
+            renderStatus?: "ready" | "pending" | "failed";
             renderedThumbnailUrl?: string | null;
+            renderedUrl?: string | null;
             thumbnailUrl?: string;
             url?: string;
         };
@@ -2827,7 +2832,10 @@ export interface operations {
     };
     getPageRenderedFile: {
         parameters: {
-            query?: never;
+            query?: {
+                revision?: number;
+                sceneSha256?: string;
+            };
             header?: never;
             path: {
                 pageId: string;
@@ -2843,6 +2851,20 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["StreamingResponseBody"];
+                };
+            };
+            /** @description Current render is pending or failed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int32 */
+                        revision: number;
+                        /** @enum {string} */
+                        status: "pending" | "failed";
+                    };
                 };
             };
         };
