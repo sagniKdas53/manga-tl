@@ -540,6 +540,15 @@ async fn recovery_reset_stale_and_debounced_render() {
         .execute(&pool)
         .await
         .expect("page");
+    sqlx::query(
+        "INSERT INTO page_scene_snapshots \
+         (page_id, revision, contract_version, source_sha256, logical_scene_sha256, scene_json) \
+         VALUES ($1, 0, 'page-scene/v1', repeat('a', 64), repeat('b', 64), '{}'::jsonb)",
+    )
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("immutable scene snapshot");
 
     // Edited 30s ago, never rendered → qualifies.
     sqlx::query("UPDATE pages SET last_edited_at = now() - interval '30 seconds' WHERE id = $1")
@@ -555,6 +564,48 @@ async fn recovery_reset_stale_and_debounced_render() {
             .await
             .expect("render count");
     assert_eq!(render_jobs, 1, "debounced render enqueued for stale edit");
+    let render_ledger_rows: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM page_render_jobs WHERE page_id = $1")
+            .bind(page_id)
+            .fetch_one(&pool)
+            .await
+            .expect("render ledger count");
+    assert_eq!(render_ledger_rows, 1);
+    manga_backend::jobs::recovery::process_pending_renders(&state).await;
+    let deduplicated_render_jobs: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE image_id = $1 AND type = 'render'")
+            .bind(image_id)
+            .fetch_one(&pool)
+            .await
+            .expect("deduplicated render count");
+    assert_eq!(deduplicated_render_jobs, 1, "same revision queues once");
+    sqlx::query(
+        "UPDATE pages SET scene_revision = 1, last_edited_at = now() - interval '30 seconds' WHERE id = $1",
+    )
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("newer page revision");
+    sqlx::query(
+        "INSERT INTO page_scene_snapshots \
+         (page_id, revision, contract_version, source_sha256, logical_scene_sha256, scene_json) \
+         VALUES ($1, 1, 'page-scene/v1', repeat('a', 64), repeat('c', 64), '{}'::jsonb)",
+    )
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("newer immutable scene snapshot");
+    manga_backend::jobs::recovery::process_pending_renders(&state).await;
+    let queued_revisions: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM page_render_jobs WHERE page_id = $1")
+            .bind(page_id)
+            .fetch_one(&pool)
+            .await
+            .expect("queued revision count");
+    assert_eq!(
+        queued_revisions, 2,
+        "an edit during a queued render retains its newer revision"
+    );
     // Remove coordinator-created rows too (their ids are uuids, not e2e-prefixed).
     sqlx::query("DELETE FROM job_costs WHERE job_id IN (SELECT id FROM jobs WHERE image_id=$1)")
         .bind(image_id)
@@ -566,6 +617,11 @@ async fn recovery_reset_stale_and_debounced_render() {
         .execute(&pool)
         .await
         .expect("renders cleanup");
+    sqlx::query("DELETE FROM page_render_jobs WHERE page_id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .expect("render ledger cleanup");
 
     // Recent FAILED render within 5 minutes → skipped this cycle.
     sqlx::query("UPDATE pages SET last_edited_at = now() - interval '30 seconds', last_rendered_at = NULL WHERE id = $1")

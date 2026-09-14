@@ -10,6 +10,7 @@ use std::{
 
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::models::{NewPageSceneAsset, NewPageSceneOwner, NewPageSceneSnapshot};
@@ -53,6 +54,22 @@ impl ValidatedPageScene {
             scene_json: self.document.clone(),
         }
     }
+}
+
+/// Returns the immutable logical scene for the page's current revision.
+/// A newer revision without a snapshot is deliberately not renderable yet.
+pub async fn current_snapshot(
+    pool: &PgPool,
+    page_id: Uuid,
+) -> Result<Option<crate::models::PageSceneSnapshot>, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT snapshot.* FROM page_scene_snapshots snapshot \
+         JOIN pages page ON page.id = snapshot.page_id \
+         WHERE snapshot.page_id = $1 AND snapshot.revision = page.scene_revision",
+    )
+    .bind(page_id)
+    .fetch_optional(pool)
+    .await
 }
 
 pub fn validate_page_scene(document: Value) -> Result<ValidatedPageScene, PageSceneError> {
