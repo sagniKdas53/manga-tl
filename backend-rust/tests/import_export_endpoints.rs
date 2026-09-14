@@ -407,7 +407,7 @@ async fn image_archive_upload_and_project_restore() {
     assert_eq!(page_count, 2);
 
     // --- Case A: page-level project restore onto the next slot ---
-    let project = r#"{"layers":[{"type":"translation","targetLanguage":"en","visible":true,"zOrder":3,"elements":[{"text":"Restored text","font":"Comic Neue","size":18,"x":10,"y":12,"maxWidth":120,"maxHeight":40,"visible":true}]}]}"#;
+    let project = r#"{"schemaVersion":1,"layers":[{"type":"translation","targetLanguage":"en","visible":true,"zOrder":3,"elements":[{"text":"Restored text","font":"Comic Neue","size":18,"x":10,"y":12,"maxWidth":120,"maxHeight":40,"visible":true}]}]}"#;
     let project_zip = {
         let cursor = std::io::Cursor::new(Vec::new());
         let mut writer = zip::ZipWriter::new(cursor);
@@ -450,6 +450,22 @@ async fn image_archive_upload_and_project_restore() {
     .await
     .unwrap();
     assert_eq!(element_text.0.as_deref(), Some("Restored text"));
+
+    let unsupported = zip_of(
+        vec![("original.png".into(), png_bytes([40, 40, 240]))],
+        Some(r#"{"schemaVersion":2,"layers":[]}"#),
+    );
+    let body = multipart(&[], Some(("file", "unsupported.zip", &unsupported)));
+    let (status, _, _) = send(
+        &app,
+        "POST",
+        &format!("/tlhub/api/chapters/{chapter_id}/import-project"),
+        &token,
+        Some("multipart/form-data; boundary=__import_boundary__"),
+        body,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 
     cleanup(&pool).await;
 }

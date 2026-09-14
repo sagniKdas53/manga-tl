@@ -2734,6 +2734,7 @@ export const Reader: React.FC<ReaderProps> = ({
       });
 
       const projectData = {
+        schemaVersion: 1,
         pageNumber: selectedPage.pageNumber,
         imageId: selectedPage.imageId,
         dimensions: { width: W, height: H },

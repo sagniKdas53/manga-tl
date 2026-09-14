@@ -1762,6 +1762,9 @@ pub async fn upload_zip_archive(
                 return zip_error("error: project.json found but no image found in zip".into());
             };
 
+            if let Err(message) = validate_project_schema(&project_bytes) {
+                return zip_error(format!("error: {message}"));
+            }
             let processed = match validate_and_process_image_bytes(
                 Some(&original_name),
                 original_bytes.clone(),
@@ -2047,6 +2050,23 @@ pub async fn insert_image_public(
     created_by: Option<Uuid>,
 ) -> Image {
     insert_image(pool, filename, storage_path, hash, created_by).await
+}
+
+const PROJECT_SCHEMA_VERSION: u64 = 1;
+
+fn validate_project_schema(project_json: &[u8]) -> Result<(), &'static str> {
+    let root: serde_json::Value =
+        serde_json::from_slice(project_json).map_err(|_| "project.json is not valid JSON")?;
+    match root
+        .get("schemaVersion")
+        .and_then(serde_json::Value::as_u64)
+    {
+        Some(PROJECT_SCHEMA_VERSION) => Ok(()),
+        Some(version) => Err(match version {
+            _ => "project.json schemaVersion is unsupported",
+        }),
+        None => Err("project.json schemaVersion is required"),
+    }
 }
 
 /// Restores `layers`/`elements` from a project.json; returns counts on success.
@@ -2336,6 +2356,9 @@ pub async fn import_project(
             .into_response();
     };
 
+    if let Err(message) = validate_project_schema(&project_bytes) {
+        return error::bad_request(message, INSTANCE);
+    }
     let page_count: i32 =
         sqlx::query_scalar("SELECT COUNT(*)::int FROM pages WHERE chapter_id = $1")
             .bind(chapter_id)

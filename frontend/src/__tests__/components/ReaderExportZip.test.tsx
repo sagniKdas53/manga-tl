@@ -335,6 +335,7 @@ describe("Reader project ZIP export", () => {
     expect(names.filter((n) => n.includes("ocr"))).toEqual([]);
 
     const project = JSON.parse(await zip.file("project.json")!.async("string"));
+    expect(project.schemaVersion).toBe(1);
     expect(project.pageNumber).toBe(22);
     expect(project.imageId).toBe("img1");
     expect(project.dimensions).toEqual({ width: 1200, height: 1600 });
