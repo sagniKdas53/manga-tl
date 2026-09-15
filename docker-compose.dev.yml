@@ -97,6 +97,26 @@ services:
       timeout: 5s
       retries: 20
 
+  page-renderer:
+    build:
+      context: .
+      dockerfile: services/page-renderer/Dockerfile
+    platform: linux/amd64
+    environment:
+      PORT: "8090"
+      PAGE_RENDERER_CONFIG: /app/fonts.json
+    healthcheck:
+      test: [ CMD, node, -e, "fetch('http://localhost:8090/health').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "${PAGE_RENDERER_CPUS:-1.0}"
+          memory: ${PAGE_RENDERER_MEMORY:-2g}
+
   worker:
     build: ./worker
     env_file: [ ./secrets/runtime/models.env ]
@@ -106,6 +126,7 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY_FILE: /run/secrets/minio_password
       BACKEND_CALLBACK_URL: http://backend:8080${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
+      PAGE_RENDERER_URL: http://page-renderer:8090
       INTERNAL_API_TOKEN_FILE: /run/secrets/internal_api_token
       WORKER_API_SECRET_FILE: /run/secrets/worker_api_secret
       DOCKER_SECRETS_JSON: /run/secrets/api_keys
@@ -147,6 +168,7 @@ services:
       - dev-rendered:/app/rendered_cache
     depends_on:
       backend: { condition: service_healthy }
+      page-renderer: { condition: service_healthy }
     deploy:
       resources:
         limits:
