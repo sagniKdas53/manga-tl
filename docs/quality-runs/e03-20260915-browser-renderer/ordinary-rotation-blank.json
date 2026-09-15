@@ -1,0 +1,19 @@
+{
+  "pngSha256": "8ad4187704790f457d6aaccd2231316b0b1c85a6aa249b3de7d16fe8ec5b097a",
+  "width": 320,
+  "height": 180,
+  "pageRevision": 7,
+  "logicalSceneSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "renderInputSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "browserBuild": "151.0.7922.34",
+  "playwrightVersion": "1.62.1",
+  "fontSha256s": [
+    "690243adfefe0ce154b547db6205794bd30ac4277275179517a90994f4980648"
+  ],
+  "diagnostics": [
+    {
+      "code": "empty-manual-text",
+      "objectId": "manual-blank"
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+[
+  {
+    "pngSha256": "c33e291ff7b72366b6b6accb351f12bb1e4f1530c3fd3e9c4a2e3ed39146420c",
+    "width": 320,
+    "height": 180,
+    "pageRevision": 7,
+    "logicalSceneSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "renderInputSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "browserBuild": "151.0.7922.34",
+    "playwrightVersion": "1.62.1",
+    "fontSha256s": [
+      "690243adfefe0ce154b547db6205794bd30ac4277275179517a90994f4980648"
+    ],
+    "diagnostics": [],
+    "name": "ordinary"
+  },
+  {
+    "pngSha256": "e522975c3cebe6063efb40ad05c87e64d05dfa7cf19f995ea9ca874099dbe3de",
+    "width": 320,
+    "height": 180,
+    "pageRevision": 7,
+    "logicalSceneSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "renderInputSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "browserBuild": "151.0.7922.34",
+    "playwrightVersion": "1.62.1",
+    "fontSha256s": [
+      "690243adfefe0ce154b547db6205794bd30ac4277275179517a90994f4980648"
+    ],
+    "diagnostics": [
+      {
+        "code": "empty-manual-text",
+        "objectId": "manual-blank"
+      }
+    ],
+    "name": "rotated-blank"
+  },
+  {
+    "pngSha256": "9630249f9da074c159fa62341e459049072b07c6bc18ae3b02cfc5900b60b95d",
+    "width": 320,
+    "height": 180,
+    "pageRevision": 7,
+    "logicalSceneSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "renderInputSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "browserBuild": "151.0.7922.34",
+    "playwrightVersion": "1.62.1",
+    "fontSha256s": [],
+    "diagnostics": [],
+    "name": "preserve"
+  }
+]

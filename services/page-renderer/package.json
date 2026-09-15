@@ -1,0 +1,16 @@
+{
+  "name": "@manga-library/page-renderer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/renderer.test.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.62.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}
