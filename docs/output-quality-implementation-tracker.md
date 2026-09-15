@@ -1,6 +1,6 @@
 # Output quality implementation tracker
 
-Planning checkpoint: 2026-09-09; G0 closure: 2026-09-14. **M1 is complete:** historical A01–A09 and A06-C work remains retained; G0 is `PASSED`, B01–B05 are complete, and G1 is `PASSED`. This is the authoritative execution tracker for the user's requested unified renderer, SFX policy, independent text ownership and generated cleanup improvements. Read the [architecture recommendations](output-quality-architecture-decisions.md) for rationale and the [investigation](output-quality-investigation.md) for reproductions.
+Planning checkpoint: 2026-09-09; G0 closure: 2026-09-14; user-review checkpoints added: 2026-09-15. **M0–M3 are complete; M4/E01 is next.** G0–G2 are `PASSED`; G3 is `PASSED` for request/object boundaries only, not end-to-end pixel quality. Historical A01–A09 and A06-C evidence remains retained; A09 is unscored. This is the authoritative execution tracker for the user's requested unified renderer, SFX policy, independent text ownership and generated cleanup improvements. Read the [architecture recommendations](output-quality-architecture-decisions.md) for rationale and the [investigation](output-quality-investigation.md) for reproductions.
 
 ## Scope overrides from the user
 
@@ -40,6 +40,40 @@ A09 roster and reserve state. Coordinator rejected `sample253` and confirmed `sa
 | [ ] | M7 — source style, fitting and editor objects | H01–H06 | G4; G6 before editor integration | G7 | Pending |
 | [ ] | M8 — export/QA cutover and renderer retirement | I01–I06 | G2, G3, G6, G7 | G8 | Pending |
 | [ ] | M9 — acceptance, holdout and corpus regeneration | J01–J05 | G8 | G9 | Pending |
+
+### User review checkpoints and realignment
+
+These are **user decision points attached to existing work**, not additional implementation milestones or quality passes. All start `TODO`; no approval is implied by adding this table. At each boundary, present the evidence and mark the review `REVIEW`; record the user's dated decision and evidence links here before marking it `DONE`. An agent's gate sign-off is not the user's approval. Pause the dependent work named below while awaiting that decision; unrelated already-ready work may continue within its existing scope and budget.
+
+| Review | Status | When to stop and show progress | Evidence and user decision |
+| --- | --- | --- | --- |
+| UR01 — first renderer pixels | TODO | After E03, before E04 queue integration | Show actual pinned-browser PNGs and diagnostics for ordinary and rotated/blank/preserve scenes. Approve the rendering direction or identify regressions before transport work. This is an isolated prototype, not improved cleanup or a release. |
+| UR02 — renderer capacity | TODO | At G4, before expanding typography in H03–H04 | Show ordinary/large-page output, cold/warm timing, peak RSS and explicit failure behavior. Agree whether the measured amd64 capacity is usable; do not promise speedups, higher concurrency or silent downsampling. |
+| UR03 — ownership | TODO | At G5, before G01 cleanup experiments | Show source/baseline/candidate owner overlays, false merges/splits, unresolved fragments and dialogue coverage. Check independent labels and ordinary balloons separately. Approve ownership or return specific cases to F01–F04; fewer regions alone is not progress. |
+| UR04 — cleanup candidate selection | TODO | After G01 before adopting its mask provider, and after G04 before adopting its reconstruction provider | Record two decisions under this review: mask selection and reconstruction selection. Show identical-input development comparisons, failures, runtime and dependencies for at most two candidates per comparison. Approve each provider separately or block its adoption; finish this review only after both decisions. No claim that a candidate will necessarily meet G6. |
+| UR05 — integrated cleanup | TODO | At G6, before H05 editor integration | Show cleanup-only full pages and native-resolution crops alongside source/baseline, including outlines, texture, protected art and preserved SFX. Approve the demonstrated cleanup or reopen the responsible G-task. Intact but untranslated dialogue is not a quality improvement. |
+| UR06 — usable editor and dialogue workflow | TODO | At G7, before M8 cutover | Let the user exercise real staging edits: authorize reviewed dialogue, translate/render, move/rotate text, hide/reject, undo and save/reload. Show missing-dialogue and unresolved/review counts plus manual actions required. Approve composition and a usable authorization workflow; do not imply unattended translation is solved by fail-closed policy. |
+| UR07 — release-candidate quality | TODO | After G8 and J01–J02 pass, before J03–J05 | Show canonical export/round-trip evidence and signed development/holdout results by language/style, including failures and review burden. Decide whether the staging candidate is useful enough to proceed to capacity/cost and corpus work. This is not production approval; preserve J02's holdout-retirement rule if tuning follows exposure. |
+| UR08 — corpus spend and canary | TODO | After J04 before starting J05, then after the J05 canary before the remaining batch | Obtain separate approvals for the manifest/canary budget and for expanding after actual canary results. Show page counts, estimated paid work, measured capacity, supported sizes, failures/review rate and actual canary spend. Record a maximum spend and stop conditions; estimates or a prior run's budget are not authorization. |
+| UR09 — release and promotion | TODO | After full-run accounting and required checks, before J05 manifest promotion and production deployment | Show coverage, unresolved required pages, final revisions, measured cost/runtime and all G9 prerequisites. The user approves promotion/deployment; the coordinator then performs the authorized promotion and records G9 completion. Required failures block release, even if aggregate scores look good. |
+
+**Review packet:** reuse the existing task/gate checkpoint and run artifacts; no separate report or paid rerun solely for a review meeting. Provide a short “better / unchanged / worse / unknown” summary, source/baseline/candidate views appropriate to the changed stage, exact revisions and artifact links, failures, and one recommended next action. Label synthetic scenes and historical baselines. For an early visual walkthrough, select a bounded set of relevant regressions and available ordinary JA/KO/ZH development controls; disclose omitted coverage. This selection never replaces a gate's full required evidence. Do not inspect or score A09 for an early demonstration.
+
+**When the user reports a regression:**
+
+1. Record the reported case and candidate revision immediately; do not dismiss it because a test or aggregate passed. Preserve the candidate and prior evidence; mark the affected review/gate `REVIEW` or `BLOCKED` and pause dependent integration, paid batch expansion and promotion.
+2. Map the problem to ownership, policy/dialogue completeness, cleanup, layout, freshness or output identity. Open one bounded correction packet at the responsible existing task, with the smallest observable acceptance case. Do not reopen baseline acquisition, redesign unrelated stages or sweep failures into `review` to inflate success.
+3. After correction, exercise that case and affected conventional controls, then rerun the invalidated gate evidence. Reuse unchanged evidence only where its inputs/dependencies remain valid. Follow J02's reserve/review protocol for an exposed holdout; never tune and rescore it as independent.
+4. Present the before/after and remaining limitations to the user again. Resume the paused dependency only after recorded approval. Any scope reduction or changed acceptance requirement needs explicit user agreement; never silently relax a hard gate or edit frozen evidence.
+
+### Commitment and deployment boundaries
+
+- Commit to the **next bounded task and its evidence**, not a calendar release date, percentage of visual quality delivered, automatic model success or completion of a whole milestone in one session. Re-estimate remaining work from observed blockers at user reviews.
+- Keep existing task scope, candidate limits and full acceptance requirements. These reviews add decision records, not new renderers, compatibility work, model searches, annotation campaigns or mandatory full-corpus reruns. A failed comparison yields a narrowly proposed next experiment and explicit approval for expansion, not an open-ended search.
+- M3 currently defaults every unreviewed region, including dialogue, to `review`; only explicit per-region `replace` authorizes replacement. Preserve that safety boundary. Demonstrate the reviewed-dialogue workflow at UR06 and report translation completeness/manual burden at UR07; better SFX safety alone is not better translation. Unattended authorization is not promised by this plan.
+- E03/G4 permits an isolated demonstration; G6 demonstrates cleanup; G7 permits an integrated editor preview; G8 plus J01–J02 supports a staging release candidate. None is production sign-off. UR09 authorizes manifest promotion, which is then recorded as part of G9 completion; production deployment requires user approval and the completed G9 record. No deployment has been authorized by this tracker update.
+- Newly processed pages and the separately regenerated manifest receive the new behavior. Deployment does not upgrade historical outputs automatically. Preserve sources/evidence; no legacy conversion or fallback is added.
+- Set resource/cost limits from actual G4/J03 measurements and the chosen manifest before corpus execution. Stop on required quality failures, the approved spend cap or capacity limits; preserve resumable state rather than continuing automatically. Do not reuse G0's historical US$3 authorization for later runs.
 
 ### M1 checkpoint register
 
@@ -89,6 +123,7 @@ flowchart LR
 4. Serialize shared files: `Reader.tsx`, `coordinator.rs`, `models.rs`, `ocr.py`, `schemas.py`, API generation, manifests/lockfiles and submodule pointers. At most two concurrent Luna agents, with disjoint worktrees or explicit file ownership. The coordinator owns this tracker and integration; agents own their task checkpoint documents.
 5. Save `docs/quality-checkpoints/<TASK-ID>.md` after reproduction, after the change, after validation and before stopping. Save partial failures too. Put artifacts in a run-specific directory; never overwrite the historical evidence. A worker-only checkout keeps its checkpoint locally and the coordinator copies it into the parent report.
 6. Focused tests run first. At the milestone, run the relevant full repository gates once. A test that returned early because PostgreSQL/Redis/storage was absent is **not executed**, even if the test command exits zero. Do not install global Python packages. Backend API changes require live OpenAPI regeneration. Before any eventual commit, run `detect_changes` for every changed repository; coordinate worker/corpus commits and parent pointers separately.
+7. Honor the [user review checkpoints](#user-review-checkpoints-and-realignment) before crossing their dependent boundaries. Save the evidence, request the user's decision and mark waiting work blocked; do not treat agent review, a passing test or silence as user approval. Apply the commitment/deployment limits above without adding work outside the active packet.
 
 ## Contract to freeze at B01
 
@@ -339,7 +374,7 @@ For every model/browser/batch run also persist a machine-readable manifest with 
 
 ## Resume packet
 
-> Immediate task: M3 is complete. Start M4 with E01 in default order, preserving the frozen G0/A09 evidence and M3's effective-`replace` authorization boundary. Do not score A09 or regenerate the corpus.
+> Immediate task: M3 is complete. Start M4 with E01 in default order, preserving the frozen G0/A09 evidence and M3's effective-`replace` authorization boundary. E01 is an extraction, not a visual-quality promise. The first user review is **UR01 after E03, before E04**: present real browser PNGs and wait for the user's direction before queue integration. Follow all subsequent user-review pauses; do not score A09 early, regenerate the corpus or deploy as part of this next task.
 
 Current checkpoint: historical A01–A08/A06-C work is retained; G0 now has current all-30 evidence, explicit unresolved identity coverage, and an approved future-J02 successor protocol. The [original planning validation record](quality-evidence/implementation-plan-validation.json) remains historical; the [coverage review](quality-evidence/style-coverage-review.md) supplies language/layout/style requirements. Later milestones remain pending.
 
