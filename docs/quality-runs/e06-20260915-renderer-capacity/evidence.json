@@ -1,0 +1,10 @@
+{
+  "image": "manga-page-renderer:e05",
+  "image_sha256": "412879b91ef14d7c158c108b780ff07bcb5dccacb1dd8e07a5ccc63a41a9a38b",
+  "platform": "linux/amd64",
+  "limits": {"cpus": 1, "memory": "2g", "contexts": 1},
+  "font": {"id": "comic-neue", "sha256": "2728ee8f303e31934e62bf27b044fd7657b0613412d51f7444db1078cc3a7cb2"},
+  "ordinary": {"dimensions": [320, 180], "elapsed_ms": 539, "peak_rss_mib": 150, "png_sha256": "8f3c3d7e58d5011813321ec8cb4fa7cfde025947f71d08c006a87405fd505c0b", "diagnostics": []},
+  "sample93": {"source": "corpus/samples/ja/sample93/source.png", "dimensions": [6764, 4961], "cold_elapsed_ms": 23426, "warm_elapsed_ms": 23699, "peak_rss_mib": 845, "png_sha256": "cabbf9d34b983eec6680fb6a8cc0bf6f1faeb76a6f44737799506615c466a7f9", "diagnostics": []},
+  "capacity_failure": {"concurrent_second_job_status": 400, "error": "renderer context capacity is exhausted"}
+}
