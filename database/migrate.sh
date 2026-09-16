@@ -19,6 +19,18 @@ psql_cmd() {
     fi
 }
 
+
+
+attempt=1
+while ! psql_cmd -c 'SELECT 1' >/dev/null 2>&1; do
+    if [ "$attempt" -ge 30 ]; then
+        echo "database did not accept migration connections after ${attempt} attempts" >&2
+        exit 1
+    fi
+    echo "waiting for database migration connection (${attempt}/30)" >&2
+    attempt=$((attempt + 1))
+    sleep 1
+done
 psql_cmd -c '
 CREATE TABLE IF NOT EXISTS public.schema_migrations (
     version character varying(255) PRIMARY KEY,

@@ -69,6 +69,7 @@ function parseArgs(argv) {
     password: process.env.TLHUB_PASSWORD || "",
     register: false,
     headed: false,
+    skipRendered: false,
     fixtures: [],
   };
   for (let index = 2; index < argv.length; index++) {
@@ -81,6 +82,7 @@ function parseArgs(argv) {
       case "--password": args.password = next(); break;
       case "--register": args.register = true; break;
       case "--headed": args.headed = true; break;
+      case "--skip-rendered": args.skipRendered = true; break;
       case "--fixture": args.fixtures.push(next()); break;
       case "-h":
       case "--help": args.help = true; break;
@@ -283,7 +285,7 @@ async function clickAndDownload(page, name, destination) {
   await download.saveAs(destination);
 }
 
-async function captureExports(page, browser, base, token, record, out) {
+async function captureExports(page, browser, base, token, record, out, skipRendered) {
   const exportStartedAt = new Date().toISOString();
   const sampleDir = path.join(out, "a04-exports", record.sample);
   fs.mkdirSync(sampleDir, { recursive: true });
@@ -296,7 +298,9 @@ async function captureExports(page, browser, base, token, record, out) {
   await page.screenshot({ path: path.join(sampleDir, "editor.png"), fullPage: true });
   await clickAndDownload(page, EXPORT_PNG, path.join(sampleDir, "export.png"));
   await clickAndDownload(page, EXPORT_ZIP, path.join(sampleDir, "project.zip"));
-  await clickAndDownload(page, EXPORT_RENDERED, path.join(sampleDir, "rendered.png"));
+  if (!skipRendered) {
+    await clickAndDownload(page, EXPORT_RENDERED, path.join(sampleDir, "rendered.png"));
+  }
 
   try {
     execFileSync("unzip", ["-o", "project.zip", "-d", "project"], { cwd: sampleDir, stdio: "ignore" });
@@ -314,7 +318,8 @@ async function captureExports(page, browser, base, token, record, out) {
     completed_at: new Date().toISOString(),
     editor_png_sha256: sha256(fs.readFileSync(path.join(sampleDir, "editor.png"))),
     export_png_sha256: sha256(fs.readFileSync(path.join(sampleDir, "export.png"))),
-    rendered_png_sha256: sha256(fs.readFileSync(path.join(sampleDir, "rendered.png"))),
+    rendered_png_sha256: skipRendered ? null : sha256(fs.readFileSync(path.join(sampleDir, "rendered.png"))),
+    rendered_png_status: skipRendered ? "not-requested" : "captured",
     project_zip_sha256: sha256(fs.readFileSync(path.join(sampleDir, "project.zip"))),
     registered_font_faces: runtime.fonts.registered_face_count,
     loaded_font_faces: runtime.fonts.loaded_face_count,
@@ -334,7 +339,7 @@ capture_quality_baseline.cjs — fresh A03 pipeline data plus A04 browser export
   --email <email>          existing account, or TLHUB_EMAIL
   --password <password>    existing account, or TLHUB_PASSWORD
   --headed                 show the browser
-  --fixture <sample>       run a named fixture; repeat for multiple isolated pages
+  --skip-rendered          omit the current-render artifact; use only for an OCR-stage run
 `;
 
 (async () => {
@@ -470,7 +475,7 @@ capture_quality_baseline.cjs — fresh A03 pipeline data plus A04 browser export
       manifest.pages.push(record);
       writeJson(path.join(out, "a03-manifest.partial.json"), manifest);
       console.log(`${sample}: pipeline complete; capturing browser exports`);
-      record.a04 = await captureExports(page, browser, args.base, token, record, out);
+      record.a04 = await captureExports(page, browser, args.base, token, record, out, args.skipRendered);
       writeJson(path.join(out, "a04-manifest.partial.json"), manifest);
     }
     manifest.finished_at = new Date().toISOString();

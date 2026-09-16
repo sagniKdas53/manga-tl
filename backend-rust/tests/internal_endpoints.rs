@@ -363,7 +363,17 @@ async fn full_pipeline_walks_every_stage() {
             {"text": "こんにちは", "detectedLanguage": "ja", "confidence": 0.98, "rotation": null,
              "x": 5, "y": 5, "width": 30, "height": 20, "bubbleReadingOrder": 1,
              "backgroundColor": "#ffffff", "bubbleId": "b1", "detectionConfidence": 0.9,
-             "maskPolygon": "[[0,0],[1,1]]", "safeTextX": 8, "safeTextY": 8, "safeTextW": 24, "safeTextH": 14},
+             "maskPolygon": "[[0,0],[1,1]]", "safeTextX": 8, "safeTextY": 8, "safeTextW": 24, "safeTextH": 14,
+             "ownershipProvenance": {
+                 "id": "fragment-worker-style",
+                 "sourceQuad": [[5,5],[35,5],[35,25],[5,25]],
+                 "sourceStyle": null,
+                 "styleProvenance": "unknown",
+                 "geometry": {
+                     "bbox": {"x": 5.0, "y": 5.0, "width": 30.0, "height": 20.0},
+                     "majorAxisDegrees": 0.0
+                 }
+             }},
             {"text": "さようなら", "detectedLanguage": "ja", "confidence": 0.91, "rotation": 0.0,
              "x": 42, "y": 5, "width": 20, "height": 18, "bubbleReadingOrder": 2,
              "backgroundColor": "#ffffff"}
@@ -386,6 +396,18 @@ async fn full_pipeline_walks_every_stage() {
             .await
             .unwrap();
     assert_eq!(region_count, 2);
+
+    let provenance: serde_json::Value = sqlx::query_scalar(
+        "SELECT ownership_provenance FROM ocr_regions WHERE page_id = $1 AND text = 'こんにちは'",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .expect("worker ownership provenance persisted");
+    assert_eq!(provenance["id"], "fragment-worker-style");
+    assert_eq!(provenance["sourceQuad"][2], serde_json::json!([35, 25]));
+    assert!(provenance["sourceStyle"].is_null());
+    assert_eq!(provenance["styleProvenance"], "unknown");
 
     // Cost recorded.
     let cost_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM job_costs WHERE image_id = $1")
