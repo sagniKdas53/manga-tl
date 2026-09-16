@@ -109,3 +109,16 @@ test("rejects missing fonts and untrusted image URLs before rendering", async ()
     await instance.stop();
   }
 });
+
+test("resolves a scene font ID to its registered browser family", async () => {
+  const instance = await renderer();
+  try {
+    const input = request();
+    for (const object of input.scene.textObjects) object.style.fontFamily = "dejavu-sans";
+    const result = await instance.render(input);
+    assert.equal(result.width, 160);
+    assert.equal(result.height, 90);
+  } finally {
+    await instance.stop();
+  }
+});

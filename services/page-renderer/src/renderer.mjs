@@ -141,17 +141,34 @@ export class PageRenderer {
       if (!Number.isFinite(object.transform?.rotationDegrees)) {
         throw new RendererError("text object rotation must be finite");
       }
-      if (object.visible && object.text && !requestedFamilies.has(object.style.fontFamily)) {
+      const configuredFamily = requestedFonts.has(object.style.fontFamily)
+        ? this.fonts.get(object.style.fontFamily).family
+        : object.style.fontFamily;
+      if (object.visible && object.text && !requestedFamilies.has(configuredFamily)) {
         throw new RendererError(`missing required font for ${object.style.fontFamily}`);
       }
     }
     for (const fontId of requestedFonts) {
       const font = this.fonts.get(fontId);
-      if (!scene.textObjects.some((object) => object.style.fontFamily === font.family)) {
+      if (!scene.textObjects.some((object) => object.style.fontFamily === fontId || object.style.fontFamily === font.family)) {
         throw new RendererError(`required font ${fontId} is not used by the scene`);
       }
     }
-    return { scene, requestedFonts };
+    return {
+      scene: {
+        ...scene,
+        textObjects: scene.textObjects.map((object) => ({
+          ...object,
+          style: {
+            ...object.style,
+            fontFamily: requestedFonts.has(object.style.fontFamily)
+              ? this.fonts.get(object.style.fontFamily).family
+              : object.style.fontFamily,
+          },
+        })),
+      },
+      requestedFonts,
+    };
   }
 
   async acquireContext() {
