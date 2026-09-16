@@ -1059,9 +1059,9 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
         sqlx::query(
             "INSERT INTO ocr_regions (id, text, detected_language, confidence, ocr_score, rotation, \
              bbox_x, bbox_y, bbox_w, bbox_h, panel_reading_order, bubble_reading_order, background_color, \
-             bubble_x, bubble_y, bubble_w, bubble_h, bubble_id, detection_confidence, mask_polygon, \
+             bubble_x, bubble_y, bubble_w, bubble_h, bubble_id, detection_confidence, mask_polygon, ownership_provenance, \
              safe_text_x, safe_text_y, safe_text_w, safe_text_h, page_id, panel_id) \
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)",
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)",
         )
         .bind(region_id)
         .bind(r.get("text").and_then(|v| v.as_str()))
@@ -1083,6 +1083,7 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
         .bind(r.get("bubbleId").and_then(|v| v.as_str()))
         .bind(r.get("detectionConfidence").and_then(|v| v.as_f64()))
         .bind(mask_polygon_value(r.get("maskPolygon")))
+        .bind(r.get("ownershipProvenance").cloned())
         .bind(r.get("safeTextX").and_then(|v| v.as_i64()).map(|v| v as i32))
         .bind(r.get("safeTextY").and_then(|v| v.as_i64()).map(|v| v as i32))
         .bind(r.get("safeTextW").and_then(|v| v.as_i64()).map(|v| v as i32))

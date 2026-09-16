@@ -276,6 +276,7 @@ CREATE TABLE public.ocr_regions (
     detected_language character varying(255) NOT NULL,
     detection_confidence double precision,
     mask_polygon jsonb,
+    ownership_provenance jsonb,
     ocr_score double precision,
     panel_reading_order integer,
     qa_feedback text,

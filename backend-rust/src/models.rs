@@ -206,6 +206,7 @@ pub struct OcrRegion {
     #[serde(with = "mask_polygon_wire", default)]
     pub mask_polygon: Option<serde_json::Value>,
     pub ocr_score: Option<f64>,
+    pub ownership_provenance: Option<serde_json::Value>,
     pub panel_reading_order: Option<i32>,
     pub qa_feedback: Option<String>,
     pub qa_score: Option<f64>,
