@@ -1,6 +1,6 @@
 # Output quality implementation tracker
 
-Planning checkpoint: 2026-09-09; G0 closure: 2026-09-14; user-review checkpoints added: 2026-09-15. **M0–M3 are complete; M4/E01 is next.** G0–G2 are `PASSED`; G3 is `PASSED` for request/object boundaries only, not end-to-end pixel quality. Historical A01–A09 and A06-C evidence remains retained; A09 is unscored. This is the authoritative execution tracker for the user's requested unified renderer, SFX policy, independent text ownership and generated cleanup improvements. Read the [architecture recommendations](output-quality-architecture-decisions.md) for rationale and the [investigation](output-quality-investigation.md) for reproductions.
+Planning checkpoint: 2026-09-09; G0 closure: 2026-09-14; user-review checkpoints added: 2026-09-15; ownership plan realigned: 2026-09-16. **M0–M4 are complete; M5 is in REVIEW. F01–F03 have partial implementation evidence, not completed task acceptance; H01a is the next bounded prerequisite for F04.** G0–G2 are `PASSED`; G3 is `PASSED` for request/object boundaries only, not end-to-end pixel quality. Historical A01–A09 and A06-C evidence remains retained; A09 is unscored. This is the authoritative execution tracker for the user's requested unified renderer, SFX policy, independent text ownership and generated cleanup improvements. Read the [architecture recommendations](output-quality-architecture-decisions.md) for rationale and the [investigation](output-quality-investigation.md) for reproductions.
 
 ## Scope overrides from the user
 
@@ -35,9 +35,9 @@ A09 roster and reserve state. Coordinator rejected `sample253` and confirmed `sa
 | [x] | M2 — revision-safe output lifecycle | C01–C05 | G1 | G2 | **DONE** — [C01](quality-checkpoints/C01.md), [C02](quality-checkpoints/C02.md), [C03](quality-checkpoints/C03.md), [C04](quality-checkpoints/C04.md), [C05](quality-checkpoints/C05.md), and [G2 freshness gate](quality-checkpoints/G2.md) are complete |
 | [x] | M3 — SFX decisions before paid/destructive work | D01–D05 | G1 | G3 | **DONE** — [D01](quality-checkpoints/D01.md), [D02](quality-checkpoints/D02.md), [D03](quality-checkpoints/D03.md), [D04](quality-checkpoints/D04.md), [D05](quality-checkpoints/D05.md), and [G3](quality-checkpoints/G3.md); no source-pixel or holdout-quality claim |
 | [x] | M4 — shared browser scene and render service | E01–E06 | G1; G2 before queue integration | G4 | **DONE** — [E01](quality-checkpoints/E01.md) through [E06](quality-checkpoints/E06.md); [G4 passed](quality-checkpoints/G4.md) after UR02 approval |
-| [ ] | M5 — independent owners and bounded grouping | F01–F04 | G1 | G5 | Pending |
+| [ ] | M5 — independent owners and bounded grouping | H01a; F01–F04 | G1 | G5 | **REVIEW** — [F01](quality-checkpoints/F01.md), [F02](quality-checkpoints/F02.md), and [F03](quality-checkpoints/F03.md) retain partial implementation evidence; completion claims are superseded by the realignment below. H01a is READY for bounded implementation; [F04](quality-checkpoints/F04.md) remains BLOCKED on implementation and acceptance evidence, not on full H01 style estimation. |
 | [ ] | M6 — glyph masks and reconstructed backgrounds | G01–G07 | G3 and G5 | G6 | Pending |
-| [ ] | M7 — source style, fitting and editor objects | H01–H06 | G4; G6 before editor integration | G7 | Pending |
+| [ ] | M7 — source style, fitting and editor objects | H01b; H02–H06 | G4; G6 before editor integration | G7 | Pending; H01a supplies basic ownership features earlier, not M7 appearance acceptance |
 | [ ] | M8 — export/QA cutover and renderer retirement | I01–I06 | G2, G3, G6, G7 | G8 | Pending |
 | [ ] | M9 — acceptance, holdout and corpus regeneration | J01–J05 | G8 | G9 | Pending |
 
@@ -106,6 +106,11 @@ flowchart LR
   M1 --> M4
   M2 --> M4
   M1 --> M5
+  M1 --> H01a["H01a: basic ownership features"]
+  H01a --> M5
+  H01a --> H01b["H01b: rendering appearance"]
+  M5 --> H01b
+  H01b --> M7
   M3 --> M6
   M5 --> M6
   M4 --> M7
@@ -216,12 +221,37 @@ G4 checkpoint: actual pinned-browser PNGs, layout diagnostics, working queue tra
 
 ### M5 — group only fragments belonging to one text unit
 
+#### 2026-09-16 realignment and coordinator feedback
+
+**Decision scope:** the user requested this plan update following the recommendation to pull forward only the basic source-feature work needed for ownership. This is a planning change, not a claim that the implementation, G5, or UR03 has passed. No runtime cutover, paid run, deployment, or cleanup authorization is performed by this document update.
+
+**Correction to the earlier blocker:** F01's implementation made matching declared source style mandatory for every multi-fragment assignment, while normal OCR does not supply that field. That implementation choice must not be treated as an unavoidable requirement to finish all of H01 first. The original H01 depends on F04; making F04 depend on full H01 creates a cycle. Split H01 into H01a below and H01b in M7, with no dependency from H01a back to F04.
+
+**Meaning of ownership:** an owner is a record for one independent source text unit, not a person or a claim over an entire image area. It identifies the unit's raw OCR fragments and links their container/evidence to later translation, cleanup, and editable text records. Shared panels, conversations, reading order, overlapping boxes, or matching fonts do not by themselves establish ownership. Ownership does not authorize erasure; the existing explicit `replace` policy remains separate.
+
+**Bounded work brought forward:** H01a preserves stable fragment IDs, source-space oriented quads and transforms, validated container evidence, and conservative source-relative size/angle measurements. Additional style observations are used only where reliable, with provenance and explicit unknowns. It must work without enabling an optional capture directory. Full fill/stroke/weight/writing-mode estimation for rendering stays in H01b; do not add font selection, typography, cleanup providers, editor changes, or a new model search here. Reuse these features in H01b rather than creating a second extraction path.
+
+**Owner-decision rules to correct and verify:**
+
+- Distinct validated containers or incompatible geometry veto a join. A detector polygon is not automatically a validated single text container, especially when fused.
+- Strong evidence of one continuous text unit is evaluated jointly using container, oriented geometry, source scale, and available style observations.
+- Missing style is an unknown feature: neither a fabricated match nor, by itself, proof that fragments belong apart. Matching style alone never establishes a common owner.
+- Insufficient overall evidence leaves ownership explicitly unresolved. Do not enable blanket singleton splitting or silently promote legacy groups to resolved owners. Unknown ownership must remain visible through runtime/callback boundaries and must not acquire automatic cleanup authority.
+- Required unresolved same-unit joins still block G5 until reviewed under the existing gate. Marking everything unknown, reducing region count, or obtaining zero merges by splitting all dialogue is not a pass.
+
+**Status correction:** earlier “F01–F03 complete” statements exceeded the evidence. Their checkpoint documents and run artifacts remain retained as historical partial results; this tracker supersedes their `DONE` claims and F04's claim that full H01 must be pulled forward. F01 needs validation of the corrected evidence rules. F02's opt-in component cap/callback tests do not yet prove real owner-aware component decisions or dialogue non-regression. F03's incompatible-polygon test does not satisfy failed crop/split, separate dark-container, and crossed-panel acceptance. Complete those cases and update each checkpoint before restoring `DONE`; synthetic counts must not be presented as page-level false-merge/split measurements.
+
+**Execution order:** freeze H01a's input/output contract and complete its bounded feature capture → correct/revalidate F01 → complete F02 component decisions and F03 local split acceptance → integrate F04 in separate OCR/layout packets as needed → run fresh six-page OCR and required conventional controls → assemble G5 evidence → pause for UR03 before G01. H01b stays in M7 after F04. F01–F03 investigation can proceed alongside H01a where file ownership permits; final F04 integration waits for all prerequisite evidence.
+
+**Unchanged review requirements:** retain all six original regressions, conventional JA/KO/ZH dialogue controls, raw-fragment accounting, deterministic replay, false merges, false splits, unresolved counts, dialogue coverage, and sample177's six illustration-label assignments. Show source/baseline/candidate overlays with exact revisions at UR03. Do not read or score A09 for this work. If the bounded feature work is inadequate, retain the failed cases and propose a specific next experiment for user approval; do not relax acceptance or expand into full H01 automatically.
+
 | ID | Depends on | Bounded output / allowed seams | Task gate |
 | --- | --- | --- | --- |
-| F01 | B04, D02 | Implement owner assignment using captured oriented fragments, validated containers, line continuity and source scale/style; preserve unknown owners. Limit changes to a pure ownership module and its adapter. | Same panel/conversation or overlapping boxes alone never imply one owner. Diagnostics explain assignment and uncertainty. |
-| F02 | F01 | Add component-level bounds and owner vetoes in `services/fragment_grouping.py`; test graph components, not just pairwise thresholds. | A–B–C bridge and close independent labels remain separate; labelled fragments from one true unit still join. Save both false-merge and false-split counts. |
-| F03 | F02 | Bound the fused-container split path in `services/merge_regions.py`. Preserve raw memberships; unresolved contour splits keep local fragments/review status. | Failed crop/split never grants the whole fused detector mask. Separate dark containers and crossed-panel fixtures pass. |
-| F04 | F03 | Wire grouping into the OCR/layout handlers in separate packets if needed; keep conversation/read-order relationships independent. | Fresh six-page OCR has zero reviewed cross-owner merges and complete fragment accounting; replay is deterministic. No sample-specific coordinate rules. |
+| H01a (`READY`) | B04, D02 | Pull forward basic source features only: stable fragment IDs, source-space oriented quads/transforms, validated container evidence, source-relative size/angle, and reliable optional style observations. Use one bounded worker feature module and narrow OCR/capture adapters; split shared-handler edits into packets. No full rendering-style estimator. | Normal OCR and capture/replay retain the same source-linked evidence without requiring `OCR_CAPTURE_DIR`; scale/orientation transforms round-trip; missing/unreliable observations remain explicit unknowns. No fabricated style, ownership, or cleanup permission. |
+| F01 (`REVIEW`; [partial evidence](quality-checkpoints/F01.md)) | B04, D02 | Implement owner assignment using captured oriented fragments, validated containers, line continuity and source scale/style; preserve unknown owners. Correct the mandatory declared-style assumption under the rules above. Limit changes to a pure ownership module and its adapter. | Same panel/conversation, matching style, or overlapping boxes alone never imply one owner. Missing style alone neither proves a match nor forces a split. Diagnostics explain assignment and uncertainty; insufficient overall evidence stays unresolved. |
+| F02 (`REVIEW`; [partial evidence](quality-checkpoints/F02.md)) | F01 | Add component-level bounds and owner vetoes in `services/fragment_grouping.py`; test graph components using actual owner decisions, not merely a stub callback or a member-count cap. | A–B–C bridge and close independent labels remain separate; labelled fragments from one true unit still join. Save both false-merge and false-split counts; distinguish synthetic cases from evaluated development pages. |
+| F03 (`REVIEW`; [partial evidence](quality-checkpoints/F03.md)) | F02 | Bound the fused-container split path in `services/merge_regions.py`. Preserve raw memberships; unresolved contour splits keep local fragments/review status. Complete the missing crop/split and container regression cases before restoring DONE. | Failed crop/split never grants the whole fused detector mask. Separate dark containers and crossed-panel fixtures pass. Removing a convex hull alone does not establish this gate. |
+| F04 (`BLOCKED`; [prior checkpoint](quality-checkpoints/F04.md)) | H01a, F03 | Wire grouping into the OCR/layout handlers in separate packets if needed; retain fragment provenance and explicit unresolved ownership without optional capture mode. Keep conversation/read-order relationships independent. Full H01b is not a prerequisite. | Fresh six-page OCR has zero reviewed cross-owner merges and complete fragment accounting; replay is deterministic. No sample-specific coordinate rules. Required conventional controls, false splits, unresolved joins, and dialogue coverage are reported without treating abstention as success. |
 
 G5 checkpoint: old/current/new owner overlays, edge decisions, split/merge counts and sample177's six illustration-label assignments. Region count alone cannot pass this gate.
 
@@ -243,8 +273,8 @@ G6 checkpoint: chosen providers with comparison evidence, glyph/support metrics 
 
 | ID | Depends on | Bounded output / allowed seams | Task gate |
 | --- | --- | --- | --- |
-| H01 | F04 | Add source style estimation in a bounded worker module: angle, fill/stroke, relative weight/size, writing mode and confidence. | Reviewed plain/decorated/colored/rotated examples have traceable estimates; unknown values stay explicit instead of unconditional bold black/white. |
-| H02 | H01, B05 | Wire source style and explicit overrides through the backend-to-scene mapping; remove unconditional style replacement at that seam. | Save/read/job snapshot retain style and font IDs/hashes. Manual override wins; source vertical writing does not force vertical English. |
+| H01b (`TODO`; remainder of H01) | H01a, F04 | Complete source appearance estimation in a bounded worker module, reusing H01a features: angle, fill/stroke, relative weight/size, writing mode and confidence. Do not duplicate basic extraction or force H01b ahead of ownership integration. | Reviewed plain/decorated/colored/rotated examples have traceable estimates; unknown values stay explicit instead of unconditional bold black/white. H01a completion does not establish this appearance gate. |
+| H02 | H01b, B05 | Wire source style and explicit overrides through the backend-to-scene mapping; remove unconditional style replacement at that seam. | Save/read/job snapshot retain style and font IDs/hashes. Manual override wins; source vertical writing does not force vertical English. |
 | H03 | E02, F04 | Add allowed-container line spans, neighbor exclusions and overflow diagnostics to the shared TS fitter. | Rotated glyph bounds stay within owner geometry; separate containers never merge to make room. Impossible fits produce review, not silent clipping or translation truncation. |
 | H04 | H03, H02 | Add per-object padding, spacing and source-relative hierarchy constraints to the shared layout module. | Minimum readability, title/label hierarchy and reviewed whitespace bands pass; no universal “fill 100%” rule. |
 | H05 | H04, G07 | Mount the shared content scene in the editor via a small Reader adapter; implement a separate simple selection frame and linked cleanup/text object panel. Split scene adapter and controls into child packets if necessary. | Four corner handles in normal mode; detailed mask mode separate. Text move/rotation leaves source cleanup anchored. Selection highlights the corresponding layer/order. |
