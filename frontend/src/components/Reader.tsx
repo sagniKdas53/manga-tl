@@ -2584,7 +2584,10 @@ export const Reader: React.FC<ReaderProps> = ({
       const res = await safeFetch(`/api/pages/${selectedPage.id}/rendered`, {
         headers: { Authorization: `Bearer ${user.token}` },
       });
-      if (!res.ok) throw new Error("Failed to export rendered PNG");
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(detail || `Rendered export is unavailable (HTTP ${res.status}).`);
+      }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -2596,9 +2599,12 @@ export const Reader: React.FC<ReaderProps> = ({
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Export rendered PNG failed:", err);
-      // Optional: showError("Failed to export rendered PNG");
+      showToast(
+        err instanceof Error ? err.message : "Rendered export is unavailable.",
+        "error",
+      );
     }
-  }, [selectedPage, user]);
+  }, [selectedPage, showToast, user]);
 
   const handleExportZip = useCallback(async () => {
     if (!selectedPage || !imgRef.current) return;
