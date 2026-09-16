@@ -230,11 +230,6 @@ const exportButtonWithMarginSx = {
   "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
 } as const;
 
-const exportButtonSx = {
-  color: "var(--primary)",
-  borderColor: "var(--primary)",
-  "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
-} as const;
 
 const inspectorHeaderRowSx = {
   display: "flex",
@@ -412,7 +407,6 @@ export interface ReaderRightSidebarProps {
   handleRedoPageTranslation: () => void;
   isRedoingPageTranslation: boolean;
   handleExportPng: () => void;
-  handleExportRenderedPng: () => void;
   handleExportZip: () => void;
   interactionMode: string;
   setInteractionMode: React.Dispatch<
@@ -467,7 +461,6 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     handleRedoPageTranslation,
     isRedoingPageTranslation,
     handleExportPng,
-    handleExportRenderedPng,
     handleExportZip,
     interactionMode,
     setInteractionMode,
@@ -916,16 +909,6 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               sx={exportButtonWithMarginSx}
             >
               Export Project (ZIP)
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FileDownloadIcon />}
-              onClick={handleExportRenderedPng}
-              fullWidth
-              sx={exportButtonSx}
-            >
-              Export Rendered PNG
             </Button>
           </SidebarSection>
         </>

@@ -2578,33 +2578,6 @@ export const Reader: React.FC<ReaderProps> = ({
     saveAllPendingChanges,
   ]);
 
-  const handleExportRenderedPng = useCallback(async () => {
-    if (!selectedPage || !user?.token) return;
-    try {
-      const res = await safeFetch(`/api/pages/${selectedPage.id}/rendered`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-      if (!res.ok) {
-        const detail = await res.text();
-        throw new Error(detail || `Rendered export is unavailable (HTTP ${res.status}).`);
-      }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `page-${selectedPage.pageNumber}-rendered.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("Export rendered PNG failed:", err);
-      showToast(
-        err instanceof Error ? err.message : "Rendered export is unavailable.",
-        "error",
-      );
-    }
-  }, [selectedPage, showToast, user]);
 
   const handleExportZip = useCallback(async () => {
     if (!selectedPage || !imgRef.current) return;
@@ -4105,7 +4078,6 @@ export const Reader: React.FC<ReaderProps> = ({
             handleRedoPageTranslation={handleRedoPageTranslation}
             isRedoingPageTranslation={isRedoingPageTranslation}
             handleExportPng={handleExportPng}
-            handleExportRenderedPng={handleExportRenderedPng}
             handleExportZip={handleExportZip}
             interactionMode={interactionMode}
             setInteractionMode={setInteractionMode}

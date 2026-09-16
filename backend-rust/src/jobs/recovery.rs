@@ -266,9 +266,11 @@ pub async fn process_pending_renders(state: &AppState) {
             continue;
         }
 
-        tracing::info!("Debounced render triggered for page: {}", page.id);
         match enqueue_current_snapshot_render(state, &page).await {
-            Ok(true) => triggered += 1,
+            Ok(true) => {
+                triggered += 1;
+                tracing::info!("Debounced render enqueued for page: {}", page.id);
+            }
             Ok(false) => {}
             Err(err) => tracing::error!("Could not queue render for page {}: {err}", page.id),
         }
