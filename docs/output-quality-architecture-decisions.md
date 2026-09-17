@@ -21,6 +21,26 @@ Implementation contract:
 
 Supporting capability checks: Playwright documents [element/region screenshots](https://playwright.dev/docs/screenshots) and [browser-version dependencies](https://playwright.dev/docs/browsers). Font loading/layout readiness is exposed through [FontFaceSet.ready](https://developer.mozilla.org/en-US/docs/Web/API/FontFaceSet/ready). These establish tooling capabilities, not benchmark results for this app.
 
+### 1a. Why the renderer is a server service (plain words, accepted 2026-09-17)
+
+Asked by the user on 2026-09-17: "why do we need a separate page-renderer service, can't this be done in the browser we are using?" Recorded here so the question does not have to be re-derived.
+
+The pipeline has to turn "this page, these text boxes, this font" into a finished PNG at four moments when nobody has the editor open: (1) **QA** — the VLM inspects the rendered page seconds after translation; (2) **chapter download / ZIP** — pages the user never opened still have to exist as finished images; (3) **thumbnails**; (4) **the corpus run** — 262 projects regenerated unattended. So something on the server must draw text onto pages. The user's browser cannot do it because the user's browser is not there at those moments. What cannot move to the frontend is the *when*, not the drawing code.
+
+How the server draws is the actual choice, and there are two options:
+
+- **Pillow draws it** (the state before R1). A second implementation of line breaking, fitting, stroke and rotation, written separately from the editor's, which has already drifted from it: QA judged one picture and the user exported a different one. Every typography feature is written twice and never quite matches.
+- **Headless Chromium draws it using the editor's own TypeScript layout code.** That is `services/page-renderer`: a browser engine with no window, running the same scene component the editor shows. One typography implementation; one picture for preview, QA, export and corpus. This is the only reason the service exists.
+
+| | Pillow stays | Chromium takes over (tracker R1) |
+| --- | --- | --- |
+| Typography implementations | 2, drifting | 1 |
+| QA judges what the user sees | no | yes |
+| Extra container | none | ~1 GB image, 1 CPU / 2 GiB cap, 28 s for a 6764×4961 page (E06) |
+| ARM64 | works | amd64 only — acceptable; chrome-box and the laptop are amd64 |
+
+**Decision (user, 2026-09-17):** keep `page-renderer` and cut the pipeline over to it (tracker R1). Do not keep Pillow typography as a fallback. A missing or failed renderer fails **render jobs** with a clear error; it must not keep OCR and translation from starting, so R1 also relaxes the worker's Compose `depends_on` on the renderer. Note for future readers: until R1 lands, the service is up but receives no jobs — see the tracker's 2026-09-17 realignment for why.
+
 ## 2. Separate OCR detection, translation intent and permission to alter pixels
 
 Broad OCR detection is useful evidence. It must not automatically create a translation request, cleanup patch or visible text object. Recognize enough to classify text where needed, but make the decision before paid translation, cleanup and per-region QA. Do not simply drop all small/kana/vertical text: ordinary dialogue shares those properties.
