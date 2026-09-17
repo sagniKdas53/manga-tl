@@ -84,9 +84,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.08708,
-              "completionPerMillion": 0.17416,
-              "cacheReadPerMillion": 0.017416
+              "promptPerMillion": 0.088606,
+              "completionPerMillion": 0.177212,
+              "cacheReadPerMillion": 0.0177212
             }
           },
           {
@@ -215,6 +215,18 @@
             }
           },
           {
+            "id": "z-ai/glm-5.2:free",
+            "name": "Z.ai: GLM 5.2 (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
             "id": "thinkingmachines/inkling-small:free",
             "name": "Thinking Machines: Inkling Small (free)",
             "free": true,
@@ -297,18 +309,6 @@
               "completionPerMillion": 0.0
             },
             "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "nex-agi/nex-n2.5-mini:free",
-            "name": "Nex AGI: Nex-N2.5-Mini (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
           }
         ],
         "qaLLM": [
@@ -319,9 +319,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.08708,
-              "completionPerMillion": 0.17416,
-              "cacheReadPerMillion": 0.017416
+              "promptPerMillion": 0.088606,
+              "completionPerMillion": 0.177212,
+              "cacheReadPerMillion": 0.0177212
             }
           },
           {
@@ -463,6 +463,18 @@
             }
           },
           {
+            "id": "z-ai/glm-5.2:free",
+            "name": "Z.ai: GLM 5.2 (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
             "id": "thinkingmachines/inkling-small:free",
             "name": "Thinking Machines: Inkling Small (free)",
             "free": true,
@@ -537,18 +549,6 @@
           {
             "id": "nvidia/nemotron-3-super-120b-a12b:free",
             "name": "NVIDIA: Nemotron 3 Super (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "nex-agi/nex-n2.5-mini:free",
-            "name": "Nex AGI: Nex-N2.5-Mini (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -721,8 +721,8 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
-            "id": "nex-agi/nex-n2.5-mini:free",
-            "name": "Nex AGI: Nex-N2.5-Mini (free)",
+            "id": "stealth/union-alpha",
+            "name": "Union Alpha",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -733,8 +733,8 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
-            "id": "nex-agi/nex-n2.5-pro:free",
-            "name": "Nex AGI: Nex-N2.5-Pro (free)",
+            "id": "nex-agi/nex-n2.5-mini:free",
+            "name": "Nex AGI: Nex-N2.5-Mini (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -942,8 +942,8 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
-            "id": "nex-agi/nex-n2.5-mini:free",
-            "name": "Nex AGI: Nex-N2.5-Mini (free)",
+            "id": "stealth/union-alpha",
+            "name": "Union Alpha",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -954,8 +954,8 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
-            "id": "nex-agi/nex-n2.5-pro:free",
-            "name": "Nex AGI: Nex-N2.5-Pro (free)",
+            "id": "nex-agi/nex-n2.5-mini:free",
+            "name": "Nex AGI: Nex-N2.5-Mini (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
