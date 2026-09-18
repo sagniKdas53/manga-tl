@@ -343,6 +343,10 @@ services:
       # API Keys are loaded via DOCKER_SECRETS_JSON
       - DOCKER_SECRETS_JSON=/run/secrets/api_keys
       - PROVIDERS_CONFIG=/app/config/providers.json
+      # The worker refreshes prices and free-model lists from OpenRouter/NVIDIA on this timer and
+      # publishes the result to Redis; nothing is committed. 0 turns it off. To check the refreshed
+      # catalog in by hand: scripts/dump_provider_catalog.py.
+      - CATALOG_REFRESH_INTERVAL_HOURS=${CATALOG_REFRESH_INTERVAL_HOURS:-24}
       - OCR_MODEL_PROVIDER=${OCR_MODEL_PROVIDER:-openrouter}
       - OCR_VLM_MODEL=${OCR_VLM_MODEL:-}
       - OCR_VLM_MODEL_LIST=${OCR_VLM_MODEL_LIST:-}
