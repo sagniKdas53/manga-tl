@@ -21,6 +21,48 @@
 
 ---
 
+## Re-verification of the field report, 2026-09-19
+
+The 2026-09-02 report (`new issues-2.pdf`, 33 bullets, 8 images) was checked again against the
+tree at `57a9a92` / worker `aa28db7`. Every bullet already has an ID below; what changed since
+09-02 is that `page-renderer` reached the live path with R1 (2026-09-18), so the render-side fixes
+that were "fixed on a renderer nobody ran" now count. The checks here are code-level (the fix and
+its test are present on the branch); nothing in this section was re-tested through the UI.
+
+**Priority list — open, in the order they should be taken:**
+
+| # | Bullet (report wording) | ID | State today | Why this rank |
+| :--- | :--- | :--- | :--- | :--- |
+| 1 | Canvas changes are never synced to the rendered output | `AUDIT-B15` | Ready; confirmed in the PR #115–#138 review | Loses edits permanently; everything else is cosmetic next to it |
+| 2 | Padding control per text box / bubble (image 2) | `AUDIT-F16` follow-up | **Open.** F16 shipped `textBoxPaddingPx` as one *global* setting; there is no per-element field. Needs `AUDIT-B18` (migration runner) first | The user's ask is per-bubble; the global dial does not answer it |
+| 3 | 2 light + 1 heavy slot logic dropped; all 3 slots stuck on slow steps (image 4) | `AUDIT-W14` | Needs measurement. The capacity-snapshot bug in `dispatcher.rs` is unambiguous; the tier split is a W10 re-measurement, not a revert | Visible every run; the dispatcher half is a small fix |
+| 4 | Translation re-region redo doesn't make a new layer (image 7) | `AUDIT-B16` | Needs repro | Unverified either way since 09-02 |
+| 5 | Queue Manager doesn't update quickly | `AUDIT-F20` (sort) fixed; the *latency* half was never filed | **New, narrow:** the sort rank is fixed; refresh cadence is not tracked anywhere |
+| 6 | Dark mode is ugly / washed out | `AUDIT-F21` marked fixed 09-03; **reopened** by the 09-18 list | `AUDIT-F24` (palette kept twice in `theme.ts` and `index.css`) is the structural cause; branch `fix/dark-mode-stops-glaring` exists, unmerged |
+| 7 | Text under-fills or leaks the balloon (image 3) | `AUDIT-R8`, `AUDIT-R16` | Overlaps R1; measured, needs a decision | Renderer is live now, so this can finally be judged on the six R1 fixtures |
+| 8 | Bubble doesn't reach full size because of SFX (image 6) | `AUDIT-R12` | Needs measurement | Hypothesis only |
+| 9 | Close text blocks overlap / overlapping bubbles erased as one | `AUDIT-R9`, `AUDIT-R10` | Design needed | Layout-time collision check is a design item |
+| 10 | Vertical English text; text at an angle | `AUDIT-R6` (vertical) design needed; `AUDIT-R5` (angle) fixed 09-03 and live since R1 | Vertical mode is a feature; rotation now renders |
+| 11 | Paint-region redo + batch redo | `AUDIT-F23` | Feature | |
+| 12 | Re-run entire chapter (image 5) | `AUDIT-F22` | Feature | |
+| 13 | No texture matching in erasure | `AUDIT-R11` = D1 | Roadmap | Largest single quality lever; not a bug fix |
+| — | SSE → WebSocket | `AUDIT-P10` | Not accepted, with evidence; the concrete complaints were `AUDIT-F17` | |
+
+**Verified fixed in the current tree (fix and test present; not re-tested through the UI):**
+`AUDIT-F14` rotation save (`layers.rs:26`, `Reader.tsx:1821`) · `AUDIT-F15` hidden element reachable
+(`ReaderRightSidebar.tsx:570`) · `AUDIT-F17` SSE refresh for all job types and background pages
+(`Reader.tsx:561`, two tests) · `AUDIT-F18` import chapter number (`ImportChapterDialog.tsx:106`) ·
+`AUDIT-F19`/`F26` thumbnails and cards re-poll (`PageDto.renderedThumbnailUrl`) · `AUDIT-F20` queue
+sort · `AUDIT-B12` QA verdicts reach the render (`coordinator.rs:2214`) · `AUDIT-B13` untranslatable
+page is a warning (`coordinator.rs:1867`; the image-8 string was removed in worker `2839284`) ·
+`AUDIT-B14` delete-then-re-add (PR #136/#137) · `AUDIT-W13` context-injected TL is sequential
+(`dispatcher.rs:148`) · `AUDIT-R5` rotation renders · `AUDIT-R7` polygon simplification
+(`bubble_geometry.py:91`).
+
+**Rejected-bubble mask still blocks the base image** (two bullets) is `AUDIT-B12`'s `reject_sfx`
+path (`coordinator.rs:2660`); it hides the element in the render, and no report since 09-02 says
+otherwise. If it recurs, file it as a B12 regression with the page, not as a new item.
+
 ## Audit of 2026-09-02
 
 The 2026-09-02 field report (24 bullets, 8 screenshots) was reconciled against the tree. Result:
