@@ -230,7 +230,6 @@ const exportButtonWithMarginSx = {
   "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
 } as const;
 
-
 const inspectorHeaderRowSx = {
   display: "flex",
   justifyContent: "space-between",

@@ -5,7 +5,6 @@ import {
   type FitTextInput,
 } from "@manga-library/page-scene";
 
-
 export type { FitResult };
 export { clampLineCenter };
 
@@ -27,7 +26,9 @@ export const ensureFontsLoaded = async (
   const specs = new Set<string>();
   for (const element of elements) {
     const style =
-      (element.fontStyle || "normal").toLowerCase() === "italic" ? "italic " : "";
+      (element.fontStyle || "normal").toLowerCase() === "italic"
+        ? "italic "
+        : "";
     const weight = element.fontWeight || "bold";
     const family = element.font || "Comic Neue";
     specs.add(`${weight} ${style}16px "${family}"`);

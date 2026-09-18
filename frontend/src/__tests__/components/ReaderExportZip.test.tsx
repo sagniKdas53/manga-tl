@@ -272,7 +272,9 @@ describe("Reader project ZIP export", () => {
       expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
     });
     const renderedRequest = mockSafeFetch.mock.calls.find(
-      (call) => typeof call[0] === "string" && call[0].endsWith(`/api/pages/${mockPage.id}/rendered`),
+      (call) =>
+        typeof call[0] === "string" &&
+        call[0].endsWith(`/api/pages/${mockPage.id}/rendered`),
     );
     expect(renderedRequest).toBeDefined();
     const contexts = vi
@@ -325,7 +327,11 @@ describe("Reader project ZIP export", () => {
     fireEvent.click(await screen.findByText("Export Page (PNG)"));
 
     await waitFor(() => {
-      expect(mockSafeFetch.mock.calls.some((call) => String(call[0]).endsWith("/rendered"))).toBe(true);
+      expect(
+        mockSafeFetch.mock.calls.some((call) =>
+          String(call[0]).endsWith("/rendered"),
+        ),
+      ).toBe(true);
     });
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(

@@ -28,6 +28,7 @@ Web application for Manga Library, providing the interactive manga reader, canva
 ## Development Workflow
 
 ### Requirements
+
 - Node.js 20.19+ or 22.12+ (Vite 8 engine requirement)
 - Running backend instance (default `http://localhost:8080`)
 

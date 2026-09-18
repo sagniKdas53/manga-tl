@@ -32,7 +32,13 @@ function sceneInput(): PageSceneContentInput {
         transform: { x: 10, y: 10, width: 40, height: 20, rotationDegrees: 15 },
         writingMode: "horizontal-tb",
         alignment: "center",
-        style: { fontFamily: "Test Font", fill: "#111111", stroke: "#ffffff", weight: 700, padding: 2 },
+        style: {
+          fontFamily: "Test Font",
+          fill: "#111111",
+          stroke: "#ffffff",
+          weight: 700,
+          padding: 2,
+        },
         visible: true,
         zIndex: 2,
       },
@@ -42,7 +48,13 @@ function sceneInput(): PageSceneContentInput {
         transform: { x: 70, y: 70, width: 10, height: 10, rotationDegrees: 0 },
         writingMode: "horizontal-tb",
         alignment: "start",
-        style: { fontFamily: "Test Font", fill: "#000000", stroke: "", weight: 400, padding: 0 },
+        style: {
+          fontFamily: "Test Font",
+          fill: "#000000",
+          stroke: "",
+          weight: 400,
+          padding: 0,
+        },
         visible: true,
         zIndex: 3,
       },
@@ -52,7 +64,13 @@ function sceneInput(): PageSceneContentInput {
         transform: { x: 88, y: 88, width: 20, height: 20, rotationDegrees: 45 },
         writingMode: "horizontal-tb",
         alignment: "end",
-        style: { fontFamily: "Test Font", fill: "#000000", stroke: "", weight: 400, padding: 0 },
+        style: {
+          fontFamily: "Test Font",
+          fill: "#000000",
+          stroke: "",
+          weight: 400,
+          padding: 0,
+        },
         visible: true,
         zIndex: 4,
       },
@@ -64,8 +82,14 @@ describe("page-scene content", () => {
   it("resolves source-space lines and reports blank and clipping diagnostics", () => {
     const scene = resolvePageScene(sceneInput(), measureText);
 
-    expect(scene.objects.find((object) => object.objectId === "rotated-dialogue")?.lineBoxes).not.toHaveLength(0);
-    expect(scene.objects.find((object) => object.objectId === "visible-manual-blank")?.lineBoxes).toEqual([]);
+    expect(
+      scene.objects.find((object) => object.objectId === "rotated-dialogue")
+        ?.lineBoxes,
+    ).not.toHaveLength(0);
+    expect(
+      scene.objects.find((object) => object.objectId === "visible-manual-blank")
+        ?.lineBoxes,
+    ).toEqual([]);
     expect(scene.diagnostics).toEqual(
       expect.arrayContaining([
         { code: "empty-manual-text", objectId: "visible-manual-blank" },

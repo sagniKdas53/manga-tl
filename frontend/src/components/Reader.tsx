@@ -2418,7 +2418,10 @@ export const Reader: React.FC<ReaderProps> = ({
         headers: { Authorization: `Bearer ${user.token}` },
       });
       if (res.status === 409) {
-        const body = (await res.json().catch(() => ({}))) as { status?: string; revision?: number };
+        const body = (await res.json().catch(() => ({}))) as {
+          status?: string;
+          revision?: number;
+        };
         showToast(
           body.status === "failed"
             ? `The render for revision ${body.revision ?? "?"} failed; fix the page and it will re-render.`
@@ -2428,7 +2431,9 @@ export const Reader: React.FC<ReaderProps> = ({
         return;
       }
       if (!res.ok) {
-        throw new Error(`Rendered artifact request failed with status ${res.status}`);
+        throw new Error(
+          `Rendered artifact request failed with status ${res.status}`,
+        );
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -2473,7 +2478,6 @@ export const Reader: React.FC<ReaderProps> = ({
       runExport();
     }
   }, [selectedPage, user, dirtyElements, saveAllPendingChanges, showToast]);
-
 
   const handleExportZip = useCallback(async () => {
     if (!selectedPage || !imgRef.current) return;
