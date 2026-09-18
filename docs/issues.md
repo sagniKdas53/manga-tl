@@ -48,6 +48,10 @@ its test are present on the branch); nothing in this section was re-tested throu
 | 13 | No texture matching in erasure | `AUDIT-R11` = D1 | Roadmap | Largest single quality lever; not a bug fix |
 | — | SSE → WebSocket | `AUDIT-P10` | Not accepted, with evidence; the concrete complaints were `AUDIT-F17` | |
 
+**Added the same day, from the "overly rounded, padded boxes" screenshots:** `AUDIT-R19` — the
+synthetic plate around free-standing text is padded 18% and rounded 22%, and the editor box is a
+different padding of the same bbox. It belongs with #2 (padding) above and is scheduled after R2.
+
 **Verified fixed in the current tree (fix and test present; not re-tested through the UI):**
 `AUDIT-F14` rotation save (`layers.rs:26`, `Reader.tsx:1821`) · `AUDIT-F15` hidden element reachable
 (`ReaderRightSidebar.tsx:570`) · `AUDIT-F17` SSE refresh for all job types and background pages
@@ -238,6 +242,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R12`](#audit-r12-medium-sfx-appear-to-shrink-neighbouring-balloons) | Medium | Worker | Hypothesis: an SFX overlapping a balloon truncates its mask | Needs measurement |
 | [`AUDIT-R15`](#audit-r15-high-the-typeset-size-depends-on-which-fonts-the-host-happens-to-have) | High | Render/Testing | The same call returns 48, 56 or 75px depending on which font files the host has | Ready |
 | [`AUDIT-R16`](#audit-r16-medium-a-narrow-box-is-capped-by-its-widest-unbreakable-token) | Medium | Render | Portrait balloons: the type is width-bound and the spare height cannot be spent | Measured; needs a decision |
+| [`AUDIT-R19`](#audit-r19-medium-a-free-standing-caption-gets-a-synthetic-rounded-plate-a-third-larger-than-its-text) | Medium | Worker/Frontend | Text with no detected balloon gets a rounded-rectangle plate padded 18% of its short side with 22%-radius corners; the editor box is 10px inside it and reshape only edits the plate | Filed 2026-09-19; fix after R2 |
 | [`AUDIT-R17`](#audit-r17-unranked-shaperectangular-is-not-ignored) | Unranked | Render | Reported as an ignored API parameter; the branch exists and the contract holds end to end | **Closed on assessment 2026-09-05** |
 
 ### Cosmetic & long tail
@@ -882,6 +887,62 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Fix:** begin one transaction before reading either page set, lock all pages in that chapter with
   `FOR UPDATE`, validate under that lock, then renumber and recalculate the cover before commit.
   Cover reorder-vs-insert and move-vs-delete with two independent database connections.
+
+### `AUDIT-R19` (medium): A free-standing caption gets a synthetic rounded plate a third larger than its text
+
+- **Report (2026-09-19):** "the text box is a rectangle but the actual region is a larger more
+  complex shape that has extra padding for no reason and can't really be re-shaped easily", with
+  two screenshots of *19th Sept ch.1 p5* and its layers ZIP.
+- **Root cause, three layers deep, all working as written:**
+  1. **The worker invents the plate.** The left caption sits on a wall; there is no balloon, so
+     the OCR handler's erase decision (`worker/src/worker/handlers/ocr.py:399` `cover_fill_for_region`,
+     the R2 "cover fill") hands back a *synthesised* balloon from `cover_balloon_polygon` (`:366`):
+     the OCR bbox grown by `min(w, h) × COVER_FILL_PAD_FRACTION` (`config.py:398`, default
+     **0.18**) on every side, with corners of radius **0.22 × the plate's shorter side**, sampled at
+     six steps per corner and then simplified (`AUDIT-R7`). For this 178×394 bbox that is 32 px of
+     padding and a 53 px corner radius: the polygon in the ZIP spans 37–279 × 48–502 (242×454),
+     14 vertices — exactly what the formula predicts. The plate is a third wider than the text.
+  2. **The backend inflates the box by a different amount.** `text_box_geometry`
+     (`backend-rust/src/jobs/coordinator.rs:1690`) takes the free-text path (no detected bubble)
+     and grows the bbox by `FREE_TEXT_PADDING / 2 = 10` px per side: 69,78 178×394 → 59,68 198×414.
+     So the blue box and the beige plate are two unrelated paddings of the same bbox (10 px vs
+     32 px); nothing ties them together and the inspector shows neither number.
+  3. **The shape is labelled by region type, not by what was found.** The insert at
+     `coordinator.rs:2131` writes `box_shape = "elliptical"` whenever `region_type` is `speech`,
+     which is the classifier's default (`services/layout.py:182`). The Appearance dropdown then
+     reads "Elliptical (Contour-Based)" for a plate that is neither elliptical nor contour-based.
+     The frontend's fallback for `elliptical` with no polygon is a true ellipse
+     (`frontend/src/utils/maskPaint.ts:158`), so switching the shape does not make it a rectangle
+     either — the polygon wins whenever it exists.
+- **Why reshape feels wrong:** reshape mode edits `mask_polygon` — the plate — while the
+  inspector's X/Y/Max Width/Max Height edit the text box. Dragging the box does not move the plate
+  and dragging a vertex does not move the box. There are 14–22 handles on what reads as a
+  rectangle because the corners are arcs.
+- **What is not the cause:** `textBoxPaddingPx` (`AUDIT-F16`) is applied *inside* the text box at
+  fit time; it has no effect on the plate. `AUDIT-R7`'s simplification is working (the 28-point
+  plate is now 14).
+- **Fix, in the order that pays:**
+  1. Make the plate padding **absolute and small** for free text (a few px past the glyph
+     extent), or derive it from the line height, and drop the corner radius to something that
+     reads as a rectangle (`≤ 0.08` of the short side) or to zero when the plate is on a flat
+     background. Keep `COVER_FILL_PAD_FRACTION` for the true cover-fill case (busy background where
+     the plate is a deliberate patch) — that is the case R2 introduced it for, and this caption is
+     not it: the wall is flat, `detect_background_color_poly` would have returned a colour if the
+     mask existed.
+  2. Tie the two paddings: derive the free-text box from the plate (plate inset by a fixed
+     margin), so the inspector's box and the painted plate move together, and reshape/drag act on
+     one geometry.
+  3. Stop deriving `box_shape` from `region_type`; set `rectangular` when the polygon came from
+     `cover_balloon_polygon`, `elliptical` only when a balloon contour was found. Rename the menu
+     item so it says what it is.
+  4. Per-element padding (`AUDIT-F16` follow-up, needs `AUDIT-B18`) then becomes the one dial for
+     "space around free-standing text", and the plate follows it.
+- **Verification:** *19th Sept ch.1 p5* left caption through `docker compose up`: the plate must
+  be within ~4 px of the glyph extent, ≤ 8 vertices, `box_shape = rectangular`, and the export ZIP's
+  `maskPolygon` must match the reader's canvas. Regression check on the six R1 fixtures for the
+  *detected*-balloon case, which this must not touch.
+- **Schedule:** after R2 (erasure), because R2 is what decides when a plate is drawn at all;
+  changing the plate's shape before that would be measured twice.
 
 ### `AUDIT-B23` (medium): The dispatcher 429 cooldown never escalates under sustained saturation
 
