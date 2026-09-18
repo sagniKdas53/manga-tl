@@ -1920,7 +1920,7 @@ pub async fn upload_zip_archive(
                 },
             };
 
-            if restore_project_page(&state, page.id, &project_bytes, false, replacement_image_id)
+            if restore_project_page(state, page.id, &project_bytes, false, replacement_image_id)
                 .await
                 .is_err()
             {
@@ -2100,9 +2100,7 @@ fn validate_project_schema(project_json: &[u8]) -> Result<(), &'static str> {
         .and_then(serde_json::Value::as_u64)
     {
         Some(PROJECT_SCHEMA_VERSION) => Ok(()),
-        Some(version) => Err(match version {
-            _ => "project.json schemaVersion is unsupported",
-        }),
+        Some(_) => Err("project.json schemaVersion is unsupported"),
         None => Err("project.json schemaVersion is required"),
     }
 }

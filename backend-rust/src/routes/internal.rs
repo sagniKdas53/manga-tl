@@ -140,17 +140,16 @@ pub async fn update_job_status(
             "COMPLETED" | "PAUSED" => None,
             _ => None,
         };
-        if let Some(ledger_status) = ledger_status {
-            if let Err(err) = sqlx::query(
+        if let Some(ledger_status) = ledger_status
+            && let Err(err) = sqlx::query(
                 "UPDATE page_render_jobs SET status = $2 WHERE job_id = $1 AND status <> 'succeeded'",
             )
             .bind(&job_id)
             .bind(ledger_status)
             .execute(&state.pool)
             .await
-            {
-                tracing::error!("Could not mirror render job {job_id} status to immutable ledger: {err}");
-            }
+        {
+            tracing::error!("Could not mirror render job {job_id} status to immutable ledger: {err}");
         }
     }
 

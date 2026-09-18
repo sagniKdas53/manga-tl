@@ -75,7 +75,7 @@ pub async fn current_snapshot(
 /// The only render result a reader may call current for the page's current immutable scene.
 #[derive(Debug)]
 pub enum CurrentRenderArtifact {
-    Ready(PageRenderJob),
+    Ready(Box<PageRenderJob>),
     Pending { revision: i32 },
     Failed { revision: i32 },
 }
@@ -110,7 +110,7 @@ pub async fn current_render_artifact(
     .fetch_optional(pool)
     .await?;
     if let Some(artifact) = artifact {
-        return Ok(CurrentRenderArtifact::Ready(artifact));
+        return Ok(CurrentRenderArtifact::Ready(Box::new(artifact)));
     }
 
     let latest_status: Option<String> = sqlx::query_scalar(
@@ -423,7 +423,7 @@ fn canonical_json(value: &Value) -> Result<String, PageSceneError> {
             .map(|(key, value)| {
                 Ok(format!(
                     "{}:{}",
-                    Value::String(key.clone()).to_string(),
+                    Value::String(key.clone()),
                     canonical_json(value)?
                 ))
             })
