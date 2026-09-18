@@ -315,6 +315,17 @@ pub async fn start_pipeline(
 /// own single-statement insert has committed (each handler-level transaction wraps the
 /// CALLER's writes; the job row itself commits atomically inside this function).
 #[allow(clippy::too_many_arguments)]
+/// The immutable-render ledger row an enqueue must write between the `jobs` insert and the
+/// Redis push. `page_render_jobs.job_id` references `jobs.id` (not deferrable), so the row cannot
+/// exist before the job; and the worker may call back within seconds of the push, so it cannot
+/// be written after it either. E04's transport wrote it first and would have failed the foreign
+/// key on every queued render — found on the first live run of tracker R1.
+pub struct RenderLedger {
+    pub page_id: Uuid,
+    pub page_revision: i32,
+    pub logical_scene_sha256: String,
+}
+
 pub async fn enqueue_job_directly(
     state: &AppState,
     job_type: &str,
@@ -324,6 +335,25 @@ pub async fn enqueue_job_directly(
     priority: &str,
     customize: impl FnOnce(&mut serde_json::Map<String, Value>),
 ) {
+    enqueue_job_with_ledger(
+        state, job_type, image_id, page_id, chapter_id, priority, customize, None,
+    )
+    .await;
+}
+
+/// `enqueue_job_directly` plus an immutable-render ledger row for the same job id. Returns
+/// whether the job (and its ledger row) were persisted.
+#[allow(clippy::too_many_arguments)]
+pub async fn enqueue_job_with_ledger(
+    state: &AppState,
+    job_type: &str,
+    image_id: Uuid,
+    page_id: Option<Uuid>,
+    chapter_id: Option<Uuid>,
+    priority: &str,
+    customize: impl FnOnce(&mut serde_json::Map<String, Value>),
+    ledger: Option<RenderLedger>,
+) -> bool {
     // Trace id: read or create, refreshing the TTL on every hand-off (AUDIT-P8).
     let trace_id = match &state.redis {
         Some(redis) => match redis.get(&format!("pipeline:trace:{image_id}")).await {
@@ -604,6 +634,19 @@ pub async fn enqueue_job_directly(
         .bind(&payload)
         .execute(&state.pool)
         .await?;
+        if let Some(ledger) = &ledger {
+            sqlx::query(
+                "INSERT INTO page_render_jobs \
+                 (job_id, page_id, page_revision, logical_scene_sha256, status) \
+                 VALUES ($1, $2, $3, $4, 'queued')",
+            )
+            .bind(&job_row_id)
+            .bind(ledger.page_id)
+            .bind(ledger.page_revision)
+            .bind(&ledger.logical_scene_sha256)
+            .execute(&state.pool)
+            .await?;
+        }
         Ok(())
     }
     .await;
@@ -636,8 +679,12 @@ pub async fn enqueue_job_directly(
                 )
                 .await;
             push_persisted_job_if_queue_running(state, &job_row_id, job_type, &payload).await;
+            true
         }
-        Err(err) => tracing::error!("Failed to enqueue {job_type} job for image {image_id}: {err}"),
+        Err(err) => {
+            tracing::error!("Failed to enqueue {job_type} job for image {image_id}: {err}");
+            false
+        }
     }
 }
 
@@ -944,6 +991,59 @@ pub async fn handle_panel_callback(state: &AppState, dto: &Value) -> Result<(), 
     Ok(())
 }
 
+/// Deletes every OCR region on the page and everything that references one. See the note at
+/// the call site in `handle_ocr_callback`.
+async fn purge_page_regions(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    page_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "DELETE FROM layer_edit_history WHERE layer_element_id IN ( \
+             SELECT le.id FROM layer_elements le \
+             JOIN ocr_regions r ON r.id = le.region_id WHERE r.page_id = $1)",
+    )
+    .bind(page_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "DELETE FROM layer_elements WHERE region_id IN (SELECT id FROM ocr_regions WHERE page_id = $1)",
+    )
+    .bind(page_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "DELETE FROM conversation_regions WHERE region_id IN (SELECT id FROM ocr_regions WHERE page_id = $1)",
+    )
+    .bind(page_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "DELETE FROM translation_regions WHERE region_id IN (SELECT id FROM ocr_regions WHERE page_id = $1)",
+    )
+    .bind(page_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query("DELETE FROM ocr_regions WHERE page_id = $1")
+        .bind(page_id)
+        .execute(&mut **tx)
+        .await?;
+    sqlx::query(
+        "DELETE FROM conversations WHERE page_id = $1 \
+         AND NOT EXISTS (SELECT 1 FROM conversation_regions cr WHERE cr.conversation_id = conversations.id)",
+    )
+    .bind(page_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "DELETE FROM layers WHERE page_id = $1 \
+         AND NOT EXISTS (SELECT 1 FROM layer_elements le WHERE le.layer_id = layers.id)",
+    )
+    .bind(page_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), String> {
     let image_id = extract_uuid(dto, "imageId").ok_or("imageId missing")?;
     tracing::info!(
@@ -1048,6 +1148,17 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
 
     // One transaction around the whole result application (Java @Transactional).
     let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+
+    // A fresh OCR pass replaces the page's regions. The Java port kept every pass's rows and only
+    // hid the old OCR *layer*, but `ocr_regions` has no pass column: every consumer selects
+    // `WHERE page_id = $1`, so each rerun doubled what translation was charged for and what the
+    // scene drew. sample61 in the 2026-09-17 evidence had 214 rows for 63 distinct boxes and cost
+    // US$0.25 for one page. Elements, conversation links and translation rows that hang off the
+    // superseded regions go with them; layers left with no elements go too, so a re-OCR'd page
+    // does not keep empty shells. Manual elements (no region) survive. Tracker R1.
+    purge_page_regions(&mut tx, page.id)
+        .await
+        .map_err(|e| format!("could not replace regions for page {}: {e}", page.id))?;
     for r in &regions {
         let rx = r.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
         let ry = r.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
@@ -2042,19 +2153,52 @@ pub async fn handle_translation_callback(
             (None, None) => {}
         }
     }
+    // The layer edits and the revision they produce commit together (page_freshness), then the
+    // render is queued from that snapshot. A page-less image has nothing to snapshot and gets no
+    // render: there is no Pillow path to fall back to any more (tracker R1).
+    let Some(page) = page.as_ref() else {
+        tx.commit().await.map_err(|e| e.to_string())?;
+        tracing::warn!("translation callback for image {image_id} has no page; nothing to render");
+        return Ok(());
+    };
+    let snapshot =
+        crate::page_scene_builder::snapshot_pipeline_scene(state, &mut tx, page.id).await;
     tx.commit().await.map_err(|e| e.to_string())?;
-
-    enqueue_job_directly(
-        state,
-        "render",
-        image_id,
-        page.map(|p| p.id),
-        None,
-        "normal",
-        |_| {},
-    )
-    .await;
+    match snapshot {
+        Ok(_) => enqueue_snapshot_render(state, page.id, json!({})).await,
+        Err(err) => tracing::error!(
+            "Could not snapshot page {} after translation: {err}",
+            page.id
+        ),
+    }
     Ok(())
+}
+
+/// Queues an immutable render of the page's current snapshot with the given job flags, logging
+/// rather than failing the callback when the queue refuses: the snapshot is already committed and
+/// the debounce poller will pick the page up.
+async fn enqueue_snapshot_render(state: &AppState, page_id: Uuid, flags: Value) {
+    let page: Option<Page> = sqlx::query_as("SELECT * FROM pages WHERE id = $1")
+        .bind(page_id)
+        .fetch_optional(&state.pool)
+        .await
+        .unwrap_or(None);
+    let Some(page) = page else {
+        tracing::error!("Cannot queue render: page {page_id} vanished after its snapshot");
+        return;
+    };
+    let extra = flags.as_object().cloned().unwrap_or_default();
+    match crate::jobs::recovery::enqueue_current_snapshot_render(state, &page, extra).await {
+        Ok(true) => tracing::info!(
+            "Queued immutable render for page {page_id} revision {}",
+            page.scene_revision
+        ),
+        Ok(false) => tracing::info!(
+            "Page {page_id} revision {} already has a render queued or done; not re-queuing",
+            page.scene_revision
+        ),
+        Err(err) => tracing::error!("Could not queue render for page {page_id}: {err}"),
+    }
 }
 
 fn falsy(value: &Value) -> bool {
@@ -2080,10 +2224,43 @@ async fn enqueue_final_pass_render(
     completes_pipeline: bool,
 ) {
     tracing::info!("QA changed layers for image {image_id}; re-rendering so the export matches");
-    enqueue_job_directly(state, "render", image_id, page_id, None, "normal", |job| {
-        job.insert("finalPass".into(), json!(true));
-        job.insert("completesPipeline".into(), json!(completes_pipeline));
-    })
+    let page_id = match page_id {
+        Some(id) => Some(id),
+        None => sqlx::query_scalar::<_, Uuid>("SELECT id FROM pages WHERE image_id = $1 LIMIT 1")
+            .bind(image_id)
+            .fetch_optional(&state.pool)
+            .await
+            .unwrap_or(None),
+    };
+    let Some(page_id) = page_id else {
+        tracing::error!("QA final-pass render for image {image_id}: no page to snapshot");
+        return;
+    };
+    // QA's layer edits were committed by their own routes; snapshot what is there now.
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(err) => {
+            tracing::error!(
+                "Could not open transaction for final-pass snapshot of {page_id}: {err}"
+            );
+            return;
+        }
+    };
+    let snapshot =
+        crate::page_scene_builder::snapshot_pipeline_scene(state, &mut tx, page_id).await;
+    if let Err(err) = snapshot {
+        tracing::error!("Could not snapshot page {page_id} for QA final pass: {err}");
+        return;
+    }
+    if let Err(err) = tx.commit().await {
+        tracing::error!("Could not commit final-pass snapshot of {page_id}: {err}");
+        return;
+    }
+    enqueue_snapshot_render(
+        state,
+        page_id,
+        json!({ "finalPass": true, "completesPipeline": completes_pipeline }),
+    )
     .await;
 }
 
@@ -2143,6 +2320,7 @@ pub async fn handle_render_callback(
     job_id: Option<&str>,
     image_id: Uuid,
     page_id: Option<Uuid>,
+    diagnostics: Value,
 ) -> Result<RenderCallbackOutcome, String> {
     let ledger: Option<(Uuid, i32, String)> = match job_id.filter(|id| !id.is_empty()) {
         Some(job_id) => sqlx::query_as(
@@ -2209,13 +2387,14 @@ pub async fn handle_render_callback(
     {
         let persisted = sqlx::query(
             "UPDATE page_render_jobs \
-             SET rendered_png_sha256 = $2, rendered_png_storage_path = $3, \
+             SET rendered_png_sha256 = $2, rendered_png_storage_path = $3, diagnostics_json = $4, \
                  status = 'succeeded', completed_at = now() \
              WHERE job_id = $1 AND status IN ('queued', 'running')",
         )
         .bind(job_id.expect("ledger requires job id"))
         .bind(&png_sha256)
         .bind(&storage_path)
+        .bind(&diagnostics)
         .execute(&mut *tx)
         .await
         .map_err(|err| err.to_string())?;
@@ -2407,12 +2586,15 @@ pub async fn handle_qa_re_ocr_callback(
 
 /// Hybrid QA first pass (LLM): apply direct fixes / SFX rejections, then fix layer
 /// visibility so exactly the newest translation layer shows.
+/// Applies the LLM first pass's fixes and layer visibility, then snapshots the page and returns
+/// the immutable render payload the worker draws through the browser renderer for its VLM check.
+/// `None` when the image has no page (nothing to render).
 pub async fn prepare_hybrid_qa(
     state: &AppState,
     image_id: Uuid,
     callback_page_id: Option<Uuid>,
     qa_results: &[Value],
-) -> Result<(), String> {
+) -> Result<Option<Value>, String> {
     tracing::info!(
         "Preparing hybrid QA for image: {image_id} with {} LLM first pass results",
         qa_results.len()
@@ -2420,7 +2602,7 @@ pub async fn prepare_hybrid_qa(
 
     let hybrid_page = resolve_page_for_callback(&state.pool, image_id, callback_page_id).await;
     let Some(page) = &hybrid_page else {
-        return Ok(());
+        return Ok(None);
     };
 
     // Latest translation layer by z_order (Java compared zOrder for the same purpose).
@@ -2527,7 +2709,9 @@ pub async fn prepare_hybrid_qa(
                 .await;
         }
     }
-    Ok(())
+    crate::page_scene_builder::snapshot_render_payload(state, page.id, image_id)
+        .await
+        .map(Some)
 }
 
 /// Picks the single translation layer QA may change for this region.

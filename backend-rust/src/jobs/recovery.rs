@@ -146,9 +146,16 @@ pub async fn recover_stale_processing_jobs(state: &AppState) {
     }
 }
 
-async fn enqueue_current_snapshot_render(
+/// Queues one immutable render of the page's current scene snapshot, or nothing when that
+/// exact revision/digest already has a queued, running or succeeded render.
+///
+/// `extra` lets the pipeline mark the job (`finalPass`, `completesPipeline`) the way
+/// `handle_render_callback` expects; the debounce poller passes nothing. Every cleanup asset the
+/// snapshot references is handed to the worker as a presigned URL under `renderAssetUrls`.
+pub async fn enqueue_current_snapshot_render(
     state: &AppState,
     page: &crate::models::Page,
+    extra: serde_json::Map<String, serde_json::Value>,
 ) -> Result<bool, String> {
     let Some(snapshot) = crate::page_scene::current_snapshot(&state.pool, page.id)
         .await
@@ -161,6 +168,18 @@ async fn enqueue_current_snapshot_render(
         );
         return Ok(false);
     };
+    let mut asset_urls = serde_json::Map::new();
+    for (asset_id, path) in
+        crate::page_scene_builder::current_asset_paths(&state.pool, page.id, snapshot.revision)
+            .await?
+    {
+        let url = state
+            .storage
+            .presigned_get_url(&path)
+            .await
+            .map_err(|err| format!("could not presign scene asset {path}: {err}"))?;
+        asset_urls.insert(asset_id, serde_json::json!(url));
+    }
 
     let existing: Option<String> = sqlx::query_scalar(
         "SELECT job_id FROM page_render_jobs \
@@ -175,41 +194,22 @@ async fn enqueue_current_snapshot_render(
     .await
     .map_err(|err| err.to_string())?;
 
-    let job_id = match existing {
-        Some(job_id) => {
-            let persisted: bool =
-                sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM jobs WHERE id = $1)")
-                    .bind(&job_id)
-                    .fetch_one(&state.pool)
-                    .await
-                    .map_err(|err| err.to_string())?;
-            if persisted {
-                return Ok(false);
-            }
-            job_id
-        }
-        None => {
-            let job_id = Uuid::new_v4().to_string();
-            sqlx::query(
-                "INSERT INTO page_render_jobs \
-                 (job_id, page_id, page_revision, logical_scene_sha256, status) \
-                 VALUES ($1, $2, $3, $4, 'queued')",
-            )
-            .bind(&job_id)
-            .bind(page.id)
-            .bind(snapshot.revision)
-            .bind(&snapshot.logical_scene_sha256)
-            .execute(&state.pool)
-            .await
-            .map_err(|err| err.to_string())?;
-            job_id
-        }
-    };
+    // The ledger row and the jobs row share one id and are written together by
+    // `enqueue_job_with_ledger` (jobs first — the ledger's foreign key requires it).
+    if existing.is_some() {
+        return Ok(false);
+    }
+    let job_id = Uuid::new_v4().to_string();
 
     let revision = snapshot.revision;
     let digest = snapshot.logical_scene_sha256.clone();
     let scene = snapshot.scene_json;
-    coordinator::enqueue_job_directly(
+    let ledger = coordinator::RenderLedger {
+        page_id: page.id,
+        page_revision: revision,
+        logical_scene_sha256: digest.clone(),
+    };
+    let persisted = coordinator::enqueue_job_with_ledger(
         state,
         "render",
         page.image_id,
@@ -221,14 +221,64 @@ async fn enqueue_current_snapshot_render(
             job.insert("pageRevision".into(), serde_json::json!(revision));
             job.insert("logicalSceneSha256".into(), serde_json::json!(digest));
             job.insert("logicalScene".into(), scene);
+            job.insert(
+                "renderAssetUrls".into(),
+                serde_json::Value::Object(asset_urls),
+            );
+            for (key, value) in extra {
+                job.insert(key, value);
+            }
         },
+        Some(ledger),
     )
     .await;
+    if !persisted {
+        return Err(format!(
+            "render job for page {} revision {revision} was not persisted",
+            page.id
+        ));
+    }
     Ok(true)
+}
+
+/// Pages whose scene could not be built, with when that happened. A page that cannot be
+/// snapshotted (no image hash, invalid rows) would otherwise be retried every 5 s with the same
+/// error; it waits five minutes instead, like a failed render job does.
+static SNAPSHOT_BACKOFF: std::sync::Mutex<
+    Option<std::collections::HashMap<Uuid, std::time::Instant>>,
+> = std::sync::Mutex::new(None);
+
+fn snapshot_backoff_active(page_id: Uuid) -> bool {
+    let mut guard = SNAPSHOT_BACKOFF
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let map = guard.get_or_insert_with(Default::default);
+    map.retain(|_, at| at.elapsed() < std::time::Duration::from_secs(300));
+    map.contains_key(&page_id)
+}
+
+fn snapshot_backoff_record(page_id: Uuid) {
+    let mut guard = SNAPSHOT_BACKOFF
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    guard
+        .get_or_insert_with(Default::default)
+        .insert(page_id, std::time::Instant::now());
 }
 
 /// DebouncedRenderService port. Pages edited more than 10s ago whose last render is
 /// older than their last edit get a debounced render redo.
+///
+/// A page whose current revision has no immutable snapshot gets one built here from its rows
+/// (`page_scene_builder`) before the render is queued. That is what editor edits rely on: the
+/// layer routes advance the revision in their own transaction and leave the snapshot to this
+/// debounce, so a burst of drags produces one snapshot and one render. Pipeline callbacks
+/// snapshot immediately and this loop then finds the render already queued.
+///
+/// Before the 2026-09-17 realignment this loop selected the same pages, found no snapshot for
+/// any of them (nothing on the live path wrote one), queued nothing, and logged "Debounced
+/// render triggered" every 5 s per page — 3,130 lines and zero renders in one afternoon's
+/// `logs/run-1.log`.
 pub async fn process_pending_renders(state: &AppState) {
     let threshold = chrono::Utc::now() - chrono::Duration::seconds(10);
     // findPagesNeedingRender: last_edited_at < threshold AND (last_rendered_at IS NULL
@@ -247,7 +297,10 @@ pub async fn process_pending_renders(state: &AppState) {
     }
 
     let mut triggered = 0usize;
-    for page in pages {
+    for mut page in pages {
+        if snapshot_backoff_active(page.id) {
+            continue;
+        }
         // Skip when a render failed within the last five minutes for this image.
         let last_render: Option<crate::models::Job> = sqlx::query_as(
             "SELECT * FROM jobs WHERE image_id = $1 AND type = 'render' ORDER BY created_at DESC LIMIT 1",
@@ -266,7 +319,41 @@ pub async fn process_pending_renders(state: &AppState) {
             continue;
         }
 
-        match enqueue_current_snapshot_render(state, &page).await {
+        let has_snapshot = crate::page_scene::current_snapshot(&state.pool, page.id)
+            .await
+            .ok()
+            .flatten()
+            .is_some();
+        if !has_snapshot {
+            let built = async {
+                let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+                let (snapshot, _) =
+                    crate::page_scene_builder::snapshot_pipeline_scene(state, &mut tx, page.id)
+                        .await?;
+                tx.commit().await.map_err(|e| e.to_string())?;
+                Ok::<i32, String>(snapshot.revision)
+            }
+            .await;
+            match built {
+                Ok(revision) => {
+                    tracing::info!(
+                        "Snapshotted page {} as revision {revision} for its debounced render",
+                        page.id
+                    );
+                    page.scene_revision = revision;
+                }
+                Err(err) => {
+                    tracing::error!(
+                        "Could not build a scene for page {}: {err}; retrying in five minutes",
+                        page.id
+                    );
+                    snapshot_backoff_record(page.id);
+                    continue;
+                }
+            }
+        }
+
+        match enqueue_current_snapshot_render(state, &page, serde_json::Map::new()).await {
             Ok(true) => {
                 triggered += 1;
                 tracing::info!("Debounced render enqueued for page: {}", page.id);

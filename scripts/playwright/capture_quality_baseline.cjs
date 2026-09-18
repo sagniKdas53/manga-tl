@@ -54,10 +54,14 @@ const DOWNLOAD_TIMEOUT_MS = 3 * 60 * 1000;
 const EXPORT_PNG = "Export Page (PNG)";
 const EXPORT_ZIP = "Export Project (ZIP)";
 
+// User decision 2026-09-17 (tracker realignment, decision 1): the deployment default is DeepSeek
+// V4 Pro and quality runs use it too. The earlier Luna pin "to match Torii" refused the NSFW half
+// (sample222) and the pipeline typeset the refusal; Torii with DeepSeek translated it fully.
+const TL_MODEL = "deepseek/deepseek-v4-pro";
 const PIPELINE_SETTINGS = {
   ocr: { provider: "local", models: { ja: "PP-OCRv6", ko: "PP-OCRv5", zh: "PP-OCRv6" } },
-  translation: { provider: "openrouter", model: "openai/gpt-5.6-luna", fallback_models: false },
-  qa: { provider: "openrouter", llm_model: "openai/gpt-5.6-luna", vlm_model: "google/gemini-3.1-flash-lite", mode: "auto" },
+  translation: { provider: "openrouter", model: TL_MODEL, fallback_models: false },
+  qa: { provider: "openrouter", llm_model: TL_MODEL, vlm_model: "google/gemini-3.1-flash-lite", mode: "auto" },
 };
 const EXPORT_RENDERED = "Export Rendered PNG";
 
@@ -285,10 +289,39 @@ async function clickAndDownload(page, name, destination) {
   await download.saveAs(destination);
 }
 
+/**
+ * Tracker R1: "Export Page (PNG)" hands out the page's current immutable render artifact, so the
+ * export can only be captured once that render has finished. The pipeline's final-pass render is
+ * queued after the QA callback that the runner treats as "pipeline complete", so wait for the
+ * artifact here. A failed render is an error, not something to export around.
+ */
+async function waitForCurrentRender(request, base, token, pageId, timeoutMs = DOWNLOAD_TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs;
+  let last = "";
+  while (Date.now() < deadline) {
+    const response = await request.fetch(`${base}/api/pages/${pageId}/rendered`, { headers: auth(token) });
+    if (response.ok()) {
+      return { status: "ready", sha256: sha256(await response.body()) };
+    }
+    if (response.status() === 409) {
+      const body = await response.json().catch(() => ({}));
+      if (body.status === "failed") {
+        throw new Error(`page ${pageId}: current render (revision ${body.revision}) failed`);
+      }
+      last = `pending revision ${body.revision}`;
+    } else {
+      last = `HTTP ${response.status()}`;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+  throw new Error(`page ${pageId}: current render not ready after ${timeoutMs} ms (${last})`);
+}
+
 async function captureExports(page, browser, base, token, record, out, skipRendered) {
   const exportStartedAt = new Date().toISOString();
   const sampleDir = path.join(out, "a04-exports", record.sample);
   fs.mkdirSync(sampleDir, { recursive: true });
+  const currentRender = await waitForCurrentRender(page.request, base, token, record.page_id);
   await page.goto(`${base}/chapters/${record.chapter_id}/reader/1`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector('img[src*="/api/images/"]', { timeout: 60_000 });
   await page.getByRole("button", { name: EXPORT_ZIP, exact: true }).waitFor({ state: "visible", timeout: 60_000 });
@@ -318,6 +351,8 @@ async function captureExports(page, browser, base, token, record, out, skipRende
     completed_at: new Date().toISOString(),
     editor_png_sha256: sha256(fs.readFileSync(path.join(sampleDir, "editor.png"))),
     export_png_sha256: sha256(fs.readFileSync(path.join(sampleDir, "export.png"))),
+    // R1 gate: the downloaded export is byte-identical to the current artifact the API served.
+    current_render_png_sha256: currentRender.sha256,
     rendered_png_sha256: skipRendered ? null : sha256(fs.readFileSync(path.join(sampleDir, "rendered.png"))),
     rendered_png_status: skipRendered ? "not-requested" : "captured",
     project_zip_sha256: sha256(fs.readFileSync(path.join(sampleDir, "project.zip"))),
@@ -404,9 +439,9 @@ capture_quality_baseline.cjs — fresh A03 pipeline data plus A04 browser export
             ocrProvider: "local",
             ocrModel: "PP-OCRv6",
             tlProvider: "openrouter",
-            tlModel: "openai/gpt-5.6-luna",
+            tlModel: TL_MODEL,
             qaProvider: "openrouter",
-            qaLlmModel: "openai/gpt-5.6-luna",
+            qaLlmModel: TL_MODEL,
             qaVlmModel: "google/gemini-3.1-flash-lite",
             qaMode: "auto",
             useFallbackModels: false,
@@ -426,9 +461,9 @@ capture_quality_baseline.cjs — fresh A03 pipeline data plus A04 browser export
           ocrProvider: "local",
           ocrModel: "PP-OCRv6",
           tlProvider: "openrouter",
-          tlModel: "openai/gpt-5.6-luna",
+          tlModel: TL_MODEL,
           qaProvider: "openrouter",
-          qaLlmModel: "openai/gpt-5.6-luna",
+          qaLlmModel: TL_MODEL,
           qaVlmModel: "google/gemini-3.1-flash-lite",
           qaMode: "auto",
           useContextMemory: true,

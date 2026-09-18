@@ -420,8 +420,11 @@ services:
         condition: service_healthy
       backend:
         condition: service_healthy
-      page-renderer:
-        condition: service_healthy
+      # Deliberately not `page-renderer`. OCR, translation and QA do not need Chromium, so a
+      # renderer that is down must not keep the whole pipeline from starting; a render job
+      # against an unreachable renderer fails on its own with the reason in the job table
+      # (worker/src/worker/page_scene_renderer.py). Decided with the user 2026-09-17, see
+      # docs/output-quality-architecture-decisions.md §1a.
     secrets:
       - minio_password
       - internal_api_token

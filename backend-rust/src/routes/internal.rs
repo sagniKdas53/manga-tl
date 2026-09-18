@@ -773,7 +773,8 @@ pub async fn qa_hybrid_prepare(
 
     match coordinator::prepare_hybrid_qa(&state, image_id, page_id_of(&payload), &qa_results).await
     {
-        Ok(()) => StatusCode::OK.into_response(),
+        Ok(Some(render_payload)) => Json(render_payload).into_response(),
+        Ok(None) => StatusCode::NO_CONTENT.into_response(),
         Err(err) => {
             tracing::error!("Error preparing hybrid QA: {err}");
             internal_error_text(err)
@@ -1190,24 +1191,39 @@ pub fn router() -> Router<AppState> {
 async fn render_callback_route(
     State(state): State<AppState>,
     headers: HeaderMap,
-    body: Result<Json<HashMap<String, String>>, axum::extract::rejection::JsonRejection>,
+    body: Result<Json<Value>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
+    // Was `HashMap<String, String>`; the browser-render callback (tracker R1) also carries the
+    // integer page revision and the renderer's layout diagnostics array.
     let Ok(Json(payload)) = body else {
         return crate::error::unreadable_body("/api/internal/jobs/callback/render");
     };
     if let Some(denied) = guard(&state, &headers) {
         return denied;
     }
-    let Some(image_id) = payload.get("imageId").and_then(|s| Uuid::parse_str(s).ok()) else {
+    let Some(image_id) = payload
+        .get("imageId")
+        .and_then(Value::as_str)
+        .and_then(|s| Uuid::parse_str(s).ok())
+    else {
         return internal_error_text("imageId missing or unparsable");
     };
-    let page_id = payload.get("pageId").and_then(|s| Uuid::parse_str(s).ok());
+    let page_id = payload
+        .get("pageId")
+        .and_then(Value::as_str)
+        .and_then(|s| Uuid::parse_str(s).ok());
+    let diagnostics = payload
+        .get("diagnostics")
+        .filter(|d| d.is_array())
+        .cloned()
+        .unwrap_or_else(|| json!([]));
 
     match coordinator::handle_render_callback(
         &state,
-        payload.get("jobId").map(String::as_str),
+        payload.get("jobId").and_then(Value::as_str),
         image_id,
         page_id,
+        diagnostics,
     )
     .await
     {

@@ -168,7 +168,7 @@ services:
       - dev-rendered:/app/rendered_cache
     depends_on:
       backend: { condition: service_healthy }
-      page-renderer: { condition: service_healthy }
+      # Not page-renderer: see the same note in docker-compose.yml (tracker R1).
     deploy:
       resources:
         limits:

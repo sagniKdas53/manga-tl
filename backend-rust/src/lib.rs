@@ -18,6 +18,7 @@ pub mod minio;
 pub mod models;
 pub mod page_freshness;
 pub mod page_scene;
+pub mod page_scene_builder;
 pub mod password;
 pub mod providers;
 pub mod redis_service;

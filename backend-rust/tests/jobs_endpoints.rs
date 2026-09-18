@@ -630,6 +630,7 @@ async fn recovery_reset_stale_and_debounced_render() {
         Some(&old_job_id),
         image_id,
         Some(page_id),
+        serde_json::json!([]),
     )
     .await
     .expect("old callback");
@@ -688,6 +689,7 @@ async fn recovery_reset_stale_and_debounced_render() {
         Some(&current_job_id),
         image_id,
         Some(page_id),
+        serde_json::json!([]),
     )
     .await
     .expect("current callback");
@@ -732,6 +734,7 @@ async fn recovery_reset_stale_and_debounced_render() {
         Some(&current_job_id),
         image_id,
         Some(page_id),
+        serde_json::json!([]),
     )
     .await
     .expect("duplicate callback");
