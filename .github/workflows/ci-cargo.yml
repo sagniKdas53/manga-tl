@@ -77,7 +77,7 @@ jobs:
         run: |
           docker run -d --name ci-minio -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/minio server /data
+            purevert/minio:backup server /data
           for i in $(seq 1 30); do
             if curl -sf http://127.0.0.1:9000/minio/health/live > /dev/null; then
               echo "MinIO healthy"; exit 0
