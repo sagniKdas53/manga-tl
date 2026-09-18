@@ -71,9 +71,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.95526,
-              "completionPerMillion": 1.91052,
-              "cacheReadPerMillion": 0.079605
+              "promptPerMillion": 1.6,
+              "completionPerMillion": 3.2,
+              "cacheReadPerMillion": 0.135
             },
             "pinned": true
           },
@@ -184,8 +184,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.09,
-              "completionPerMillion": 0.55
+              "promptPerMillion": 0.0875,
+              "completionPerMillion": 0.35,
+              "cacheReadPerMillion": 0.0175
             }
           },
           {
@@ -195,9 +196,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.03,
-              "completionPerMillion": 0.12,
-              "cacheReadPerMillion": 0.006
+              "promptPerMillion": 0.09,
+              "completionPerMillion": 0.36,
+              "cacheReadPerMillion": 0.018
             }
           },
           {
@@ -214,68 +215,8 @@
             }
           },
           {
-            "id": "minimax/minimax-m3:free",
-            "name": "MiniMax: MiniMax M3 (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "thinkingmachines/inkling:free",
-            "name": "Thinking Machines: Inkling (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "inclusionai/ling-3.0-flash-sante:free",
-            "name": "inclusionAI: Ling 3.0 Flash Sante (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "dots-studio/dots-3-note-preview:free",
-            "name": "Dots Studio: Dots3-Note Preview (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "liquid/lfm-2.5-2.6b:free",
-            "name": "LiquidAI: LFM2.5-2.6B (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "nvidia/nemotron-3.5-lightning:free",
-            "name": "NVIDIA: Nemotron 3.5 Lightning (free)",
+            "id": "z-ai/glm-5.2:free",
+            "name": "Z.ai: GLM 5.2 (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -298,8 +239,68 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
-            "id": "poolside/laguna-s-2.1:free",
-            "name": "Poolside: Laguna S 2.1 (free)",
+            "id": "thinkingmachines/inkling:free",
+            "name": "Thinking Machines: Inkling (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
+            "id": "inclusionai/ling-3.0-flash-vl:free",
+            "name": "inclusionAI: Ling 3.0 Flash VL (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
+            "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+            "name": "NVIDIA: Nemotron 3 Ultra (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
+            "id": "google/gemma-4-31b-it:free",
+            "name": "Google: Gemma 4 31B (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
+            "id": "nvidia/nemotron-3.5-lightning:free",
+            "name": "NVIDIA: Nemotron 3.5 Lightning (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
+            "id": "nvidia/nemotron-3-super-120b-a12b:free",
+            "name": "NVIDIA: Nemotron 3 Super (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -330,9 +331,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.95526,
-              "completionPerMillion": 1.91052,
-              "cacheReadPerMillion": 0.079605
+              "promptPerMillion": 1.6,
+              "completionPerMillion": 3.2,
+              "cacheReadPerMillion": 0.135
             },
             "pinned": true
           },
@@ -431,9 +432,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.03,
-              "completionPerMillion": 0.12,
-              "cacheReadPerMillion": 0.006
+              "promptPerMillion": 0.09,
+              "completionPerMillion": 0.36,
+              "cacheReadPerMillion": 0.018
             }
           },
           {
@@ -443,8 +444,9 @@
             "pricing": {
               "currency": "USD",
               "source": "openrouter",
-              "promptPerMillion": 0.09,
-              "completionPerMillion": 0.55
+              "promptPerMillion": 0.0875,
+              "completionPerMillion": 0.35,
+              "cacheReadPerMillion": 0.0175
             }
           },
           {
@@ -461,68 +463,8 @@
             }
           },
           {
-            "id": "minimax/minimax-m3:free",
-            "name": "MiniMax: MiniMax M3 (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "thinkingmachines/inkling:free",
-            "name": "Thinking Machines: Inkling (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "inclusionai/ling-3.0-flash-sante:free",
-            "name": "inclusionAI: Ling 3.0 Flash Sante (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "dots-studio/dots-3-note-preview:free",
-            "name": "Dots Studio: Dots3-Note Preview (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "liquid/lfm-2.5-2.6b:free",
-            "name": "LiquidAI: LFM2.5-2.6B (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
-            "id": "nvidia/nemotron-3.5-lightning:free",
-            "name": "NVIDIA: Nemotron 3.5 Lightning (free)",
+            "id": "z-ai/glm-5.2:free",
+            "name": "Z.ai: GLM 5.2 (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -545,8 +487,68 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
-            "id": "poolside/laguna-s-2.1:free",
-            "name": "Poolside: Laguna S 2.1 (free)",
+            "id": "thinkingmachines/inkling:free",
+            "name": "Thinking Machines: Inkling (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
+            "id": "inclusionai/ling-3.0-flash-vl:free",
+            "name": "inclusionAI: Ling 3.0 Flash VL (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
+            "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+            "name": "NVIDIA: Nemotron 3 Ultra (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
+            "id": "google/gemma-4-31b-it:free",
+            "name": "Google: Gemma 4 31B (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
+            "id": "nvidia/nemotron-3.5-lightning:free",
+            "name": "NVIDIA: Nemotron 3.5 Lightning (free)",
+            "free": true,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.0,
+              "completionPerMillion": 0.0
+            },
+            "managedBy": "provider-catalog-refresh"
+          },
+          {
+            "id": "nvidia/nemotron-3-super-120b-a12b:free",
+            "name": "NVIDIA: Nemotron 3 Super (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -671,8 +673,8 @@
             }
           },
           {
-            "id": "minimax/minimax-m3:free",
-            "name": "MiniMax: MiniMax M3 (free)",
+            "id": "thinkingmachines/inkling-small:free",
+            "name": "Thinking Machines: Inkling Small (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -695,8 +697,8 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
-            "id": "dots-studio/dots-3-note-preview:free",
-            "name": "Dots Studio: Dots3-Note Preview (free)",
+            "id": "inclusionai/ling-3.0-flash-vl:free",
+            "name": "inclusionAI: Ling 3.0 Flash VL (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -707,8 +709,8 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
-            "id": "thinkingmachines/inkling-small:free",
-            "name": "Thinking Machines: Inkling Small (free)",
+            "id": "google/gemma-4-31b-it:free",
+            "name": "Google: Gemma 4 31B (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -719,8 +721,8 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
-            "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-            "name": "NVIDIA: Nemotron 3 Nano Omni (free)",
+            "id": "stealth/union-alpha",
+            "name": "Union Alpha",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -731,8 +733,8 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
-            "id": "google/gemma-4-26b-a4b-it:free",
-            "name": "Google: Gemma 4 26B A4B  (free)",
+            "id": "nex-agi/nex-n2.5-mini:free",
+            "name": "Nex AGI: Nex-N2.5-Mini (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -892,8 +894,8 @@
             }
           },
           {
-            "id": "minimax/minimax-m3:free",
-            "name": "MiniMax: MiniMax M3 (free)",
+            "id": "thinkingmachines/inkling-small:free",
+            "name": "Thinking Machines: Inkling Small (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -916,8 +918,8 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
-            "id": "dots-studio/dots-3-note-preview:free",
-            "name": "Dots Studio: Dots3-Note Preview (free)",
+            "id": "inclusionai/ling-3.0-flash-vl:free",
+            "name": "inclusionAI: Ling 3.0 Flash VL (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -928,8 +930,8 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
-            "id": "thinkingmachines/inkling-small:free",
-            "name": "Thinking Machines: Inkling Small (free)",
+            "id": "google/gemma-4-31b-it:free",
+            "name": "Google: Gemma 4 31B (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -940,8 +942,8 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
-            "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-            "name": "NVIDIA: Nemotron 3 Nano Omni (free)",
+            "id": "stealth/union-alpha",
+            "name": "Union Alpha",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -952,8 +954,8 @@
             "managedBy": "provider-catalog-refresh"
           },
           {
-            "id": "google/gemma-4-26b-a4b-it:free",
-            "name": "Google: Gemma 4 26B A4B  (free)",
+            "id": "nex-agi/nex-n2.5-mini:free",
+            "name": "Nex AGI: Nex-N2.5-Mini (free)",
             "free": true,
             "pricing": {
               "currency": "USD",
@@ -983,16 +985,6 @@
       "models": {
         "tl": [
           {
-            "id": "minimaxai/minimax-m3",
-            "name": "Minimax M3",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "nvidia-catalog",
-              "note": "Free credits"
-            }
-          },
-          {
             "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
             "name": "Nemotron 3 Nano Omni 30B A3B Reasoning",
             "free": true,
@@ -1004,16 +996,6 @@
           }
         ],
         "qaLLM": [
-          {
-            "id": "minimaxai/minimax-m3",
-            "name": "Minimax M3",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "nvidia-catalog",
-              "note": "Free credits"
-            }
-          },
           {
             "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
             "name": "Nemotron 3 Nano Omni 30B A3B Reasoning",
