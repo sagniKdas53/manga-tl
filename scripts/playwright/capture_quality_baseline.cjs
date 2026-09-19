@@ -47,6 +47,8 @@ const CONVENTIONAL_CONTROLS = [
   ["sample609", "corpus/gaps/pending/zh/sample609/source.jpg", "zh"],
   ["sample611", "corpus/gaps/pending/zh/sample611/source.jpg", "zh"],
   ["sample612", "corpus/gaps/pending/zh/sample612/source.jpg", "zh"],
+  // 25th control, user decision 2026-09-19: curated zh balloon page with a human reference (AUDIT-R20 witness).
+  ["sample641", "corpus/gaps/pending/zh/sample641/source.webp", "zh"],
 ];
 
 const PIPELINE_TIMEOUT_MS = 30 * 60 * 1000;

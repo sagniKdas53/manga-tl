@@ -63,6 +63,8 @@ from render_quality_metrics import CHANGE_THRESHOLD  # noqa: E402
 from render_quality_metrics import score as pixel_score  # noqa: E402
 
 CORPUS = REPO / "corpus" / "samples"
+# Pages that have not been promoted yet live under corpus/gaps/pending/<lang>/<sample>.
+CORPUS_PENDING = REPO / "corpus" / "gaps" / "pending"
 IOU_MATCH = 0.3
 WIPE_REGION_PCT = 25.0  # tracker R2 gate: no patch larger than a quarter of the page
 FLATTENED_FAIL = 5.0  # render_quality_metrics thresholds, measured 2026-08-05
@@ -133,7 +135,7 @@ class PageReport:
 
 
 def find_sample_dir(sample: str) -> Path:
-    hits = [p for p in CORPUS.glob(f"*/{sample}") if p.is_dir()]
+    hits = [p for root in (CORPUS, CORPUS_PENDING) for p in root.glob(f"*/{sample}") if p.is_dir()]
     if len(hits) != 1:
         raise FileNotFoundError(f"{sample}: expected one corpus directory, found {hits}")
     return hits[0]

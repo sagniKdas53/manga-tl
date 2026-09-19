@@ -244,6 +244,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R15`](#audit-r15-high-the-typeset-size-depends-on-which-fonts-the-host-happens-to-have) | High | Render/Testing | The same call returns 48, 56 or 75px depending on which font files the host has | Ready |
 | [`AUDIT-R16`](#audit-r16-medium-a-narrow-box-is-capped-by-its-widest-unbreakable-token) | Medium | Render | Portrait balloons: the type is width-bound and the spare height cannot be spent | Measured; needs a decision |
 | [`AUDIT-R19`](#audit-r19-medium-a-free-standing-caption-gets-a-synthetic-rounded-plate-a-third-larger-than-its-text) | Medium | Worker/Frontend | Text with no detected balloon gets a rounded-rectangle plate padded 18% of its short side with 22%-radius corners; the editor box is 10px inside it and reshape only edits the plate | **Fixed in R2 (2026-09-19)**: no plate for free text, `box_shape` from detection; verified on the p5 caption live |
+| [`AUDIT-R20`](#audit-r20-high-a-balloon-is-emitted-as-one-region-per-column) | High | Worker | The live owner veto splits a balloon into one region per column/line when the detector's container does not enclose every column; each piece is translated and typeset alone | Found on the R2 short list (2026-09-19); not R2's seam; ordering decision open |
 | [`AUDIT-R17`](#audit-r17-unranked-shaperectangular-is-not-ignored) | Unranked | Render | Reported as an ignored API parameter; the branch exists and the contract holds end to end | **Closed on assessment 2026-09-05** |
 
 ### Cosmetic & long tail
@@ -1086,6 +1087,35 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   page it does not own.
 - **Next Step:** union rather than hull for the mask, keeping the hull only for the text box. The
   renderer already fills a polygon; a multi-polygon is the schema change.
+
+### `AUDIT-R20` (high): A balloon is emitted as one region per column
+
+- **Report (2026-09-19, R2 short list — [`R2.md`](quality-checkpoints/R2.md#short-list)):** on the
+  first conventional-balloon pages measured live (`sample7` ja, `sample197` ko, `sample641` zh),
+  region counts are 1.3–1.9× the August exports. `sample641`'s five-column balloon became five
+  regions, each translated on its own (*"I still" / "can't believe this" / "is homemade!" / …*)
+  and each set in a 30–41 px column at 8–33 px; `sample7` has five such balloons (18 regions),
+  `sample197` three. Crop: [`compare/sample641-balloon.png`](quality-runs/r2-20260919-shortlist/compare/sample641-balloon.png).
+- **Root cause, from the persisted `ownerDecision` on every region:** F04's live owner veto
+  (`worker/src/worker/handlers/ocr.py` `owner_aware_grouping_context` — *"a rejected decision can
+  only split a component"*) applies F01's rule (`services/owner_assignment.py`
+  `assign_captured_owners`): a multi-fragment owner needs every fragment's quad with all four
+  corners inside one validated detector container (`_containing_container`, `:276`). Line
+  continuity passes (`lc=vertical, gap 0`); the decline is `incomplete-validated-container`
+  (some columns outside the polygon: sample641 `bubble_3` → `[None, 'bubble-3', 'bubble-3', 'bubble-3', 'bubble-3']`;
+  sample7 `bubble_4` → `[None, None, 'bubble-4', None]`) or `missing-validated-container` (none
+  found at all). The detector's container is frequently column-sized (sample641 `bubble_3`:
+  72×176 for a 150 px-wide balloon). When the decision is `unknown` the whole group falls to
+  singletons; the only partial-merge path is exactly two members with one outsider (`:142`).
+  August's `merge_regions` had no veto and merged the balloon. The six fixtures could not show
+  it: their text is free-standing (`direct_text`, mostly single fragments).
+- **Not the R2 area gate** (`OCR_COMPONENT_MAX_AREA_FRACTION`): no group came near 25 %.
+- **Where it lands:** the same detector-container family as `AUDIT-R10`. Options are (a) a
+  container test that tolerates a column crossing the polygon edge (containment by centre or by
+  ≥ N % of quad area, not all four corners), (b) merging the members that *are* inside one
+  container and leaving only the outsiders as singletons, (c) fixing the container itself (why
+  YOLO/contour returns a column-sized box for a full balloon). Any of them changes what R3's
+  region-masked gate and the 24 controls measure, so the order relative to R3 is the user's call.
 
 ### `AUDIT-R12` (medium): SFX appear to shrink neighbouring balloons
 

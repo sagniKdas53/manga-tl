@@ -1,5 +1,7 @@
 # R2 — 24-control sweep runbook
 
+> **2026-09-19, after the short list:** `sample7`, `sample197` and `sample641` already ran on this stack ([`r2-20260919-shortlist`](../quality-runs/r2-20260919-shortlist/)); on *this* database they must not be re-uploaded (dedup, below). The sweep now runs once, after `AUDIT-R20` and R3, on a fresh stack — so the list below includes them again and is 25 pages. `sample641` was added as the 25th control by user decision.
+
 Mechanical sweep for the second half of the R2 gate (tracker row R2: "six fixtures **+ 24 controls**"). The six fixtures ran in `docs/quality-runs/r2-20260919-six/`; this runbook produces `docs/quality-runs/r2-20260919-controls/` on the same stack, the same account and the same images, so the two runs are one measurement. Nothing here needs a decision; anything that does is listed under *Stop and report*.
 
 ## Preconditions (already true on the laptop, 2026-09-19)
@@ -24,7 +26,8 @@ setsid nohup bash -c '
     --fixture sample192 --fixture sample197 --fixture sample199 --fixture sample268 \
     --fixture sample289 --fixture sample320 --fixture sample360 --fixture sample416 \
     --fixture sample206 --fixture sample208 --fixture sample226 --fixture sample261 \
-    --fixture sample457 --fixture sample609 --fixture sample611 --fixture sample612
+    --fixture sample457 --fixture sample609 --fixture sample611 --fixture sample612 \
+    --fixture sample641
   echo "harness exit $?"' > logs/r2-controls-harness.log 2>&1 < /dev/null &
 ```
 
@@ -45,7 +48,7 @@ setsid nohup bash -c '
 
 ## Report — counts only, from the artifacts, not from the harness output
 
-Per language slice (ja: 7, 139, 39, 47, 123, 134, 150, 172 · ko: 192, 197, 199, 268, 289, 320, 360, 416 · zh: 206, 208, 226, 261, 457, 609, 611, 612), read from `reference-compare.md`:
+Per language slice (ja: 7, 139, 39, 47, 123, 134, 150, 172 · ko: 192, 197, 199, 268, 289, 320, 360, 416 · zh: 206, 208, 226, 261, 457, 609, 611, 612, 641 — `sample641` is the 25th control, added 2026-09-19), read from `reference-compare.md`:
 
 1. pages with `WIPE-REGION` (any region > 25 % of page) — gate says 0;
 2. pages with `OUTSIDE-BBOX` and the `outside bbox %` value — gate says ~0 (threshold 0.5 %);
