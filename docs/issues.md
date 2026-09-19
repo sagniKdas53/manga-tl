@@ -1,6 +1,9 @@
 # Issues & Technical Debt
 
-> **Standing: 114 filed, 86 closed, 28 open.** `AUDIT-B18` was closed by decision 2026-09-19 (`LOCK-3`: no migration runner; `init.sql` is the schema). Six review items were added 2026-09-03
+> **Standing: 117 filed, 86 closed, 31 open.** `AUDIT-B25`, `AUDIT-F29` and `AUDIT-B26` were filed
+> 2026-09-19 from a user review of the `manga-quality-r6-20260919` stack: a live reproduction of the
+> R5 stale-recovery duplicate-layer race, a request for manual OCR-fragment regrouping, and a request
+> to change what `Export Chapter (ZIP)` bundles. `AUDIT-B18` was closed by decision 2026-09-19 (`LOCK-3`: no migration runner; `init.sql` is the schema). Six review items were added 2026-09-03
 > (`AUDIT-R13`, `AUDIT-R14`, `AUDIT-F25`..`F27`, `AUDIT-T5`). Three renderer items were added 2026-09-05
 > (`AUDIT-R15`..`R17`). Three hardening items are folded in from backlog notes: `AUDIT-B19` (JWT signing error
 > masking), `AUDIT-B20` (systemic DB `unwrap_or_default`), and `AUDIT-F28` (settings catalog retry gate).
@@ -1114,6 +1117,64 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   [`LOCK-1`](#lock-1--free-standing-text-keeps-its-columns-height-it-is-never-squared-into-a-box):
   resolving a collision by shrinking a box is fine, resolving it by *moving* a box onto artwork
   is not.
+- **Live reproduction, 2026-09-19 (user's own `manga-quality-r6-20260919` upload, chapter page 12):**
+  five free-standing vertical-source columns 75–83 px apart (`bbox_x` 847/930/1005, ownership
+  correctly `single-fragment-owner` each, `validated_container_count: 0` — no shared balloon, so
+  this is not an ownership/`AUDIT-R20` case), rendered as 137 px-wide English boxes that overlap
+  their neighbour by 44–62 px ("Open your legs." over "Lower your hips more." over "Number 4!").
+  Confirms the fix is neighbour-aware width/placement, not per-element fitting alone.
+
+### `AUDIT-B25` (medium): A still-running job is stale-recovered and requeued, leaving a duplicate layer behind
+
+- **Locations:** worker `rq_tasks.py`/`recovery.rs` requeue path named in the output-quality
+  tracker's R5 row (2026-09-18, `sample61`'s 27-chunk DeepSeek translation ran as three concurrent
+  attempts after ~10 minutes with no heartbeat); not yet filed here before this entry.
+- **Live reproduction, 2026-09-19 (`manga-quality-r6-20260919`, chapter page 18):** `jobs` row for
+  its first `translation` job shows `attempt=3`, `status=COMPLETED`,
+  `error='Max attempts exhausted after stale recovery'` — a contradictory terminal state (completed
+  *and* carrying an exhaustion error) — queued at 16:00:40, not started until 16:31:25. It produced
+  a hidden `translation` layer (32 elements, `visible=false`). A subsequent `qa-re-ocr` →
+  `translation` cycle produced a second, visible layer with the same 32-element count. The stray
+  hidden layer is not cleaned up; it is retained rows and DB weight, not a rendering symptom, but
+  the underlying stale-recovery-while-still-alive race is the same one R5 already named.
+- **Next step:** give a long-running job type (translation, at minimum) a heartbeat or a per-type
+  stale window instead of the current fixed timeout, and drop a callback for an attempt the
+  recovery sweep has already superseded — matching R5's existing note. File as its own R5 packet;
+  run `impact()` on the recovery/requeue symbols before touching them.
+
+### `AUDIT-F29` (feature): No way to manually re-group OCR fragments when automatic clubbing fails
+
+- **Report (2026-09-19, user review of `manga-quality-r6-20260919`):** "sometimes text fragments
+  are not getting clubbed together" and the automatic grouping (owner assignment, `AUDIT-R20`/M5)
+  "is not going to be done automatically most of the time" for some page styles — the user wants a
+  way to manually select several OCR fragments in the editor and merge them into one owner (or
+  split a wrongly-merged one), rather than only being able to override the region *action*
+  (preserve/replace/review, already in D02) with no way to override *ownership*.
+- **Scope:** editor feature, M7 territory — sits next to H05 (mount the shared content scene with a
+  selection frame) and H06 (wire object actions: preserve/explain/replace/review, hide/reject,
+  undo/redo). Needs a backend mutation for `owner_assignment` records (currently worker-computed
+  only, no user-facing override path) plus a frontend multi-select-and-merge/split interaction.
+  Not scoped or estimated yet; the user's own example pages (`manga-quality-r6-20260919`, series
+  "User-Test") are reference material once this is picked up.
+- **Next step:** write a bounded task card under M7 (after H01b/H02) once H01a/F04's ownership
+  contract is finalized; do not build a parallel ownership representation.
+
+### `AUDIT-B26` (feature): "Export Chapter (ZIP)" should export page projects, not rendered images
+
+- **Report (2026-09-19, user):** wants `Export Chapter (ZIP)` to export the editable page-project
+  archive (the new-format per-page scene: OCR/translation/cleanup records, not flattened PNGs) for
+  every page in the chapter, so a chapter can be exported and re-imported quickly as a unit for the
+  team's own workflow — today's export is rendered-or-original images only.
+- **Locations:** `backend-rust/src/export.rs:20` `build_and_upload_export` currently packages
+  rendered-or-original page images plus `meta-data.json` (see the module doc comment at
+  `export.rs:1-3`). The per-page editable archive format is `contracts/page-scene-v1.schema.json`
+  (B01) / the "new project archive" row in the tracker's contract table — currently a per-project
+  archive, not wired to the chapter-ZIP export path.
+- **Next step:** either add a chapter-level bundle of per-page new-format archives as a second
+  export mode, or change what `Export Chapter (ZIP)` produces outright (needs a user decision — this
+  changes an existing, already-shipped export's contents, not just adds one). Run `impact()` on
+  `build_and_upload_export` before either path; M8 (I01/I02, new-format archive export/import) is
+  the natural place to land this once it starts.
 
 ### `AUDIT-R10` (medium): Overlapping bubbles are erased as one
 
