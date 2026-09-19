@@ -748,8 +748,11 @@ async fn recovery_reset_stale_and_debounced_render() {
 
     // A failed immutable job is not completion. The next debounce scan may reserve a fresh job
     // for the same current snapshot without disturbing the earlier current artifact.
+    // The revision-1 callback just stamped `last_rendered_at = now()`; the debounce only selects
+    // a page edited after its last render, so this edit is placed after that render and both
+    // are older than the 10 s threshold.
     sqlx::query(
-        "UPDATE pages SET scene_revision = 2, last_edited_at = now() - interval '30 seconds' WHERE id = $1",
+        "UPDATE pages SET scene_revision = 2,            last_rendered_at = now() - interval '60 seconds',            last_edited_at = now() - interval '30 seconds'          WHERE id = $1",
     )
     .bind(page_id)
     .execute(&pool)
@@ -875,8 +878,25 @@ async fn recovery_reset_stale_and_debounced_render() {
         "failure older than 5 minutes allows re-trigger"
     );
 
-    // Cleanup: cascade removes pages/chapters with the series; jobs by prefix.
+    // Cleanup: cascade removes pages/chapters with the series; jobs by prefix. The re-trigger
+    // above wrote another ledger row and jobs row (uuid ids), and the ledger references the
+    // snapshot the page cascade would remove, so those go first.
     clear_jobs(&pool).await;
+    sqlx::query("DELETE FROM page_render_jobs WHERE page_id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .expect("retry ledger cleanup");
+    sqlx::query("DELETE FROM job_costs WHERE job_id IN (SELECT id FROM jobs WHERE image_id=$1)")
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .expect("retry costs cleanup");
+    sqlx::query("DELETE FROM jobs WHERE image_id = $1")
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .expect("retry jobs cleanup");
     sqlx::query(
         "DELETE FROM pages WHERE chapter_id IN (SELECT id FROM chapters WHERE series_id=$1)",
     )

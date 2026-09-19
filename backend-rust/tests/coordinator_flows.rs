@@ -109,11 +109,14 @@ async fn seed_pipeline(
     .expect("chapter");
 
     let image_id = Uuid::new_v4();
+    // A real-looking SHA-256: `prepare_hybrid_qa` ends by snapshotting the page scene, and the
+    // scene builder refuses an image whose hash is not 64 hex digits.
     sqlx::query(
         "INSERT INTO images (id, created_at, filename, storage_path, hash, width, height) \
-         VALUES ($1, now(), 'coord.png', 'originals/coord.png', 'hash-coord', 64, 64)",
+         VALUES ($1, now(), 'coord.png', 'originals/coord.png', $2, 64, 64)",
     )
     .bind(image_id)
+    .bind(format!("{:0>64}", image_id.simple().to_string()))
     .execute(pool)
     .await
     .expect("image");

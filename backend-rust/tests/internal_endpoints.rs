@@ -175,11 +175,14 @@ async fn seed_pipeline(pool: &sqlx::PgPool) -> (Uuid, Uuid, Uuid, Uuid) {
         .expect("chapter");
 
     let image_id = Uuid::new_v4();
+    // A real-looking SHA-256: the translation callback snapshots the page scene before it queues
+    // the render, and the scene builder refuses an image whose hash is not 64 hex digits.
     sqlx::query(
         "INSERT INTO images (id, created_at, filename, storage_path, hash, width, height) \
-         VALUES ($1, now(), 'probe.png', 'originals/probe.png', 'hash-pipeline', 64, 64)",
+         VALUES ($1, now(), 'probe.png', 'originals/probe.png', $2, 64, 64)",
     )
     .bind(image_id)
+    .bind(format!("{:0>64}", image_id.simple().to_string()))
     .execute(pool)
     .await
     .expect("image");
@@ -502,14 +505,36 @@ async fn full_pipeline_walks_every_stage() {
     .unwrap();
     assert_eq!(element_count, 1);
 
-    let render_raw = redis
-        .pop_from_queue("queue:render")
-        .await
-        .unwrap()
-        .expect("render queued");
-    let render_payload: serde_json::Value = serde_json::from_str(&render_raw).unwrap();
+    // `queue:render` outlives this binary: the coordinator_flows suite snapshots and queues
+    // renders it never pops, so the head of the queue may be another page's job. Search for
+    // ours and put back whatever is not (same rule as the region-redo test below).
+    let mut render_payload = None;
+    let mut put_back: Vec<String> = Vec::new();
+    while let Some(raw) = redis.pop_from_queue("queue:render").await.unwrap() {
+        let job: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        if job["pageId"] == page_id.to_string() {
+            render_payload = Some(job);
+            break;
+        }
+        put_back.push(raw);
+    }
+    for raw in put_back {
+        redis.push_to_queue("queue:render", &raw).await.unwrap();
+    }
+    let render_payload = render_payload.expect("render queued");
 
     // --- render callback stamps rendered, queues QA ---
+    // The callback reads the worker's output from storage and files it as the revision's
+    // immutable artifact; without bytes at this path it stays retryable and answers 500.
+    state
+        .storage
+        .upload_bytes(
+            &format!("rendered/{image_id}.png"),
+            b"rendered page".to_vec(),
+            "image/png",
+        )
+        .await
+        .expect("stage render output");
     let render_callback = serde_json::json!({
         "jobId": render_payload["jobId"],
         "imageId": image_id.to_string(),

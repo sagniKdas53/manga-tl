@@ -189,6 +189,19 @@ export function resolvePageScene(
   return { input, objects, diagnostics };
 }
 
+/**
+ * Formats a scene number for an SVG attribute. The scene arrives from outside this package, so
+ * a numeric field is coerced and refused unless it is a finite number; nothing but digits, a sign,
+ * a point, or an exponent can reach the markup through it (CodeQL js/html-constructed-from-input).
+ */
+function svgNumber(value: number): string {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    throw new TypeError(`page-scene: expected a finite number, got ${String(value)}`);
+  }
+  return String(numeric);
+}
+
 function escapeXml(value: string): string {
   return value.replace(
     /[&<>"']/g,
@@ -217,7 +230,7 @@ export function renderPageSceneSvg(scene: ResolvedPageScene): string {
     .sort((left, right) => left.zIndex - right.zIndex)
     .map(
       (asset) =>
-        `<image data-cleanup-id="${escapeXml(asset.cleanupId)}" href="${escapeXml(asset.href)}" x="${asset.x}" y="${asset.y}" width="${asset.width}" height="${asset.height}"/>`,
+        `<image data-cleanup-id="${escapeXml(asset.cleanupId)}" href="${escapeXml(asset.href)}" x="${svgNumber(asset.x)}" y="${svgNumber(asset.y)}" width="${svgNumber(asset.width)}" height="${svgNumber(asset.height)}"/>`,
     )
     .join("");
   const glyphMarkup = [...scene.input.textObjects]
@@ -228,9 +241,9 @@ export function renderPageSceneSvg(scene: ResolvedPageScene): string {
       if (!resolved || resolved.lineBoxes.length === 0) return "";
       const centerX = object.transform.x + object.transform.width / 2;
       const centerY = object.transform.y + object.transform.height / 2;
-      const common = `font-family="${escapeXml(object.style.fontFamily)}" font-size="${resolved.fontSize}" font-weight="${object.style.weight}" text-anchor="start" style="writing-mode:${object.writingMode}"`;
+      const common = `font-family="${escapeXml(object.style.fontFamily)}" font-size="${svgNumber(resolved.fontSize)}" font-weight="${svgNumber(object.style.weight)}" text-anchor="start" style="writing-mode:${escapeXml(object.writingMode)}"`;
       const lineText = (line: ResolvedLineBox, paint: string) =>
-        `<text x="${line.x}" y="${line.y + line.height * 0.8}" ${paint} ${common}>${escapeXml(line.text)}</text>`;
+        `<text x="${svgNumber(line.x)}" y="${svgNumber(line.y + line.height * 0.8)}" ${paint} ${common}>${escapeXml(line.text)}</text>`;
       // Torii's order: the stroke pass for every line first, then the fill pass for every line.
       // One <text> per line with paint-order would let line 2's halo cover line 1's glyphs
       // wherever ascenders and descenders meet, which at this width they do.
@@ -239,7 +252,7 @@ export function renderPageSceneSvg(scene: ResolvedPageScene): string {
             .map((line) =>
               lineText(
                 line,
-                `fill="none" stroke="${escapeXml(object.style.stroke)}" stroke-width="${Math.max(1, resolved.fontSize * STROKE_WIDTH_RATIO)}" stroke-linejoin="round" stroke-linecap="round"`,
+                `fill="none" stroke="${escapeXml(object.style.stroke)}" stroke-width="${svgNumber(Math.max(1, resolved.fontSize * STROKE_WIDTH_RATIO))}" stroke-linejoin="round" stroke-linecap="round"`,
               ),
             )
             .join("")
@@ -247,9 +260,11 @@ export function renderPageSceneSvg(scene: ResolvedPageScene): string {
       const fillPass = resolved.lineBoxes
         .map((line) => lineText(line, `fill="${escapeXml(object.style.fill)}" stroke="none"`))
         .join("");
-      return `<g data-text-object-id="${escapeXml(object.objectId)}" transform="rotate(${object.transform.rotationDegrees} ${centerX} ${centerY})"><g data-text-pass="stroke">${strokePass}</g><g data-text-pass="fill">${fillPass}</g></g>`;
+      return `<g data-text-object-id="${escapeXml(object.objectId)}" transform="rotate(${svgNumber(object.transform.rotationDegrees)} ${svgNumber(centerX)} ${svgNumber(centerY)})"><g data-text-pass="stroke">${strokePass}</g><g data-text-pass="fill">${fillPass}</g></g>`;
     })
     .join("");
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${source.width}" height="${source.height}" viewBox="0 0 ${source.width} ${source.height}" data-scene-content="page-scene-v1"><image data-scene-layer="source" href="${escapeXml(source.href)}" x="0" y="0" width="${source.width}" height="${source.height}"/><g data-scene-layer="cleanup">${cleanupMarkup}</g><g data-scene-layer="glyphs">${glyphMarkup}</g></svg>`;
+  const width = svgNumber(source.width);
+  const height = svgNumber(source.height);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" data-scene-content="page-scene-v1"><image data-scene-layer="source" href="${escapeXml(source.href)}" x="0" y="0" width="${width}" height="${height}"/><g data-scene-layer="cleanup">${cleanupMarkup}</g><g data-scene-layer="glyphs">${glyphMarkup}</g></svg>`;
 }
