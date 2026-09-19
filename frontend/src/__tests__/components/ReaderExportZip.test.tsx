@@ -33,9 +33,10 @@ vi.mock("../../components/useNotifications", () => ({
   }),
 }));
 
+const mockShowToast = vi.fn();
 vi.mock("../../components/ToastContext", () => ({
   useToast: () => ({
-    showToast: vi.fn(),
+    showToast: mockShowToast,
     showSuccess: vi.fn(),
     showError: vi.fn(),
   }),
@@ -249,7 +250,9 @@ describe("Reader project ZIP export", () => {
     vi.restoreAllMocks();
   });
 
-  it("never paints OCR text into the canvas PNG export", async () => {
+  it("downloads the current immutable render artifact instead of drawing a canvas", async () => {
+    // Tracker R1: the PNG export is the browser renderer's artifact for the page's current
+    // revision. Nothing here may touch a canvas, and the request must go to /rendered.
     render(
       <Reader
         user={mockUser}
@@ -262,31 +265,81 @@ describe("Reader project ZIP export", () => {
     );
 
     const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
-    Object.defineProperty(img, "naturalWidth", {
-      value: 1200,
-      configurable: true,
-    });
-    Object.defineProperty(img, "naturalHeight", {
-      value: 1600,
-      configurable: true,
-    });
     fireEvent.load(img);
     fireEvent.click(await screen.findByText("Export Page (PNG)"));
 
     await waitFor(() => {
       expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
     });
+    const renderedRequest = mockSafeFetch.mock.calls.find(
+      (call) =>
+        typeof call[0] === "string" &&
+        call[0].endsWith(`/api/pages/${mockPage.id}/rendered`),
+    );
+    expect(renderedRequest).toBeDefined();
     const contexts = vi
       .mocked(HTMLCanvasElement.prototype.getContext)
       .mock.results.map((result) => result.value)
       .filter((context) => context !== null);
-    expect(contexts.length).toBeGreaterThan(0);
-    const renderedText = vi
-      .mocked(contexts[0]!.fillText)
-      .mock.calls.map((call: unknown[]) => String(call[0]))
+    const paintedText = contexts
+      .flatMap((context) => vi.mocked(context!.fillText).mock.calls)
+      .map((call: unknown[]) => String(call[0]))
       .join(" ");
-    expect(renderedText).toContain("Am I");
-    expect(renderedText).not.toContain("\u79c1\u306f");
+    expect(paintedText).toBe("");
+  });
+
+  it("reports a pending render instead of exporting something else", async () => {
+    mockSafeFetch.mockImplementation((url: string) => {
+      if (typeof url === "string" && url.endsWith("/rendered")) {
+        return Promise.resolve({
+          ok: false,
+          status: 409,
+          json: () => Promise.resolve({ status: "pending", revision: 4 }),
+        });
+      }
+      if (typeof url === "string" && /\/api\/pages\/[^/]+$/.test(url)) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              panels: [],
+              ocrRegions: [],
+              conversations: [],
+              layers: layerPayload,
+              image: { width: 1200, height: 1600 },
+            }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    });
+    render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={[mockPage]}
+        theme="dark"
+      />,
+    );
+    const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
+    fireEvent.load(img);
+    fireEvent.click(await screen.findByText("Export Page (PNG)"));
+
+    await waitFor(() => {
+      expect(
+        mockSafeFetch.mock.calls.some((call) =>
+          String(call[0]).endsWith("/rendered"),
+        ),
+      ).toBe(true);
+    });
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        expect.stringMatching(/render is still pending/i),
+        "error",
+      );
+    });
+    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
   });
 
   it("produces an archive that opens, with the expected entries and a readable project.json", async () => {
@@ -335,6 +388,7 @@ describe("Reader project ZIP export", () => {
     expect(names.filter((n) => n.includes("ocr"))).toEqual([]);
 
     const project = JSON.parse(await zip.file("project.json")!.async("string"));
+    expect(project.schemaVersion).toBe(1);
     expect(project.pageNumber).toBe(22);
     expect(project.imageId).toBe("img1");
     expect(project.dimensions).toEqual({ width: 1200, height: 1600 });

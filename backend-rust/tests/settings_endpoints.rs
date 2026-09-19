@@ -191,6 +191,49 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
         .execute(&pool)
         .await;
     let token = probe_user(&pool, &jwt).await;
+    let series_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO series (id, created_at, updated_at, title, reading_direction, original_language) \
+         VALUES ($1, now(), now(), $2, 'rightToLeft', 'ja')",
+    )
+    .bind(series_id)
+    .bind(format!("__settings-e2e-{series_id}"))
+    .execute(&pool)
+    .await
+    .expect("geometry series");
+    let chapter_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO chapters (id, chapter_number, created_at, updated_at, use_context_memory, series_id) \
+         VALUES ($1, 1, now(), now(), TRUE, $2)",
+    )
+    .bind(chapter_id)
+    .bind(series_id)
+    .execute(&pool)
+    .await
+    .expect("geometry chapter");
+    let image_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO images (id, created_at, filename, storage_path, hash, width, height) \
+         VALUES ($1, now(), 'geometry.png', $2, $3, 64, 64)",
+    )
+    .bind(image_id)
+    .bind(format!("originals/settings-{image_id}.png"))
+    .bind(format!("settings-{image_id}"))
+    .execute(&pool)
+    .await
+    .expect("geometry image");
+    for page_number in [1, 2] {
+        sqlx::query(
+            "INSERT INTO pages (id, page_number, chapter_id, image_id) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(Uuid::new_v4())
+        .bind(page_number)
+        .bind(chapter_id)
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .expect("geometry page");
+    }
 
     // --- unauthenticated GET is the security 403 Boot shape ---
     let (status, ctype, _) = send(app.clone(), "GET", "/tlhub/api/settings", None, None).await;
@@ -308,6 +351,17 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     assert_eq!(echoed["textBoxPaddingPx"], 12);
     assert_eq!(echoed["textBoxSafetyPercent"], 80);
 
+    let revised_pages: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pages WHERE chapter_id = $1 AND scene_revision = 1",
+    )
+    .bind(chapter_id)
+    .fetch_one(&pool)
+    .await
+    .expect("geometry revisions");
+    assert_eq!(
+        revised_pages, 2,
+        "a geometry change invalidates every affected page"
+    );
     // The stale tab now saves an unrelated model setting.
     let mut legacy = put_body.clone();
     legacy.as_object_mut().unwrap().insert(
@@ -336,6 +390,17 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     .expect("padding row survives a legacy PUT");
     assert_eq!(padding, "12");
 
+    let revisions_after_legacy_put: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pages WHERE chapter_id = $1 AND scene_revision = 1",
+    )
+    .bind(chapter_id)
+    .fetch_one(&pool)
+    .await
+    .expect("unchanged geometry revisions");
+    assert_eq!(
+        revisions_after_legacy_put, 2,
+        "an unrelated settings save must not invalidate pages again"
+    );
     // --- validate with an EMPTY catalog is permissive: {"orphaned":[]} ---
     redis.delete(CATALOG_KEY).await.expect("del catalog");
     state.providers.reload(&redis).await;

@@ -43,3 +43,50 @@ backend/*
 # install has to land here rather than in frontend/. Committed so the corpus run is reproducible;
 # the tree it installs is not.
 node_modules/
+
+# G0 closure retains machine-readable manifests and decisions; browser exports, source-derived
+# project archives, snapshots, and the superseded draft remain local evidence only.
+/docs/quality-runs/g0-20260913-closure/canary-sample7/a04-exports/
+/docs/quality-runs/g0-20260913-closure/continuation/a04-exports/
+/docs/quality-runs/g0-20260913-closure/A09-evaluation-correction-v2.draft.json
+
+# Quality-run artifacts (images, JSON, project zips, logs) stay on disk and on the
+# pi5 mirror but are not tracked here; the notes (.md) and harness scripts are.
+docs/quality-runs/**/*.png
+docs/quality-runs/**/*.jpg
+docs/quality-runs/**/*.jpeg
+docs/quality-runs/**/*.webp
+docs/quality-runs/**/*.svg
+docs/quality-runs/**/*.json
+docs/quality-runs/**/*.jsonl
+docs/quality-runs/**/*.zip
+docs/quality-runs/**/*.log
+docs/quality-runs/**/*.txt
+docs/quality-runs/**/source-served
+docs/quality-checkpoints/**/*.png
+docs/quality-checkpoints/**/*.jpg
+docs/quality-checkpoints/**/*.jpeg
+docs/quality-checkpoints/**/*.webp
+docs/quality-checkpoints/**/*.svg
+docs/quality-checkpoints/**/*.json
+docs/quality-checkpoints/**/*.jsonl
+docs/quality-checkpoints/**/*.zip
+docs/quality-checkpoints/**/*.log
+docs/quality-checkpoints/**/*.txt
+docs/quality-checkpoints/**/source-served
+docs/quality-evidence/**/*.png
+docs/quality-evidence/**/*.jpg
+docs/quality-evidence/**/*.jpeg
+docs/quality-evidence/**/*.webp
+docs/quality-evidence/**/*.svg
+docs/quality-evidence/**/*.json
+docs/quality-evidence/**/*.jsonl
+docs/quality-evidence/**/*.zip
+docs/quality-evidence/**/*.log
+docs/quality-evidence/**/*.txt
+docs/quality-evidence/**/source-served
+
+# Torii reference captures saved in the repo root
+*.torii
+/Upload and Translate Manga Images*
+/translated_images_*.zip

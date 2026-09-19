@@ -23,6 +23,7 @@ If documentation contradicts the code, the code is authoritative. File discrepan
 | Concurrency & dispatch slot model | [`reference/slot_allocation.md`](reference/slot_allocation.md) |
 | WebP thumbnails & cache endpoints | [`reference/webp_thumbnail_encoding.md`](reference/webp_thumbnail_encoding.md) |
 | Public routes & security boundaries | [`reference/security_boundary.md`](reference/security_boundary.md) |
+| Object storage: MinIO mirror and the AIStor plan | [`minio-aistor-migration.md`](minio-aistor-migration.md) |
 | Pre-commit quality gates | [`guides/quality_gate.md`](guides/quality_gate.md) |
 | Render quality evaluation (D1–D16) | [`render_quality_gap_2026-08-05.md`](render_quality_gap_2026-08-05.md) |
 | Canvas & layer fixes (2026-09-06) | [`canvas_render_fixes_2026-09-06.md`](canvas_render_fixes_2026-09-06.md) |

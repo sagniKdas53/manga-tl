@@ -117,7 +117,7 @@ services:
       retries: 5
 
   minio:
-    image: minio/minio
+    image: purevert/minio:backup
     container_name: manga-minio
     command: server /data --console-address ":9001"
     environment:
@@ -267,6 +267,33 @@ services:
       retries: 3
       start_period: 40s
 
+  page-renderer:
+    build:
+      context: .
+      dockerfile: services/page-renderer/Dockerfile
+    container_name: manga-page-renderer
+    platform: linux/amd64
+    environment:
+      - PORT=8090
+      - PAGE_RENDERER_CONFIG=/app/fonts.json
+    networks:
+      - manga-net
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "node", "-e", "fetch('http://localhost:8090/health').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "${PAGE_RENDERER_CPUS:-1.0}"
+          memory: ${PAGE_RENDERER_MEMORY:-2g}
+        reservations:
+          cpus: "0.25"
+          memory: 512m
+
   worker:
     image: ghcr.io/sagnikdas53/manga-tl-worker:latest
     build:
@@ -282,6 +309,7 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_SECRET_KEY_FILE=/run/secrets/minio_password
       - BACKEND_CALLBACK_URL=${BACKEND_CALLBACK_URL:-http://backend:8080}${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
+      - PAGE_RENDERER_URL=${PAGE_RENDERER_URL:-http://page-renderer:8090}
       - INTERNAL_API_TOKEN_FILE=/run/secrets/internal_api_token
       # Fragment grouping. The default was 1.0 here against a code default of 0.50, so the
       # deployment ran at double the tested value; both are now 0.35, measured over 40 corpus
@@ -293,6 +321,10 @@ services:
       # API Keys are loaded via DOCKER_SECRETS_JSON
       - DOCKER_SECRETS_JSON=/run/secrets/api_keys
       - PROVIDERS_CONFIG=/app/config/providers.json
+      # The worker refreshes prices and free-model lists from OpenRouter/NVIDIA on this timer and
+      # publishes the result to Redis; nothing is committed. 0 turns it off. To check the refreshed
+      # catalog in by hand: scripts/dump_provider_catalog.py.
+      - CATALOG_REFRESH_INTERVAL_HOURS=${CATALOG_REFRESH_INTERVAL_HOURS:-24}
       - OCR_MODEL_PROVIDER=${OCR_MODEL_PROVIDER:-openrouter}
       - OCR_VLM_MODEL=${OCR_VLM_MODEL:-}
       - OCR_VLM_MODEL_LIST=${OCR_VLM_MODEL_LIST:-}
@@ -370,6 +402,11 @@ services:
         condition: service_healthy
       backend:
         condition: service_healthy
+      # Deliberately not `page-renderer`. OCR, translation and QA do not need Chromium, so a
+      # renderer that is down must not keep the whole pipeline from starting; a render job
+      # against an unreachable renderer fails on its own with the reason in the job table
+      # (worker/src/worker/page_scene_renderer.py). Decided with the user 2026-09-17, see
+      # docs/output-quality-architecture-decisions.md §1a.
     secrets:
       - minio_password
       - internal_api_token
@@ -635,7 +672,7 @@ services:
   watchtower:
     image: containrrr/watchtower:1.7.1
     container_name: manga-watchtower
-    profiles: ["watchtower"]
+    profiles: [ "watchtower" ]
     command: --label-enable --cleanup --interval 21600
     environment:
       # Belt and braces with --label-enable: without it Watchtower would consider every

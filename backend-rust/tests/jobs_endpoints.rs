@@ -540,6 +540,15 @@ async fn recovery_reset_stale_and_debounced_render() {
         .execute(&pool)
         .await
         .expect("page");
+    sqlx::query(
+        "INSERT INTO page_scene_snapshots \
+         (page_id, revision, contract_version, source_sha256, logical_scene_sha256, scene_json) \
+         VALUES ($1, 0, 'page-scene/v1', repeat('a', 64), repeat('b', 64), '{}'::jsonb)",
+    )
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("immutable scene snapshot");
 
     // Edited 30s ago, never rendered → qualifies.
     sqlx::query("UPDATE pages SET last_edited_at = now() - interval '30 seconds' WHERE id = $1")
@@ -555,6 +564,259 @@ async fn recovery_reset_stale_and_debounced_render() {
             .await
             .expect("render count");
     assert_eq!(render_jobs, 1, "debounced render enqueued for stale edit");
+    let render_ledger_rows: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM page_render_jobs WHERE page_id = $1")
+            .bind(page_id)
+            .fetch_one(&pool)
+            .await
+            .expect("render ledger count");
+    assert_eq!(render_ledger_rows, 1);
+    manga_backend::jobs::recovery::process_pending_renders(&state).await;
+    let deduplicated_render_jobs: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE image_id = $1 AND type = 'render'")
+            .bind(image_id)
+            .fetch_one(&pool)
+            .await
+            .expect("deduplicated render count");
+    assert_eq!(deduplicated_render_jobs, 1, "same revision queues once");
+    sqlx::query(
+        "UPDATE pages SET scene_revision = 1, last_edited_at = now() - interval '30 seconds' WHERE id = $1",
+    )
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("newer page revision");
+    sqlx::query(
+        "INSERT INTO page_scene_snapshots \
+         (page_id, revision, contract_version, source_sha256, logical_scene_sha256, scene_json) \
+         VALUES ($1, 1, 'page-scene/v1', repeat('a', 64), repeat('c', 64), '{}'::jsonb)",
+    )
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("newer immutable scene snapshot");
+    manga_backend::jobs::recovery::process_pending_renders(&state).await;
+    let queued_revisions: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM page_render_jobs WHERE page_id = $1")
+            .bind(page_id)
+            .fetch_one(&pool)
+            .await
+            .expect("queued revision count");
+    assert_eq!(
+        queued_revisions, 2,
+        "an edit during a queued render retains its newer revision"
+    );
+
+    // The first callback arrives after a newer scene was saved. It retains its own immutable
+    // artifact but cannot advance the page's current pointer or its rendered timestamp.
+    let old_job_id: String = sqlx::query_scalar(
+        "SELECT job_id FROM page_render_jobs WHERE page_id = $1 AND page_revision = 0",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .expect("old render ledger");
+    state
+        .storage
+        .upload_bytes(
+            &format!("rendered/{image_id}.png"),
+            b"old revision output".to_vec(),
+            "image/png",
+        )
+        .await
+        .expect("stage old render output");
+    let old_callback = manga_backend::jobs::coordinator::handle_render_callback(
+        &state,
+        Some(&old_job_id),
+        image_id,
+        Some(page_id),
+        serde_json::json!([]),
+        serde_json::json!([]),
+    )
+    .await
+    .expect("old callback");
+    assert!(!old_callback.artifact_current);
+    let old_pointer: Option<String> =
+        sqlx::query_scalar("SELECT current_render_job_id FROM pages WHERE id = $1")
+            .bind(page_id)
+            .fetch_one(&pool)
+            .await
+            .expect("old page pointer");
+    assert!(
+        old_pointer.is_none(),
+        "an old callback must not present its artifact as current"
+    );
+    let pending_response = manga_backend::routes::page::get_page_rendered(
+        axum::extract::State(state.clone()),
+        axum::extract::Path(page_id),
+    )
+    .await;
+    assert_eq!(
+        pending_response.status(),
+        StatusCode::CONFLICT,
+        "the page read boundary must not expose the old callback"
+    );
+    let pending_body = pending_response
+        .into_body()
+        .collect()
+        .await
+        .expect("pending response body")
+        .to_bytes();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&pending_body).expect("pending response JSON")
+            ["status"],
+        "pending"
+    );
+
+    let current_job_id: String = sqlx::query_scalar(
+        "SELECT job_id FROM page_render_jobs WHERE page_id = $1 AND page_revision = 1",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .expect("current render ledger");
+    let current_output = b"current revision output".to_vec();
+    state
+        .storage
+        .upload_bytes(
+            &format!("rendered/{image_id}.png"),
+            current_output.clone(),
+            "image/png",
+        )
+        .await
+        .expect("stage current render output");
+    let current_callback = manga_backend::jobs::coordinator::handle_render_callback(
+        &state,
+        Some(&current_job_id),
+        image_id,
+        Some(page_id),
+        serde_json::json!([]),
+        serde_json::json!([]),
+    )
+    .await
+    .expect("current callback");
+    assert!(current_callback.artifact_current);
+    let (current_pointer, artifact_path): (Option<String>, Option<String>) = sqlx::query_as(
+        "SELECT p.current_render_job_id, r.rendered_png_storage_path \
+         FROM pages p JOIN page_render_jobs r ON r.job_id = p.current_render_job_id \
+         WHERE p.id = $1",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .expect("current artifact pointer");
+    assert_eq!(current_pointer.as_deref(), Some(current_job_id.as_str()));
+    assert_eq!(
+        state
+            .storage
+            .download_bytes(artifact_path.as_deref().expect("artifact path"))
+            .await,
+        Some(current_output.clone()),
+        "the current pointer selects immutable bytes for the current revision"
+    );
+    let ready_response = manga_backend::routes::page::get_page_rendered(
+        axum::extract::State(state.clone()),
+        axum::extract::Path(page_id),
+    )
+    .await;
+    assert_eq!(ready_response.status(), StatusCode::OK);
+    assert_eq!(
+        ready_response
+            .into_body()
+            .collect()
+            .await
+            .expect("ready response body")
+            .to_bytes()
+            .to_vec(),
+        current_output,
+        "the public page read returns exactly the current immutable artifact"
+    );
+    let duplicate = manga_backend::jobs::coordinator::handle_render_callback(
+        &state,
+        Some(&current_job_id),
+        image_id,
+        Some(page_id),
+        serde_json::json!([]),
+        serde_json::json!([]),
+    )
+    .await
+    .expect("duplicate callback");
+    assert!(
+        !duplicate.artifact_current,
+        "duplicate completion cannot advance the current artifact again"
+    );
+
+    // A failed immutable job is not completion. The next debounce scan may reserve a fresh job
+    // for the same current snapshot without disturbing the earlier current artifact.
+    // The revision-1 callback just stamped `last_rendered_at = now()`; the debounce only selects
+    // a page edited after its last render, so this edit is placed after that render and both
+    // are older than the 10 s threshold.
+    sqlx::query(
+        "UPDATE pages SET scene_revision = 2,            last_rendered_at = now() - interval '60 seconds',            last_edited_at = now() - interval '30 seconds'          WHERE id = $1",
+    )
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("third page revision");
+    sqlx::query(
+        "INSERT INTO page_scene_snapshots \
+         (page_id, revision, contract_version, source_sha256, logical_scene_sha256, scene_json) \
+         VALUES ($1, 2, 'page-scene/v1', repeat('a', 64), repeat('d', 64), '{}'::jsonb)",
+    )
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("third immutable scene snapshot");
+    manga_backend::jobs::recovery::process_pending_renders(&state).await;
+    sqlx::query(
+        "UPDATE page_render_jobs SET status = 'failed' \
+         WHERE page_id = $1 AND page_revision = 2",
+    )
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("fail immutable render job");
+    let failed_response = manga_backend::routes::page::get_page_rendered(
+        axum::extract::State(state.clone()),
+        axum::extract::Path(page_id),
+    )
+    .await;
+    assert_eq!(failed_response.status(), StatusCode::CONFLICT);
+    let failed_body = failed_response
+        .into_body()
+        .collect()
+        .await
+        .expect("failed response body")
+        .to_bytes();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&failed_body).expect("failed response JSON")["status"],
+        "failed"
+    );
+    manga_backend::jobs::recovery::process_pending_renders(&state).await;
+    let retry_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM page_render_jobs WHERE page_id = $1 AND page_revision = 2",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .expect("retry ledger count");
+    assert_eq!(retry_count, 2, "a failed render job remains retryable");
+    let retry_pending_response = manga_backend::routes::page::get_page_rendered(
+        axum::extract::State(state.clone()),
+        axum::extract::Path(page_id),
+    )
+    .await;
+    assert_eq!(
+        retry_pending_response.status(),
+        StatusCode::CONFLICT,
+        "a retry reservation remains pending until its artifact callback"
+    );
+
+    sqlx::query("UPDATE pages SET current_render_job_id = NULL WHERE id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .expect("clear current pointer before ledger cleanup");
     // Remove coordinator-created rows too (their ids are uuids, not e2e-prefixed).
     sqlx::query("DELETE FROM job_costs WHERE job_id IN (SELECT id FROM jobs WHERE image_id=$1)")
         .bind(image_id)
@@ -566,6 +828,11 @@ async fn recovery_reset_stale_and_debounced_render() {
         .execute(&pool)
         .await
         .expect("renders cleanup");
+    sqlx::query("DELETE FROM page_render_jobs WHERE page_id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .expect("render ledger cleanup");
 
     // Recent FAILED render within 5 minutes → skipped this cycle.
     sqlx::query("UPDATE pages SET last_edited_at = now() - interval '30 seconds', last_rendered_at = NULL WHERE id = $1")
@@ -611,8 +878,25 @@ async fn recovery_reset_stale_and_debounced_render() {
         "failure older than 5 minutes allows re-trigger"
     );
 
-    // Cleanup: cascade removes pages/chapters with the series; jobs by prefix.
+    // Cleanup: cascade removes pages/chapters with the series; jobs by prefix. The re-trigger
+    // above wrote another ledger row and jobs row (uuid ids), and the ledger references the
+    // snapshot the page cascade would remove, so those go first.
     clear_jobs(&pool).await;
+    sqlx::query("DELETE FROM page_render_jobs WHERE page_id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .expect("retry ledger cleanup");
+    sqlx::query("DELETE FROM job_costs WHERE job_id IN (SELECT id FROM jobs WHERE image_id=$1)")
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .expect("retry costs cleanup");
+    sqlx::query("DELETE FROM jobs WHERE image_id = $1")
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .expect("retry jobs cleanup");
     sqlx::query(
         "DELETE FROM pages WHERE chapter_id IN (SELECT id FROM chapters WHERE series_id=$1)",
     )

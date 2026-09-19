@@ -40,7 +40,6 @@ describe("ReaderRightSidebar", () => {
         ocrRegions={[]}
         isRedoingRegionTl={false}
         handleRedoRegion={vi.fn()}
-        handleExportRenderedPng={vi.fn()}
         handleSetElementVisibility={vi.fn()}
         isRedoingRegionOcr={false}
       />,
@@ -116,7 +115,6 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
-        handleExportRenderedPng={vi.fn()}
         handleSetElementVisibility={vi.fn()}
       />,
     );
@@ -188,7 +186,6 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
         handleRedoRegion={handleRedoRegion}
         isRedoingRegionTl={false}
-        handleExportRenderedPng={vi.fn()}
         handleSetElementVisibility={vi.fn()}
       />,
     );
@@ -246,7 +243,6 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
-        handleExportRenderedPng={vi.fn()}
         handleSetElementVisibility={vi.fn()}
       />,
     );
@@ -289,7 +285,6 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
-        handleExportRenderedPng={vi.fn()}
         handleSetElementVisibility={vi.fn()}
       />,
     );
@@ -361,7 +356,6 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
-        handleExportRenderedPng={vi.fn()}
         handleSetElementVisibility={vi.fn()}
       />,
     );
@@ -470,7 +464,6 @@ describe("ReaderRightSidebar", () => {
         ocrRegions={[]}
         isRedoingRegionTl={false}
         handleRedoRegion={vi.fn()}
-        handleExportRenderedPng={vi.fn()}
         handleSetElementVisibility={vi.fn()}
         isRedoingRegionOcr={false}
       />,
@@ -557,7 +550,6 @@ describe("ReaderRightSidebar", () => {
         ocrRegions={[mockRegion]}
         isRedoingRegionTl={false}
         handleRedoRegion={mockHandleRedoRegion}
-        handleExportRenderedPng={vi.fn()}
         handleSetElementVisibility={vi.fn()}
         isRedoingRegionOcr={false}
       />,
@@ -618,7 +610,6 @@ describe("ReaderRightSidebar", () => {
         handleRedoPageTranslation: vi.fn(),
         isRedoingPageTranslation: false,
         handleExportPng: vi.fn(),
-        handleExportRenderedPng: vi.fn(),
         handleExportZip: vi.fn(),
         interactionMode: "none",
         setInteractionMode: vi.fn(),

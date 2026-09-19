@@ -130,6 +130,29 @@ pub async fn update_job_status(
     .execute(&state.pool)
     .await;
 
+    if result.is_ok() && job.job_type == "render" {
+        let ledger_status = match new_status.as_str() {
+            "PENDING" => Some("queued"),
+            "PROCESSING" => Some("running"),
+            "FAILED" => Some("failed"),
+            // Completion means the worker delivered bytes; only the callback may attest the
+            // immutable artifact and advance the page pointer.
+            "COMPLETED" | "PAUSED" => None,
+            _ => None,
+        };
+        if let Some(ledger_status) = ledger_status
+            && let Err(err) = sqlx::query(
+                "UPDATE page_render_jobs SET status = $2 WHERE job_id = $1 AND status <> 'succeeded'",
+            )
+            .bind(&job_id)
+            .bind(ledger_status)
+            .execute(&state.pool)
+            .await
+        {
+            tracing::error!("Could not mirror render job {job_id} status to immutable ledger: {err}");
+        }
+    }
+
     match result {
         Ok(_) => {
             if new_status == "PENDING" {
@@ -749,7 +772,8 @@ pub async fn qa_hybrid_prepare(
 
     match coordinator::prepare_hybrid_qa(&state, image_id, page_id_of(&payload), &qa_results).await
     {
-        Ok(()) => StatusCode::OK.into_response(),
+        Ok(Some(render_payload)) => Json(render_payload).into_response(),
+        Ok(None) => StatusCode::NO_CONTENT.into_response(),
         Err(err) => {
             tracing::error!("Error preparing hybrid QA: {err}");
             internal_error_text(err)
@@ -1166,42 +1190,60 @@ pub fn router() -> Router<AppState> {
 async fn render_callback_route(
     State(state): State<AppState>,
     headers: HeaderMap,
-    body: Result<Json<HashMap<String, String>>, axum::extract::rejection::JsonRejection>,
+    body: Result<Json<Value>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
+    // Was `HashMap<String, String>`; the browser-render callback (tracker R1) also carries the
+    // integer page revision and the renderer's layout diagnostics array.
     let Ok(Json(payload)) = body else {
         return crate::error::unreadable_body("/api/internal/jobs/callback/render");
     };
     if let Some(denied) = guard(&state, &headers) {
         return denied;
     }
-    let Some(image_id) = payload.get("imageId").and_then(|s| Uuid::parse_str(s).ok()) else {
+    let Some(image_id) = payload
+        .get("imageId")
+        .and_then(Value::as_str)
+        .and_then(|s| Uuid::parse_str(s).ok())
+    else {
         return internal_error_text("imageId missing or unparsable");
     };
-    let page_id = payload.get("pageId").and_then(|s| Uuid::parse_str(s).ok());
+    let page_id = payload
+        .get("pageId")
+        .and_then(Value::as_str)
+        .and_then(|s| Uuid::parse_str(s).ok());
+    let diagnostics = payload
+        .get("diagnostics")
+        .filter(|d| d.is_array())
+        .cloned()
+        .unwrap_or_else(|| json!([]));
+    // Resolved layout per text object (font px, line breaks); tracker R2 (c).
+    let layout = payload
+        .get("layout")
+        .filter(|l| l.is_array())
+        .cloned()
+        .unwrap_or_else(|| json!([]));
 
     match coordinator::handle_render_callback(
         &state,
-        payload.get("jobId").map(String::as_str),
+        payload.get("jobId").and_then(Value::as_str),
         image_id,
         page_id,
+        diagnostics,
+        layout,
     )
     .await
     {
-        Ok(completes_pipeline) => {
-            let _ = sqlx::query("UPDATE images SET last_rendered_at = now() WHERE id = $1")
-                .bind(image_id)
-                .execute(&state.pool)
-                .await;
-            // AUDIT-F26. Derive the grid's thumbnail from the render we were just told about.
-            // Eagerly, and always overwriting: the endpoint can generate this lazily too, but only
-            // doing it there would leave a re-rendered page serving the *previous* translation's
-            // thumbnail, since the object would already exist and the miss path would not run.
-            crate::routes::page::generate_rendered_thumbnail(&state.storage, image_id).await;
-            // AUDIT-B12 follow-up: the QA callback used to say "Page Processing Complete" while
-            // its own re-render was still queued, so the user could export a PNG that did not yet
-            // carry the QA corrections the notification was announcing. When QA defers to a final
-            // render, that render makes the claim — here, once the artifact actually matches.
-            if completes_pipeline {
+        Ok(outcome) => {
+            // A callback for an old revision may be valid for its own job, but it must not
+            // refresh image-level freshness, regenerate a mutable-path thumbnail, or announce
+            // completion for the page's newer scene.
+            if outcome.artifact_current {
+                let _ = sqlx::query("UPDATE images SET last_rendered_at = now() WHERE id = $1")
+                    .bind(image_id)
+                    .execute(&state.pool)
+                    .await;
+            }
+            if outcome.completes_pipeline {
                 let ctx = resolve_notification_context(&state, image_id, page_id).await;
                 emit_qa_notification(
                     &state,

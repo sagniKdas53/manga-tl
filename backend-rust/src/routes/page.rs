@@ -38,8 +38,10 @@ use crate::clone::recalculate_chapter_cover;
 use crate::error;
 use crate::minio::MinioService;
 use crate::models::{
-    Chapter, Conversation, ConversationRegion, Image, Layer, LayerElement, OcrRegion, Page, Panel,
+    Chapter, Conversation, ConversationRegion, Image, Layer, LayerElement, OcrRegion, Page,
+    PageSceneSnapshot, Panel,
 };
+use crate::page_scene::{CurrentRenderArtifact, current_render_artifact};
 use crate::state::AppState;
 
 // ---------------------------------------------------------------------------
@@ -64,19 +66,15 @@ pub struct PageDto {
     pub filename: String,
     pub url: String,
     pub thumbnailUrl: String,
-    /// AUDIT-F26. When the pipeline last produced a rendered page, or null if it never has.
-    ///
-    /// This DTO previously carried nothing a pipeline run could change. `thumbnailUrl` is a fixed
-    /// path to the *original*'s thumbnail, and every other field is set at upload. Re-fetching
-    /// `/pages` after a translation finished therefore returned byte-identical JSON — React saw
-    /// identical props and an identical image `src`, so the grid could not update no matter how
-    /// often it asked. That is what made the AUDIT-F19 refresh a no-op.
+    /// Null unless the immutable artifact matches this page's current scene revision/digest.
     pub lastRenderedAt: Option<chrono::DateTime<chrono::Utc>>,
-    /// A thumbnail of the *rendered* page, or null when nothing has been rendered yet.
-    ///
-    /// Carries `last_rendered_at` as a cache key because `stream_cached_image` marks these
-    /// `immutable` for a year: without the key a re-render would keep serving the previous
-    /// translation out of the browser cache.
+    /// `ready`, `pending`, or `failed` for the page's current immutable scene revision.
+    pub renderStatus: String,
+    /// Current page revision, including when its artifact is pending or failed.
+    pub renderRevision: i32,
+    /// Immutable revision URL when the current artifact is ready; otherwise null.
+    pub renderedUrl: Option<String>,
+    /// No mutable image-level thumbnail is exposed as current.
     pub renderedThumbnailUrl: Option<String>,
 }
 
@@ -131,20 +129,6 @@ fn thumbnail_url(state: &AppState, image_id: Uuid) -> String {
     format!(
         "{}/api/images/{image_id}/thumbnail",
         state.config.context_path
-    )
-}
-
-/// AUDIT-F26. `?v=` is the whole point: these responses are `immutable, max-age=1y`, so a page
-/// that gets re-rendered after an edit needs a different URL or the browser never re-asks.
-fn rendered_thumbnail_url(
-    state: &AppState,
-    image_id: Uuid,
-    last_rendered_at: chrono::DateTime<chrono::Utc>,
-) -> String {
-    format!(
-        "{}/api/images/{image_id}/thumbnail/rendered?v={}",
-        state.config.context_path,
-        last_rendered_at.timestamp_millis()
     )
 }
 
@@ -700,12 +684,32 @@ pub async fn list_pages(
         chapter_id: Uuid,
         image_id: Uuid,
         filename: String,
-        // AUDIT-F26. The one column here that a pipeline run changes.
+        scene_revision: i32,
+        logical_scene_sha256: Option<String>,
         last_rendered_at: Option<chrono::DateTime<chrono::Utc>>,
+        artifact_ready: bool,
+        latest_render_status: Option<String>,
     }
     let sql = format!(
-        "SELECT p.id, p.page_number, p.chapter_id, p.image_id, p.last_rendered_at, i.filename \
-         FROM pages p JOIN images i ON i.id = p.image_id \
+        "SELECT p.id, p.page_number, p.chapter_id, p.image_id, p.scene_revision, \
+                p.last_rendered_at, i.filename, snapshot.logical_scene_sha256, \
+                (render.job_id IS NOT NULL) AS artifact_ready, latest.status AS latest_render_status \
+         FROM pages p \
+         JOIN images i ON i.id = p.image_id \
+         LEFT JOIN page_scene_snapshots snapshot \
+           ON snapshot.page_id = p.id AND snapshot.revision = p.scene_revision \
+         LEFT JOIN page_render_jobs render \
+           ON render.job_id = p.current_render_job_id \
+          AND render.page_revision = p.scene_revision \
+          AND render.logical_scene_sha256 = snapshot.logical_scene_sha256 \
+          AND render.status = 'succeeded' \
+          AND render.rendered_png_storage_path IS NOT NULL \
+         LEFT JOIN LATERAL ( \
+           SELECT status FROM page_render_jobs \
+           WHERE page_id = p.id AND page_revision = p.scene_revision \
+             AND logical_scene_sha256 = snapshot.logical_scene_sha256 \
+           ORDER BY created_at DESC LIMIT 1 \
+         ) latest ON TRUE \
          WHERE p.chapter_id = $1 ORDER BY p.page_number {direction} LIMIT {size} OFFSET {}",
         p.offset(size)
     );
@@ -720,18 +724,40 @@ pub async fn list_pages(
 
     let content: Vec<PageDto> = rows
         .into_iter()
-        .map(|r| PageDto {
-            id: r.id,
-            pageNumber: r.page_number,
-            imageId: r.image_id,
-            chapterId: r.chapter_id,
-            filename: r.filename,
-            url: image_url(&state, r.image_id),
-            thumbnailUrl: thumbnail_url(&state, r.image_id),
-            lastRenderedAt: r.last_rendered_at,
-            renderedThumbnailUrl: r
-                .last_rendered_at
-                .map(|at| rendered_thumbnail_url(&state, r.image_id, at)),
+        .map(|r| {
+            let render_status = if r.artifact_ready {
+                "ready"
+            } else if r.latest_render_status.as_deref() == Some("failed") {
+                "failed"
+            } else {
+                "pending"
+            };
+            let rendered_url = (render_status == "ready")
+                .then(|| {
+                    r.logical_scene_sha256.as_deref().map(|digest| {
+                        format!(
+                            "{}/api/pages/{}/rendered?revision={}&sceneSha256={digest}",
+                            state.config.context_path, r.id, r.scene_revision
+                        )
+                    })
+                })
+                .flatten();
+            PageDto {
+                id: r.id,
+                pageNumber: r.page_number,
+                imageId: r.image_id,
+                chapterId: r.chapter_id,
+                filename: r.filename,
+                url: image_url(&state, r.image_id),
+                thumbnailUrl: thumbnail_url(&state, r.image_id),
+                lastRenderedAt: (render_status == "ready")
+                    .then_some(r.last_rendered_at)
+                    .flatten(),
+                renderStatus: render_status.to_string(),
+                renderRevision: r.scene_revision,
+                renderedUrl: rendered_url,
+                renderedThumbnailUrl: None,
+            }
         })
         .collect();
 
@@ -848,6 +874,190 @@ pub async fn get_page(State(state): State<AppState>, Path(page_id): Path<Uuid>) 
     }
 }
 
+/// GET /api/pages/{pageId}/scene — reads the immutable logical scene at the page's current revision.
+pub async fn get_page_scene(State(state): State<AppState>, Path(page_id): Path<Uuid>) -> Response {
+    match sqlx::query_as::<_, PageSceneSnapshot>(
+        "SELECT snapshot.* \
+         FROM page_scene_snapshots snapshot \
+         JOIN pages page ON page.id = snapshot.page_id \
+         WHERE snapshot.page_id = $1 AND snapshot.revision = page.scene_revision",
+    )
+    .bind(page_id)
+    .fetch_optional(&state.pool)
+    .await
+    {
+        Ok(Some(snapshot)) => Json(snapshot.scene_json).into_response(),
+        Ok(None) => error::not_found(
+            &format!("Page scene not found: {page_id}"),
+            "/api/pages/{pageId}/scene",
+        ),
+        Err(err) => {
+            tracing::error!("Could not read page scene for {page_id}: {err}");
+            error::internal_error("/api/pages/{pageId}/scene")
+        }
+    }
+}
+
+/// PUT /api/pages/{pageId}/scene — stores one new-format logical scene atomically.
+///
+/// Snapshot revision advancement belongs to C02. This endpoint only accepts the current revision,
+/// makes retries with the same logical digest idempotent, and refuses to overwrite an immutable
+/// snapshot with different content.
+pub async fn put_page_scene(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(page_id): Path<Uuid>,
+    body: Result<Json<serde_json::Value>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    const INSTANCE: &str = "/api/pages/{pageId}/scene";
+    if user.role.eq_ignore_ascii_case("viewer") {
+        return error::access_denied(INSTANCE);
+    }
+    let Json(document) = match body {
+        Ok(json) => json,
+        Err(_) => return error::unreadable_body(INSTANCE),
+    };
+    let validated = match crate::page_scene::validate_page_scene(document) {
+        Ok(scene) if scene.scene_kind == "logical" => scene,
+        Ok(_) => return error::bad_request("API writes require a logical scene", INSTANCE),
+        Err(err) => return error::bad_request(&err.to_string(), INSTANCE),
+    };
+
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(err) => {
+            tracing::error!("Could not open page-scene transaction for {page_id}: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    };
+    let page_source = sqlx::query_as::<_, (i32, Option<String>)>(
+        "SELECT p.scene_revision, i.hash \
+         FROM pages p \
+         JOIN images i ON i.id = p.image_id \
+         WHERE p.id = $1 \
+         FOR UPDATE",
+    )
+    .bind(page_id)
+    .fetch_optional(&mut *tx)
+    .await;
+    let (current_revision, source_sha256) = match page_source {
+        Ok(Some(page_source)) => page_source,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(err) => {
+            tracing::error!("Could not lock page {page_id} for page-scene write: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    };
+    if validated.source_page_id != page_id.to_string() {
+        return error::bad_request("scene page_id does not match the route page ID", INSTANCE);
+    }
+    if validated.revision != current_revision && validated.revision != current_revision + 1 {
+        return error::bad_request(
+            "scene revision is neither the current retry nor the next page revision",
+            INSTANCE,
+        );
+    }
+    if source_sha256.as_deref() != Some(validated.source_sha256.as_str()) {
+        return error::bad_request("scene source hash does not match the page source", INSTANCE);
+    }
+
+    let existing = sqlx::query_as::<_, PageSceneSnapshot>(
+        "SELECT * FROM page_scene_snapshots WHERE page_id = $1 AND revision = $2",
+    )
+    .bind(page_id)
+    .bind(validated.revision)
+    .fetch_optional(&mut *tx)
+    .await;
+    match existing {
+        Ok(Some(snapshot)) if snapshot.logical_scene_sha256 == validated.logical_scene_sha256 => {
+            return Json(snapshot.scene_json).into_response();
+        }
+        Ok(Some(_)) => {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({"message": "A different immutable scene already exists for this page revision"})),
+            )
+                .into_response();
+        }
+        Ok(None) => {}
+        Err(err) => {
+            tracing::error!("Could not inspect page-scene snapshot for {page_id}: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    }
+    if validated.revision != current_revision + 1 {
+        return error::bad_request("new scene writes require the next page revision", INSTANCE);
+    }
+
+    let snapshot = validated.snapshot_for_page(page_id);
+    let insert_snapshot = sqlx::query(
+        "INSERT INTO page_scene_snapshots \
+         (page_id, revision, contract_version, source_sha256, logical_scene_sha256, scene_json) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(snapshot.page_id)
+    .bind(snapshot.revision)
+    .bind(&snapshot.contract_version)
+    .bind(&snapshot.source_sha256)
+    .bind(&snapshot.logical_scene_sha256)
+    .bind(&snapshot.scene_json)
+    .execute(&mut *tx)
+    .await;
+    if let Err(err) = insert_snapshot {
+        tracing::error!("Could not insert page-scene snapshot for {page_id}: {err}");
+        return error::internal_error(INSTANCE);
+    }
+    for owner in &validated.owners {
+        if let Err(err) = sqlx::query(
+            "INSERT INTO page_scene_owners \
+             (page_id, revision, owner_id, policy_kind, policy_action, policy_override) \
+             VALUES ($1, $2, $3, $4, $5, $6)",
+        )
+        .bind(page_id)
+        .bind(validated.revision)
+        .bind(&owner.owner_id)
+        .bind(&owner.policy_kind)
+        .bind(&owner.policy_action)
+        .bind(&owner.policy_override)
+        .execute(&mut *tx)
+        .await
+        {
+            tracing::error!("Could not insert page-scene owner for {page_id}: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    }
+    for asset in &validated.assets {
+        if let Err(err) = sqlx::query(
+            "INSERT INTO page_scene_assets \
+             (page_id, revision, asset_id, asset_kind, asset_sha256, byte_length, mime_type, storage_path) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        )
+        .bind(page_id)
+        .bind(validated.revision)
+        .bind(&asset.asset_id)
+        .bind(&asset.asset_kind)
+        .bind(&asset.asset_sha256)
+        .bind(asset.byte_length)
+        .bind(&asset.mime_type)
+        .bind(&asset.storage_path)
+        .execute(&mut *tx)
+        .await
+        {
+            tracing::error!("Could not insert page-scene asset for {page_id}: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    }
+    if let Err(err) = crate::page_freshness::advance_page_revision(&mut tx, page_id).await {
+        tracing::error!("Could not advance page revision for page-scene write {page_id}: {err}");
+        return error::internal_error(INSTANCE);
+    }
+    if let Err(err) = tx.commit().await {
+        tracing::error!("Could not commit page-scene snapshot for {page_id}: {err}");
+        return error::internal_error(INSTANCE);
+    }
+    Json(snapshot.scene_json).into_response()
+}
+
 /// GET /api/images/{imageId} — page payload when a Page references it; bare otherwise.
 pub async fn get_image(State(state): State<AppState>, Path(image_id): Path<Uuid>) -> Response {
     let first_page: Option<Page> =
@@ -921,43 +1131,51 @@ async fn stream_cached_image(storage: &MinioService, path: &str, etag_suffix: &s
     }
 }
 
-/// GET /api/pages/{pageId}/rendered — rendered/{imageId}.png falling back to rendered/{pageId}.png.
-pub async fn get_page_rendered(
-    State(state): State<AppState>,
-    Path(page_id): Path<Uuid>,
-) -> Response {
-    let Some(page) = find_page(&state.pool, page_id).await else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
-    let primary = format!("rendered/{}.png", page.image_id);
-    let fallback = format!("rendered/{page_id}.png");
-    let path = if state.storage.exists(&primary).await {
-        primary
-    } else if state.storage.exists(&fallback).await {
-        fallback
-    } else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
-
-    match state.storage.download(&path).await {
-        Ok(stream) => {
-            let bytes = stream.collect().await.expect("body collect").to_vec();
-            (
-                StatusCode::OK,
-                [(header::CONTENT_TYPE, "image/png")],
-                Body::from(bytes),
-            )
-                .into_response()
-        }
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    }
-}
-
-/// GET /api/images/{imageId}/file — the stored original.
+/// GET /api/images/{imageId}/file — original upload.
 pub async fn get_image_file(State(state): State<AppState>, Path(image_id): Path<Uuid>) -> Response {
     match find_image(&state.pool, image_id).await {
         Some(image) => stream_cached_image(&state.storage, &image.storage_path, "orig").await,
         None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// GET /api/pages/{pageId}/rendered — only the immutable artifact for the current scene.
+pub async fn get_page_rendered(
+    State(state): State<AppState>,
+    Path(page_id): Path<Uuid>,
+) -> Response {
+    if find_page(&state.pool, page_id).await.is_none() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match current_render_artifact(&state.pool, page_id).await {
+        Ok(CurrentRenderArtifact::Ready(artifact)) => {
+            let path = artifact
+                .rendered_png_storage_path
+                .expect("ready artifact always has a storage path");
+            stream_cached_image(
+                &state.storage,
+                &path,
+                &format!(
+                    "render-{}-{}",
+                    artifact.page_revision, artifact.logical_scene_sha256
+                ),
+            )
+            .await
+        }
+        Ok(CurrentRenderArtifact::Pending { revision }) => (
+            StatusCode::CONFLICT,
+            Json(json!({ "status": "pending", "revision": revision })),
+        )
+            .into_response(),
+        Ok(CurrentRenderArtifact::Failed { revision }) => (
+            StatusCode::CONFLICT,
+            Json(json!({ "status": "failed", "revision": revision })),
+        )
+            .into_response(),
+        Err(err) => {
+            tracing::error!("Could not resolve current render for page {page_id}: {err}");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
     }
 }
 
@@ -1514,6 +1732,10 @@ pub fn router() -> Router<AppState> {
         )
         .route("/pages/{pageId}", get(get_page).delete(delete_page))
         .route(
+            "/pages/{pageId}/scene",
+            get(get_page_scene).put(put_page_scene),
+        )
+        .route(
             "/pages/{pageId}/number",
             axum::routing::patch(update_page_number),
         )
@@ -1573,6 +1795,9 @@ pub async fn upload_zip_archive(
                 return zip_error("error: project.json found but no image found in zip".into());
             };
 
+            if let Err(message) = validate_project_schema(&project_bytes) {
+                return zip_error(format!("error: {message}"));
+            }
             let processed = match validate_and_process_image_bytes(
                 Some(&original_name),
                 original_bytes.clone(),
@@ -1593,10 +1818,11 @@ pub async fn upload_zip_archive(
                     .await
                     .unwrap_or(None);
 
+            let mut replacement_image_id = None;
             let page = match existing_page {
                 Some(existing_page) => {
                     // Clear elements (+history) and layers, then maybe swap the image.
-                    clear_page_layers(&state.pool, existing_page.id).await;
+                    // Replacement of editable layers is committed atomically with its revision below.
                     let old_image: Option<Image> =
                         sqlx::query_as("SELECT * FROM images WHERE id = $1")
                             .bind(existing_page.image_id)
@@ -1644,15 +1870,7 @@ pub async fn upload_zip_archive(
                                 created.id
                             }
                         };
-                        sqlx::query("UPDATE pages SET image_id=$2 WHERE id=$1")
-                            .bind(existing_page.id)
-                            .bind(new_image_id)
-                            .execute(&state.pool)
-                            .await
-                            .expect("page image swap");
-                        if existing_page.page_number == 1 {
-                            recalculate_chapter_cover(&state.pool, chapter_id).await;
-                        }
+                        replacement_image_id = Some(new_image_id);
                     }
                     page_at_slot(&state.pool, chapter_id, existing_page.page_number)
                         .await
@@ -1702,11 +1920,19 @@ pub async fn upload_zip_archive(
                 },
             };
 
-            let restored = restore_project_layers(state, page.id, &project_bytes, false).await;
-            if restored.is_err() {
+            if restore_project_page(state, page.id, &project_bytes, false, replacement_image_id)
+                .await
+                .is_err()
+            {
                 return StatusCode::INTERNAL_SERVER_ERROR.into_response();
             }
 
+            let page = page_at_slot(&state.pool, chapter_id, page.page_number)
+                .await
+                .unwrap_or(page);
+            if replacement_image_id.is_some() && page.page_number == 1 {
+                recalculate_chapter_cover(&state.pool, chapter_id).await;
+            }
             Json(UploadResponse {
                 pageId: Some(page.id),
                 imageId: Some(page.image_id),
@@ -1827,27 +2053,31 @@ fn zip_error(status: String) -> Response {
 }
 
 /// Removes a page's layer elements (+edit history) and layers before a project restore.
-async fn clear_page_layers(pool: &sqlx::PgPool, page_id: Uuid) {
+///
+/// This uses the caller's transaction so a failed restore leaves the previous editable page
+/// intact instead of committing a half-cleared replacement.
+async fn clear_page_layers(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    page_id: Uuid,
+) -> Result<(), sqlx::Error> {
     sqlx::query(
         "DELETE FROM layer_edit_history WHERE layer_element_id IN (\
              SELECT le.id FROM layer_elements le JOIN layers l ON l.id = le.layer_id WHERE l.page_id = $1)",
     )
     .bind(page_id)
-    .execute(pool)
-    .await
-    .ok();
+    .execute(&mut **tx)
+    .await?;
     sqlx::query(
         "DELETE FROM layer_elements WHERE layer_id IN (SELECT id FROM layers WHERE page_id = $1)",
     )
     .bind(page_id)
-    .execute(pool)
-    .await
-    .ok();
+    .execute(&mut **tx)
+    .await?;
     sqlx::query("DELETE FROM layers WHERE page_id = $1")
         .bind(page_id)
-        .execute(pool)
-        .await
-        .ok();
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
 }
 
 pub async fn insert_image_public(
@@ -1860,11 +2090,26 @@ pub async fn insert_image_public(
     insert_image(pool, filename, storage_path, hash, created_by).await
 }
 
+const PROJECT_SCHEMA_VERSION: u64 = 1;
+
+fn validate_project_schema(project_json: &[u8]) -> Result<(), &'static str> {
+    let root: serde_json::Value =
+        serde_json::from_slice(project_json).map_err(|_| "project.json is not valid JSON")?;
+    match root
+        .get("schemaVersion")
+        .and_then(serde_json::Value::as_u64)
+    {
+        Some(PROJECT_SCHEMA_VERSION) => Ok(()),
+        Some(_) => Err("project.json schemaVersion is unsupported"),
+        None => Err("project.json schemaVersion is required"),
+    }
+}
+
 /// Restores `layers`/`elements` from a project.json; returns counts on success.
 /// `track_manual_edits` stamps the image's last_edited_at when manual edits exist
 /// (the chapters/{id}/import-project behaviour).
 async fn restore_project_layers(
-    state: &AppState,
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     page_id: Uuid,
     project_json: &[u8],
     track_manual_edits: bool,
@@ -1916,7 +2161,7 @@ async fn restore_project_layers(
         .bind(z_order)
         .bind(&metadata_json)
         .bind(page_id)
-        .execute(&state.pool)
+        .execute(&mut **tx)
         .await
         .map_err(|_| ())?;
         imported_layers += 1;
@@ -2039,7 +2284,7 @@ async fn restore_project_layers(
             .bind(is_manually_edited)
             .bind(layer_id)
             .bind(region_id)
-            .execute(&state.pool)
+            .execute(&mut **tx)
             .await
             .map_err(|_| ())?;
             imported_elements += 1;
@@ -2049,19 +2294,44 @@ async fn restore_project_layers(
     if has_manual_edits && track_manual_edits {
         let image_id: Option<Uuid> = sqlx::query_scalar("SELECT image_id FROM pages WHERE id = $1")
             .bind(page_id)
-            .fetch_optional(&state.pool)
+            .fetch_optional(&mut **tx)
             .await
             .ok()
             .flatten();
         if let Some(image_id) = image_id {
             let _ = sqlx::query("UPDATE images SET last_edited_at = now() WHERE id = $1")
                 .bind(image_id)
-                .execute(&state.pool)
+                .execute(&mut **tx)
                 .await;
         }
     }
 
     Ok((imported_layers, imported_elements))
+}
+
+async fn restore_project_page(
+    state: &AppState,
+    page_id: Uuid,
+    project_json: &[u8],
+    track_manual_edits: bool,
+    replacement_image_id: Option<Uuid>,
+) -> Result<(usize, usize), ()> {
+    let mut tx = state.pool.begin().await.map_err(|_| ())?;
+    clear_page_layers(&mut tx, page_id).await.map_err(|_| ())?;
+    if let Some(image_id) = replacement_image_id {
+        sqlx::query("UPDATE pages SET image_id = $2 WHERE id = $1")
+            .bind(page_id)
+            .bind(image_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| ())?;
+    }
+    let counts = restore_project_layers(&mut tx, page_id, project_json, track_manual_edits).await?;
+    crate::page_freshness::advance_page_revision(&mut tx, page_id)
+        .await
+        .map_err(|_| ())?;
+    tx.commit().await.map_err(|_| ())?;
+    Ok(counts)
 }
 
 /// POST /api/chapters/{chapterId}/import-project — restore a page-level project export
@@ -2147,6 +2417,9 @@ pub async fn import_project(
             .into_response();
     };
 
+    if let Err(message) = validate_project_schema(&project_bytes) {
+        return error::bad_request(message, INSTANCE);
+    }
     let page_count: i32 =
         sqlx::query_scalar("SELECT COUNT(*)::int FROM pages WHERE chapter_id = $1")
             .bind(chapter_id)
@@ -2155,11 +2428,11 @@ pub async fn import_project(
             .unwrap_or(0);
     let page_number = page_count + 1;
 
-    // Slot occupied? Replace its contents; otherwise create a fresh page at that slot.
+    let mut replacement_image_id = None;
     let existing_page = page_at_slot(&state.pool, chapter_id, page_number).await;
     let page = match &existing_page {
         Some(existing_page) => {
-            clear_page_layers(&state.pool, existing_page.id).await;
+            // Replacement of editable layers is committed atomically with its revision below.
             if let Some((original_name, original_bytes)) = original {
                 let file_hash = hex::encode(sha2::Sha256::digest(&original_bytes));
                 let old_hash_matches = sqlx::query_scalar::<_, Option<String>>(
@@ -2215,15 +2488,7 @@ pub async fn import_project(
                             created.id
                         }
                     };
-                    sqlx::query("UPDATE pages SET image_id=$2 WHERE id=$1")
-                        .bind(existing_page.id)
-                        .bind(new_image_id)
-                        .execute(&state.pool)
-                        .await
-                        .expect("image swap");
-                    if existing_page.page_number == 1 {
-                        recalculate_chapter_cover(&state.pool, chapter_id).await;
-                    }
+                    replacement_image_id = Some(new_image_id);
                 }
             }
             page_at_slot(&state.pool, chapter_id, existing_page.page_number)
@@ -2277,21 +2542,20 @@ pub async fn import_project(
         }
     };
 
-    match restore_project_layers(&state, page.id, &project_bytes, true).await {
+    match restore_project_page(&state, page.id, &project_bytes, true, replacement_image_id).await {
         Ok((layers_count, elements_count)) => {
             tracing::info!(
                 "Successfully imported project ZIP to chapter {chapter_id}: {layers_count} layers and {elements_count} elements imported."
             );
+            if replacement_image_id.is_some() && page.page_number == 1 {
+                recalculate_chapter_cover(&state.pool, chapter_id).await;
+            }
             Json(json!({
                 "status": "success",
                 "pageId": page.id.to_string(),
             }))
             .into_response()
         }
-        Err(()) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "message": "failed to restore project layers" })),
-        )
-            .into_response(),
+        Err(_) => error::internal_error(INSTANCE),
     }
 }

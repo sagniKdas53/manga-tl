@@ -12,6 +12,7 @@
 //!   * trace ids: `pipeline:trace:{imageId}` with a 12h TTL refreshed on every enqueue.
 
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -314,6 +315,17 @@ pub async fn start_pipeline(
 /// own single-statement insert has committed (each handler-level transaction wraps the
 /// CALLER's writes; the job row itself commits atomically inside this function).
 #[allow(clippy::too_many_arguments)]
+/// The immutable-render ledger row an enqueue must write between the `jobs` insert and the
+/// Redis push. `page_render_jobs.job_id` references `jobs.id` (not deferrable), so the row cannot
+/// exist before the job; and the worker may call back within seconds of the push, so it cannot
+/// be written after it either. E04's transport wrote it first and would have failed the foreign
+/// key on every queued render — found on the first live run of tracker R1.
+pub struct RenderLedger {
+    pub page_id: Uuid,
+    pub page_revision: i32,
+    pub logical_scene_sha256: String,
+}
+
 pub async fn enqueue_job_directly(
     state: &AppState,
     job_type: &str,
@@ -323,6 +335,25 @@ pub async fn enqueue_job_directly(
     priority: &str,
     customize: impl FnOnce(&mut serde_json::Map<String, Value>),
 ) {
+    enqueue_job_with_ledger(
+        state, job_type, image_id, page_id, chapter_id, priority, customize, None,
+    )
+    .await;
+}
+
+/// `enqueue_job_directly` plus an immutable-render ledger row for the same job id. Returns
+/// whether the job (and its ledger row) were persisted.
+#[allow(clippy::too_many_arguments)]
+pub async fn enqueue_job_with_ledger(
+    state: &AppState,
+    job_type: &str,
+    image_id: Uuid,
+    page_id: Option<Uuid>,
+    chapter_id: Option<Uuid>,
+    priority: &str,
+    customize: impl FnOnce(&mut serde_json::Map<String, Value>),
+    ledger: Option<RenderLedger>,
+) -> bool {
     // Trace id: read or create, refreshing the TTL on every hand-off (AUDIT-P8).
     let trace_id = match &state.redis {
         Some(redis) => match redis.get(&format!("pipeline:trace:{image_id}")).await {
@@ -577,7 +608,13 @@ pub async fn enqueue_job_directly(
     );
 
     customize(&mut job);
-
+    // Immutable render scheduling reserves its database job ID before constructing this
+    // generic payload. Other callers retain the freshly generated ID above.
+    let job_row_id = job
+        .get("jobId")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .unwrap_or(job_row_id);
     let payload = Value::Object(job).to_string();
 
     let inserted: Result<(), sqlx::Error> = async {
@@ -597,6 +634,19 @@ pub async fn enqueue_job_directly(
         .bind(&payload)
         .execute(&state.pool)
         .await?;
+        if let Some(ledger) = &ledger {
+            sqlx::query(
+                "INSERT INTO page_render_jobs \
+                 (job_id, page_id, page_revision, logical_scene_sha256, status) \
+                 VALUES ($1, $2, $3, $4, 'queued')",
+            )
+            .bind(&job_row_id)
+            .bind(ledger.page_id)
+            .bind(ledger.page_revision)
+            .bind(&ledger.logical_scene_sha256)
+            .execute(&state.pool)
+            .await?;
+        }
         Ok(())
     }
     .await;
@@ -629,8 +679,12 @@ pub async fn enqueue_job_directly(
                 )
                 .await;
             push_persisted_job_if_queue_running(state, &job_row_id, job_type, &payload).await;
+            true
         }
-        Err(err) => tracing::error!("Failed to enqueue {job_type} job for image {image_id}: {err}"),
+        Err(err) => {
+            tracing::error!("Failed to enqueue {job_type} job for image {image_id}: {err}");
+            false
+        }
     }
 }
 
@@ -937,6 +991,59 @@ pub async fn handle_panel_callback(state: &AppState, dto: &Value) -> Result<(), 
     Ok(())
 }
 
+/// Deletes every OCR region on the page and everything that references one. See the note at
+/// the call site in `handle_ocr_callback`.
+async fn purge_page_regions(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    page_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "DELETE FROM layer_edit_history WHERE layer_element_id IN ( \
+             SELECT le.id FROM layer_elements le \
+             JOIN ocr_regions r ON r.id = le.region_id WHERE r.page_id = $1)",
+    )
+    .bind(page_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "DELETE FROM layer_elements WHERE region_id IN (SELECT id FROM ocr_regions WHERE page_id = $1)",
+    )
+    .bind(page_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "DELETE FROM conversation_regions WHERE region_id IN (SELECT id FROM ocr_regions WHERE page_id = $1)",
+    )
+    .bind(page_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "DELETE FROM translation_regions WHERE region_id IN (SELECT id FROM ocr_regions WHERE page_id = $1)",
+    )
+    .bind(page_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query("DELETE FROM ocr_regions WHERE page_id = $1")
+        .bind(page_id)
+        .execute(&mut **tx)
+        .await?;
+    sqlx::query(
+        "DELETE FROM conversations WHERE page_id = $1 \
+         AND NOT EXISTS (SELECT 1 FROM conversation_regions cr WHERE cr.conversation_id = conversations.id)",
+    )
+    .bind(page_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "DELETE FROM layers WHERE page_id = $1 \
+         AND NOT EXISTS (SELECT 1 FROM layer_elements le WHERE le.layer_id = layers.id)",
+    )
+    .bind(page_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), String> {
     let image_id = extract_uuid(dto, "imageId").ok_or("imageId missing")?;
     tracing::info!(
@@ -1041,6 +1148,17 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
 
     // One transaction around the whole result application (Java @Transactional).
     let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+
+    // A fresh OCR pass replaces the page's regions. The Java port kept every pass's rows and only
+    // hid the old OCR *layer*, but `ocr_regions` has no pass column: every consumer selects
+    // `WHERE page_id = $1`, so each rerun doubled what translation was charged for and what the
+    // scene drew. sample61 in the 2026-09-17 evidence had 214 rows for 63 distinct boxes and cost
+    // US$0.25 for one page. Elements, conversation links and translation rows that hang off the
+    // superseded regions go with them; layers left with no elements go too, so a re-OCR'd page
+    // does not keep empty shells. Manual elements (no region) survive. Tracker R1.
+    purge_page_regions(&mut tx, page.id)
+        .await
+        .map_err(|e| format!("could not replace regions for page {}: {e}", page.id))?;
     for r in &regions {
         let rx = r.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
         let ry = r.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
@@ -1052,9 +1170,9 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
         sqlx::query(
             "INSERT INTO ocr_regions (id, text, detected_language, confidence, ocr_score, rotation, \
              bbox_x, bbox_y, bbox_w, bbox_h, panel_reading_order, bubble_reading_order, background_color, \
-             bubble_x, bubble_y, bubble_w, bubble_h, bubble_id, detection_confidence, mask_polygon, \
+             bubble_x, bubble_y, bubble_w, bubble_h, bubble_id, detection_confidence, mask_polygon, ownership_provenance, \
              safe_text_x, safe_text_y, safe_text_w, safe_text_h, page_id, panel_id) \
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)",
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)",
         )
         .bind(region_id)
         .bind(r.get("text").and_then(|v| v.as_str()))
@@ -1076,6 +1194,7 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
         .bind(r.get("bubbleId").and_then(|v| v.as_str()))
         .bind(r.get("detectionConfidence").and_then(|v| v.as_f64()))
         .bind(mask_polygon_value(r.get("maskPolygon")))
+        .bind(r.get("ownershipProvenance").cloned())
         .bind(r.get("safeTextX").and_then(|v| v.as_i64()).map(|v| v as i32))
         .bind(r.get("safeTextY").and_then(|v| v.as_i64()).map(|v| v as i32))
         .bind(r.get("safeTextW").and_then(|v| v.as_i64()).map(|v| v as i32))
@@ -2010,7 +2129,11 @@ pub async fn handle_translation_callback(
                 .bind(!failed)
                 .bind(&region.background_color)
                 .bind(contrasting_text_color(region.background_color.as_deref()))
-                .bind(if region.region_type.as_deref().unwrap_or("").eq_ignore_ascii_case("speech") {
+                // AUDIT-R19 (tracker R2): the shape says what was *found*, not what the layout
+                // classifier guessed. A detected container -- YOLO balloon or a contour the
+                // fallback found -- is elliptical/contour-based; free-standing text, whose only
+                // geometry is its bbox, is a rectangle, whatever `region_type` says.
+                .bind(if has_detected_bubble(region) {
                     "elliptical"
                 } else {
                     "rectangular"
@@ -2034,19 +2157,52 @@ pub async fn handle_translation_callback(
             (None, None) => {}
         }
     }
+    // The layer edits and the revision they produce commit together (page_freshness), then the
+    // render is queued from that snapshot. A page-less image has nothing to snapshot and gets no
+    // render: there is no Pillow path to fall back to any more (tracker R1).
+    let Some(page) = page.as_ref() else {
+        tx.commit().await.map_err(|e| e.to_string())?;
+        tracing::warn!("translation callback for image {image_id} has no page; nothing to render");
+        return Ok(());
+    };
+    let snapshot =
+        crate::page_scene_builder::snapshot_pipeline_scene(state, &mut tx, page.id).await;
     tx.commit().await.map_err(|e| e.to_string())?;
-
-    enqueue_job_directly(
-        state,
-        "render",
-        image_id,
-        page.map(|p| p.id),
-        None,
-        "normal",
-        |_| {},
-    )
-    .await;
+    match snapshot {
+        Ok(_) => enqueue_snapshot_render(state, page.id, json!({})).await,
+        Err(err) => tracing::error!(
+            "Could not snapshot page {} after translation: {err}",
+            page.id
+        ),
+    }
     Ok(())
+}
+
+/// Queues an immutable render of the page's current snapshot with the given job flags, logging
+/// rather than failing the callback when the queue refuses: the snapshot is already committed and
+/// the debounce poller will pick the page up.
+async fn enqueue_snapshot_render(state: &AppState, page_id: Uuid, flags: Value) {
+    let page: Option<Page> = sqlx::query_as("SELECT * FROM pages WHERE id = $1")
+        .bind(page_id)
+        .fetch_optional(&state.pool)
+        .await
+        .unwrap_or(None);
+    let Some(page) = page else {
+        tracing::error!("Cannot queue render: page {page_id} vanished after its snapshot");
+        return;
+    };
+    let extra = flags.as_object().cloned().unwrap_or_default();
+    match crate::jobs::recovery::enqueue_current_snapshot_render(state, &page, extra).await {
+        Ok(true) => tracing::info!(
+            "Queued immutable render for page {page_id} revision {}",
+            page.scene_revision
+        ),
+        Ok(false) => tracing::info!(
+            "Page {page_id} revision {} already has a render queued or done; not re-queuing",
+            page.scene_revision
+        ),
+        Err(err) => tracing::error!("Could not queue render for page {page_id}: {err}"),
+    }
 }
 
 fn falsy(value: &Value) -> bool {
@@ -2072,10 +2228,43 @@ async fn enqueue_final_pass_render(
     completes_pipeline: bool,
 ) {
     tracing::info!("QA changed layers for image {image_id}; re-rendering so the export matches");
-    enqueue_job_directly(state, "render", image_id, page_id, None, "normal", |job| {
-        job.insert("finalPass".into(), json!(true));
-        job.insert("completesPipeline".into(), json!(completes_pipeline));
-    })
+    let page_id = match page_id {
+        Some(id) => Some(id),
+        None => sqlx::query_scalar::<_, Uuid>("SELECT id FROM pages WHERE image_id = $1 LIMIT 1")
+            .bind(image_id)
+            .fetch_optional(&state.pool)
+            .await
+            .unwrap_or(None),
+    };
+    let Some(page_id) = page_id else {
+        tracing::error!("QA final-pass render for image {image_id}: no page to snapshot");
+        return;
+    };
+    // QA's layer edits were committed by their own routes; snapshot what is there now.
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(err) => {
+            tracing::error!(
+                "Could not open transaction for final-pass snapshot of {page_id}: {err}"
+            );
+            return;
+        }
+    };
+    let snapshot =
+        crate::page_scene_builder::snapshot_pipeline_scene(state, &mut tx, page_id).await;
+    if let Err(err) = snapshot {
+        tracing::error!("Could not snapshot page {page_id} for QA final pass: {err}");
+        return;
+    }
+    if let Err(err) = tx.commit().await {
+        tracing::error!("Could not commit final-pass snapshot of {page_id}: {err}");
+        return;
+    }
+    enqueue_snapshot_render(
+        state,
+        page_id,
+        json!({ "finalPass": true, "completesPipeline": completes_pipeline }),
+    )
     .await;
 }
 
@@ -2102,20 +2291,181 @@ async fn final_pass_flags(state: &AppState, job_id: Option<&str>) -> (bool, bool
     (flag("finalPass"), flag("completesPipeline"))
 }
 
-/// Render callback: stamp pages rendered, skip QA when manual edits exist, else queue QA.
+/// Result of applying a render callback.
 ///
-/// Returns `true` when this render is the one that finishes the page — QA's `finalPass` on a
-/// terminal pass. The caller emits "Page Processing Complete" off that, so the claim is made when
-/// the artifact actually matches the layers rather than one render job earlier.
+/// `artifact_current` is deliberately separate from pipeline completion: an old callback may be
+/// valid for its job but must never make a newer revision appear rendered.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RenderCallbackOutcome {
+    pub completes_pipeline: bool,
+    pub artifact_current: bool,
+}
+
+/// Immutable storage path for one render result. The output hash makes retries append-only even
+/// when a renderer produces different bytes for the same logical input.
+pub fn rendered_artifact_path(
+    page_id: Uuid,
+    revision: i32,
+    logical_scene_sha256: &str,
+    rendered_png_sha256: &str,
+) -> String {
+    format!(
+        "rendered/revisions/{page_id}/{revision}/{logical_scene_sha256}/{rendered_png_sha256}.png"
+    )
+}
+
+/// Render callback: copy a render result into immutable storage, then advance the current pointer
+/// only when the job's revision and logical digest still equal the page's current snapshot.
+///
+/// A missing ledger is an old pipeline callback. It can still drive its legacy QA flow, but it
+/// cannot stamp an image or page rendered because it has no immutable input/output identity.
+/// `(layer_element id, font px)` for every `text-<uuid>` object in a renderer layout array
+/// (`[{object_id, font_size, lines: [...]}, ...]`, see services/page-renderer static-entry).
+pub fn resolved_font_sizes(layout: &Value) -> Vec<(Uuid, f64)> {
+    layout
+        .as_array()
+        .map(|objects| {
+            objects
+                .iter()
+                .filter_map(|object| {
+                    let id = object
+                        .get("object_id")
+                        .or_else(|| object.get("objectId"))
+                        .and_then(Value::as_str)?
+                        .strip_prefix("text-")?;
+                    let font_size = object
+                        .get("font_size")
+                        .or_else(|| object.get("fontSize"))
+                        .and_then(Value::as_f64)
+                        .filter(|px| px.is_finite() && *px > 0.0)?;
+                    Some((Uuid::parse_str(id).ok()?, font_size))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 pub async fn handle_render_callback(
     state: &AppState,
     job_id: Option<&str>,
     image_id: Uuid,
     page_id: Option<Uuid>,
-) -> Result<bool, String> {
-    if !claim_callback(state, job_id, image_id, "render").await {
-        return Ok(false);
+    diagnostics: Value,
+    layout: Value,
+) -> Result<RenderCallbackOutcome, String> {
+    let ledger: Option<(Uuid, i32, String)> = match job_id.filter(|id| !id.is_empty()) {
+        Some(job_id) => sqlx::query_as(
+            "SELECT page_id, page_revision, logical_scene_sha256 \
+             FROM page_render_jobs WHERE job_id = $1",
+        )
+        .bind(job_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|err| err.to_string())?,
+        None => None,
+    };
+
+    let artifact = if let Some((ledger_page_id, revision, logical_scene_sha256)) = &ledger {
+        if page_id.is_some_and(|reported| reported != *ledger_page_id) {
+            return Err(format!(
+                "render job belongs to page {ledger_page_id}, not reported page {}",
+                page_id.unwrap()
+            ));
+        }
+        let source_path = format!("rendered/{image_id}.png");
+        let bytes = state
+            .storage
+            .download_bytes(&source_path)
+            .await
+            .ok_or_else(|| {
+                format!(
+                    "render callback has no output at {source_path}; callback remains retryable"
+                )
+            })?;
+        let rendered_png_sha256 = hex::encode(Sha256::digest(&bytes));
+        let storage_path = rendered_artifact_path(
+            *ledger_page_id,
+            *revision,
+            logical_scene_sha256,
+            &rendered_png_sha256,
+        );
+        if !state.storage.exists(&storage_path).await {
+            state
+                .storage
+                .upload_bytes(&storage_path, bytes, "image/png")
+                .await
+                .map_err(|err| err.to_string())?;
+        }
+        Some((storage_path, rendered_png_sha256))
+    } else {
+        None
+    };
+
+    let mut tx = state.pool.begin().await.map_err(|err| err.to_string())?;
+    if !claim_callback_tx(&mut tx, job_id, image_id, "render")
+        .await
+        .map_err(|err| err.to_string())?
+    {
+        tx.rollback().await.map_err(|err| err.to_string())?;
+        return Ok(RenderCallbackOutcome::default());
     }
+
+    let mut artifact_current = false;
+    if let (
+        Some((ledger_page_id, revision, logical_scene_sha256)),
+        Some((storage_path, png_sha256)),
+    ) = (ledger, artifact)
+    {
+        let persisted = sqlx::query(
+            "UPDATE page_render_jobs \
+             SET rendered_png_sha256 = $2, rendered_png_storage_path = $3, diagnostics_json = $4, \
+                 layout_json = $5, status = 'succeeded', completed_at = now() \
+             WHERE job_id = $1 AND status IN ('queued', 'running')",
+        )
+        .bind(job_id.expect("ledger requires job id"))
+        .bind(&png_sha256)
+        .bind(&storage_path)
+        .bind(&diagnostics)
+        .bind(&layout)
+        .execute(&mut *tx)
+        .await
+        .map_err(|err| err.to_string())?;
+
+        if persisted.rows_affected() > 0 {
+            // Tracker R2 (c): the resolved font px goes back onto the element it was fitted for,
+            // so the export's project.json (and the R4 harness's `ours font px` column) carries
+            // what the page was actually set in. Only auto-sized elements: a size the user typed
+            // is theirs. Line breaks stay in the ledger's layout_json with the rest of the layout.
+            for (element_id, font_size) in resolved_font_sizes(&layout) {
+                sqlx::query(
+                    "UPDATE layer_elements SET size = $2 \
+                     WHERE id = $1 AND COALESCE(auto_size, TRUE) = TRUE",
+                )
+                .bind(element_id)
+                .bind(font_size)
+                .execute(&mut *tx)
+                .await
+                .map_err(|err| err.to_string())?;
+            }
+            let pointer = sqlx::query(
+                "UPDATE pages SET current_render_job_id = $1, last_rendered_at = now() \
+                 WHERE id = $2 AND scene_revision = $3 \
+                   AND EXISTS ( \
+                     SELECT 1 FROM page_scene_snapshots \
+                     WHERE page_id = $2 AND revision = $3 AND logical_scene_sha256 = $4 \
+                   )",
+            )
+            .bind(job_id.expect("ledger requires job id"))
+            .bind(ledger_page_id)
+            .bind(revision)
+            .bind(logical_scene_sha256)
+            .execute(&mut *tx)
+            .await
+            .map_err(|err| err.to_string())?;
+            artifact_current = pointer.rows_affected() > 0;
+        }
+    }
+    tx.commit().await.map_err(|err| err.to_string())?;
 
     let pages: Vec<Page> = match page_id {
         Some(page_id) => sqlx::query_as("SELECT * FROM pages WHERE id = $1")
@@ -2132,14 +2482,6 @@ pub async fn handle_render_callback(
             .map_err(|e| e.to_string())?,
     };
 
-    for page in &pages {
-        sqlx::query("UPDATE pages SET last_rendered_at = now() WHERE id = $1")
-            .bind(page.id)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| e.to_string())?;
-    }
-
     let mut manual_changes_done = false;
     for page in &pages {
         let count: i64 = sqlx::query_scalar(
@@ -2155,9 +2497,6 @@ pub async fn handle_render_callback(
         }
     }
 
-    // AUDIT-B12: a render QA itself asked for must not queue QA again — that is a render/QA loop
-    // with no ceiling. The flag rides on the job payload rather than on Redis so it cannot be lost
-    // to an eviction and leave the loop live.
     let (is_final_pass, completes_pipeline) = final_pass_flags(state, job_id).await;
     if is_final_pass {
         tracing::info!(
@@ -2190,7 +2529,10 @@ pub async fn handle_render_callback(
         )
         .await;
     }
-    Ok(is_final_pass && completes_pipeline)
+    Ok(RenderCallbackOutcome {
+        completes_pipeline: is_final_pass && completes_pipeline && artifact_current,
+        artifact_current,
+    })
 }
 
 /// QA retries are counted per PAGE when known (two chapters sharing a duplicated image
@@ -2291,12 +2633,15 @@ pub async fn handle_qa_re_ocr_callback(
 
 /// Hybrid QA first pass (LLM): apply direct fixes / SFX rejections, then fix layer
 /// visibility so exactly the newest translation layer shows.
+/// Applies the LLM first pass's fixes and layer visibility, then snapshots the page and returns
+/// the immutable render payload the worker draws through the browser renderer for its VLM check.
+/// `None` when the image has no page (nothing to render).
 pub async fn prepare_hybrid_qa(
     state: &AppState,
     image_id: Uuid,
     callback_page_id: Option<Uuid>,
     qa_results: &[Value],
-) -> Result<(), String> {
+) -> Result<Option<Value>, String> {
     tracing::info!(
         "Preparing hybrid QA for image: {image_id} with {} LLM first pass results",
         qa_results.len()
@@ -2304,7 +2649,7 @@ pub async fn prepare_hybrid_qa(
 
     let hybrid_page = resolve_page_for_callback(&state.pool, image_id, callback_page_id).await;
     let Some(page) = &hybrid_page else {
-        return Ok(());
+        return Ok(None);
     };
 
     // Latest translation layer by z_order (Java compared zOrder for the same purpose).
@@ -2411,7 +2756,9 @@ pub async fn prepare_hybrid_qa(
                 .await;
         }
     }
-    Ok(())
+    crate::page_scene_builder::snapshot_render_payload(state, page.id, image_id)
+        .await
+        .map(Some)
 }
 
 /// Picks the single translation layer QA may change for this region.
@@ -3434,6 +3781,26 @@ pub async fn handle_qa_callback(
 // ---------------------------------------------------------------------------
 // TextBoxForTest port — pure geometry, no database.
 // ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod render_layout_tests {
+    use super::*;
+
+    #[test]
+    fn resolved_font_sizes_reads_text_objects_in_either_case() {
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let layout = serde_json::json!([
+            { "object_id": format!("text-{a}"), "font_size": 31.5, "lines": ["one", "two"] },
+            { "objectId": format!("text-{b}"), "fontSize": 20 },
+            { "object_id": "manual-not-a-text-object", "font_size": 12 },
+            { "object_id": format!("text-{}", Uuid::new_v4()), "font_size": 0 },
+            { "object_id": format!("text-{}", Uuid::new_v4()) },
+        ]);
+        assert_eq!(resolved_font_sizes(&layout), vec![(a, 31.5), (b, 20.0)]);
+        assert!(resolved_font_sizes(&serde_json::json!({})).is_empty());
+    }
+}
 
 #[cfg(test)]
 mod textbox_tests {

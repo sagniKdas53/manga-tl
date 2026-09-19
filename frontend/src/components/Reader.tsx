@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useMemo,
-} from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type {
   User,
@@ -30,7 +24,7 @@ import {
   ensureFontsLoaded,
 } from "../utils/fitText";
 import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
-import { hasDetectedBubble, paintLayerMask } from "../utils/maskPaint";
+import { paintLayerMask } from "../utils/maskPaint";
 import {
   DEFAULT_TEXT_BOX_INSET,
   textFitBox,
@@ -314,12 +308,6 @@ export const Reader: React.FC<ReaderProps> = ({
   // Reader States
   const [panels, setPanels] = useState<Panel[]>([]);
   const [ocrRegions, setOcrRegions] = useState<OcrRegion[]>([]);
-  // Erasure needs to know which regions have no balloon, so their text box can be
-  // erased alongside their mask; see `paintLayerMask`.
-  const regionsById = useMemo(
-    () => new Map(ocrRegions.map((r) => [r.id, r])),
-    [ocrRegions],
-  );
   const [imageDims, setImageDims] = useState({ w: 800, h: 1200 });
   // True once the server has told us the original size, which makes the displayed image's
   // naturalWidth irrelevant. Kept in a ref because handleImgLoad reads it outside React's flow.
@@ -2406,132 +2394,44 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // --- EXPORT HANDLERS ---
   const handleExportPng = useCallback(() => {
-    if (!selectedPage || !imgRef.current) return;
+    if (!selectedPage) return;
 
+    // Tracker R1 (2026-09-17): the exported PNG is the page's current immutable render artifact —
+    // the same pixels the browser renderer drew for QA — not a Canvas re-drawing of the layers.
+    // Until then this function was a third typography implementation; see
+    // docs/output-quality-architecture-decisions.md §1a. A page whose current revision has no
+    // finished render is reported as such rather than exported from something else.
     const doExport = async () => {
-      // Never `imgRef.current`: that element shows the lossy reading variant, so exporting from
-      // it would silently bake a re-encode into the output. Export always starts from /file.
-      const img = await loadOriginalImage(selectedPage.url, user.token);
-      const W = imageDims.w;
-      const H = imageDims.h;
-
-      const canvas = document.createElement("canvas");
-      canvas.width = W;
-      canvas.height = H;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      // Canvas fillText never triggers a web font load itself -- without this, an export run
-      // before the page's own DOM text has already loaded "Comic Neue" silently falls back to
-      // sans-serif (see ensureFontsLoaded).
-      await ensureFontsLoaded(sortedLayers.flatMap((l) => l.elements));
-
-      // Draw the base page image
-      ctx.drawImage(img, 0, 0, W, H);
-
-      // Draw visible layer elements
-      sortedLayers.forEach((lData) => {
-        if (!lData.layer.visible || !isExportableLayer(lData.layer)) return;
-        // Masks for the whole layer first, then text. Painting mask-then-text per element
-        // let a later element's mask paint over an earlier element's already-drawn
-        // translation -- measured on 39 % of exported pages, and on the worst of them a
-        // bubble's text was covered completely. The masks go onto their own transparent
-        // canvas because paintLayerMask composites with `destination-over`, which would
-        // otherwise put them behind the page artwork drawn above.
-        const layerMaskCanvas = document.createElement("canvas");
-        layerMaskCanvas.width = W;
-        layerMaskCanvas.height = H;
-        const layerMaskCtx = layerMaskCanvas.getContext("2d");
-        if (layerMaskCtx) {
-          paintLayerMask(layerMaskCtx, lData.elements, regionsById);
-          ctx.drawImage(layerMaskCanvas, 0, 0);
-        }
-
-        lData.elements.forEach((el) => {
-          if (!el.visible) return;
-          const width = el.maxWidth || 100;
-          const height = el.maxHeight || 100;
-
-          // AUDIT-R5: the angle applies to the glyphs whether or not the element has a mask
-          // polygon. The old `if (!el.maskPolygon)` guard skipped rotation in exactly the case
-          // where the user had rotated something — the rotation handle only exists in reshape
-          // mode, which requires a polygon — so the plate turned and the text stayed level.
-          ctx.save();
-          if (el.rotation) {
-            const cx = el.x + width / 2;
-            const cy = el.y + height / 2;
-            ctx.translate(cx, cy);
-            ctx.rotate((el.rotation * Math.PI) / 180);
-            ctx.translate(-cx, -cy);
-          }
-
-          // Draw text
-          let displayText = el.text || "";
-          if (el.boxShape === "elliptical") {
-            displayText = displayText.toUpperCase();
-          }
-
-          // AUDIT-R1: one definition of the fitted rectangle, shared with render.py.
-          const fitBox = textFitBox(
-            { x: el.x, y: el.y, width, height },
-            textBoxInset,
-          );
-          const fit = fitTextInBox(
-            displayText,
-            fitBox.width,
-            fitBox.height,
-            el.font || "Comic Neue",
-            el.size || 16,
-            el.boxShape === "elliptical" ? "elliptical" : "rectangular",
-            fitBox.x,
-            fitBox.y,
-            el.maskPolygon,
-            el.fontWeight || "bold",
-            el.fontStyle || "normal",
-          );
-          const fSize = fit.fontSize;
-          ctx.font = `${el.fontWeight || "bold"} ${el.fontStyle === "italic" ? "italic " : ""}${fSize}px "${el.font || "Comic Neue"}", sans-serif`;
-          ctx.fillStyle = el.textColor || "#000000";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          const lineH = fSize * 1.2;
-          const startY =
-            el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
-          fit.lines.forEach((line, i) => {
-            const lineCenterX =
-              fit.lineCenters && fit.lineCenters.at(i) !== undefined
-                ? (fit.lineCenters.at(i) ?? el.x + width / 2)
-                : el.x + width / 2;
-            ctx.fillText(
-              line,
-              clampLineCenter(
-                lineCenterX,
-                ctx.measureText(line).width,
-                el.x,
-                width,
-              ),
-              startY + i * lineH,
-            );
-          });
-
-          ctx.restore();
-        });
+      const res = await safeFetch(`/api/pages/${selectedPage.id}/rendered`, {
+        headers: { Authorization: `Bearer ${user.token}` },
       });
-
-      // Trigger download
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `page-${selectedPage.pageNumber}-export.png`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }, "image/png");
+      if (res.status === 409) {
+        const body = (await res.json().catch(() => ({}))) as {
+          status?: string;
+          revision?: number;
+        };
+        showToast(
+          body.status === "failed"
+            ? `The render for revision ${body.revision ?? "?"} failed; fix the page and it will re-render.`
+            : "This page's render is still pending; try again in a few seconds.",
+          "error",
+        );
+        return;
+      }
+      if (!res.ok) {
+        throw new Error(
+          `Rendered artifact request failed with status ${res.status}`,
+        );
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `page-${selectedPage.pageNumber}-export.png`;
+      a.click();
+      URL.revokeObjectURL(url);
     };
 
-    // doExport is async now that it fetches the original, and the call sites below are not
-    // awaited — without this a failed fetch would surface as an unhandled rejection.
     const runExport = () => {
       doExport().catch((err) => {
         console.error("Export failed:", err);
@@ -2565,40 +2465,7 @@ export const Reader: React.FC<ReaderProps> = ({
     } else {
       runExport();
     }
-  }, [
-    selectedPage,
-    user,
-    imageDims,
-    // AUDIT-R1: an export must use the inset in force now, not the one captured when this
-    // callback was last built, or a settings change would apply to the reader and not the file.
-    textBoxInset,
-    regionsById,
-    sortedLayers,
-    dirtyElements,
-    saveAllPendingChanges,
-  ]);
-
-  const handleExportRenderedPng = useCallback(async () => {
-    if (!selectedPage || !user?.token) return;
-    try {
-      const res = await safeFetch(`/api/pages/${selectedPage.id}/rendered`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-      if (!res.ok) throw new Error("Failed to export rendered PNG");
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `page-${selectedPage.pageNumber}-rendered.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("Export rendered PNG failed:", err);
-      // Optional: showError("Failed to export rendered PNG");
-    }
-  }, [selectedPage, user]);
+  }, [selectedPage, user, dirtyElements, saveAllPendingChanges, showToast]);
 
   const handleExportZip = useCallback(async () => {
     if (!selectedPage || !imgRef.current) return;
@@ -2640,7 +2507,7 @@ export const Reader: React.FC<ReaderProps> = ({
         maskCanvas.height = H;
         const maskCtx = maskCanvas.getContext("2d")!;
 
-        paintLayerMask(maskCtx, lData.elements, regionsById);
+        paintLayerMask(maskCtx, lData.elements);
 
         const maskBlob = await new Promise<Blob>((res) =>
           maskCanvas.toBlob((b) => res(b!), "image/png"),
@@ -2734,6 +2601,7 @@ export const Reader: React.FC<ReaderProps> = ({
       });
 
       const projectData = {
+        schemaVersion: 1,
         pageNumber: selectedPage.pageNumber,
         imageId: selectedPage.imageId,
         dimensions: { width: W, height: H },
@@ -2835,7 +2703,6 @@ export const Reader: React.FC<ReaderProps> = ({
     // AUDIT-R1: an export must use the inset in force now, not the one captured when this
     // callback was last built, or a settings change would apply to the reader and not the file.
     textBoxInset,
-    regionsById,
     layers,
     dirtyElements,
     saveAllPendingChanges,
@@ -3734,23 +3601,10 @@ export const Reader: React.FC<ReaderProps> = ({
                                         }
                                         stroke="none"
                                       />
-                                      {/* No balloon: the mask covers the source column, the box
-                                          is where the English goes, and the difference was
-                                          landing on artwork. Same rule as paintLayerMask. */}
-                                      {relatedRegion &&
-                                        !hasDetectedBubble(relatedRegion) && (
-                                          <rect
-                                            x={element.x}
-                                            y={element.y}
-                                            width={width}
-                                            height={height}
-                                            fill={
-                                              element.backgroundColor ||
-                                              "#ffffff"
-                                            }
-                                            stroke="none"
-                                          />
-                                        )}
+                                      {/* Tracker R2: the polygon is the whole plate. The box
+                                          fill that used to follow it for free-standing text was
+                                          the flat slab on the artwork. Same rule as
+                                          paintLayerMask. */}
                                     </>
                                   );
                                 }
@@ -3759,7 +3613,8 @@ export const Reader: React.FC<ReaderProps> = ({
                               }
                               return null;
                             })()
-                          ) : element.boxShape === "elliptical" ? (
+                          ) : element.regionId ? null : element.boxShape === // R2: pipeline free text without a polygon gets no plate
+                            "elliptical" ? (
                             <ellipse
                               cx={cx}
                               cy={cy}
@@ -4098,7 +3953,6 @@ export const Reader: React.FC<ReaderProps> = ({
             handleRedoPageTranslation={handleRedoPageTranslation}
             isRedoingPageTranslation={isRedoingPageTranslation}
             handleExportPng={handleExportPng}
-            handleExportRenderedPng={handleExportRenderedPng}
             handleExportZip={handleExportZip}
             interactionMode={interactionMode}
             setInteractionMode={setInteractionMode}

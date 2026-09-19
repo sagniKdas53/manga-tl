@@ -1,0 +1,9 @@
+{
+  "contract_version": "page-scene/v1",
+  "scene_kind": "resolved",
+  "page": {"page_id": "page-empty", "revision": 0, "source": {"sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "width": 1, "height": 1, "mime_type": "image/png"}},
+  "provenance": {"app_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "worker_commit": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "renderer_commit": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "models": [], "configuration_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "fonts": [], "runtime": {"os": "linux", "architecture": "amd64", "execution_provider": "cpu"}, "timings_ms": {}, "warnings": []},
+  "fragments": [], "owners": [], "policies": [], "assets": [], "cleanup_artifacts": [],
+  "objects": [],
+  "resolved_layout": {"logical_scene_sha256": "2ba3a22ba4ebf8262910baf22be69168e3e8a2a6b1df0a3002a3ea5db005c9fa", "layout_engine_version": "page-scene-layout-v1", "objects": [], "diagnostics": ["no-visible-objects"]}
+}

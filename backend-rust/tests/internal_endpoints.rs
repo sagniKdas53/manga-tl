@@ -175,11 +175,14 @@ async fn seed_pipeline(pool: &sqlx::PgPool) -> (Uuid, Uuid, Uuid, Uuid) {
         .expect("chapter");
 
     let image_id = Uuid::new_v4();
+    // A real-looking SHA-256: the translation callback snapshots the page scene before it queues
+    // the render, and the scene builder refuses an image whose hash is not 64 hex digits.
     sqlx::query(
         "INSERT INTO images (id, created_at, filename, storage_path, hash, width, height) \
-         VALUES ($1, now(), 'probe.png', 'originals/probe.png', 'hash-pipeline', 64, 64)",
+         VALUES ($1, now(), 'probe.png', 'originals/probe.png', $2, 64, 64)",
     )
     .bind(image_id)
+    .bind(format!("{:0>64}", image_id.simple().to_string()))
     .execute(pool)
     .await
     .expect("image");
@@ -363,7 +366,17 @@ async fn full_pipeline_walks_every_stage() {
             {"text": "こんにちは", "detectedLanguage": "ja", "confidence": 0.98, "rotation": null,
              "x": 5, "y": 5, "width": 30, "height": 20, "bubbleReadingOrder": 1,
              "backgroundColor": "#ffffff", "bubbleId": "b1", "detectionConfidence": 0.9,
-             "maskPolygon": "[[0,0],[1,1]]", "safeTextX": 8, "safeTextY": 8, "safeTextW": 24, "safeTextH": 14},
+             "maskPolygon": "[[0,0],[1,1]]", "safeTextX": 8, "safeTextY": 8, "safeTextW": 24, "safeTextH": 14,
+             "ownershipProvenance": {
+                 "id": "fragment-worker-style",
+                 "sourceQuad": [[5,5],[35,5],[35,25],[5,25]],
+                 "sourceStyle": null,
+                 "styleProvenance": "unknown",
+                 "geometry": {
+                     "bbox": {"x": 5.0, "y": 5.0, "width": 30.0, "height": 20.0},
+                     "majorAxisDegrees": 0.0
+                 }
+             }},
             {"text": "さようなら", "detectedLanguage": "ja", "confidence": 0.91, "rotation": 0.0,
              "x": 42, "y": 5, "width": 20, "height": 18, "bubbleReadingOrder": 2,
              "backgroundColor": "#ffffff"}
@@ -386,6 +399,18 @@ async fn full_pipeline_walks_every_stage() {
             .await
             .unwrap();
     assert_eq!(region_count, 2);
+
+    let provenance: serde_json::Value = sqlx::query_scalar(
+        "SELECT ownership_provenance FROM ocr_regions WHERE page_id = $1 AND text = 'こんにちは'",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .expect("worker ownership provenance persisted");
+    assert_eq!(provenance["id"], "fragment-worker-style");
+    assert_eq!(provenance["sourceQuad"][2], serde_json::json!([35, 25]));
+    assert!(provenance["sourceStyle"].is_null());
+    assert_eq!(provenance["styleProvenance"], "unknown");
 
     // Cost recorded.
     let cost_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM job_costs WHERE image_id = $1")
@@ -480,14 +505,36 @@ async fn full_pipeline_walks_every_stage() {
     .unwrap();
     assert_eq!(element_count, 1);
 
-    let render_raw = redis
-        .pop_from_queue("queue:render")
-        .await
-        .unwrap()
-        .expect("render queued");
-    let render_payload: serde_json::Value = serde_json::from_str(&render_raw).unwrap();
+    // `queue:render` outlives this binary: the coordinator_flows suite snapshots and queues
+    // renders it never pops, so the head of the queue may be another page's job. Search for
+    // ours and put back whatever is not (same rule as the region-redo test below).
+    let mut render_payload = None;
+    let mut put_back: Vec<String> = Vec::new();
+    while let Some(raw) = redis.pop_from_queue("queue:render").await.unwrap() {
+        let job: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        if job["pageId"] == page_id.to_string() {
+            render_payload = Some(job);
+            break;
+        }
+        put_back.push(raw);
+    }
+    for raw in put_back {
+        redis.push_to_queue("queue:render", &raw).await.unwrap();
+    }
+    let render_payload = render_payload.expect("render queued");
 
     // --- render callback stamps rendered, queues QA ---
+    // The callback reads the worker's output from storage and files it as the revision's
+    // immutable artifact; without bytes at this path it stays retryable and answers 500.
+    state
+        .storage
+        .upload_bytes(
+            &format!("rendered/{image_id}.png"),
+            b"rendered page".to_vec(),
+            "image/png",
+        )
+        .await
+        .expect("stage render output");
     let render_callback = serde_json::json!({
         "jobId": render_payload["jobId"],
         "imageId": image_id.to_string(),
