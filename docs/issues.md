@@ -1107,6 +1107,10 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   different rectangles, so what looks correct in one is wrong in the other. Do not open this as
   separate work until `AUDIT-R1`/`AUDIT-F16` have landed and the remainder has been re-measured on
   the corpus.
+- **M7 acceptance control, 2026-09-20:** `corpus/gaps/pending/ja/sample700` (page 27 of the user's
+  `manga-quality-r6-20260919` review chapter) — 10 of 11 correctly-masked balloons render with the
+  box sized to the *source* balloon, not the translated text, leaving visible dead space around
+  short English lines. Fresh Torii reference fetched.
 
 ### `AUDIT-R9` (medium): Neighbouring text boxes are allowed to overlap
 
@@ -1123,6 +1127,12 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   this is not an ownership/`AUDIT-R20` case), rendered as 137 px-wide English boxes that overlap
   their neighbour by 44–62 px ("Open your legs." over "Lower your hips more." over "Number 4!").
   Confirms the fix is neighbour-aware width/placement, not per-element fitting alone.
+- **M7 acceptance controls, 2026-09-20:** the page 12 case above is filed as
+  `corpus/gaps/pending/ja/sample698` (fresh Torii reference fetched). Page 18 of the same chapter —
+  `corpus/gaps/pending/ja/sample699`, also filed — shows the same family at much higher region
+  density (35 regions/page), rendering as garbled overlapping captions; not confirmed whether a
+  second cause (the `AUDIT-B25` duplicate hidden layer found on this same page) contributes visually
+  or whether R9 alone explains it.
 
 ### `AUDIT-B25` (medium): A still-running job is stale-recovered and requeued, leaving a duplicate layer behind
 
@@ -1345,6 +1355,15 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Relationship:** this is the same family as [`AUDIT-R8`](#audit-r8-medium-text-under-fills-and-over-runs-its-balloon)
   (under-filled balloons) and does not overlap [`AUDIT-R6`](#audit-r6-medium-there-is-no-vertical-text-mode);
   setting the English vertically would remove the problem and is a different feature.
+- **Open question, 2026-09-20:** `corpus/gaps/pending/ja/sample697` (page 6 of the user's
+  `manga-quality-r6-20260919` review chapter) is a full paragraph in an 87×594px source column —
+  aspect ~6.8, well past anything measured above — and renders as ~20 overlapping one-to-three-word
+  lines directly over the untouched source (no plate; that half is R3). Whether this is the same
+  "flat across every aspect" case this entry measured for full sentences, just not yet measured at
+  this extreme, or a distinct failure, is unconfirmed — not diagnosed further here. Torii's own
+  reference for the same page (`ref-torii.png`) uses a small uniform size with tight line-height and
+  real cleanup underneath rather than widening or squaring the column; worth a look when this gets
+  designed.
 
 ### `AUDIT-R17` (unranked): `shape="rectangular"` is not ignored
 

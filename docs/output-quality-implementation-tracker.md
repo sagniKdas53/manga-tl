@@ -350,6 +350,16 @@ G6 checkpoint: chosen providers with comparison evidence, glyph/support metrics 
 
 ### M7 — match composition and keep objects editable
 
+**Five additional acceptance controls, added 2026-09-20.** From the user's manual review of `manga-quality-r6-20260919` (a fresh upload, series "User-Test", chapter `399bac7e-7d68-4271-941d-d3f9b7361e99`), pages 6/12/18/23/27 each show a fitting defect the R6 gate doesn't cover and R3 alone won't fix. User decision: keep R3 scoped to cleanup only (`AUDIT-R9`/`R8`/`R16` stay in M7 as already planned, not pulled forward) — but gate M7 acceptance against these five pages specifically, not just the existing six/24. Page 23 is byte-identical to the existing `corpus/samples/ja/sample76` (pixiv:128208398, already has a Torii ref). Pages 6/12/18/27 are filed as `corpus/gaps/pending/ja/sample697`–`sample700`, each now with a fresh Torii reference (`gpt-5.6-luna`, BYOK openrouter, 1 credit flat each). Not yet promoted to `corpus/samples/`.
+
+| Page | Sample | Defect | Torii comparison |
+| --- | --- | --- | --- |
+| 6 | `sample697` | Full paragraph crammed into an 87px source column, drawn over untouched source — `AUDIT-R16` (too-narrow column) stacked on R3's not-yet-landed cleanup | Torii found 2 boxes for the whole page (ours: 5) and rendered the paragraph at a small uniform size with real cleanup underneath, no plate — worth a look before designing the fitter |
+| 12 | `sample698` | Free-standing boxes overlap their neighbours, `AUDIT-R9` | — |
+| 18 | `sample699` | Same family as 12, at higher region density (35 regions/page) | — |
+| 23 | `sample76` (existing) | No plate under title/caption text, source visible underneath — R3's job | Already had a Torii ref |
+| 27 | `sample700` | Correctly-masked balloons sized to the source balloon, not the translated text, leaving visible dead space — `AUDIT-R8` | — |
+
 | ID | Depends on | Bounded output / allowed seams | Task gate |
 | --- | --- | --- | --- |
 | H01b (`TODO`; remainder of H01) | H01a, F04 | Complete source appearance estimation in a bounded worker module, reusing H01a features: angle, fill/stroke, relative weight/size, writing mode and confidence. Do not duplicate basic extraction or force H01b ahead of ownership integration. | Reviewed plain/decorated/colored/rotated examples have traceable estimates; unknown values stay explicit instead of unconditional bold black/white. H01a completion does not establish this appearance gate. |
