@@ -75,6 +75,7 @@ function parseArgs(argv) {
     headed: false,
     skipRendered: false,
     fixtures: [],
+    pages: [],
   };
   for (let index = 2; index < argv.length; index++) {
     const value = argv[index];
@@ -88,6 +89,15 @@ function parseArgs(argv) {
       case "--headed": args.headed = true; break;
       case "--skip-rendered": args.skipRendered = true; break;
       case "--fixture": args.fixtures.push(next()); break;
+      case "--page": {
+        // name=path[:lang] — a named acceptance case that is not in the fixed lists (tracker
+        // R2: the *19th Sept ch.1 p5* caption). Runs after any --fixture selection.
+        const [name, rest] = next().split("=");
+        const [sourcePath, language = "ja"] = (rest || "").split(":");
+        if (!name || !sourcePath) throw new Error("--page expects name=path[:lang]");
+        args.pages.push([name, sourcePath, language]);
+        break;
+      }
       case "-h":
       case "--help": args.help = true; break;
       default: throw new Error(`unknown argument: ${value}`);
@@ -375,6 +385,8 @@ capture_quality_baseline.cjs — fresh A03 pipeline data plus A04 browser export
   --password <password>    existing account, or TLHUB_PASSWORD
   --headed                 show the browser
   --skip-rendered          omit the current-render artifact; use only for an OCR-stage run
+  --fixture <sample>       run only this fixture or control (repeatable)
+  --page <name=path[:lang]> add a named page outside the fixed lists (repeatable)
 `;
 
 (async () => {
@@ -393,12 +405,16 @@ capture_quality_baseline.cjs — fresh A03 pipeline data plus A04 browser export
     throw new Error(`refusing non-empty run directory: ${out}`);
   }
   fs.mkdirSync(out, { recursive: true });
-  const fixtures = args.fixtures.length
+  const selected = args.fixtures.length
     ? [...FIXTURES, ...CONVENTIONAL_CONTROLS].filter(([sample]) => args.fixtures.includes(sample))
-    : FIXTURES;
-  if (!fixtures.length || (args.fixtures.length && fixtures.length !== args.fixtures.length)) {
+    : args.pages.length
+      ? []
+      : FIXTURES;
+  if (args.fixtures.length && selected.length !== args.fixtures.length) {
     throw new Error(`unknown fixture: ${args.fixtures.join(", ")}`);
   }
+  const fixtures = [...selected, ...args.pages];
+  if (!fixtures.length) throw new Error("nothing to run");
   const chromium = loadChromium();
   const browser = await chromium.launch({ headless: !args.headed });
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 }, acceptDownloads: true });

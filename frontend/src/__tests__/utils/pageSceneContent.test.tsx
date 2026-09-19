@@ -119,6 +119,32 @@ describe("page-scene content", () => {
         ?.getAttribute("href"),
     ).toBe("cleanup.png");
     expect(text?.getAttribute("stroke")).toBe("#ffffff");
+    // Tracker R2 stroke rule (Torii): every line's halo is painted before any line's fill, with
+    // round joins and a width of 15-25 % of the resolved font px -- not 4 %.
+    const dialogue = document.querySelector(
+      '[data-text-object-id="rotated-dialogue"]',
+    );
+    const passes = [...(dialogue?.children ?? [])].map((pass) =>
+      pass.getAttribute("data-text-pass"),
+    );
+    expect(passes).toEqual(["stroke", "fill"]);
+    const strokeText = dialogue?.querySelector(
+      '[data-text-pass="stroke"] text',
+    );
+    const fillText = dialogue?.querySelector('[data-text-pass="fill"] text');
+    expect(strokeText?.getAttribute("fill")).toBe("none");
+    expect(strokeText?.getAttribute("stroke-linejoin")).toBe("round");
+    const fontSize = Number(strokeText?.getAttribute("font-size"));
+    const strokeWidth = Number(strokeText?.getAttribute("stroke-width"));
+    expect(strokeWidth).toBeGreaterThanOrEqual(fontSize * 0.15);
+    expect(strokeWidth).toBeLessThanOrEqual(fontSize * 0.25);
+    expect(fillText?.getAttribute("stroke")).toBe("none");
+    expect(fillText?.getAttribute("fill")).not.toBe("none");
+    // An object with no stroke colour gets no stroke pass at all.
+    const plain = document.querySelector(
+      '[data-text-object-id="off-page"] [data-text-pass="stroke"]',
+    );
+    expect(plain?.children.length ?? 0).toBe(0);
     expect(
       document
         .querySelector('[data-text-object-id="rotated-dialogue"]')

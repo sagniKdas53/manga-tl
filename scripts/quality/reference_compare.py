@@ -21,6 +21,11 @@ For every page it reports, side by side for ours and for Torii:
                        this is a proxy for "did we keep the art under the text"; Torii's own
                        translated.png is scored the same way as the reference point.
   refusal              a translation that is a model refusal rather than a translation.
+  outside altered      share of page pixels *outside* the union of our region bboxes that changed
+                       by more than render_quality_metrics' CHANGE_THRESHOLD. Tracker R2 gate:
+                       "pixels outside the union of region bboxes identical to source", so this
+                       should be ~0; a plate padded past its bbox, or a widened free-text box
+                       filled flat, shows up here and nowhere else.
   cost                 from the run manifest (provider_calls) or project.json totalCost.
 
 Inputs. A run directory laid out like docs/quality-runs/<run>/a04-exports/<sample>/ with
@@ -54,6 +59,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts"))
+from render_quality_metrics import CHANGE_THRESHOLD  # noqa: E402
 from render_quality_metrics import score as pixel_score  # noqa: E402
 
 CORPUS = REPO / "corpus" / "samples"
@@ -62,6 +68,10 @@ WIPE_REGION_PCT = 25.0  # tracker R2 gate: no patch larger than a quarter of the
 FLATTENED_FAIL = 5.0  # render_quality_metrics thresholds, measured 2026-08-05
 FLATTENED_REGRESS = 3.0
 DUP_RATIO = 1.5
+# Tracker R2 gate: pixels outside the union of region bboxes identical to source. JPEG re-encode and
+# anti-aliasing of the halo at a bbox edge account for a fraction of a percent; anything more is a
+# plate or a box painted past its region.
+OUTSIDE_ALTERED_MAX = 0.5
 REFUSAL = re.compile(
     r"^\s*\[?\s*(explicit|exploitative|sexual content|i can(?:'|no)?t|i cannot|i am unable|unable to|"
     r"sorry,|as an ai|content (?:involving|policy))|redacted",
@@ -109,6 +119,7 @@ class PageReport:
     elements_per_region: float | None
     hidden_translation_layers: int
     refusals: int
+    outside_altered_pct: float | None
     torii_font_px_median: float | None
     ours_font_px_median: float | None
     pixels: dict[str, dict[str, float]] = field(default_factory=dict)
@@ -237,6 +248,20 @@ def region_diff(a: np.ndarray, b: np.ndarray, regions: list[Box]) -> float | Non
     return float(np.abs(a.astype(np.int16) - b.astype(np.int16))[mask].mean())
 
 
+def outside_altered(a: np.ndarray, b: np.ndarray, regions: list[Box]) -> float | None:
+    """Share (%) of pixels outside the union of region bboxes where |a-b| > CHANGE_THRESHOLD."""
+    mask = np.ones(a.shape, dtype=bool)
+    for r in regions:
+        x0, y0 = max(int(r.x), 0), max(int(r.y), 0)
+        x1, y1 = min(int(r.x + r.w), a.shape[1]), min(int(r.y + r.h), a.shape[0])
+        if x1 > x0 and y1 > y0:
+            mask[y0:y1, x0:x1] = False
+    if not mask.any():
+        return None
+    diff = np.abs(a.astype(np.int16) - b.astype(np.int16))
+    return float((diff[mask] > CHANGE_THRESHOLD).mean() * 100)
+
+
 def safe_pixels(original: Path, render: Path, notes: list[str], label: str) -> dict[str, float] | None:
     try:
         return pixel_score(original, render)
@@ -296,6 +321,14 @@ def report_page(
         if got:
             pixels[ref.stem] = got
 
+    outside: float | None = None
+    primary_path = outputs.get("export") if outputs.get("export", Path("/nonexistent")).exists() else outputs.get("render")
+    if primary_path is not None and primary_path.exists():
+        try:
+            outside = outside_altered(src_gray, load_gray(primary_path, (W, H)), regions)
+        except Exception as err:
+            notes.append(f"outside-altered skipped ({err})")
+
     vs_inpainted: dict[str, float] = {}
     inpainted = sample_dir / "torii" / "inpainted.png"
     if inpainted.exists() and regions:
@@ -325,6 +358,8 @@ def report_page(
         flags.append("HIDDEN-LAYERS")
     if refusals:
         flags.append("REFUSAL")
+    if outside is not None and outside > OUTSIDE_ALTERED_MAX:
+        flags.append("OUTSIDE-BBOX")
     if torii and regions and (distinct < 0.7 * len(torii) or distinct > 1.3 * len(torii)):
         flags.append("REGION-COUNT")
 
@@ -346,6 +381,7 @@ def report_page(
         elements_per_region=round(ratio, 2) if ratio is not None else None,
         hidden_translation_layers=hidden_layers,
         refusals=refusals,
+        outside_altered_pct=round(outside, 2) if outside is not None else None,
         torii_font_px_median=statistics.median([b.font_px for b in torii if b.font_px]) if any(b.font_px for b in torii) else None,
         ours_font_px_median=statistics.median(sizes) if sizes else None,
         pixels={k: {m: round(v, 2) for m, v in d.items()} for k, d in pixels.items()},
@@ -426,8 +462,8 @@ def markdown(label: str, reports: list[PageReport]) -> str:
         "`vs inpainted` is the mean gray difference to Torii's `inpainted.png` inside our region bboxes; "
         "Torii's own translated page is scored the same way as the reference point.",
         "",
-        "| page | regions ours (distinct) / torii | largest region % | matched (IoU) | elements / region | hidden layers | refusals | altered % ours / torii | flattened % ours / torii | vs inpainted ours / torii | font px ours / torii | cost | flags |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| page | regions ours (distinct) / torii | largest region % | matched (IoU) | elements / region | hidden layers | refusals | altered % ours / torii | flattened % ours / torii | outside bbox % | vs inpainted ours / torii | font px ours / torii | cost | flags |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for r in reports:
         ours = r.pixels.get("export") or r.pixels.get("render") or {}
@@ -448,6 +484,7 @@ def markdown(label: str, reports: list[PageReport]) -> str:
                     str(r.refusals),
                     f"{fmt(ours.get('altered'))} / {fmt(torii.get('altered'))}",
                     f"{fmt(ours.get('flattened'))} / {fmt(torii.get('flattened'))}",
+                    fmt(r.outside_altered_pct),
                     f"{fmt(r.vs_inpainted.get('export', r.vs_inpainted.get('render')))} / {fmt(r.vs_inpainted.get('ref-torii'))}",
                     f"{fmt(r.ours_font_px_median)} / {fmt(r.torii_font_px_median)}",
                     cost_s,

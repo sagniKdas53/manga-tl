@@ -2129,7 +2129,11 @@ pub async fn handle_translation_callback(
                 .bind(!failed)
                 .bind(&region.background_color)
                 .bind(contrasting_text_color(region.background_color.as_deref()))
-                .bind(if region.region_type.as_deref().unwrap_or("").eq_ignore_ascii_case("speech") {
+                // AUDIT-R19 (tracker R2): the shape says what was *found*, not what the layout
+                // classifier guessed. A detected container -- YOLO balloon or a contour the
+                // fallback found -- is elliptical/contour-based; free-standing text, whose only
+                // geometry is its bbox, is a rectangle, whatever `region_type` says.
+                .bind(if has_detected_bubble(region) {
                     "elliptical"
                 } else {
                     "rectangular"
@@ -2315,12 +2319,39 @@ pub fn rendered_artifact_path(
 ///
 /// A missing ledger is an old pipeline callback. It can still drive its legacy QA flow, but it
 /// cannot stamp an image or page rendered because it has no immutable input/output identity.
+/// `(layer_element id, font px)` for every `text-<uuid>` object in a renderer layout array
+/// (`[{object_id, font_size, lines: [...]}, ...]`, see services/page-renderer static-entry).
+pub fn resolved_font_sizes(layout: &Value) -> Vec<(Uuid, f64)> {
+    layout
+        .as_array()
+        .map(|objects| {
+            objects
+                .iter()
+                .filter_map(|object| {
+                    let id = object
+                        .get("object_id")
+                        .or_else(|| object.get("objectId"))
+                        .and_then(Value::as_str)?
+                        .strip_prefix("text-")?;
+                    let font_size = object
+                        .get("font_size")
+                        .or_else(|| object.get("fontSize"))
+                        .and_then(Value::as_f64)
+                        .filter(|px| px.is_finite() && *px > 0.0)?;
+                    Some((Uuid::parse_str(id).ok()?, font_size))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 pub async fn handle_render_callback(
     state: &AppState,
     job_id: Option<&str>,
     image_id: Uuid,
     page_id: Option<Uuid>,
     diagnostics: Value,
+    layout: Value,
 ) -> Result<RenderCallbackOutcome, String> {
     let ledger: Option<(Uuid, i32, String)> = match job_id.filter(|id| !id.is_empty()) {
         Some(job_id) => sqlx::query_as(
@@ -2388,18 +2419,34 @@ pub async fn handle_render_callback(
         let persisted = sqlx::query(
             "UPDATE page_render_jobs \
              SET rendered_png_sha256 = $2, rendered_png_storage_path = $3, diagnostics_json = $4, \
-                 status = 'succeeded', completed_at = now() \
+                 layout_json = $5, status = 'succeeded', completed_at = now() \
              WHERE job_id = $1 AND status IN ('queued', 'running')",
         )
         .bind(job_id.expect("ledger requires job id"))
         .bind(&png_sha256)
         .bind(&storage_path)
         .bind(&diagnostics)
+        .bind(&layout)
         .execute(&mut *tx)
         .await
         .map_err(|err| err.to_string())?;
 
         if persisted.rows_affected() > 0 {
+            // Tracker R2 (c): the resolved font px goes back onto the element it was fitted for,
+            // so the export's project.json (and the R4 harness's `ours font px` column) carries
+            // what the page was actually set in. Only auto-sized elements: a size the user typed
+            // is theirs. Line breaks stay in the ledger's layout_json with the rest of the layout.
+            for (element_id, font_size) in resolved_font_sizes(&layout) {
+                sqlx::query(
+                    "UPDATE layer_elements SET size = $2 \
+                     WHERE id = $1 AND COALESCE(auto_size, TRUE) = TRUE",
+                )
+                .bind(element_id)
+                .bind(font_size)
+                .execute(&mut *tx)
+                .await
+                .map_err(|err| err.to_string())?;
+            }
             let pointer = sqlx::query(
                 "UPDATE pages SET current_render_job_id = $1, last_rendered_at = now() \
                  WHERE id = $2 AND scene_revision = $3 \
@@ -3734,6 +3781,26 @@ pub async fn handle_qa_callback(
 // ---------------------------------------------------------------------------
 // TextBoxForTest port — pure geometry, no database.
 // ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod render_layout_tests {
+    use super::*;
+
+    #[test]
+    fn resolved_font_sizes_reads_text_objects_in_either_case() {
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let layout = serde_json::json!([
+            { "object_id": format!("text-{a}"), "font_size": 31.5, "lines": ["one", "two"] },
+            { "objectId": format!("text-{b}"), "fontSize": 20 },
+            { "object_id": "manual-not-a-text-object", "font_size": 12 },
+            { "object_id": format!("text-{}", Uuid::new_v4()), "font_size": 0 },
+            { "object_id": format!("text-{}", Uuid::new_v4()) },
+        ]);
+        assert_eq!(resolved_font_sizes(&layout), vec![(a, 31.5), (b, 20.0)]);
+        assert!(resolved_font_sizes(&serde_json::json!({})).is_empty());
+    }
+}
 
 #[cfg(test)]
 mod textbox_tests {

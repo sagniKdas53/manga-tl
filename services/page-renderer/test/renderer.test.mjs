@@ -87,6 +87,11 @@ test("renders source-sized deterministic PNGs with browser and font provenance",
     assert.deepEqual(first.diagnostics, [
       { code: "empty-manual-text", objectId: "manual-blank" },
     ]);
+    // Tracker R2 (c): the resolved font px and line breaks come back per text object.
+    assert.equal(first.layout.length, 1);
+    assert.equal(first.layout[0].object_id, "dialogue-1");
+    assert.ok(first.layout[0].font_size > 0);
+    assert.equal(first.layout[0].lines.join(" "), "Pinned browser text");
   } finally {
     await instance.stop();
   }

@@ -248,6 +248,7 @@ export class PageRenderer {
         playwrightVersion: this.playwrightVersion,
         fontSha256s: fonts.map((font) => font.sha256),
         diagnostics: diagnostics.diagnostics,
+        layout: diagnostics.layout ?? [],
       };
     } finally {
       await page.close();

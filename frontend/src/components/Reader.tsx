@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useMemo,
-} from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type {
   User,
@@ -30,7 +24,7 @@ import {
   ensureFontsLoaded,
 } from "../utils/fitText";
 import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
-import { hasDetectedBubble, paintLayerMask } from "../utils/maskPaint";
+import { paintLayerMask } from "../utils/maskPaint";
 import {
   DEFAULT_TEXT_BOX_INSET,
   textFitBox,
@@ -314,12 +308,6 @@ export const Reader: React.FC<ReaderProps> = ({
   // Reader States
   const [panels, setPanels] = useState<Panel[]>([]);
   const [ocrRegions, setOcrRegions] = useState<OcrRegion[]>([]);
-  // Erasure needs to know which regions have no balloon, so their text box can be
-  // erased alongside their mask; see `paintLayerMask`.
-  const regionsById = useMemo(
-    () => new Map(ocrRegions.map((r) => [r.id, r])),
-    [ocrRegions],
-  );
   const [imageDims, setImageDims] = useState({ w: 800, h: 1200 });
   // True once the server has told us the original size, which makes the displayed image's
   // naturalWidth irrelevant. Kept in a ref because handleImgLoad reads it outside React's flow.
@@ -2519,7 +2507,7 @@ export const Reader: React.FC<ReaderProps> = ({
         maskCanvas.height = H;
         const maskCtx = maskCanvas.getContext("2d")!;
 
-        paintLayerMask(maskCtx, lData.elements, regionsById);
+        paintLayerMask(maskCtx, lData.elements);
 
         const maskBlob = await new Promise<Blob>((res) =>
           maskCanvas.toBlob((b) => res(b!), "image/png"),
@@ -2715,7 +2703,6 @@ export const Reader: React.FC<ReaderProps> = ({
     // AUDIT-R1: an export must use the inset in force now, not the one captured when this
     // callback was last built, or a settings change would apply to the reader and not the file.
     textBoxInset,
-    regionsById,
     layers,
     dirtyElements,
     saveAllPendingChanges,
@@ -3614,23 +3601,10 @@ export const Reader: React.FC<ReaderProps> = ({
                                         }
                                         stroke="none"
                                       />
-                                      {/* No balloon: the mask covers the source column, the box
-                                          is where the English goes, and the difference was
-                                          landing on artwork. Same rule as paintLayerMask. */}
-                                      {relatedRegion &&
-                                        !hasDetectedBubble(relatedRegion) && (
-                                          <rect
-                                            x={element.x}
-                                            y={element.y}
-                                            width={width}
-                                            height={height}
-                                            fill={
-                                              element.backgroundColor ||
-                                              "#ffffff"
-                                            }
-                                            stroke="none"
-                                          />
-                                        )}
+                                      {/* Tracker R2: the polygon is the whole plate. The box
+                                          fill that used to follow it for free-standing text was
+                                          the flat slab on the artwork. Same rule as
+                                          paintLayerMask. */}
                                     </>
                                   );
                                 }
@@ -3639,7 +3613,8 @@ export const Reader: React.FC<ReaderProps> = ({
                               }
                               return null;
                             })()
-                          ) : element.boxShape === "elliptical" ? (
+                          ) : element.regionId ? null : element.boxShape === // R2: pipeline free text without a polygon gets no plate
+                            "elliptical" ? (
                             <ellipse
                               cx={cx}
                               cy={cy}

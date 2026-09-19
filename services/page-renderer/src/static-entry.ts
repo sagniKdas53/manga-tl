@@ -1,6 +1,7 @@
 import {
   renderPageSceneSvg,
   resolvePageScene,
+  resolvedTextLayout,
   type PageSceneContentInput,
 } from "../../../packages/page-scene/src/index.js";
 
@@ -15,6 +16,7 @@ export function mountPageScene(input: PageSceneContentInput) {
   document.body.innerHTML = renderPageSceneSvg(scene);
   return {
     diagnostics: scene.diagnostics,
+    layout: resolvedTextLayout(scene),
     width: input.source.width,
     height: input.source.height,
   };

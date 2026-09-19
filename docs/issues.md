@@ -227,6 +227,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-B13`](#audit-b13-medium-a-page-with-no-translatable-text-fails-the-job) | Medium | Worker/Backend | An untranslatable page raises and burns 3 attempts; it should warn | **Fixed 2026-09-02** |
 | [`AUDIT-B14`](#audit-b14-medium-delete-then-re-add-leaves-a-chapter-inconsistent) | Medium | Backend/Frontend | Page count stale, old slot held, reader hangs on the loading screen | **Fixed 2026-09-04** |
 | [`AUDIT-B22`](#audit-b22-medium-page-ordering-is-validated-before-the-chapter-is-locked) | Medium | Backend | Reorder and move validate outside their transaction, so concurrent page changes can invalidate the result | Ready |
+| [`AUDIT-B24`](#audit-b24-medium-a-re-uploaded-image-is-deduplicated-onto-a-processed-one-and-gets-a-render-job-it-cannot-run) | Medium | Backend | Uploading bytes the backend already has attaches the page to the processed image, skips OCR and queues a bare `render` with no scene, which fails 3× | Filed 2026-09-19 from the R2 run; R5 |
 | [`AUDIT-B23`](#audit-b23-medium-the-dispatcher-429-cooldown-never-escalates-under-sustained-saturation) | Medium | Backend | `consecutive_429s` is cleared on every healthy `/capabilities` probe, so the exponential cooldown never advances past its 10s base | Ready |
 | [`AUDIT-W3`](#audit-w3-medium-cooldowns-and-lock-waits-burn-a-job-slot) | Medium | Worker | Cooldowns and lock waits block a concurrency slot doing nothing | Deprioritized; needs concurrency test harness |
 | [`AUDIT-F23`](#audit-f23-medium-no-paint-region-redo-and-no-batch-redo) | Medium | Frontend | Redo is per-region and free-form only; no painted region, no batch | Feature |
@@ -238,11 +239,11 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | :--- | :--- | :--- | :--- | :--- |
 | [`AUDIT-R8`](#audit-r8-medium-text-under-fills-and-over-runs-its-balloon) | Medium | Render | Some balloons are half empty, others leak a line past the mask | Overlaps `AUDIT-R1` |
 | [`AUDIT-R9`](#audit-r9-medium-neighbouring-text-boxes-are-allowed-to-overlap) | Medium | Render | Nothing checks box-vs-box collision at layout time | Design needed |
-| [`AUDIT-R10`](#audit-r10-medium-overlapping-bubbles-are-erased-as-one) | Medium | Worker | Two touching balloons merge into one plate | Design needed |
-| [`AUDIT-R12`](#audit-r12-medium-sfx-appear-to-shrink-neighbouring-balloons) | Medium | Worker | Hypothesis: an SFX overlapping a balloon truncates its mask | Needs measurement |
+| [`AUDIT-R10`](#audit-r10-medium-overlapping-bubbles-are-erased-as-one) | Medium | Worker | Two touching balloons merge into one plate | Hull merge gone; no instance on the R2 six; decided on the 24 controls (R2 runbook) |
+| [`AUDIT-R12`](#audit-r12-medium-sfx-appear-to-shrink-neighbouring-balloons) | Medium | Worker | Hypothesis: an SFX overlapping a balloon truncates its mask | Not reproduced on the R2 six (no SFX overlaps any container); re-labelled as R8/R16 interior utilisation; 24 controls give it one more look |
 | [`AUDIT-R15`](#audit-r15-high-the-typeset-size-depends-on-which-fonts-the-host-happens-to-have) | High | Render/Testing | The same call returns 48, 56 or 75px depending on which font files the host has | Ready |
 | [`AUDIT-R16`](#audit-r16-medium-a-narrow-box-is-capped-by-its-widest-unbreakable-token) | Medium | Render | Portrait balloons: the type is width-bound and the spare height cannot be spent | Measured; needs a decision |
-| [`AUDIT-R19`](#audit-r19-medium-a-free-standing-caption-gets-a-synthetic-rounded-plate-a-third-larger-than-its-text) | Medium | Worker/Frontend | Text with no detected balloon gets a rounded-rectangle plate padded 18% of its short side with 22%-radius corners; the editor box is 10px inside it and reshape only edits the plate | Filed 2026-09-19; fix after R2 |
+| [`AUDIT-R19`](#audit-r19-medium-a-free-standing-caption-gets-a-synthetic-rounded-plate-a-third-larger-than-its-text) | Medium | Worker/Frontend | Text with no detected balloon gets a rounded-rectangle plate padded 18% of its short side with 22%-radius corners; the editor box is 10px inside it and reshape only edits the plate | **Fixed in R2 (2026-09-19)**: no plate for free text, `box_shape` from detection; verified on the p5 caption live |
 | [`AUDIT-R17`](#audit-r17-unranked-shaperectangular-is-not-ignored) | Unranked | Render | Reported as an ignored API parameter; the branch exists and the contract holds end to end | **Closed on assessment 2026-09-05** |
 
 ### Cosmetic & long tail
@@ -598,6 +599,12 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   "no new layer" at the reader.
 - **Next Step:** needs a repro before any code change. Capture the layer list, the element's
   `visible`/`region_id`, and what `/rendered` returns, on one page where this happens.
+- **Evidence from the R2 run (2026-09-19):** `handle_translation_callback` inserts a new
+  translation layer on *every* pass (`coordinator.rs`, the `INSERT INTO layers` after the
+  `is_redo` block) and hides the previous ones on a redo; sample177 finished with three translation
+  layers, two hidden, after two QA retries. So "a redo makes no new layer" is not reproducible —
+  a redo always makes one — and R1's note that a retry "updates the existing layer" describes only
+  the per-element update within a layer. No pixel effect; the hidden layers are not in the scene.
 
 ### `AUDIT-R11` (high): No texture-aware erasure (D1)
 
@@ -943,6 +950,39 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   *detected*-balloon case, which this must not touch.
 - **Schedule:** after R2 (erasure), because R2 is what decides when a plate is drawn at all;
   changing the plate's shape before that would be measured twice.
+- **Resolution (R2, 2026-09-19, [checkpoint](quality-checkpoints/R2.md)):** fix 1 became moot —
+  free-standing text gets **no plate** (`cover_fill_for_region(container_detected=False)` returns
+  the colour for the halo and `polygon = None`; a flat bbox keeps the honest bbox rectangle).
+  Fix 3 done: `box_shape` comes from `has_detected_bubble`. Fix 2: where a patch survives it is the
+  bbox itself and the box is bbox + 10 px, same centre; the per-element dial is still `F16`/`B18`.
+  The editor's own box fill for free text (`maskPaint.ts`, `Reader.tsx`) is removed too. Verified
+  live on the same page: the left caption came back with the same bbox (69,78 178×394), **no
+  polygon, `rectangular`, size 36**; before: 14 vertices spanning 37–279 × 48–502, `elliptical`.
+
+### `AUDIT-B24` (medium): A re-uploaded image is deduplicated onto a processed one and gets a render job it cannot run
+
+- **Seen:** R2 six-fixture run, 2026-09-19 07:06 (`R2.md`, stack notes). The harness was relaunched
+  on a database that already held a processed `sample177`; the second upload of the same bytes
+  came back with the *same* `imageId` (`c14a56b7…`), a new page, no OCR job, and a bare `render`
+  job for the new page, which the worker rejected three times with `render job carries no
+  logicalScene` — the new page has no regions, no layers and no snapshot to build one from. The
+  harness then reported "pipeline stopped with 1 failed job".
+- **Where:** `routes/page.rs:486` finds the image by hash and calls
+  `clone::handle_duplicate_image_cloning` (`clone.rs:267`), which clones the source page's OCR
+  regions and translation layers to the new page and then calls
+  `trigger_page_redo(new_page, "render")` — `enqueue_job_directly` of a bare `render`, the
+  pre-R1 job shape. Since R1 a render job needs the page's snapshot (`snapshot_pipeline_scene` →
+  `enqueue_snapshot_render`); nothing here writes one, so the worker refuses the job. (On the R2
+  run the clone also found no source page in the same chapter/series — the six run in one
+  chapter each — so it may have queued the render with nothing copied at all; either way the
+  outcome is the same.)
+- **Fix:** in the `tl_matches` branch, replace `trigger_page_redo(…, "render")` with a
+  transaction that runs `snapshot_pipeline_scene` for the new page and then
+  `enqueue_snapshot_render`; if the snapshot cannot be built (no regions were cloned), fall
+  through to the `"translation"` branch or start OCR. Never queue a `render` for a page without a
+  snapshot — `recovery.rs`'s poller already follows that rule.
+- **Schedule:** R5 (provider/job hygiene). Until then, quality runs must never re-upload a sample
+  on the same database (noted in the R2 controls runbook).
 
 ### `AUDIT-B23` (medium): The dispatcher 429 cooldown never escalates under sustained saturation
 

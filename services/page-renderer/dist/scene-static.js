@@ -368,6 +368,14 @@ var PageSceneStatic = (() => {
   }
 
   // ../../packages/page-scene/src/ContentScene.ts
+  var STROKE_WIDTH_RATIO = 0.18;
+  function resolvedTextLayout(scene) {
+    return scene.objects.filter((object) => object.lineBoxes.length > 0).map((object) => ({
+      object_id: object.objectId,
+      font_size: object.fontSize,
+      lines: object.lineBoxes.map((line) => line.text)
+    }));
+  }
   function fontSpec(style, fontSize) {
     return `${style.weight} ${fontSize}px "${style.fontFamily}", sans-serif`;
   }
@@ -460,12 +468,16 @@ var PageSceneStatic = (() => {
       if (!resolved || resolved.lineBoxes.length === 0) return "";
       const centerX = object.transform.x + object.transform.width / 2;
       const centerY = object.transform.y + object.transform.height / 2;
-      const stroke = object.style.stroke || "none";
-      const strokeWidth = object.style.stroke ? Math.max(1, resolved.fontSize * 0.04) : 0;
-      const lines = resolved.lineBoxes.map(
-        (line) => `<text x="${line.x}" y="${line.y + line.height * 0.8}" fill="${escapeXml(object.style.fill)}" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" paint-order="stroke fill" font-family="${escapeXml(object.style.fontFamily)}" font-size="${resolved.fontSize}" font-weight="${object.style.weight}" text-anchor="start" style="writing-mode:${object.writingMode}">${escapeXml(line.text)}</text>`
-      ).join("");
-      return `<g data-text-object-id="${escapeXml(object.objectId)}" transform="rotate(${object.transform.rotationDegrees} ${centerX} ${centerY})">${lines}</g>`;
+      const common = `font-family="${escapeXml(object.style.fontFamily)}" font-size="${resolved.fontSize}" font-weight="${object.style.weight}" text-anchor="start" style="writing-mode:${object.writingMode}"`;
+      const lineText = (line, paint) => `<text x="${line.x}" y="${line.y + line.height * 0.8}" ${paint} ${common}>${escapeXml(line.text)}</text>`;
+      const strokePass = object.style.stroke ? resolved.lineBoxes.map(
+        (line) => lineText(
+          line,
+          `fill="none" stroke="${escapeXml(object.style.stroke)}" stroke-width="${Math.max(1, resolved.fontSize * STROKE_WIDTH_RATIO)}" stroke-linejoin="round" stroke-linecap="round"`
+        )
+      ).join("") : "";
+      const fillPass = resolved.lineBoxes.map((line) => lineText(line, `fill="${escapeXml(object.style.fill)}" stroke="none"`)).join("");
+      return `<g data-text-object-id="${escapeXml(object.objectId)}" transform="rotate(${object.transform.rotationDegrees} ${centerX} ${centerY})"><g data-text-pass="stroke">${strokePass}</g><g data-text-pass="fill">${fillPass}</g></g>`;
     }).join("");
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${source.width}" height="${source.height}" viewBox="0 0 ${source.width} ${source.height}" data-scene-content="page-scene-v1"><image data-scene-layer="source" href="${escapeXml(source.href)}" x="0" y="0" width="${source.width}" height="${source.height}"/><g data-scene-layer="cleanup">${cleanupMarkup}</g><g data-scene-layer="glyphs">${glyphMarkup}</g></svg>`;
   }
@@ -482,6 +494,7 @@ var PageSceneStatic = (() => {
     document.body.innerHTML = renderPageSceneSvg(scene);
     return {
       diagnostics: scene.diagnostics,
+      layout: resolvedTextLayout(scene),
       width: input.source.width,
       height: input.source.height
     };

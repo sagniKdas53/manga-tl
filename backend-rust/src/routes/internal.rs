@@ -1216,6 +1216,12 @@ async fn render_callback_route(
         .filter(|d| d.is_array())
         .cloned()
         .unwrap_or_else(|| json!([]));
+    // Resolved layout per text object (font px, line breaks); tracker R2 (c).
+    let layout = payload
+        .get("layout")
+        .filter(|l| l.is_array())
+        .cloned()
+        .unwrap_or_else(|| json!([]));
 
     match coordinator::handle_render_callback(
         &state,
@@ -1223,6 +1229,7 @@ async fn render_callback_route(
         image_id,
         page_id,
         diagnostics,
+        layout,
     )
     .await
     {

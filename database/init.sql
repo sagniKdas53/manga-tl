@@ -374,6 +374,7 @@ CREATE TABLE public.page_render_jobs (
     browser_build_sha256 character(64),
     status character varying(16) NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed')),
     diagnostics_json jsonb DEFAULT '[]'::jsonb NOT NULL,
+    layout_json jsonb DEFAULT '[]'::jsonb NOT NULL,
     created_at timestamp(6) with time zone DEFAULT now() NOT NULL,
     completed_at timestamp(6) with time zone,
     CONSTRAINT page_render_jobs_pkey PRIMARY KEY (job_id),

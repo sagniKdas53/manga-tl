@@ -239,6 +239,18 @@ fn encode_png(width: u32, height: u32, rgba: Vec<u8>) -> Result<Vec<u8>, String>
     Ok(out)
 }
 
+/// Tracker R2 gate: the largest share of the page one cleanup patch may cover.
+pub const MAX_PATCH_PAGE_SHARE: f64 = 0.25;
+
+/// Share of the page a patch's bounds cover, 0..1.
+fn patch_page_share(raster: &Raster, page_w: i32, page_h: i32) -> f64 {
+    let page = (page_w as f64) * (page_h as f64);
+    if page <= 0.0 {
+        return 1.0;
+    }
+    (raster.width as f64) * (raster.height as f64) / page
+}
+
 /// `(patch_png, mask_png)` for one legacy mask: the patch is the polygon filled with the sampled
 /// background colour, the mask is the same coverage as white-on-transparent.
 fn legacy_patch_and_mask(raster: &Raster, colour: [u8; 3]) -> Result<(Vec<u8>, Vec<u8>), String> {
@@ -480,9 +492,26 @@ pub async fn build_pipeline_scene(
             .expect("owner_by_region is built from regions");
 
         let mut cleanup_ids: Vec<String> = Vec::new();
-        if let Some(points) = parse_polygon(element.mask_polygon.as_ref())
-            && let Some(raster) = rasterize_polygon(&points, page_w as i64, page_h as i64)
-        {
+        let raster = parse_polygon(element.mask_polygon.as_ref())
+            .and_then(|points| rasterize_polygon(&points, page_w as i64, page_h as i64));
+        if let Some(raster) = raster.filter(|raster| {
+            // Tracker R2 gate: no patch larger than a quarter of the page. The worker's merge
+            // no longer produces such a region, so this only fires on old rows or a wrong
+            // detector mask -- and then the text is drawn over the source rather than the page
+            // being flattened under one plate.
+            let share = patch_page_share(raster, page_w, page_h);
+            if share > MAX_PATCH_PAGE_SHARE {
+                warnings.push(format!(
+                    "element {} patch refused: {:.1} % of the page exceeds the {:.0} % gate; text drawn over source",
+                    element.id,
+                    share * 100.0,
+                    MAX_PATCH_PAGE_SHARE * 100.0
+                ));
+                false
+            } else {
+                true
+            }
+        }) {
             let colour = parse_hex_colour(element.background_color.as_deref());
             let (patch_png, mask_png) = legacy_patch_and_mask(&raster, colour)?;
             let patch_sha = hex::encode(Sha256::digest(&patch_png));
@@ -523,12 +552,14 @@ pub async fn build_pipeline_scene(
                 "diagnostics": [],
             }));
             cleanup_ids.push(cleanup_id);
-        } else {
+        } else if element.mask_polygon.is_some() {
             warnings.push(format!(
-                "element {} has no usable mask polygon; text is drawn over source pixels",
+                "element {} has a mask polygon that does not rasterize; text is drawn over source pixels",
                 element.id
             ));
         }
+        // A NULL mask is the R2 free-standing-text case, not a defect: the worker returns no plate
+        // for text with no container, and the text goes over the untouched source with its halo.
 
         objects.push(json!({
             "object_id": format!("text-{}", element.id),
@@ -601,7 +632,11 @@ fn style_for(element: &LayerElement, font_id: &str) -> Value {
     json!({
         "font_id": font_id,
         "fill": element.text_color.clone().filter(|c| !c.trim().is_empty()).unwrap_or_else(|| "#000000".into()),
-        "stroke": "",
+        // Tracker R2, user decision 2 (2026-09-17): text is drawn with a thick stroke in the
+        // local background colour under the fill -- the halo that makes unenclosed lettering
+        // read against artwork. The width is the renderer's (packages/page-scene) as a fraction
+        // of the resolved font px; the colour is the worker's local-background sample.
+        "stroke": element.background_color.clone().filter(|c| !c.trim().is_empty()).unwrap_or_default(),
         "weight": weight_for(element.font_weight.as_deref()),
         // The Pillow path's DEFAULT_TEXT_BOX_PADDING_PX; the safety percent lives in the layout module.
         "padding": 4.0,
@@ -802,5 +837,24 @@ mod tests {
         assert_eq!(policy_kind(Some("speech")), "dialogue");
         assert_eq!(policy_kind(Some("SFX")), "sfx");
         assert_eq!(policy_kind(None), "unknown");
+    }
+
+    #[test]
+    fn a_patch_over_a_quarter_of_the_page_is_over_the_r2_gate() {
+        // sample83's plate: 1011x1617 on 1412x2000 = 57.9 % of the page.
+        let rect = |w: f64, h: f64| {
+            [
+                Pt { x: 0.0, y: 0.0 },
+                Pt { x: w, y: 0.0 },
+                Pt { x: w, y: h },
+                Pt { x: 0.0, y: h },
+            ]
+        };
+        let plate = rasterize_polygon(&rect(1011.0, 1617.0), 1412, 2000).unwrap();
+        assert!(patch_page_share(&plate, 1412, 2000) > MAX_PATCH_PAGE_SHARE);
+        // A balloon-sized patch is not.
+        let balloon = rasterize_polygon(&rect(300.0, 400.0), 1412, 2000).unwrap();
+        assert!(patch_page_share(&balloon, 1412, 2000) < MAX_PATCH_PAGE_SHARE);
+        assert_eq!(patch_page_share(&balloon, 0, 0), 1.0);
     }
 }
