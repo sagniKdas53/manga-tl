@@ -789,6 +789,14 @@ CREATE INDEX idx_job_costs_created ON public.job_costs USING btree (created_at);
 
 
 --
+-- Name: page_render_jobs_input_idx; Type: INDEX; Schema: public; Owner: tladmin
+--
+
+-- page_scene.rs and jobs/recovery.rs look a render job up by its input triple.
+CREATE INDEX page_render_jobs_input_idx ON public.page_render_jobs USING btree (page_id, page_revision, logical_scene_sha256);
+
+
+--
 -- Name: layer_elements fk7qyvypb91ygmpsr7fdb7uqblm; Type: FK CONSTRAINT; Schema: public; Owner: tladmin
 --
 

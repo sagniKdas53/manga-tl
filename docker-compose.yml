@@ -37,26 +37,6 @@ services:
       timeout: 5s
       retries: 5
 
-  db-migrate:
-    image: postgres:15-alpine
-    container_name: manga-db-migrate
-    environment:
-      PGHOST: db
-      PGDATABASE: ${POSTGRES_DB:-manga_library}
-      PGUSER: ${POSTGRES_USER:-postgres}
-      PGPASSWORD_FILE: /run/secrets/db_password
-    volumes:
-      - ./database:/migrations:ro
-    secrets:
-      - db_password
-    entrypoint: [ "/bin/sh", "/migrations/migrate.sh" ]
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: "no"
-    networks:
-      - manga-net
-
   db-backup:
     image: prodrigestivill/postgres-backup-local:15
     container_name: manga-db-backup
@@ -230,8 +210,6 @@ services:
       # down for three days.
       db:
         condition: service_healthy
-      db-migrate:
-        condition: service_completed_successfully
       redis:
         condition: service_healthy
       minio:

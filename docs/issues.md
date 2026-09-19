@@ -1,6 +1,6 @@
 # Issues & Technical Debt
 
-> **Standing: 114 filed, 85 closed, 29 open.** Six review items were added 2026-09-03
+> **Standing: 114 filed, 86 closed, 28 open.** `AUDIT-B18` was closed by decision 2026-09-19 (`LOCK-3`: no migration runner; `init.sql` is the schema). Six review items were added 2026-09-03
 > (`AUDIT-R13`, `AUDIT-R14`, `AUDIT-F25`..`F27`, `AUDIT-T5`). Three renderer items were added 2026-09-05
 > (`AUDIT-R15`..`R17`). Three hardening items are folded in from backlog notes: `AUDIT-B19` (JWT signing error
 > masking), `AUDIT-B20` (systemic DB `unwrap_or_default`), and `AUDIT-F28` (settings catalog retry gate).
@@ -34,7 +34,7 @@ its test are present on the branch); nothing in this section was re-tested throu
 | # | Bullet (report wording) | ID | State today | Why this rank |
 | :--- | :--- | :--- | :--- | :--- |
 | 1 | Canvas changes are never synced to the rendered output | `AUDIT-B15` | Ready; confirmed in the PR #115–#138 review | Loses edits permanently; everything else is cosmetic next to it |
-| 2 | Padding control per text box / bubble (image 2) | `AUDIT-F16` follow-up | **Open.** F16 shipped `textBoxPaddingPx` as one *global* setting; there is no per-element field. Needs `AUDIT-B18` (migration runner) first | The user's ask is per-bubble; the global dial does not answer it |
+| 2 | Padding control per text box / bubble (image 2) | `AUDIT-F16` follow-up | **Open.** F16 shipped `textBoxPaddingPx` as one *global* setting; there is no per-element field. No longer gated on `AUDIT-B18` (closed by `LOCK-3`): the column goes into `init.sql`, the stack is recreated | The user's ask is per-bubble; the global dial does not answer it |
 | 3 | 2 light + 1 heavy slot logic dropped; all 3 slots stuck on slow steps (image 4) | `AUDIT-W14` | Needs measurement. The capacity-snapshot bug in `dispatcher.rs` is unambiguous; the tier split is a W10 re-measurement, not a revert | Visible every run; the dispatcher half is a small fix |
 | 4 | Translation re-region redo doesn't make a new layer (image 7) | `AUDIT-B16` | Needs repro | Unverified either way since 09-02 |
 | 5 | Queue Manager doesn't update quickly | `AUDIT-F20` (sort) fixed; the *latency* half was never filed | **New, narrow:** the sort rank is fixed; refresh cadence is not tracked anywhere |
@@ -175,6 +175,37 @@ clean and only the frontend's own exports disagreed.
 
 Guarded by the OCR-layer assertions in `ReaderExportZip.test.tsx`.
 
+### `LOCK-3` — `database/init.sql` is the whole schema. There is no migration runner
+
+**Decided 2026-09-19 (Sagnik).**
+
+B02 (2026-09-14) added a one-shot `db-migrate` Compose service: a `postgres:15-alpine` container
+that ran `database/migrate.sh` against the live database before the backend started, replaying
+`database/migrations/*.sql` and ledgering each file in a `schema_migrations` table. It was written
+so a column could be added to a database that already existed. Three migrations were carried
+(`20260914_page_scene_v1`, `20260916_ownership_provenance`, `20260919_render_layout`), and every
+one of them was *also* folded into `init.sql` on the same commit — the runner never applied
+anything a fresh volume did not already have.
+
+That is the point: this project does not keep a database alive across a schema change. The
+output-quality plan targets newly processed images and a regenerated corpus (tracker § scope), the
+quality gates each run on a fresh `dev-postgres` volume, and the deployed stacks are rebuilt from
+the tree rather than upgraded in place. A runner that exists to upgrade a live database is
+maintenance for a situation the plan already excludes, and it was one more container, one more
+`depends_on`, and one more thing to explain in every stack log.
+
+**The rule now:** a schema change is an edit to `init.sql` and nothing else. A stack whose volume
+predates the change is thrown away and recreated (`docker compose down -v`), not migrated. The
+parity check that decided the removal: on `postgres:15-alpine`, *pre-removal `init.sql` +
+`migrate.sh`* and *current `init.sql` alone* produce byte-identical `pg_dump --schema-only`
+output except for the `schema_migrations` ledger itself. The one object the runner had that
+`init.sql` lacked, `page_render_jobs_input_idx`, was moved into `init.sql` with the removal.
+
+**What will tempt a revert:** a field report against a long-lived deployment whose data would be
+lost. That is a backup-and-restore question (`db-backup` is still in the production stack), not a
+reason to carry a runner in every stack for the case that has not happened. `AUDIT-B18` is closed
+against this decision; per-element columns (`AUDIT-F16` follow-up) are no longer gated on it.
+
 ---
 
 ## Open Issues Summary
@@ -220,7 +251,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-W13`](#audit-w13-high-context-injected-translation-ran-in-parallel) | High | Worker/Backend | "Previous page dialogue" was read while the previous page was still translating — and `COALESCE` handed back its Japanese | **Fixed 2026-09-02** |
 | [`AUDIT-W14`](#audit-w14-medium-the-slot-policy-lets-slow-network-work-crowd-out-local-work) | Medium | Worker/Backend | Four light slots + a per-cycle capacity snapshot; OCR waits behind LLM calls | Needs measurement |
 | [`AUDIT-B17`](#audit-b17-low-jobspage_id-was-never-written) | Low | Backend | `jobs.page_id` existed, was deserialised, and was never populated by the INSERT | **Fixed 2026-09-03** |
-| [`AUDIT-B18`](#audit-b18-medium-there-is-no-schema-migration-runner) | Medium | Backend | `init.sql` only runs on a fresh volume, so no column can ever be added to a live deployment | Ready |
+| [`AUDIT-B18`](#audit-b18-medium-there-is-no-schema-migration-runner) | Medium | Backend | `init.sql` only runs on a fresh volume, so no column can ever be added to a live deployment | **Closed by decision 2026-09-19** ([`LOCK-3`](#lock-3--databaseinitsql-is-the-whole-schema-there-is-no-migration-runner)) |
 | [`AUDIT-B21`](#audit-b21-high-a-retryable-translation-callback-consumes-the-exactly-once-claim) | High | Worker/Backend | A retryable outage posts and claims a callback before retrying, so a later successful result is dropped | Ready |
 | [`AUDIT-B19`](#audit-b19-low-jwt-signing-failure-reported-as-successful-login) | Low | Backend | `unwrap_or_default()` yields empty token answered as 200 OK on signing error | Ready |
 | [`AUDIT-B20`](#audit-b20-low-database-query-errors-converted-to-empty-results) | Low | Backend | 53 sites convert query errors into empty lists/options disguised as 200 OK | Backlog |
@@ -389,6 +420,11 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   took a global setting instead; `AUDIT-B17` was fixable only because the column already existed.
 - **Next Step:** `sqlx::migrate!` is already a dependency-compatible option and `build_postgres_url`
   was written for it. Small, but it must land before anything that needs a column.
+- **Closed by decision 2026-09-19.** B02 shipped a `db-migrate` Compose service on 2026-09-14 and it
+  was removed again on 2026-09-19 — see [`LOCK-3`](#lock-3--databaseinitsql-is-the-whole-schema-there-is-no-migration-runner).
+  The ceiling described above is accepted: a new column goes into `init.sql` and the volume is
+  recreated. `build_postgres_url`'s "migration tooling" comment is now stale and `flyway_schema_history`
+  stays as the Java-era vestige it already was.
 
 ### `AUDIT-R7` (medium): A rectangle arrived as a 40-vertex polygon
 

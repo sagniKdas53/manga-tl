@@ -19,21 +19,6 @@ services:
       timeout: 3s
       retries: 20
 
-  db-migrate:
-    image: postgres:15-alpine
-    environment:
-      PGHOST: db
-      PGDATABASE: manga_library
-      PGUSER: tladmin
-      PGPASSWORD_FILE: /run/secrets/db_password
-    volumes:
-      - ./database:/migrations:ro
-    secrets: [ db_password ]
-    entrypoint: [ /bin/sh, /migrations/migrate.sh ]
-    depends_on:
-      db: { condition: service_healthy }
-    restart: "no"
-
   redis:
     image: valkey/valkey:8-alpine
     command: [ valkey-server, --appendonly, "yes" ]
@@ -88,7 +73,6 @@ services:
     ports: [ "127.0.0.1:${DEV_HTTP_PORT:-18080}:8080" ]
     depends_on:
       db: { condition: service_healthy }
-      db-migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
       minio: { condition: service_healthy }
     healthcheck:

@@ -81,8 +81,8 @@ each later one is wasted effort until the earlier one holds.
   - [x] `AUDIT-F16`/`AUDIT-R1` — worse than filed: there were **four** answers to "what rectangle
     does text go in?", three of them in the frontend, and the one with no inset at all was the
     live reader. One definition per language now, both driven by the same two global settings and
-    asserted against the same parity table. Not per-element — that needs a column, and there is no
-    migration runner (`AUDIT-B18`).
+    asserted against the same parity table. Not per-element — that needs a column in `init.sql` and a
+    fresh volume (`LOCK-3`).
   - [x] `AUDIT-R7` — the simplification tolerance was a fraction of the *perimeter*, so a small
     caption plate got a sub-pixel tolerance and kept every vertex. Absolute 2px now, at all four
     sites — including the merge hull, which had none at all.
@@ -101,7 +101,8 @@ each later one is wasted effort until the earlier one holds.
     every 5s. Its defect is that it stamps `last_rendered_at` when it *asks* for the render, not
     when the render lands, and gates that on an `is_ok()` that is always true. A lost render job
     therefore falsifies the sweeper's own predicate and strands that edit forever.
-  - [ ] `AUDIT-B18` — no schema migration runner; `init.sql` only runs on fresh volumes.
+  - [x] `AUDIT-B18` — closed by decision 2026-09-19 (`LOCK-3`): there is deliberately no migration
+    runner. `db-migrate` was removed; `init.sql` is the whole schema and a change means a fresh volume.
 - [/] **Seam 3 — the UI does not believe the backend.**
   - [x] `AUDIT-F17` — the reader filtered SSE down to four job types on one page. Both halves
     fixed; the allow-list was removed rather than extended, because it goes stale silently.
