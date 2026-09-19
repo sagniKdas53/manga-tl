@@ -275,7 +275,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R15`](#audit-r15-high-the-typeset-size-depends-on-which-fonts-the-host-happens-to-have) | High | Render/Testing | The same call returns 48, 56 or 75px depending on which font files the host has | Ready |
 | [`AUDIT-R16`](#audit-r16-medium-a-narrow-box-is-capped-by-its-widest-unbreakable-token) | Medium | Render | Portrait balloons: the type is width-bound and the spare height cannot be spent | Measured; needs a decision |
 | [`AUDIT-R19`](#audit-r19-medium-a-free-standing-caption-gets-a-synthetic-rounded-plate-a-third-larger-than-its-text) | Medium | Worker/Frontend | Text with no detected balloon gets a rounded-rectangle plate padded 18% of its short side with 22%-radius corners; the editor box is 10px inside it and reshape only edits the plate | **Fixed in R2 (2026-09-19)**: no plate for free text, `box_shape` from detection; verified on the p5 caption live |
-| [`AUDIT-R20`](#audit-r20-high-a-balloon-is-emitted-as-one-region-per-column) | High | Worker | The live owner veto splits a balloon into one region per column/line when the detector's container does not enclose every column; each piece is translated and typeset alone | Found on the R2 short list (2026-09-19); not R2's seam; ordering decision open |
+| [`AUDIT-R20`](#audit-r20-high-a-balloon-is-emitted-as-one-region-per-column) | High | Worker | The live owner veto splits a balloon into one region per column/line when the detector's container does not enclose every column; each piece is translated and typeset alone | **Fixed in code 2026-09-19** (worker `1c62e13`, [R6](quality-checkpoints/R6.md)); live gate pending |
 | [`AUDIT-R17`](#audit-r17-unranked-shaperectangular-is-not-ignored) | Unranked | Render | Reported as an ignored API parameter; the branch exists and the contract holds end to end | **Closed on assessment 2026-09-05** |
 
 ### Cosmetic & long tail
@@ -1152,6 +1152,15 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   container and leaving only the outsiders as singletons, (c) fixing the container itself (why
   YOLO/contour returns a column-sized box for a full balloon). Any of them changes what R3's
   region-masked gate and the 24 controls measure, so the order relative to R3 is the user's call.
+- **Fixed in code 2026-09-19 (R6, worker `1c62e13`).** The user chose R6 before R3. It was (a), and
+  the "column-sized container" was a misreading: the persisted 72×176 polygon is the *post-split*
+  local crop (`containerResolution = resolved-local-split`), and the real YOLO container is the
+  full balloon. The mechanism is that a balloon is an ellipse and a column is a rectangle — the
+  outer columns' corners are past the curve on every multi-line balloon, so all-four-corners
+  failed exactly the balloons that hold sentences. `_containing_container` now needs ≥ 0.75 of the
+  quad's area inside one container (measured floor on the three pages: 0.875 for every fragment
+  that belongs). Details, the 42-fragment table and the gate runbook in
+  [R6.md](quality-checkpoints/R6.md). Stays open until the live gate runs.
 
 ### `AUDIT-R12` (medium): SFX appear to shrink neighbouring balloons
 
