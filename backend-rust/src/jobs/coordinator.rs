@@ -1171,8 +1171,12 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
             "INSERT INTO ocr_regions (id, text, detected_language, confidence, ocr_score, rotation, \
              bbox_x, bbox_y, bbox_w, bbox_h, panel_reading_order, bubble_reading_order, background_color, \
              bubble_x, bubble_y, bubble_w, bubble_h, bubble_id, detection_confidence, mask_polygon, ownership_provenance, \
-             safe_text_x, safe_text_y, safe_text_w, safe_text_h, page_id, panel_id) \
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)",
+             safe_text_x, safe_text_y, safe_text_w, safe_text_h, page_id, panel_id, \
+             cleanup_mask_asset_id, cleanup_mask_sha256, cleanup_mask_byte_length, \
+             cleanup_patch_asset_id, cleanup_patch_sha256, cleanup_patch_byte_length, \
+             cleanup_bounds, cleanup_generator_sha256, cleanup_diagnostics) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,\
+             $28,$29,$30,$31,$32,$33,$34,$35,$36)",
         )
         .bind(region_id)
         .bind(r.get("text").and_then(|v| v.as_str()))
@@ -1201,6 +1205,15 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
         .bind(r.get("safeTextH").and_then(|v| v.as_i64()).map(|v| v as i32))
         .bind(page.id)
         .bind(matching.map(|p| p.id))
+        .bind(r.get("cleanupMaskAssetId").and_then(|v| v.as_str()))
+        .bind(r.get("cleanupMaskSha256").and_then(|v| v.as_str()))
+        .bind(r.get("cleanupMaskByteLength").and_then(|v| v.as_i64()))
+        .bind(r.get("cleanupPatchAssetId").and_then(|v| v.as_str()))
+        .bind(r.get("cleanupPatchSha256").and_then(|v| v.as_str()))
+        .bind(r.get("cleanupPatchByteLength").and_then(|v| v.as_i64()))
+        .bind(r.get("cleanupBounds").cloned())
+        .bind(r.get("cleanupGeneratorSha256").and_then(|v| v.as_str()))
+        .bind(r.get("cleanupDiagnostics").cloned())
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;

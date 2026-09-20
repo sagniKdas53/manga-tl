@@ -116,6 +116,8 @@ services:
       DOCKER_SECRETS_JSON: /run/secrets/api_keys
       PROVIDERS_CONFIG: /app/config/providers.json
       YOLO_MODEL_PATH: /opt/models/yolo11n_bubble.onnx
+      CTD_MODEL_PATH: /opt/models/ctd_seg_dyn.onnx
+      AOT_MODEL_PATH: /opt/models/lama_aot.onnx
       DISABLE_LOCAL_OCR: ${DISABLE_LOCAL_OCR:-false}
       DISABLE_LOCAL_LLM: ${DISABLE_LOCAL_LLM:-true}
       DISABLE_DEEPL_TRANSLATE: ${DISABLE_DEEPL_TRANSLATE:-true}
@@ -144,6 +146,18 @@ services:
       - type: bind
         source: ./data/bootstrap/yolo11n_bubble.onnx
         target: /opt/models/yolo11n_bubble.onnx
+        read_only: true
+        bind: { create_host_path: false }
+      # R3 glyph-mask cleanup: CTD glyph-segmentation head + AOT GAN inpainter, same
+      # bootstrap-bind pattern as YOLO above (docs/archive/ctd_mask_validation_2026-08-26.md).
+      - type: bind
+        source: ./data/bootstrap/ctd_seg_dyn.onnx
+        target: /opt/models/ctd_seg_dyn.onnx
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ./data/bootstrap/lama_aot.onnx
+        target: /opt/models/lama_aot.onnx
         read_only: true
         bind: { create_host_path: false }
       # Named volumes inherit the image's UID 10001 cache ownership on first use.

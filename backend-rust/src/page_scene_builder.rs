@@ -270,6 +270,35 @@ fn legacy_patch_and_mask(raster: &Raster, colour: [u8; 3]) -> Result<(Vec<u8>, V
     ))
 }
 
+/// R3: the `cleanup_artifact` JSON for a worker-supplied glyph mask + reconstructed patch.
+/// `region`'s own `cleanup_generator_sha256` is trusted when present (the worker's own record
+/// of which method -- TELEA or AOT -- produced it); `fallback_generator_sha256` only covers a
+/// row where that field is somehow absent despite the asset refs being present.
+fn worker_cleanup_artifact(
+    cleanup_id: &str,
+    owner_id: &str,
+    source_sha256: &str,
+    mask_asset_id: &str,
+    patch_asset_id: &str,
+    region: &OcrRegion,
+    fallback_generator_sha256: &str,
+) -> Value {
+    json!({
+        "cleanup_id": cleanup_id,
+        "owner_ids": [owner_id],
+        "source_sha256": source_sha256,
+        "mask_asset_id": mask_asset_id,
+        "patch_asset_id": patch_asset_id,
+        "bounds": region.cleanup_bounds.clone().unwrap_or(json!({"x": 0, "y": 0, "width": 0, "height": 0})),
+        "generator_sha256": region
+            .cleanup_generator_sha256
+            .clone()
+            .unwrap_or_else(|| fallback_generator_sha256.to_string()),
+        "active_set_dependency": "independent",
+        "diagnostics": region.cleanup_diagnostics.clone().unwrap_or(json!([])),
+    })
+}
+
 fn quad_for(region: &OcrRegion) -> Vec<Value> {
     let cx = region.bbox_x as f64 + region.bbox_w as f64 / 2.0;
     let cy = region.bbox_y as f64 + region.bbox_h as f64 / 2.0;
@@ -492,74 +521,145 @@ pub async fn build_pipeline_scene(
             .expect("owner_by_region is built from regions");
 
         let mut cleanup_ids: Vec<String> = Vec::new();
-        let raster = parse_polygon(element.mask_polygon.as_ref())
-            .and_then(|points| rasterize_polygon(&points, page_w as i64, page_h as i64));
-        if let Some(raster) = raster.filter(|raster| {
-            // Tracker R2 gate: no patch larger than a quarter of the page. The worker's merge
-            // no longer produces such a region, so this only fires on old rows or a wrong
-            // detector mask -- and then the text is drawn over the source rather than the page
-            // being flattened under one plate.
-            let share = patch_page_share(raster, page_w, page_h);
-            if share > MAX_PATCH_PAGE_SHARE {
-                warnings.push(format!(
-                    "element {} patch refused: {:.1} % of the page exceeds the {:.0} % gate; text drawn over source",
-                    element.id,
-                    share * 100.0,
-                    MAX_PATCH_PAGE_SHARE * 100.0
-                ));
-                false
-            } else {
-                true
-            }
-        }) {
-            let colour = parse_hex_colour(element.background_color.as_deref());
-            let (patch_png, mask_png) = legacy_patch_and_mask(&raster, colour)?;
-            let patch_sha = hex::encode(Sha256::digest(&patch_png));
-            let mask_sha = hex::encode(Sha256::digest(&mask_png));
-            let patch_id = format!("patch-{}", element.id);
-            let mask_id = format!("mask-{}", element.id);
-            for (id, sha, bytes) in [
-                (&patch_id, &patch_sha, &patch_png),
-                (&mask_id, &mask_sha, &mask_png),
-            ] {
-                let path = scene_asset_path(page_id, sha);
-                if !state.storage.exists(&path).await {
-                    state
-                        .storage
-                        .upload_bytes(&path, bytes.clone(), "image/png")
-                        .await
-                        .map_err(|e| format!("could not upload scene asset {path}: {e}"))?;
+
+        // R3: the worker computes the real glyph mask + reconstructed patch and uploads them
+        // itself (same content-addressed `scene-assets/{page_id}/{sha256}.png` path this
+        // function already uses below); here we only register what it already put there. A
+        // missing ref, or a ref whose object never actually landed in storage, falls through
+        // to the pre-R3 raster/`legacy_patch_and_mask` path untouched -- never a worse result.
+        let worker_cleanup = match (
+            region.cleanup_mask_asset_id.as_deref(),
+            region.cleanup_mask_sha256.as_deref(),
+            region.cleanup_patch_asset_id.as_deref(),
+            region.cleanup_patch_sha256.as_deref(),
+        ) {
+            (Some(mask_asset_id), Some(mask_sha), Some(patch_asset_id), Some(patch_sha)) => {
+                let mask_path = scene_asset_path(page_id, mask_sha);
+                let patch_path = scene_asset_path(page_id, patch_sha);
+                if state.storage.exists(&mask_path).await && state.storage.exists(&patch_path).await
+                {
+                    Some((
+                        mask_asset_id,
+                        mask_sha,
+                        mask_path,
+                        patch_asset_id,
+                        patch_sha,
+                        patch_path,
+                    ))
+                } else {
+                    warnings.push(format!(
+                        "element {} region {region_id} has cleanup asset refs but the objects are missing \
+                         from storage; falling back to the legacy patch",
+                        element.id
+                    ));
+                    None
                 }
-                assets.push(json!({
-                    "asset_id": id,
-                    "kind": if id == &patch_id { "cleanup_patch" } else { "glyph_mask" },
-                    "sha256": sha,
-                    "byte_length": bytes.len(),
-                    "mime_type": "image/png",
-                }));
-                asset_paths.insert(id.clone(), path);
             }
-            let cleanup_id = format!("cleanup-{}", element.id);
-            cleanup_artifacts.push(json!({
-                "cleanup_id": cleanup_id,
-                "owner_ids": [owner_id],
-                "source_sha256": source_sha256,
-                "mask_asset_id": mask_id,
-                "patch_asset_id": patch_id,
-                "bounds": { "x": raster.x, "y": raster.y, "width": raster.width, "height": raster.height },
-                "generator_sha256": generator_sha256,
-                "active_set_dependency": "independent",
-                "diagnostics": [],
+            _ => None,
+        };
+
+        if let Some((mask_asset_id, mask_sha, mask_path, patch_asset_id, patch_sha, patch_path)) =
+            worker_cleanup
+        {
+            assets.push(json!({
+                "asset_id": mask_asset_id,
+                "kind": "glyph_mask",
+                "sha256": mask_sha,
+                "byte_length": region.cleanup_mask_byte_length.unwrap_or(0),
+                "mime_type": "image/png",
             }));
-            cleanup_ids.push(cleanup_id);
-        } else if element.mask_polygon.is_some() {
-            warnings.push(format!(
-                "element {} has a mask polygon that does not rasterize; text is drawn over source pixels",
-                element.id
+            asset_paths.insert(mask_asset_id.to_string(), mask_path);
+            assets.push(json!({
+                "asset_id": patch_asset_id,
+                "kind": "cleanup_patch",
+                "sha256": patch_sha,
+                "byte_length": region.cleanup_patch_byte_length.unwrap_or(0),
+                "mime_type": "image/png",
+            }));
+            asset_paths.insert(patch_asset_id.to_string(), patch_path);
+
+            let cleanup_id = format!("cleanup-{}", element.id);
+            cleanup_artifacts.push(worker_cleanup_artifact(
+                &cleanup_id,
+                &owner_id,
+                &source_sha256,
+                mask_asset_id,
+                patch_asset_id,
+                region,
+                &generator_sha256,
             ));
+            cleanup_ids.push(cleanup_id);
+        } else {
+            let raster = parse_polygon(element.mask_polygon.as_ref())
+                .and_then(|points| rasterize_polygon(&points, page_w as i64, page_h as i64));
+            if let Some(raster) = raster.filter(|raster| {
+                // Tracker R2 gate: no patch larger than a quarter of the page. The worker's merge
+                // no longer produces such a region, so this only fires on old rows or a wrong
+                // detector mask -- and then the text is drawn over the source rather than the page
+                // being flattened under one plate.
+                let share = patch_page_share(raster, page_w, page_h);
+                if share > MAX_PATCH_PAGE_SHARE {
+                    warnings.push(format!(
+                        "element {} patch refused: {:.1} % of the page exceeds the {:.0} % gate; text drawn over source",
+                        element.id,
+                        share * 100.0,
+                        MAX_PATCH_PAGE_SHARE * 100.0
+                    ));
+                    false
+                } else {
+                    true
+                }
+            }) {
+                let colour = parse_hex_colour(element.background_color.as_deref());
+                let (patch_png, mask_png) = legacy_patch_and_mask(&raster, colour)?;
+                let patch_sha = hex::encode(Sha256::digest(&patch_png));
+                let mask_sha = hex::encode(Sha256::digest(&mask_png));
+                let patch_id = format!("patch-{}", element.id);
+                let mask_id = format!("mask-{}", element.id);
+                for (id, sha, bytes) in [
+                    (&patch_id, &patch_sha, &patch_png),
+                    (&mask_id, &mask_sha, &mask_png),
+                ] {
+                    let path = scene_asset_path(page_id, sha);
+                    if !state.storage.exists(&path).await {
+                        state
+                            .storage
+                            .upload_bytes(&path, bytes.clone(), "image/png")
+                            .await
+                            .map_err(|e| format!("could not upload scene asset {path}: {e}"))?;
+                    }
+                    assets.push(json!({
+                        "asset_id": id,
+                        "kind": if id == &patch_id { "cleanup_patch" } else { "glyph_mask" },
+                        "sha256": sha,
+                        "byte_length": bytes.len(),
+                        "mime_type": "image/png",
+                    }));
+                    asset_paths.insert(id.clone(), path);
+                }
+                let cleanup_id = format!("cleanup-{}", element.id);
+                cleanup_artifacts.push(json!({
+                    "cleanup_id": cleanup_id,
+                    "owner_ids": [owner_id],
+                    "source_sha256": source_sha256,
+                    "mask_asset_id": mask_id,
+                    "patch_asset_id": patch_id,
+                    "bounds": { "x": raster.x, "y": raster.y, "width": raster.width, "height": raster.height },
+                    "generator_sha256": generator_sha256,
+                    "active_set_dependency": "independent",
+                    "diagnostics": [],
+                }));
+                cleanup_ids.push(cleanup_id);
+            } else if element.mask_polygon.is_some() {
+                warnings.push(format!(
+                    "element {} has a mask polygon that does not rasterize; text is drawn over source pixels",
+                    element.id
+                ));
+            }
+            // A NULL mask is the R2 free-standing-text case, not a defect: the worker returns no
+            // plate for text with no container, and the text goes over the untouched source with
+            // its halo.
         }
-        // A NULL mask is the R2 free-standing-text case, not a defect: the worker returns no plate
-        // for text with no container, and the text goes over the untouched source with its halo.
 
         objects.push(json!({
             "object_id": format!("text-{}", element.id),
@@ -837,6 +937,126 @@ mod tests {
         assert_eq!(policy_kind(Some("speech")), "dialogue");
         assert_eq!(policy_kind(Some("SFX")), "sfx");
         assert_eq!(policy_kind(None), "unknown");
+    }
+
+    fn region_with_cleanup(
+        cleanup_bounds: Option<Value>,
+        cleanup_generator_sha256: Option<String>,
+        cleanup_diagnostics: Option<Value>,
+    ) -> OcrRegion {
+        OcrRegion {
+            id: Uuid::nil(),
+            approved: None,
+            background_color: None,
+            bbox_x: 10,
+            bbox_y: 20,
+            bbox_w: 30,
+            bbox_h: 40,
+            bubble_x: None,
+            bubble_y: None,
+            bubble_w: None,
+            bubble_h: None,
+            bubble_id: None,
+            bubble_reading_order: None,
+            confidence: None,
+            detected_language: "ja".to_string(),
+            detection_confidence: None,
+            mask_polygon: None,
+            ocr_score: None,
+            ownership_provenance: None,
+            panel_reading_order: None,
+            qa_feedback: None,
+            qa_score: None,
+            qa_status: None,
+            region_type: None,
+            rotation: None,
+            safe_text_x: None,
+            safe_text_y: None,
+            safe_text_w: None,
+            safe_text_h: None,
+            text: None,
+            translated_text: None,
+            translation_failed: None,
+            translation_score: None,
+            page_id: Uuid::nil(),
+            panel_id: None,
+            cleanup_mask_asset_id: None,
+            cleanup_mask_sha256: None,
+            cleanup_mask_byte_length: None,
+            cleanup_patch_asset_id: None,
+            cleanup_patch_sha256: None,
+            cleanup_patch_byte_length: None,
+            cleanup_bounds,
+            cleanup_generator_sha256,
+            cleanup_diagnostics,
+        }
+    }
+
+    #[test]
+    fn worker_cleanup_artifact_uses_the_regions_own_bounds_generator_and_diagnostics() {
+        // The live `validate_page_scene` runtime validator does not check bounds/generator_sha256/
+        // diagnostics (only the offline JSON-Schema fixture runner does) -- this is the test that
+        // would actually catch a mistake in populating them from the worker-supplied region.
+        let region = region_with_cleanup(
+            Some(json!({"x": 12, "y": 34, "width": 56, "height": 78})),
+            Some("a".repeat(64)),
+            Some(json!([
+                "reconstruction method: aot (pixel_spread=25.0)",
+                "residual ink: 3.0%"
+            ])),
+        );
+        let artifact = worker_cleanup_artifact(
+            "cleanup-1",
+            "owner-1",
+            "b".repeat(64).as_str(),
+            "mask-1",
+            "patch-1",
+            &region,
+            "fallback-sha",
+        );
+
+        assert_eq!(artifact["cleanup_id"], json!("cleanup-1"));
+        assert_eq!(artifact["owner_ids"], json!(["owner-1"]));
+        assert_eq!(artifact["source_sha256"], json!("b".repeat(64)));
+        assert_eq!(artifact["mask_asset_id"], json!("mask-1"));
+        assert_eq!(artifact["patch_asset_id"], json!("patch-1"));
+        assert_eq!(
+            artifact["bounds"],
+            json!({"x": 12, "y": 34, "width": 56, "height": 78})
+        );
+        assert_eq!(artifact["generator_sha256"], json!("a".repeat(64)));
+        assert_eq!(artifact["active_set_dependency"], json!("independent"));
+        assert_eq!(
+            artifact["diagnostics"],
+            json!([
+                "reconstruction method: aot (pixel_spread=25.0)",
+                "residual ink: 3.0%"
+            ])
+        );
+    }
+
+    #[test]
+    fn worker_cleanup_artifact_falls_back_when_the_region_lacks_optional_fields() {
+        // A row with the asset refs present but somehow missing bounds/generator/diagnostics
+        // (should not happen from the worker, but the field is nullable) must not panic or
+        // silently produce a malformed artifact.
+        let region = region_with_cleanup(None, None, None);
+        let artifact = worker_cleanup_artifact(
+            "cleanup-2",
+            "owner-2",
+            "c".repeat(64).as_str(),
+            "mask-2",
+            "patch-2",
+            &region,
+            "fallback-sha",
+        );
+
+        assert_eq!(
+            artifact["bounds"],
+            json!({"x": 0, "y": 0, "width": 0, "height": 0})
+        );
+        assert_eq!(artifact["generator_sha256"], json!("fallback-sha"));
+        assert_eq!(artifact["diagnostics"], json!([]));
     }
 
     #[test]

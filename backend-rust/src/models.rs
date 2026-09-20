@@ -223,6 +223,18 @@ pub struct OcrRegion {
     pub translation_score: Option<f64>,
     pub page_id: Uuid,
     pub panel_id: Option<Uuid>,
+    // R3 glyph-mask cleanup: worker-computed, worker-uploaded assets. A NULL
+    // cleanup_patch_asset_id means `build_pipeline_scene` falls through to
+    // `legacy_patch_and_mask`'s flat fill, same as before R3 landed.
+    pub cleanup_mask_asset_id: Option<String>,
+    pub cleanup_mask_sha256: Option<String>,
+    pub cleanup_mask_byte_length: Option<i64>,
+    pub cleanup_patch_asset_id: Option<String>,
+    pub cleanup_patch_sha256: Option<String>,
+    pub cleanup_patch_byte_length: Option<i64>,
+    pub cleanup_bounds: Option<serde_json::Value>,
+    pub cleanup_generator_sha256: Option<String>,
+    pub cleanup_diagnostics: Option<serde_json::Value>,
 }
 
 // ---------------------------------------------------------------- layers

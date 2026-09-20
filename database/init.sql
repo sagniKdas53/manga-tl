@@ -293,7 +293,20 @@ CREATE TABLE public.ocr_regions (
     translation_failed boolean,
     translation_score double precision,
     page_id uuid NOT NULL,
-    panel_id uuid
+    panel_id uuid,
+    -- R3 glyph-mask cleanup: worker-computed, worker-uploaded cleanup assets (CTD glyph mask +
+    -- TELEA/AOT reconstruction), referenced by page_scene_builder.rs's build_pipeline_scene
+    -- instead of legacy_patch_and_mask's flat fill when present. All nullable and additive:
+    -- a NULL cleanup_patch_asset_id falls through to the existing flat-fill/no-plate behaviour.
+    cleanup_mask_asset_id character varying(255),
+    cleanup_mask_sha256 character(64),
+    cleanup_mask_byte_length bigint,
+    cleanup_patch_asset_id character varying(255),
+    cleanup_patch_sha256 character(64),
+    cleanup_patch_byte_length bigint,
+    cleanup_bounds jsonb,
+    cleanup_generator_sha256 character(64),
+    cleanup_diagnostics jsonb
 );
 
 
