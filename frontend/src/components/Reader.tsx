@@ -3548,7 +3548,7 @@ export const Reader: React.FC<ReaderProps> = ({
                       const totalHeight = fit.lines.length * fontSize * 1.2;
                       overflow = totalHeight > (element.maxHeight || 100);
                     }
-                    const textToRender = fit.lines.join("\\n");
+                    const textToRender = fit.lines.join("\n");
 
                     const width = element.maxWidth || 100;
                     const height = element.maxHeight || 100;
