@@ -1,72 +1,124 @@
-# R3 cleanup phase-separation handoff
+# R3 handoff — sequential cleanup, reliable recovery, honest acceptance
 
-## Status
+Updated 2026-09-21 after reviewing the tracker, retained runs, representative editor/export images, and current source. Inspected checkout: parent `ab86d20`, worker `ac7cbba`. These are review revisions, not the revisions that generated every retained image. Refresh heads and runtime image identities before implementation or measurement.
 
-**Decided and documented; not yet spec'd or built.** This is a handoff for a fresh session — the conversation that produced this got long enough that continuing to work inside it stopped being efficient. Read this file first, then [`output-quality-implementation-tracker.md`](../output-quality-implementation-tracker.md)'s "Status at a glance" section for the wider project, then [`quality-checkpoints/R3.md`](R3.md) for the formal six-fixture gate result this work exists to pass.
+This handoff supersedes earlier summaries that say quality passed on six fixtures, describe cleanup as parallel/deferred, promise a measured post-fix speedup, or equate the editor with the render service. Historical run artifacts remain unchanged. This update records a proposed execution plan; it does not claim implementation, live validation, deployment, or user quality sign-off.
 
-Three things landed and are merged on `feat/output-quality` (worker `ac7cbba`, parent `225ef95`, both pushed, CI green on both PRs). One thing is a settled design with no code yet — that's the actual next task.
+## Current state
 
-## The one thing not done yet: R3's phase-separation
+**R3 is NOT PASSED. The worker → backend → scene data path exists. Performance fails; visual cleanup acceptance and complete fixture coverage remain open.** Cleanup still runs inside OCR with two CTD calls per eligible region. The separate cleanup job, heartbeat protocol, and removal of the second call are not implemented.
 
-**Problem.** R3 (glyph-mask cleanup: erase the original-language strokes, repaint the background) landed its data path and passed the six-fixture quality gate, but failed the time gate. Cleanup runs inline inside the OCR job handler (`worker/src/worker/handlers/ocr.py::_compute_cleanup_fields`, three call sites), per region, and each region's `reconstruct_region` (`worker/src/worker/services/cleanup_reconstruct.py`) calls the CTD glyph-segmentation model *twice* — once for the mask, once more for a residual-ink recheck — at up to native crop resolution. Measured on the real six-fixture gate run (`docs/quality-checkpoints/R3.md`): 15–27 minutes of cleanup for a single busy page, more than R2's entire old pipeline, and long enough that the backend's 10-minute stale-recovery sweep re-dispatches the job mid-run, producing duplicate concurrent work.
+| Area | Verified state | Still open |
+| --- | --- | --- |
+| Cleanup | Per-region CTD masks, TELEA/AOT reconstruction, stored assets, server scene consumption. CTD caps the input long side at 1024. | Mask coverage, protected-art invariance, visual reconstruction quality, acceptable page time. |
+| Translation | Source has default `CLOUD_CONCURRENCY=2` and OpenRouter reasoning capped at 4096 tokens. | Combined live speed/quality improvement. These retained runs do not establish it. |
+| Recovery | Ten-minute stale threshold, five-minute sweep; callback claims deduplicate by job ID. | Current-attempt checks, periodic heartbeat, atomic result/stage advancement, restart behavior. |
+| QA | Bounded translation/re-OCR retries and final render after accepted edits. | Complete target coverage: sample61 returned 38 verdicts for 63 regions yet logged a pass. |
+| Editor/export | Page PNG export calls the backend rendered-artifact endpoint. Editor still draws legacy layer elements without R3 cleanup assets. | R7 shared cleanup scene behavior; remaining M8 archive/output consistency. |
+| Fitting | Shared fitter exists; automatic starting-size calculation still contains a 72 px limit. | M7 sizing, narrow columns, collisions, overflow, style, and editor acceptance. |
 
-**Investigated and closed: page-scale CTD.** The obvious speed idea — run CTD once on the whole page at a downscaled size, the way PaddleOCR already gets one whole-page pass at `max_dim=1024` — does not work. A recall spike (ground truth = the real per-crop masks from the actual R3h gate run, not aggregate IoU) measured page-scale recall at 1024px long-side: median 0.34–0.75 across the six fixtures, collapsing to near-zero on 3 of 11 regions on `sample93` (a large, bold-stroke SFX character with a thick outline that per-crop CTD finds cleanly — 28–36% mask coverage — but the page-scale pass mostly misses). Pushing the page-level pass to 2048/2560/3072px (bypassing `glyph_mask.CTD_MAX_SIDE` for that one call) partially recovers it — 0.11/0.60/0.40 recall at 3072 for the three problem regions — but the 3072 pass alone cost 517.7s (8.6 min), *more* than that page's entire per-crop CTD total (480s for all 11 regions). An overlay (`sample93_region1_overlay.png`, scratchpad, not committed — regenerate from `originals/be7e391c-6730-44f7-95e8-1ecb34c12e5e.png` region `(1023,4181,641,779)` if needed) confirmed it's a genuine detection miss, not downscale blur. **Conclusion: per-region native CTD is the only correctness-safe mask source. Do not revisit page-scale CTD as a mask-generation shortcut without new evidence.**
+Implementation entry points: [cleanup](../../worker/src/worker/services/cleanup_reconstruct.py), [CTD cap](../../worker/src/worker/services/glyph_mask.py), [OCR wiring](../../worker/src/worker/handlers/ocr.py), [translation](../../worker/src/worker/handlers/translation.py), [callbacks](../../backend-rust/src/jobs/coordinator.rs), [recovery](../../backend-rust/src/jobs/recovery.rs), [sweep schedule](../../backend-rust/src/jobs/mod.rs), [reader/export](../../frontend/src/components/Reader.tsx), [fitter](../../packages/page-scene/src/layout.ts).
 
-**Investigated and validated: the residual-ink recheck is dead weight.** Across every region logged in the real R3h gate run, the recheck (the second CTD call, checking whether the reconstructed patch still shows glyph ink) rejected **zero** regions — max observed residual was 3.3% against a 15% bound — while costing essentially the same as the first CTD call (sample61: 519s call 1, 514s call 2, out of 1038s total cleanup). **Drop it.** This alone is a measured ~2× cut with zero quality regression on the evidence in hand.
+## What the retained runs demonstrate
 
-**The settled design** (confirmed with the user 2026-09-21, reversing an earlier same-day "run cleanup in parallel with translation" version — see below for why):
+| Directory | Captured fixtures | Limit |
+| --- | --- | --- |
+| [`r3-20260921-six`](../quality-runs/r3-20260921-six/) | sample177 | Initial uncapped attempt. Partial manifests; sample222 took about 27 minutes in OCR/cleanup and exceeded the harness window. |
+| [`r3b-20260921-six`](../quality-runs/r3b-20260921-six/) | sample177, sample222 | Capped attempt. Harness aborted waiting for sample61. Its eventual roughly 47-minute completion includes interruption/recovery overhead; no sample61 export was captured. |
+| [`r3b-20260921-six-b`](../quality-runs/r3b-20260921-six-b/) | sample99, sample93, sample83 | Completed continuation on the same stack, not a second complete six-fixture experiment. |
 
-1. Cleanup becomes its own pipeline stage/job type, dispatched **after OCR and before translation**, strictly sequential — the same one-job-per-image-in-flight shape every other stage already has. Not parallel with translation.
-2. Per-region native CTD stays as the mask source (the loop already in `reconstruct_region`, just moved out of the OCR job into its own).
-3. The residual-ink recheck (second CTD call) is removed from `reconstruct_region`.
-4. The new job type needs its own heavy-queue slot classification (it's CTD/AOT CPU inference, same resource profile as OCR's YOLO/PaddleOCR — put it in `HEAVY_QUEUES` in `worker/src/worker/concurrency.py` alongside `queue:ocr`, not a new independent capacity pool).
-5. Stale recovery needs a **heartbeat**, not a bigger fixed timeout: the job pings after each region (piggyback on the per-region logging point already added in `cleanup_reconstruct.py`/`ocr.py` this session), the backend records `last_heartbeat_at` on the job row, and `backend-rust/src/jobs/recovery.rs::recover_stale_processing_jobs` keys its re-dispatch decision off staleness-*since-last-heartbeat* (short window, ~2 min) rather than staleness-since-dispatch (today's fixed 10-minute `updated_at` check). A job that's genuinely still working is never falsely re-dispatched no matter how long the page takes; a truly hung worker is caught in ~2 minutes instead of 10.
-6. Because it's strictly sequential, **there is no late-arrival case to design for** — nothing downstream (translation, render, QA) ever starts before cleanup's callback lands, so `page_scene_builder.rs`'s existing fallback logic (lines ~530–559: use the worker's cleanup ref if present, else the legacy flat-plate path) always sees the real data by the time it matters. This is simpler than the parallel version below and was a deciding factor in reversing to sequential.
+The capped directories contain **five distinct captured fixtures**. A worker rebuild and stale recovery confound run A's wall time. The conventional controls have not passed the combined R2/R3 gate.
 
-**Why sequential, not parallel (the reversal).** Earlier the same day, the design was "cleanup runs in parallel with translation, dispatched at the OCR callback, so translation never waits on it" — this needed a "late cleanup arrival" mechanism (bump the page's scene revision and re-render, skipping QA, if cleanup finished after the pipeline had already completed). The user pushed back: running two jobs in flight per image, at fleet scale (N images × 2 concurrent stages each), looked like it could multiply concurrent heavy CPU work. The precise correction for the record: translation is a *light* (network-bound) queue, not heavy, so it was never going to compete with cleanup for the CPU-bound heavy-slot pool OCR already uses — `MAX_HEAVY_SLOTS` (default 1) already caps total concurrent heavy work fleet-wide regardless of whether cleanup is inline-in-OCR (today) or its own job (either design), so parallel cleanup would not itself have created new CPU oversubscription. But the correction doesn't change the conclusion: sequential is still better, independent of that capacity math — it keeps the existing one-job-per-image invariant (no race between a translation callback and a cleanup callback for the same image), it deletes the late-arrival mechanism entirely rather than building it, and it matches how Torii's own pipeline works (clean the page, then typeset onto it) while giving R7's reader a natural progressive reveal (OCR boxes → cleaned page → translated text, in that order). The cost is real: per-page time-to-translated-text becomes roughly OCR (fast) + cleanup (4–9 min post-recheck-drop) + translation (now ~1–5 min, see below) instead of `max(cleanup, translation)`. Still a large improvement over today's 15–30 min bundled path.
+Keep [R3's timing table](R3.md#time--this-is-the-failed-part) as historical measurement. Sample61 took 1245.9 seconds in OCR: 202.9 seconds in page OCR, 1038 seconds in cleanup, including approximately 519 seconds initial CTD, 514 seconds recheck, and 5 seconds reconstruction. Removing the recheck alone projects **732 seconds / 12.2 minutes for OCR plus cleanup**, before translation/render/QA. This is subtraction from recorded timings, not a new benchmark. Separating jobs changes scheduling and recovery, not inference cost.
 
-**Not yet done, in order:**
-1. Write this up as a proper architectural spec per the `superpowers:brainstorming` skill (this session had already reached the "approaches narrowed by evidence to one" point when it ran long — the spec-writing and `writing-plans` steps haven't happened). Save to `docs/superpowers/specs/2026-09-2X-r3-phase-separation-design.md`.
-2. The spec needs to cover, concretely (this handoff has the *decisions*, the spec needs the *mechanics*): the new job type's name and payload shape; where in `backend-rust/src/jobs/coordinator.rs` it gets dispatched (right after `handle_ocr_callback`'s region-save transaction, before whatever currently triggers translation); the new internal callback route (`backend-rust/src/routes/internal.rs`) that writes `ocr_regions.cleanup_*` columns (the columns already exist, added in R3a-c) and then triggers translation's existing dispatch; the heartbeat column/endpoint and the `recovery.rs` change; whether `region-redo-ocr` (which also runs cleanup inline today, per `ocr.py`) moves to the same job type or stays inline (it's single-region and fast, may not need to change).
-3. `writing-plans` skill for the implementation plan, then implement, per the normal TDD workflow this repo uses.
-4. R3f/R3g (harness/measurement packets — a presigned scene-asset route for the harness, and `region_ssim.py`) were explicitly deferred until R3h; they still haven't started and should probably fold into the same implementation pass since the phase-separation touches the same scene-asset plumbing.
-5. R7 (inpainting layer in the reader) waits on this landing — see its row in the tracker's realigned-order table for its own spec needs (scene-asset HTTP route to the browser, canvas rendering of patches as editable layer objects).
+The reports compare final translated output with Torii's inpainted image inside region boxes; this mixes typography and cleanup. Changed/flattened-pixel percentages cannot establish correct artwork reconstruction. Unchanged OCR region counts cannot establish CTD mask accuracy. R3f/R3g cleanup-only capture/scoring remain unfinished.
 
-## What already landed this session (merged, don't redo)
+Visual review of [sample83 export](../quality-runs/r3b-20260921-six-b/a04-exports/sample83/export.png) found reconstruction smearing; [sample93 export](../quality-runs/r3b-20260921-six-b/a04-exports/sample93/export.png) shows patchy/outline-shaped remnants and undersized text. These concerns are not yet independently root-caused. [Sample93 editor](../quality-runs/r3b-20260921-six-b/a04-exports/sample93/editor.png) demonstrates the editor/export cleanup gap. Aggregate metrics do not close these findings.
 
-### Reader `\n` bug — fixed
-`frontend/src/components/Reader.tsx` joined wrapped text lines with the literal two-character string `"\\n"` instead of a real newline, in the `pre-wrap` branch used by elements without `maskPolygon`. One-character fix (`join("\n")`). Parent commit `0e61fa4`, 409 frontend tests green.
+## Preserve the agreed direction
 
-### Worker CI — fixed (unrelated pre-existing gap)
-Worker PR #47's "Run worker tests" was failing on 3 tests in `tests/test_seed_models.py`. R3a-c had added `_verify_ctd()`/`_verify_aot()` model checks to `seed_models()` alongside the existing `_verify_yolo()`, but the test fixture (`_fake_yolo`) only ever stubbed the YOLO check — on GitHub's runner (no CTD/AOT model file present) all three OCR-routing tests failed on `_verify_ctd()` before reaching what they actually test. Stubbed all three the same way. Worker `57d402d`. Confirmed green on the actual GitHub runner, not just locally.
+Normal forward path, after any existing panel-detection step:
 
-### Translation timing — root-caused and fixed
-Translation was taking 1–14 minutes per page. Investigated two theories and confirmed one, ruled out another:
+`OCR → cleanup → translation → render → QA → complete/review`
 
-- **Ruled out:** a dispatcher-polling regression (the user specifically remembered a past incident where a poll interval got bumped from 5s to 30s and wasted hours). `WORKER_POLL_MS` (`backend-rust/src/jobs/dispatcher.rs::spawn`) has defaulted to 2000ms in every compose file since it was introduced, unchanged in git history; confirmed live on the running stack. Per-call LLM log timestamps from a real 7-chunk page showed ~0 idle gap between chunks — the elapsed time was already fully explained by each call's own token generation, not polling delays.
-- **Found instead:** `worker/src/worker/handlers/translation.py`'s per-page chunk `ThreadPoolExecutor` was hardcoded to `max_workers=1`. Git archaeology: it used to be `max_workers=CLOUD_CONCURRENCY` (a real env-configurable setting) until a July 2026 refactor ("Phase 2 … deprecating CLOUD_CONCURRENCY") removed the variable and hardcoded `1` in its place, with no comment explaining why. The chunks have no ordering dependency (the context string is built once, upfront, from the page manifest — not accumulated chunk-by-chunk), so they were being serialized for no reason. A 7-chunk page ran its 7 LLM calls fully back-to-back. Reinstated `CLOUD_CONCURRENCY` (default 2 — note its *original* default was also 1, so this is a new lever, not a restored-but-lowered default) in `worker/src/worker/config.py`, wired into both `ThreadPoolExecutor` call sites in `translation.py`.
-- **The dominant cause, separately:** DeepSeek-v4-pro via OpenRouter reasons with no budget cap sent. Measured 74–81% of output tokens as reasoning on normal (`finish=stop`) pages, and on one real page, 8073/8192 output tokens went to reasoning with `finish=length` — zero actual content, four retries, 17.5 minutes for one page. Added `reasoning: {"max_tokens": 4096}` to OpenRouter payloads in `worker/src/worker/services/llm_client.py::_build_payload` (reasoning stays *on*, just capped — the user's explicit call, not `enabled: false`). `_build_payload` is shared by translation, cloud OCR, and QA LLM/VLM calls (impact: CRITICAL, 9 symbols/5 processes) — the change is additive and provider-gated (`if self.provider == "openrouter"`), and QA's own truncation issue is unrelated (that call already logs `reasoning=0`, unaffected by the cap).
-- Both fixes are worker commit `ac7cbba` (parent submodule bump `5b15023`). New tests: `test_openrouter_sends_a_bounded_reasoning_budget`, `test_non_openrouter_providers_get_no_reasoning_field`, `test_translation_chunks_honor_cloud_concurrency`. Full suite: 559 passed (was 556 before this session's other work, 552 before R3h).
-- **Queued, not done:** the user wants a live side-by-side test against `gpt-5.6-luna` (a non-reasoning model) in the *next* test round, to double check DeepSeek's reasoning behavior was really the whole story. Not run yet — don't assume it's covered.
+1. Cleanup is one job per page, processing a stable ordered list of regions. Keep it sequential with translation. No parallel cleanup branch or late-cleanup re-render mechanism.
+2. Retain per-region CTD **with the existing 1024 cap** and current reconstruction routing. Older “native CTD” wording must not lead to removing the cap. Do not reopen whole-page CTD/model/quantization exploration in this packet.
+3. Remove the unconditional runtime recheck. It rejected no regions in the logged gate run and consumed about half its cleanup time. This supports an optimization candidate, not universal claims of uselessness or zero quality risk. Retain offline evaluation and known bad-reconstruction cases; an inside-mask residual score cannot validate missing glyphs outside that mask.
+4. Add cleanup to the existing heavy queues on **both backend and worker**. No independent heavy capacity. `MAX_HEAVY_SLOTS` is per worker, not a fleet-wide limit. Translation chunk concurrency separately affects provider load.
+5. Preserve source images and linked cleanup patches. English text movement must not move source cleanup or rerun it. R7 separates cleanup visibility from text visibility for manual typesetting; reconcile older coupled hide-text/hide-cleanup rules when specifying that layer.
 
-### Quantization — spiked and closed
-int8 dynamic quantization of the CTD ONNX graph gives only 1.17–1.25× speedup (dynamic quantization leaves the graph's 63 `Conv`/6 `ConvTranspose` layers in fp32; it mainly helps MatMul/Gemm, which this graph barely has) at mask IoU 0.91–0.96 vs fp32 — marginal, not worth the accuracy trade on its own. Static (calibration-based) int8 could reach ~2× on this CPU (AVX2, no VNNI) but wasn't spiked; it sits behind the phase-separation work in priority since that's a much bigger, already-proven win.
+Sequential does not mean an unconditional single pass: existing QA retries/final renders remain bounded branches. Require one authorized forward stage per page/run, with obsolete attempts unable to mutate current state. Persisted stage outputs and pinned scene/font inputs support replay; fresh remote LLM calls do not promise identical text or timing. Translation chunks currently map results by region ID, not completion order; preserve that behavior.
 
-## Evidence and artifacts
+## Next work, in bounded packets
 
-- [`quality-checkpoints/R3.md`](R3.md) — the formal six-fixture gate writeup (quality passed, time failed) that everything above is fixing.
-- Tracker addenda in [`output-quality-implementation-tracker.md`](../output-quality-implementation-tracker.md), dated 2026-09-21, in order: the R3h rerun result, the reader/`\n`/decoupled-mask decisions, the page-pass-CTD-closed correction, the translation-timing trace, and the final parallel→sequential reversal. Read newest-first if short on time — each one says what it supersedes.
-- Recall-check spike scripts were throwaway (session scratchpad, not committed) — if the page-scale CTD question ever needs re-litigating, the method was: pull real region bboxes from a live stack's Postgres (`ocr_regions` table), pull source images from MinIO (`worker.config.minio_client`, bucket `manga-library`), run `worker.services.glyph_mask.segment_crop` both per-region (ground truth) and once on the downscaled whole page, compare recall (intersection / ground-truth-mask-area) per region — not aggregate IoU, which hides exactly the failure that matters.
+Start with a concrete specification, then the reliability foundation. Use existing R3/R5 seams; avoid a general scheduler rewrite. Each implementation packet needs focused verification and its own evidence. This documentation update makes no runtime changes.
 
-## GitNexus / repo requirements (unchanged, just a reminder)
+### Packet 1 — freeze the transition and recovery contract
 
-- `worker/` is `manga-tl-worker`, indexed separately from the parent `manga-library`. `impact()` before editing any symbol in either. `detect_changes({repo: "manga-tl-worker"})` for worker changes — the parent's `detect_changes()` cannot see inside the submodule.
-- Commit and push worker first, then bump the parent's submodule pointer — never the other way around.
-- Worker gates (from `worker/CLAUDE.md`), all via `../.venv/bin/python`: `ruff check --fix .`, `ruff format .`, `ruff check .`, `ruff format --check .`, `pyright .`, `pytest -q`. Current baseline: **559 passed**.
-- Commit footer: `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>` (session-specific — check the live system reminder for the current session's exact attribution lines before committing, they've changed mid-session before).
+Write `docs/superpowers/specs/2026-09-21-r3-phase-separation-design.md` and a bounded implementation plan. Preserve the decisions above; resolve these mechanics from actual callers:
 
-## Open threads not covered by the design above
+- Cleanup job name and immutable payload/result shapes: stable region IDs, source/geometry/policy/config digests, page/run generation, attempt or lease token. Distinguish input generation from scene revisions created by successful output writes.
+- OCR callback → persisted regions → cleanup → persisted patches → translation. Define empty-page, policy-exclusion, partial-failure, cancellation, edit, deletion, and redo outcomes. Missing patches/fallbacks must remain explicit, not count as successful cleanup. Trace page redo, region redo, and QA re-OCR separately; do not assume identical cleanup wiring.
+- Heartbeats, status updates, and callbacks must match the current attempt/input generation. An old attempt cannot renew a newer lease, write patches, reset status, or dispatch translation. Job-ID deduplication alone is insufficient.
+- Commit callback acceptance, result records, and durable next-job intent together. Specify queue publication/reconciliation after commit so a crash between database and Redis cannot strand or duplicate the next stage.
+- Periodic liveness heartbeats during inference/network waits, separate progress timestamps/counters, and bounded operation timeouts. A heartbeat thread must not hide hung inference indefinitely. Specify startup grace, heartbeat interval, expiry, sweep cadence, and recovery bounds together; two-minute expiry plus today's five-minute sweep is not two-minute recovery.
+- Scope the same protocol to other long stages, especially OCR/translation. Cleanup-only heartbeat leaves their false-recovery path open. Enumerate shared-code impact and split implementation where necessary.
+- State what survives restart. Prefer reusing completed region artifacts only when source, geometry, policy, and generator/config digests match; otherwise account for recomputation. A filename or existing row is not proof of a valid cache hit.
 
-- QA VLM response truncation (`QA passed` logged even when the response was cut off, e.g. 38 results returned for 63 regions on `sample61`) — noted in `R3.md`, a real correctness gap, not touched by anything in this handoff.
-- R3f/R3g formal packets — not started (see "not yet done" list above).
-- Static int8 CTD quantization — not spiked, lower priority than the phase-separation work.
+Finish with concrete transitions, payloads, failure outcomes, affected files, and tests. Do not repeat architecture brainstorming or make unavailable historical skills a prerequisite. Apply the current session's instructions and authorization to subsequent implementation and runs.
+
+### Packet 2 — recovery safety, then the cleanup stage
+
+Implement attempt/generation checks, heartbeat handling, and durable stage advancement at the touched seams first. Wire cleanup onto those guarantees, move it out of OCR, keep the cap, and remove the runtime recheck. Preserve asset/compositing semantics unless a separately reproduced defect needs correction.
+
+Required integration cases: healthy work spanning the old ten-minute threshold; death before callback; death after commit but before queue publication; duplicate callback; superseded attempt arriving after recovery; edit/cancel/delete during cleanup; partial region failure. Assert persisted results and downstream dispatch counts. Use isolated database/queue services; skipped integration tests are not executed.
+
+### Packet 3 — QA coverage before quality acceptance
+
+Persist expected QA target IDs for the submitted generation/artifact. Compare them with unique valid returned IDs. Explicit policy exclusions are not missing verdicts. Truncation, missing IDs, duplicates, or foreign IDs cannot produce a full pass. Retry under a bounded policy or finish incomplete/manual review. Old QA cannot approve a newer artifact.
+
+Regression: 38 verdicts for 63 expected targets cannot be `passed`. Cover empty and partial responses. JSON repair is not complete QA. Keep this separate from provider tuning.
+
+### Packet 4 — measurement and the bounded gate
+
+Finish R3f/R3g: capture logical/resolved scene, actual cleanup assets, cleanup-only composite, final artifact and provenance. Measure cleanup independently of translated text. Check exact source invariance outside approved alpha support, lettering/outline coverage, and protected art. Keep human crop review; Torii similarity is supporting evidence, not a sufficient pass.
+
+Use recorded OCR/translation outputs first to isolate cleanup/replay without paid calls. Then run a fresh isolated live canary with image/model/config identities and effective hardware/resources recorded. No mid-benchmark worker rebuild. Forced restart is a separate labeled reliability run. Save resumable manifests; capture completed pages without repeating paid stages.
+
+Complete all six fixtures, including sample61, and the selected short list (`sample7`, `sample197`, `sample641`) before the combined conventional-control sweep under existing runbook/review/budget decisions. The tracker historically says “24 controls” but later adds sample641 as the 25th: enumerate the actual manifest and report its denominator. Preserve A09; do not score or tune on it here.
+
+The previously requested live `gpt-5.6-luna` comparison remains pending for the next provider test round. Hold inputs/settings constant and report omissions/refusals, tokens, retries, cost and time. Do not silently change the default model or claim the comparison happened.
+
+### Packet 5 — R7 editor, then M7 fitting
+
+R7 should consume the same assets and shared scene/layout as the artifact, without another independently editable scene or typography implementation. First cut: separate Inpainting objects with the agreed geometry/visibility controls; no new inference-on-edit workflow. Specify source anchoring, explicit patch transforms, overlapping patches, hide/delete, undo and save/reload. Deleting a patch restores source plus remaining active patches; overlapping support requires recomposition.
+
+Compare content-only renders at identical source dimensions, revision, fonts and assets. A viewport screenshot with UI/overlays need not share the artifact's PNG digest. Check canonical downloads by digest separately. OCR overlays remain absent from exports.
+
+M7 addresses the 72 px sizing behavior, narrow columns, neighbor collisions, overflow, hierarchy, padding and style. Preserve the user's five named cases (`sample697`–`sample700`, `sample76`) alongside existing fixtures/controls. R3 does not close these defects. M8 finishes archive/output consistency; M9 release/corpus work remains later.
+
+## Three separate acceptance decisions
+
+| Gate | Required evidence | Current status |
+| --- | --- | --- |
+| Reliability | Attempt-safe callbacks, atomic advancement, bounded recovery, restart/edit/cancel cases, no duplicate accepted stage results/downstream jobs. | Open. Heartbeats alone cannot pass it. |
+| Performance | Queue wait and service time per stage; region/call costs; first translated artifact and final completion; retry/recovery overhead; batch throughput/resource use on declared hardware. | Retained runs fail; optimized end-to-end result unmeasured. |
+| Quality | All required captures, cleanup-only assets and visual review, complete translation/QA accounting, protected-art checks. R7/M7 separately gate editor equality/fitting. | Incomplete, with visible concerns. No six-fixture quality pass. |
+
+Set explicit user-facing latency/throughput ceilings for ordinary and stress pages before calling speed accepted. These runs establish no approved numeric ceiling for the revised pipeline. Record per-page timings/sample count; small-sample percentiles are descriptive, not production p95 evidence. A heartbeat or finishing within the harness timeout is not a speed target. The unset ceiling does not prevent implementing/measuring the agreed optimization; it prevents claiming performance acceptance.
+
+If capped per-region CTD without recheck still misses the eventual budget, retain that failure and propose one measured next optimization. Do not silently increase timeouts, concurrency, hardware requirements, or quality tolerances to manufacture a pass.
+
+## Landed fixes and evidence limits
+
+- Worker `ac7cbba` / parent pointer `5b15023`: translation concurrency and OpenRouter reasoning cap. The cap also affects OpenRouter OCR/QA. Some normal observed calls already used fewer than 4096 reasoning tokens; the cap alone cannot establish that typical translation latency is solved.
+- Parent `0e61fa4`: literal backslash-n joining corrected to real newlines in Reader. Fitting and cleanup visibility remain open.
+- Worker `57d402d`: seed-model fixtures stub CTD/AOT as well as YOLO. Previous handoff reports 559 worker tests, 409 frontend tests, and green hosted CI. These are historical results, not rerun or reverified by this documentation review.
+- Whole-page CTD spike: prior notes report recall/agreement 0.34–0.75 at 1024 and poor recovery of selected regions at larger sizes. Comparator was per-crop CTD, not independently annotated glyph truth. Scripts/overlays were scratch artifacts, not reproducible assets in these three run directories. Keep the rejected direction closed for this packet; do not label per-region CTD universally correctness-safe.
+- Dynamic quantization: prior spike reports 1.17–1.25× acceleration with mask disagreement; not selected. Static quantization remains unmeasured. LaMa-mpe/pluggable reconstruction are separate follow-ups.
+
+## Resume checklist
+
+Read this handoff, the [tracker summary](../output-quality-implementation-tracker.md#status-at-a-glance-2026-09-21--read-this-first-then-the-r-track-table), and [R3 measurements](R3.md). Check worktrees, heads and applicable instructions. Start **Packet 1**, then **Packet 2** before another expensive full run. Packets 3/4 must land before declaring quality acceptance.
+
+GitNexus impact before symbol edits; worker index is `manga-tl-worker`, separate from parent. Detect changes in each changed repository before committing. Worker development uses root `.venv`; backend API changes require live OpenAPI regeneration. Deliver worker commits before the parent pointer. Preserve runs, sources, references and uploads. This handoff does not authorize volume resets, expanded paid corpus work or deployment, and records no new quality sign-off.
