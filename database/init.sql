@@ -179,6 +179,17 @@ CREATE TABLE public.jobs (
     payload text,
     started_at timestamp(6) with time zone,
     status character varying(255) NOT NULL,
+    -- R3 stage-attempt authority. Payload mirrors these fields for worker transport;
+    -- the database values, not Redis delivery, decide whether work is current.
+    input_generation integer DEFAULT 0 NOT NULL,
+    lease_token character varying(255),
+    lease_expires_at timestamp(6) with time zone,
+    heartbeat_at timestamp(6) with time zone,
+    -- Liveness and progress are separate readings on purpose: heartbeat_at only says the worker
+    -- process is answering, progress_at/progress_count say the job advanced a unit of work.
+    -- A hung inference keeps the first moving and stops the second.
+    progress_at timestamp(6) with time zone,
+    progress_count integer DEFAULT 0 NOT NULL,
     trace_id character varying(255),
     type character varying(255) NOT NULL,
     updated_at timestamp(6) with time zone
@@ -324,6 +335,9 @@ CREATE TABLE public.pages (
     last_edited_at timestamp(6) with time zone,
     last_rendered_at timestamp(6) with time zone,
     scene_revision integer DEFAULT 0 NOT NULL,
+    -- Source/geometry generation for OCR/cleanup. This intentionally does not advance for
+    -- ordinary scene/layout edits, which only affect scene_revision.
+    input_generation integer DEFAULT 0 NOT NULL,
     current_render_job_id character varying(255)
 );
 

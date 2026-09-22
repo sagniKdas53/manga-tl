@@ -98,6 +98,95 @@
         },
         "type": "object"
       },
+      "CleanupCallbackDto": {
+        "properties": {
+          "cleanupInputDigest": {
+            "description": "Echo of the digest of the dispatched region list.",
+            "type": "string"
+          },
+          "imageId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "jobId": {
+            "type": "string"
+          },
+          "pageId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "regions": {
+            "description": "One outcome per dispatched region. A missing, repeated or foreign region fails the whole cleanup and withholds translation.",
+            "items": {
+              "$ref": "#/components/schemas/CleanupRegionResultDto"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CleanupRegionResultDto": {
+        "properties": {
+          "cleanupBounds": {
+            "nullable": true,
+            "type": "object"
+          },
+          "cleanupGeneratorSha256": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cleanupMaskAssetId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cleanupMaskByteLength": {
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
+          "cleanupMaskSha256": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cleanupPatchAssetId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cleanupPatchByteLength": {
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
+          "cleanupPatchSha256": {
+            "nullable": true,
+            "type": "string"
+          },
+          "diagnostics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "inputDigest": {
+            "description": "Echo of the digest this region was dispatched with.",
+            "type": "string"
+          },
+          "regionId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "complete",
+              "degraded",
+              "excluded",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "JsonNode": {
         "type": "object"
       },
@@ -1886,6 +1975,86 @@
         ]
       }
     },
+    "/api/internal/jobs/callback/cleanup": {
+      "post": {
+        "operationId": "cleanupCallback",
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleanupCallbackDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
+          }
+        },
+        "tags": [
+          "internal-job-controller"
+        ]
+      }
+    },
     "/api/internal/jobs/callback/layout": {
       "post": {
         "operationId": "layoutCallback",
@@ -1912,10 +2081,60 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [
           "internal-job-controller"
+        ],
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ]
       }
     },
@@ -1942,10 +2161,60 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [
           "internal-job-controller"
+        ],
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ]
       }
     },
@@ -1972,10 +2241,60 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [
           "internal-job-controller"
+        ],
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ]
       }
     },
@@ -2005,10 +2324,60 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [
           "internal-job-controller"
+        ],
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ]
       }
     },
@@ -2038,10 +2407,60 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [
           "internal-job-controller"
+        ],
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ]
       }
     },
@@ -2071,10 +2490,60 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [
           "internal-job-controller"
+        ],
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ]
       }
     },
@@ -2104,10 +2573,60 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [
           "internal-job-controller"
+        ],
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ]
       }
     },
@@ -2152,6 +2671,44 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -2177,6 +2734,16 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [

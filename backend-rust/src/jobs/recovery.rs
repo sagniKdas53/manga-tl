@@ -59,16 +59,24 @@ pub async fn reset_processing_jobs_to_pending(state: &AppState) {
                 max_attempts
             );
             // Clear started_at: the abandoned attempt's wall-clock must not charge the retry.
+            // The fresh lease token is what makes the abandoned attempt harmless if its process
+            // is somehow still alive: its headers name the old token, so every status update and
+            // every callback it makes from here on is a 409.
+            let lease_token = Uuid::new_v4().to_string();
             let payload = job
                 .payload
                 .as_deref()
-                .map(|p| coordinator::update_payload_attempt(p, attempt));
+                .map(|p| coordinator::update_payload_attempt_and_lease(p, attempt, &lease_token));
             let _ = sqlx::query(
-                "UPDATE jobs SET status='PENDING', started_at=NULL, attempt=$2, payload=COALESCE($3, payload), updated_at=now() WHERE id=$1",
+                "UPDATE jobs SET status='PENDING', started_at=NULL, attempt=$2, \
+                   payload=COALESCE($3, payload), lease_token=$4, lease_expires_at=NULL, \
+                   heartbeat_at=NULL, callback_applied_at=NULL, updated_at=now() \
+                 WHERE id=$1",
             )
             .bind(&job.id)
             .bind(attempt)
             .bind(payload)
+            .bind(&lease_token)
             .execute(&mut *tx)
             .await;
         }
@@ -79,8 +87,19 @@ pub async fn reset_processing_jobs_to_pending(state: &AppState) {
 }
 
 /// The @Scheduled(fixedRate = 300000) stale sweep.
+///
+/// Staleness is now the **lease**, not a flat ten minutes of silence. A worker renews its lease
+/// every heartbeat (`JOB_LEASE_SECS`), so a job that is genuinely working — a cleanup page that
+/// spends seventeen minutes in CTD — is never swept, while a worker that died is recoverable
+/// roughly one lease plus one sweep interval later. That is a bounded window, not a two-minute
+/// one: this loop runs every five minutes, so recovery is worst-case ~5 min + the lease, and the
+/// handoff is explicit that those two numbers must be read together.
+///
+/// Rows predating this change (or never started) have no lease; they fall back to the original
+/// ten-minute `updated_at` rule so an upgrade does not strand them.
 pub async fn recover_stale_processing_jobs(state: &AppState) {
-    let threshold = chrono::Utc::now() - chrono::Duration::minutes(10);
+    let legacy_threshold = chrono::Utc::now() - chrono::Duration::minutes(10);
+    let now = chrono::Utc::now();
     let stale: Vec<crate::models::Job> =
         sqlx::query_as("SELECT * FROM jobs WHERE status = 'PROCESSING' ORDER BY created_at ASC")
             .fetch_all(&state.pool)
@@ -91,17 +110,53 @@ pub async fn recover_stale_processing_jobs(state: &AppState) {
         let Some(updated_at) = job.updated_at else {
             continue;
         };
-        if updated_at >= threshold {
+        let expired = match job.lease_expires_at {
+            Some(expires_at) => expires_at < now,
+            None => updated_at < legacy_threshold,
+        };
+        if !expired {
             continue;
+        }
+        // A job whose page has moved on is not recoverable, it is obsolete. Re-arming it would
+        // dispatch the stage again — for cleanup, a full CTD pass — against the region list and
+        // geometry it was built for, and its callback would then be refused on the generation
+        // fence anyway. Up to `max_attempts` runs of that is not a retry, it is waste.
+        if let Some(page_id) = job.page_id {
+            let page_generation: Option<i32> =
+                sqlx::query_scalar("SELECT input_generation FROM pages WHERE id = $1")
+                    .bind(page_id)
+                    .fetch_optional(&state.pool)
+                    .await
+                    .ok()
+                    .flatten();
+            if page_generation.is_some_and(|current| current != job.input_generation) {
+                tracing::warn!(
+                    "Abandoning stale job {} ({}): its page is at input generation {:?}, the job at {}",
+                    job.id,
+                    job.job_type,
+                    page_generation,
+                    job.input_generation
+                );
+                let _ = sqlx::query(
+                    "UPDATE jobs SET status='FAILED', \
+                       error='Superseded: the page inputs were replaced while this attempt ran', \
+                       updated_at=now() WHERE id=$1 AND status='PROCESSING'",
+                )
+                .bind(&job.id)
+                .execute(&state.pool)
+                .await;
+                continue;
+            }
         }
         let attempt = job.attempt.map(|a| a + 1).unwrap_or(1);
         let max_attempts = job.max_attempts.unwrap_or(3);
         tracing::warn!(
-            "Recovering stale PROCESSING job {} (attempt {}/{}, last updated at {})",
+            "Recovering stale PROCESSING job {} (attempt {}/{}, last updated at {}, lease expiry {:?})",
             job.id,
             attempt,
             max_attempts,
-            updated_at
+            updated_at,
+            job.lease_expires_at
         );
         if attempt > max_attempts {
             let _ = sqlx::query(
@@ -111,18 +166,37 @@ pub async fn recover_stale_processing_jobs(state: &AppState) {
             .execute(&state.pool)
             .await;
         } else {
+            // Compare-and-swap on the attempt and lease this sweep observed. A worker that
+            // heartbeated between the SELECT above and this UPDATE has already moved the lease
+            // on, and this statement then matches nothing rather than yanking a live job back to
+            // PENDING underneath it.
+            let lease_token = Uuid::new_v4().to_string();
             let payload = job
                 .payload
                 .as_deref()
-                .map(|p| coordinator::update_payload_attempt(p, attempt));
-            let _ = sqlx::query(
-                "UPDATE jobs SET status='PENDING', started_at=NULL, attempt=$2, payload=COALESCE($3,payload), updated_at=now() WHERE id=$1",
+                .map(|p| coordinator::update_payload_attempt_and_lease(p, attempt, &lease_token));
+            let swapped = sqlx::query(
+                "UPDATE jobs SET status='PENDING', started_at=NULL, attempt=$2, \
+                   payload=COALESCE($3,payload), lease_token=$4, lease_expires_at=NULL, \
+                   heartbeat_at=NULL, callback_applied_at=NULL, updated_at=now() \
+                 WHERE id=$1 AND status='PROCESSING' \
+                   AND attempt IS NOT DISTINCT FROM $5 AND lease_token IS NOT DISTINCT FROM $6",
             )
             .bind(&job.id)
             .bind(attempt)
             .bind(payload)
+            .bind(&lease_token)
+            .bind(job.attempt)
+            .bind(job.lease_token.as_deref())
             .execute(&state.pool)
             .await;
+            if swapped.map(|res| res.rows_affected()).unwrap_or(0) == 0 {
+                tracing::info!(
+                    "Job {} moved on before the stale sweep could re-arm it; leaving it alone",
+                    job.id
+                );
+                continue;
+            }
             // Re-push only when still PENDING (mirrors Java's post-save check).
             if let Some(refreshed) = sqlx::query_as::<_, crate::models::Job>(
                 "SELECT * FROM jobs WHERE id = $1 AND status = 'PENDING'",

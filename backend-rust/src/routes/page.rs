@@ -2327,6 +2327,14 @@ async fn restore_project_page(
             .map_err(|_| ())?;
     }
     let counts = restore_project_layers(&mut tx, page_id, project_json, track_manual_edits).await?;
+    if replacement_image_id.is_some() {
+        // New source pixels: every cleanup patch and OCR box on this page was computed from the
+        // old ones, so the generation fence has to move with them (R3 phase-separation design,
+        // "Invalidation and deletion").
+        crate::page_freshness::advance_page_input_generation(&mut tx, page_id)
+            .await
+            .map_err(|_| ())?;
+    }
     crate::page_freshness::advance_page_revision(&mut tx, page_id)
         .await
         .map_err(|_| ())?;

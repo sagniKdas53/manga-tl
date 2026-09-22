@@ -62,8 +62,11 @@ async fn app() -> Option<(
             .expect("redis connect"),
     );
 
+    // The throwaway stack publishes MinIO on a deliberately disjoint port (scripts/test-env.sh);
+    // the hardcoded 9000 here only ever worked when the serving stack happened to be up.
     let minio = MinioConfig {
-        endpoint: "http://localhost:9000".into(),
+        endpoint: std::env::var("MINIO_TEST_ENDPOINT")
+            .unwrap_or_else(|_| "http://localhost:9000".into()),
         external_url: None,
         access_key: Some("minioadmin".into()),
         secret_key: Some("minioadmin".into()),
@@ -108,9 +111,23 @@ async fn request(
     token_header: Option<(&str, &str)>,
     body: Option<String>,
 ) -> (StatusCode, String, String) {
+    let headers: Vec<(String, String)> = token_header
+        .into_iter()
+        .map(|(name, value)| (name.to_string(), value.to_string()))
+        .collect();
+    request_with_headers(app, method, uri, &headers, body).await
+}
+
+async fn request_with_headers(
+    app: &Router,
+    method: &str,
+    uri: &str,
+    headers: &[(String, String)],
+    body: Option<String>,
+) -> (StatusCode, String, String) {
     let mut builder = Request::builder().method(method).uri(uri);
-    if let Some((name, value)) = token_header {
-        builder = builder.header(name, value);
+    for (name, value) in headers {
+        builder = builder.header(name.as_str(), value.as_str());
     }
     if body.is_some() {
         builder = builder.header("Content-Type", "application/json");
@@ -139,6 +156,120 @@ fn internal(
     token_header: Option<(&'static str, &'static str)>,
 ) -> Option<(&'static str, &'static str)> {
     token_header.or(Some(("X-Internal-Token", INTERNAL_TOKEN)))
+}
+
+/// Everything `rq_tasks.process_job_rq` puts on the wire for a job it is running: the internal
+/// token plus the four attempt-identity headers, read out of the job row so a test speaks as the
+/// attempt the backend actually dispatched.
+///
+/// Reading them rather than inventing them is the point. A test that made up an attempt number or
+/// a lease token would be testing a fiction; a test that copies the row is a superseded-attempt
+/// test the moment the row moves on underneath it.
+async fn worker_headers(pool: &sqlx::PgPool, job_id: &str) -> Vec<(String, String)> {
+    let (attempt, input_generation, lease_token): (Option<i32>, i32, Option<String>) =
+        sqlx::query_as("SELECT attempt, input_generation, lease_token FROM jobs WHERE id = $1")
+            .bind(job_id)
+            .fetch_one(pool)
+            .await
+            .expect("job row for worker headers");
+    vec![
+        ("X-Internal-Token".into(), INTERNAL_TOKEN.into()),
+        ("X-Job-Id".into(), job_id.into()),
+        ("X-Job-Attempt".into(), attempt.unwrap_or(1).to_string()),
+        ("X-Input-Generation".into(), input_generation.to_string()),
+        ("X-Lease-Token".into(), lease_token.unwrap_or_default()),
+    ]
+}
+
+/// POST a result callback the way the worker does: the body, plus the identity of the job the
+/// body names.
+async fn worker_post(
+    app: &Router,
+    pool: &sqlx::PgPool,
+    uri: &str,
+    body: &serde_json::Value,
+) -> (StatusCode, String, String) {
+    let job_id = body["jobId"]
+        .as_str()
+        .expect("a callback body names the job it reports on")
+        .to_string();
+    let headers = worker_headers(pool, &job_id).await;
+    request_with_headers(app, "POST", uri, &headers, Some(body.to_string())).await
+}
+
+/// PATCH a job's status the way the worker does.
+async fn worker_status(
+    app: &Router,
+    pool: &sqlx::PgPool,
+    job_id: &str,
+    body: serde_json::Value,
+) -> (StatusCode, String, String) {
+    let headers = worker_headers(pool, job_id).await;
+    request_with_headers(
+        app,
+        "PATCH",
+        &format!("/tlhub/api/internal/jobs/{job_id}/status"),
+        &headers,
+        Some(body.to_string()),
+    )
+    .await
+}
+
+/// Pop the entry for one page off a shared stage queue, putting any neighbour's entries back.
+///
+/// `queue:*` keys are global Redis lists. `QUEUE_GUARD` stops two tests in this binary racing on
+/// them, but it cannot clear what an aborted run left behind, and a stale payload popped here
+/// reads as this page's job and fails the assertions in a thoroughly confusing way.
+async fn pop_for_page(
+    redis: &RedisService,
+    queue: &str,
+    page_id: Uuid,
+) -> Option<serde_json::Value> {
+    let mut put_back = Vec::new();
+    let mut found = None;
+    while let Some(raw) = redis.pop_from_queue(queue).await.unwrap() {
+        let job: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        if job["pageId"] == page_id.to_string() {
+            found = Some(job);
+            break;
+        }
+        put_back.push(raw);
+    }
+    for raw in put_back {
+        redis.push_to_queue(queue, &raw).await.unwrap();
+    }
+    found
+}
+
+/// Run a stage end to end the way a worker does: win the start compare-and-swap on the PENDING
+/// row, then post the result callback for it. Tests that are about the CAS or about a *duplicate*
+/// delivery call `worker_starts` / `worker_post` separately, because a duplicate delivery does
+/// not get to start the job again.
+async fn worker_runs(
+    app: &Router,
+    pool: &sqlx::PgPool,
+    uri: &str,
+    body: &serde_json::Value,
+) -> (StatusCode, String, String) {
+    let job_id = body["jobId"]
+        .as_str()
+        .expect("a callback body names the job it reports on")
+        .to_string();
+    worker_starts(app, pool, &job_id).await;
+    worker_post(app, pool, uri, body).await
+}
+
+/// Take a job from PENDING to PROCESSING, as the worker's start compare-and-swap does, so the
+/// row is in the state a result callback is allowed to complete.
+async fn worker_starts(app: &Router, pool: &sqlx::PgPool, job_id: &str) {
+    let (status, _, body) = worker_status(
+        app,
+        pool,
+        job_id,
+        serde_json::json!({"status": "PROCESSING"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "worker start CAS: {body}");
 }
 
 /// Seeds series → chapter → page → image; returns their ids.
@@ -307,15 +438,7 @@ async fn full_pipeline_walks_every_stage() {
     assert_eq!(row.0, "PENDING");
 
     // --- worker PATCHes PROCESSING, then posts the panel callback ---
-    let (status, _, _) = request(
-        &app,
-        "PATCH",
-        &format!("/tlhub/api/internal/jobs/{job_id}/status"),
-        internal(None),
-        Some(r#"{"status":"PROCESSING"}"#.into()),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
+    worker_starts(&app, &pool, &job_id).await;
 
     let panel_callback = serde_json::json!({
         "jobId": job_id,
@@ -326,12 +449,11 @@ async fn full_pipeline_walks_every_stage() {
             {"x": 40, "y": 0, "width": 24, "height": 64, "gridRow": 1, "gridCol": 2, "readingOrder": 2}
         ]
     });
-    let (status, _, body) = request(
+    let (status, _, body) = worker_post(
         &app,
-        "POST",
+        &pool,
         "/tlhub/api/internal/jobs/callback/panel",
-        internal(None),
-        Some(panel_callback.to_string()),
+        &panel_callback,
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -382,12 +504,11 @@ async fn full_pipeline_walks_every_stage() {
              "backgroundColor": "#ffffff"}
         ]
     });
-    let (status, _, body) = request(
+    let (status, _, body) = worker_runs(
         &app,
-        "POST",
+        &pool,
         "/tlhub/api/internal/jobs/callback/ocr",
-        internal(None),
-        Some(ocr_callback.to_string()),
+        &ocr_callback,
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -443,12 +564,11 @@ async fn full_pipeline_walks_every_stage() {
         "regionTypes": [{"regionId": region_id.0.to_string(), "regionType": "sfx"}],
         "conversations": [{"sceneType": "dialogue", "regionIds": [region_id.0.to_string()]}]
     });
-    let (status, _, body) = request(
+    let (status, _, body) = worker_runs(
         &app,
-        "POST",
+        &pool,
         "/tlhub/api/internal/jobs/callback/layout",
-        internal(None),
-        Some(layout_callback.to_string()),
+        &layout_callback,
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -461,12 +581,143 @@ async fn full_pipeline_walks_every_stage() {
             .unwrap();
     assert_eq!(conv_count, 1);
 
-    let tl_raw = redis
-        .pop_from_queue("queue:translation")
+    // --- cleanup is the stage between layout and translation now ---
+    // Layout dispatches it in the same transaction that wrote the classifications, so translation
+    // is NOT on its queue yet: nothing translates a page whose Japanese is still on it.
+    // Asserted against this image's own rows rather than the shared queue: the stage queues are
+    // global Redis lists that sibling tests and aborted runs also write to.
+    let translation_jobs = |pool: sqlx::PgPool| async move {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM jobs WHERE image_id = $1 AND type = 'translation'",
+        )
+        .bind(image_id)
+        .fetch_one(&pool)
         .await
         .unwrap()
-        .expect("translation queued");
-    let tl_payload: serde_json::Value = serde_json::from_str(&tl_raw).unwrap();
+    };
+    assert_eq!(
+        translation_jobs(pool.clone()).await,
+        0,
+        "layout hands off to cleanup, not straight to translation"
+    );
+    let cleanup_payload = pop_for_page(&redis, "queue:cleanup", page_id)
+        .await
+        .expect("cleanup queued");
+    assert_eq!(cleanup_payload["type"], "cleanup");
+    assert_eq!(
+        cleanup_payload["inputGeneration"], 1,
+        "OCR advanced the page's input generation"
+    );
+    let dispatched_regions = cleanup_payload["cleanupRegions"]
+        .as_array()
+        .expect("cleanup carries its immutable region list");
+    assert_eq!(
+        dispatched_regions.len(),
+        2,
+        "both OCR regions are dispatched"
+    );
+    // The region layout classified as SFX is excluded rather than dropped: SFX are never
+    // typeset, so their source lettering stays on the page.
+    let excluded: Vec<&serde_json::Value> = dispatched_regions
+        .iter()
+        .filter(|entry| entry["policyAction"] == "exclude")
+        .collect();
+    assert_eq!(excluded.len(), 1, "the SFX region is excluded from cleanup");
+    assert_eq!(excluded[0]["regionId"], region_id.0.to_string());
+
+    // A response that reports only some of the dispatched regions is an incomplete cleanup, and
+    // an incomplete cleanup withholds translation rather than translating an uncleaned page.
+    let short_response = serde_json::json!({
+        "jobId": cleanup_payload["jobId"],
+        "imageId": image_id.to_string(),
+        "pageId": page_id.to_string(),
+        "cleanupInputDigest": cleanup_payload["cleanupInputDigest"],
+        "regions": [{
+            "regionId": dispatched_regions[0]["regionId"],
+            "inputDigest": dispatched_regions[0]["inputDigest"],
+            "status": if dispatched_regions[0]["policyAction"] == "exclude" { "excluded" } else { "complete" },
+            "diagnostics": [],
+        }],
+    });
+    let cleanup_job_id = cleanup_payload["jobId"].as_str().unwrap().to_string();
+    worker_starts(&app, &pool, &cleanup_job_id).await;
+    let (status, _, body) = worker_post(
+        &app,
+        &pool,
+        "/tlhub/api/internal/jobs/callback/cleanup",
+        &short_response,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        translation_jobs(pool.clone()).await,
+        0,
+        "an under-reported cleanup must not dispatch translation"
+    );
+    let (cleanup_status, cleanup_error): (String, Option<String>) =
+        sqlx::query_as("SELECT status, error FROM jobs WHERE id = $1")
+            .bind(&cleanup_job_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(cleanup_status, "FAILED", "an incomplete cleanup says so");
+    assert!(
+        cleanup_error.unwrap_or_default().contains("never reported"),
+        "the failure names the regions that went missing"
+    );
+
+    // The worker's bounded retry re-arms the job, and the complete answer dispatches translation.
+    let (status, ..) = worker_status(
+        &app,
+        &pool,
+        &cleanup_job_id,
+        serde_json::json!({"status": "PENDING", "attempt": "2"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "a failed cleanup is retryable");
+    let _ = pop_for_page(&redis, "queue:cleanup", page_id).await;
+    let full_response = serde_json::json!({
+        "jobId": cleanup_payload["jobId"],
+        "imageId": image_id.to_string(),
+        "pageId": page_id.to_string(),
+        "cleanupInputDigest": cleanup_payload["cleanupInputDigest"],
+        "regions": dispatched_regions.iter().map(|entry| serde_json::json!({
+            "regionId": entry["regionId"],
+            "inputDigest": entry["inputDigest"],
+            "status": if entry["policyAction"] == "exclude" { "excluded" } else { "complete" },
+            "cleanupPatchAssetId": "patch-abc",
+            "cleanupPatchSha256": format!("{:0>64}", "ab"),
+            "cleanupPatchByteLength": 1234,
+            "cleanupBounds": {"x": 0, "y": 0, "width": 10, "height": 10},
+            "cleanupGeneratorSha256": format!("{:0>64}", "cd"),
+            "diagnostics": ["reconstruction method: telea"],
+        })).collect::<Vec<_>>(),
+    });
+    let (status, _, body) = worker_runs(
+        &app,
+        &pool,
+        "/tlhub/api/internal/jobs/callback/cleanup",
+        &full_response,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // The non-excluded region carries its patch; the excluded one deliberately carries none.
+    let patched: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM ocr_regions WHERE page_id = $1 AND cleanup_patch_asset_id IS NOT NULL",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        patched, 1,
+        "one replace region patched, the SFX exclusion untouched"
+    );
+
+    let tl_payload = pop_for_page(&redis, "queue:translation", page_id)
+        .await
+        .expect("translation queued once cleanup is complete");
 
     // --- translation callback builds the translation layer + elements, queues render ---
     let translation_callback = serde_json::json!({
@@ -478,12 +729,11 @@ async fn full_pipeline_walks_every_stage() {
         ],
         "cost": {"estimated_cost": 0.002, "provider": "openai", "model": "gpt-4o"}
     });
-    let (status, _, body) = request(
+    let (status, _, body) = worker_runs(
         &app,
-        "POST",
+        &pool,
         "/tlhub/api/internal/jobs/callback/translation",
-        internal(None),
-        Some(translation_callback.to_string()),
+        &translation_callback,
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -540,12 +790,11 @@ async fn full_pipeline_walks_every_stage() {
         "imageId": image_id.to_string(),
         "pageId": page_id.to_string()
     });
-    let (status, _, body) = request(
+    let (status, _, body) = worker_runs(
         &app,
-        "POST",
+        &pool,
         "/tlhub/api/internal/jobs/callback/render",
-        internal(None),
-        Some(render_callback.to_string()),
+        &render_callback,
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -574,12 +823,11 @@ async fn full_pipeline_walks_every_stage() {
             {"regionId": translated_region.0.to_string(), "qaStatus": "passed", "qaScore": 0.99, "qaFeedback": ""}
         ]
     });
-    let (status, _, body) = request(
+    let (status, _, body) = worker_runs(
         &app,
-        "POST",
+        &pool,
         "/tlhub/api/internal/jobs/callback/qa",
-        internal(None),
-        Some(qa_callback.to_string()),
+        &qa_callback,
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -631,12 +879,11 @@ async fn duplicate_callbacks_are_dropped() {
     });
 
     // First application inserts one panel and enqueues OCR...
-    let (status, ..) = request(
+    let (status, ..) = worker_runs(
         &app,
-        "POST",
+        &pool,
         "/tlhub/api/internal/jobs/callback/panel",
-        internal(None),
-        Some(panel_callback.to_string()),
+        &panel_callback,
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -646,12 +893,11 @@ async fn duplicate_callbacks_are_dropped() {
     );
 
     // ...the duplicate is dropped: no second panel, no second OCR enqueue.
-    let (status, ..) = request(
+    let (status, ..) = worker_post(
         &app,
-        "POST",
+        &pool,
         "/tlhub/api/internal/jobs/callback/panel",
-        internal(None),
-        Some(panel_callback.to_string()),
+        &panel_callback,
     )
     .await;
     assert_eq!(
@@ -704,13 +950,65 @@ async fn job_status_patch_validates_and_updates() {
     let payload: serde_json::Value = serde_json::from_str(&raw).unwrap();
     let job_id = payload["jobId"].as_str().unwrap().to_string();
 
-    // Unknown status → 400 JSON with allowed vocabulary.
-    let (status, content_type, body) = request(
+    // A heartbeat renews the lease and records progress, and does NOT need a status change to
+    // mean something: `progress_count` is what separates "the worker is answering" from "the job
+    // is advancing" when an inference hangs.
+    worker_starts(&app, &pool, &job_id).await;
+    let (status, ..) = worker_status(
         &app,
-        "PATCH",
-        &format!("/tlhub/api/internal/jobs/{job_id}/status"),
-        internal(None),
-        Some(r#"{"status":"RUNNING"}"#.into()),
+        &pool,
+        &job_id,
+        serde_json::json!({"status": "PROCESSING", "heartbeat": "true", "progress": "7"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (progress, heartbeat_at, progress_at): (
+        i32,
+        Option<chrono::DateTime<chrono::Utc>>,
+        Option<chrono::DateTime<chrono::Utc>>,
+    ) = sqlx::query_as("SELECT progress_count, heartbeat_at, progress_at FROM jobs WHERE id=$1")
+        .bind(&job_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(progress, 7);
+    assert!(heartbeat_at.is_some() && progress_at.is_some());
+
+    // A heartbeat that reports no new work keeps the job alive without pretending it advanced.
+    let (status, ..) = worker_status(
+        &app,
+        &pool,
+        &job_id,
+        serde_json::json!({"status": "PROCESSING", "heartbeat": "true", "progress": "7"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (progress, later_progress_at): (i32, Option<chrono::DateTime<chrono::Utc>>) =
+        sqlx::query_as("SELECT progress_count, progress_at FROM jobs WHERE id=$1")
+            .bind(&job_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(progress, 7);
+    assert_eq!(
+        later_progress_at, progress_at,
+        "a heartbeat with no new work must not look like progress"
+    );
+
+    // Put the row back to PENDING for the rest of this test's walk through the table.
+    sqlx::query("UPDATE jobs SET status='PENDING', started_at=NULL WHERE id=$1")
+        .bind(&job_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // Unknown status → 400 JSON with allowed vocabulary. Vocabulary is checked before the row is
+    // even looked up, so this stays a 400 rather than becoming a transition 409.
+    let (status, content_type, body) = worker_status(
+        &app,
+        &pool,
+        &job_id,
+        serde_json::json!({"status": "RUNNING"}),
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -722,13 +1020,28 @@ async fn job_status_patch_validates_and_updates() {
         "[PENDING, PROCESSING, COMPLETED, FAILED, PAUSED]"
     );
 
-    // FAILED with an error message persists both.
-    let (status, ..) = request(
+    // A PENDING job cannot go straight to FAILED: only a started attempt can fail. This is the
+    // transition table, not the vocabulary check, so it is a 409.
+    let (status, ..) = worker_status(
         &app,
-        "PATCH",
-        &format!("/tlhub/api/internal/jobs/{job_id}/status"),
-        internal(None),
-        Some(r#"{"status":"FAILED","error":"boom"}"#.into()),
+        &pool,
+        &job_id,
+        serde_json::json!({"status": "FAILED", "error": "boom"}),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "a job that never started cannot report a failure"
+    );
+
+    // The start CAS, then FAILED with an error message persists both.
+    worker_starts(&app, &pool, &job_id).await;
+    let (status, ..) = worker_status(
+        &app,
+        &pool,
+        &job_id,
+        serde_json::json!({"status": "FAILED", "error": "boom"}),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -743,21 +1056,69 @@ async fn job_status_patch_validates_and_updates() {
         ("FAILED", Some("boom"))
     );
 
+    // A retry that does not advance the attempt is refused: it would re-arm the row under the
+    // same identity the failed attempt still holds, and that attempt could then claim a callback.
+    let (status, ..) = worker_status(
+        &app,
+        &pool,
+        &job_id,
+        serde_json::json!({"status": "PENDING"}),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "a retry must name the attempt it is advancing to"
+    );
+
     // PENDING re-pushes the payload onto the stage queue and clears started_at.
     sqlx::query("UPDATE jobs SET started_at = now() WHERE id=$1")
         .bind(&job_id)
         .execute(&pool)
         .await
         .unwrap();
-    let (status, ..) = request(
+    let stale_headers = worker_headers(&pool, &job_id).await;
+    let (status, ..) = worker_status(
         &app,
-        "PATCH",
-        &format!("/tlhub/api/internal/jobs/{job_id}/status"),
-        internal(None),
-        Some(r#"{"status":"PENDING"}"#.into()),
+        &pool,
+        &job_id,
+        serde_json::json!({"status": "PENDING", "attempt": "2"}),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
+
+    // The re-armed row carries a NEW lease, and the attempt that just failed cannot touch it
+    // again with the credentials it still has.
+    let (attempt, lease): (Option<i32>, Option<String>) =
+        sqlx::query_as("SELECT attempt, lease_token FROM jobs WHERE id=$1")
+            .bind(&job_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(attempt, Some(2));
+    let stale_lease = stale_headers
+        .iter()
+        .find(|(name, _)| name == "X-Lease-Token")
+        .map(|(_, value)| value.clone())
+        .unwrap();
+    assert_ne!(
+        lease.as_deref(),
+        Some(stale_lease.as_str()),
+        "retry rotates the lease"
+    );
+    let (status, ..) = request_with_headers(
+        &app,
+        "PATCH",
+        &format!("/tlhub/api/internal/jobs/{job_id}/status"),
+        &stale_headers,
+        Some(serde_json::json!({"status": "PROCESSING"}).to_string()),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "the superseded attempt cannot start the re-armed job"
+    );
     assert!(
         redis
             .pop_from_queue("queue:panel-detection")
@@ -1131,20 +1492,29 @@ async fn redo_callbacks_persist_their_spend() {
             "duration_ms": 1700
         }]
     });
-    let (status, _, body) = request(
+    // A QA re-OCR result comes from a real job, so it needs a real job row to report on.
+    let qa_job_id = format!("qa-re-ocr-{region_id}");
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, image_id, page_id, attempt, max_attempts, lease_token, created_at, updated_at) \
+         VALUES ($1,'qa-re-ocr','PROCESSING',$2,$3,1,3,$1,now(),now())",
+    )
+    .bind(&qa_job_id)
+    .bind(image_id)
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("qa-re-ocr job");
+    let (status, _, body) = worker_post(
         &app,
-        "POST",
+        &pool,
         "/tlhub/api/internal/jobs/callback/qa-re-ocr",
-        internal(None),
-        Some(
-            serde_json::json!({
-                "imageId": image_id.to_string(),
-                "pageId": page_id.to_string(),
-                "results": [{"regionId": region_id.to_string(), "text": "再OCR", "confidence": 0.9, "detectedLanguage": "ja"}],
-                "cost": qa_cost,
-            })
-            .to_string(),
-        ),
+        &serde_json::json!({
+            "jobId": qa_job_id,
+            "imageId": image_id.to_string(),
+            "pageId": page_id.to_string(),
+            "results": [{"regionId": region_id.to_string(), "text": "再OCR", "confidence": 0.9, "detectedLanguage": "ja"}],
+            "cost": qa_cost,
+        }),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -1219,7 +1589,7 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
         .unwrap();
 
     let job_id = format!("redo-en-{region_id}");
-    sqlx::query("INSERT INTO jobs (id, type, status, image_id, attempt, max_attempts, payload, created_at, updated_at) VALUES ($1,'region-redo-tl','PROCESSING',$2,1,3,$3,now(),now())")
+    sqlx::query("INSERT INTO jobs (id, type, status, image_id, attempt, max_attempts, payload, lease_token, created_at, updated_at) VALUES ($1,'region-redo-tl','PROCESSING',$2,1,3,$3,$1,now(),now())")
         .bind(&job_id)
         .bind(image_id)
         .bind(serde_json::json!({"targetLanguage": "en"}).to_string())
@@ -1227,18 +1597,14 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
         .await
         .unwrap();
 
-    let (status, _, body) = request(
+    let (status, _, body) = worker_post(
         &app,
-        "POST",
+        &pool,
         &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
-        internal(None),
-        Some(
-            serde_json::json!({
-                "jobId": job_id,
-                "translatedText": "Was it really that big...?"
-            })
-            .to_string(),
-        ),
+        &serde_json::json!({
+            "jobId": job_id,
+            "translatedText": "Was it really that big...?"
+        }),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -1559,7 +1925,7 @@ async fn a_repeated_region_callback_is_applied_once() {
 
     // The job the worker is reporting on, so claim_callback has a row to claim.
     let job_id = format!("redo-dup-{region_id}");
-    sqlx::query("INSERT INTO jobs (id, type, status, image_id, attempt, max_attempts, created_at, updated_at) VALUES ($1,'region-redo-ocr','PROCESSING',$2,1,3,now(),now())")
+    sqlx::query("INSERT INTO jobs (id, type, status, image_id, attempt, max_attempts, lease_token, created_at, updated_at) VALUES ($1,'region-redo-ocr','PROCESSING',$2,1,3,$1,now(),now())")
         .bind(&job_id)
         .bind(image_id)
         .execute(&pool)
@@ -1583,13 +1949,16 @@ async fn a_repeated_region_callback_is_applied_once() {
     })
     .to_string();
 
-    // Deliver it twice, exactly as a worker retry or a lost response would.
+    // Deliver it twice, exactly as a worker retry or a lost response would — same job, same
+    // attempt, same lease, so both deliveries are equally entitled and only the claim separates
+    // them.
+    let headers = worker_headers(&pool, &job_id).await;
     for _ in 0..2 {
-        let (status, _, body) = request(
+        let (status, _, body) = request_with_headers(
             &app,
             "POST",
             &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
-            internal(None),
+            &headers,
             Some(body_json.clone()),
         )
         .await;
@@ -1673,7 +2042,7 @@ async fn region_callback_rolls_back_claim_when_cost_persistence_fails() {
         .unwrap();
 
     let job_id = format!("redo-cost-rollback-{region_id}");
-    sqlx::query("INSERT INTO jobs (id, type, status, image_id, attempt, max_attempts, created_at, updated_at) VALUES ($1,'region-redo-ocr','PROCESSING',$2,1,3,now(),now())")
+    sqlx::query("INSERT INTO jobs (id, type, status, image_id, attempt, max_attempts, lease_token, created_at, updated_at) VALUES ($1,'region-redo-ocr','PROCESSING',$2,1,3,$1,now(),now())")
         .bind(&job_id)
         .bind(image_id)
         .execute(&pool)
@@ -1720,11 +2089,12 @@ async fn region_callback_rolls_back_claim_when_cost_persistence_fails() {
         }
     })
     .to_string();
-    let (failed_status, _, failed_body) = request(
+    let headers = worker_headers(&pool, &job_id).await;
+    let (failed_status, _, failed_body) = request_with_headers(
         &app,
         "POST",
         &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
-        internal(None),
+        &headers,
         Some(payload.clone()),
     )
     .await;
@@ -1769,11 +2139,11 @@ async fn region_callback_rolls_back_claim_when_cost_persistence_fails() {
         );
     }
 
-    let (retry_status, _, retry_body) = request(
+    let (retry_status, _, retry_body) = request_with_headers(
         &app,
         "POST",
         &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
-        internal(None),
+        &headers,
         Some(payload),
     )
     .await;

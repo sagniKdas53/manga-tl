@@ -13,7 +13,7 @@
 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::models::{Chapter, Image, Job, Layer, LayerElement, OcrRegion, Page, Panel, Series};
@@ -23,8 +23,11 @@ use crate::state::AppState;
 
 pub const PIPELINE_TRACE_TTL_SECS: u64 = 12 * 3600;
 pub const REDO_REASON_TTL_SECS: u64 = 24 * 3600;
+pub const JOB_LEASE_SECS: i64 = 120;
+pub const JOB_MAX_RUNTIME_SECS: i64 = 3600;
 /// Worker queues in drain order (heavy first). Also used by the dispatcher.
-pub const HEAVY_QUEUES: [&str; 4] = [
+pub const HEAVY_QUEUES: [&str; 5] = [
+    "queue:cleanup",
     "queue:qa-re-ocr",
     "queue:region-redo-ocr",
     "queue:ocr",
@@ -37,6 +40,40 @@ pub const LIGHT_QUEUES: [&str; 5] = [
     "queue:translation",
     "queue:layout",
 ];
+
+/// Callback identity is installed by the internal route for the duration of a callback.
+/// It deliberately belongs to the task, not `AppState`: an HTTP request cannot accidentally
+/// lend its authority to a concurrently executing callback.
+#[derive(Clone, Debug)]
+pub struct CallbackIdentity {
+    pub job_id: String,
+    pub attempt: i32,
+    pub input_generation: i32,
+    pub lease_token: String,
+}
+
+tokio::task_local! {
+    pub static CALLBACK_IDENTITY: CallbackIdentity;
+}
+
+/// What happened when a callback tried to claim the right to apply its result.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClaimOutcome {
+    /// This delivery owns the result; apply it.
+    Claimed,
+    /// A previous delivery of the SAME attempt already applied it. Nothing to do, and nothing
+    /// wrong: acknowledge it.
+    AlreadyApplied,
+    /// The caller is not the current attempt — superseded by recovery, a redo, or a new page
+    /// input generation. Its work is void; tell it so rather than letting it look accepted.
+    NotCurrent,
+}
+
+impl ClaimOutcome {
+    pub fn is_claimed(self) -> bool {
+        matches!(self, ClaimOutcome::Claimed)
+    }
+}
 
 /// Everything a callback needs to resolve its job row (AUDIT-P5): prefer the echoed
 /// jobId exactly; fall back to newest job of that type for the image only when absent,
@@ -108,28 +145,47 @@ pub async fn claim_callback(
     image_id: Uuid,
     job_type: &str,
 ) -> bool {
-    let Some(job) = resolve_callback_job(&state.pool, job_id, image_id, job_type).await else {
-        return true; // nothing to deduplicate against — apply
+    let Ok(identity) = CALLBACK_IDENTITY.try_with(Clone::clone) else {
+        tracing::warn!("Rejecting {job_type} callback without request identity");
+        return false;
     };
+    if job_id != Some(identity.job_id.as_str()) {
+        tracing::warn!(
+            "Rejecting {job_type} callback whose payload job id disagrees with its headers"
+        );
+        return false;
+    }
     let result = sqlx::query(
-        "UPDATE jobs SET callback_applied_at = now() WHERE id = $1 AND callback_applied_at IS NULL",
+        "UPDATE jobs SET callback_applied_at = now(), status = 'COMPLETED', updated_at = now() \
+         WHERE id = $1 AND image_id = $2 AND type = $3 AND status = 'PROCESSING' \
+           AND attempt = $4 AND input_generation = $5 AND lease_token = $6 \
+           AND callback_applied_at IS NULL \
+           AND (jobs.page_id IS NULL \
+                OR jobs.input_generation \
+                   = (SELECT p.input_generation FROM pages p WHERE p.id = jobs.page_id)) \
+           AND (started_at IS NULL OR started_at > now() - make_interval(secs => $7))",
     )
-    .bind(&job.id)
+    .bind(&identity.job_id)
+    .bind(image_id)
+    .bind(job_type)
+    .bind(identity.attempt)
+    .bind(identity.input_generation)
+    .bind(&identity.lease_token)
+    .bind(JOB_MAX_RUNTIME_SECS as f64)
     .execute(&state.pool)
     .await;
     match result {
         Ok(res) if res.rows_affected() > 0 => true,
         Ok(_) => {
             tracing::warn!(
-                "Ignoring duplicate {job_type} callback for image {image_id} — job {} already applied its result at {:?}",
-                job.id,
-                job.callback_applied_at
+                "Ignoring duplicate or stale {job_type} callback for image {image_id} — job {} was not claimable",
+                identity.job_id
             );
             false
         }
         Err(err) => {
-            tracing::error!("claimCallback failed for job {}: {err}", job.id);
-            true // fail-open like a lost race, never lose a genuine result
+            tracing::error!("claimCallback failed for job {}: {err}", identity.job_id);
+            false
         }
     }
 }
@@ -141,16 +197,26 @@ pub async fn claim_callback(
 /// and then fails leaves the job flagged and the worker's retry discarded as a duplicate — the
 /// result lost. Claiming inside the caller's transaction makes a rollback release the claim too.
 ///
-/// Returns Ok(false) when the delivery was already applied.
+/// The two refusals are NOT the same thing and callers that can say so should say so:
+/// [`ClaimOutcome::AlreadyApplied`] is a worker re-sending a delivery whose result did land, and
+/// is a success from its point of view; [`ClaimOutcome::NotCurrent`] is an attempt that has been
+/// superseded — recovered, redone, or fenced out by a new page generation — and whose work must
+/// stop rather than be retried against the same stale identity.
 pub async fn claim_callback_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     job_id: Option<&str>,
     image_id: Uuid,
     job_type: &str,
-) -> Result<bool, sqlx::Error> {
+) -> Result<ClaimOutcome, sqlx::Error> {
+    let Ok(identity) = CALLBACK_IDENTITY.try_with(Clone::clone) else {
+        return Ok(ClaimOutcome::NotCurrent);
+    };
+    if job_id != Some(identity.job_id.as_str()) {
+        return Ok(ClaimOutcome::NotCurrent);
+    }
     let job: Option<Job> = match job_id.filter(|s| !s.is_empty()) {
         Some(id) => {
-            sqlx::query_as("SELECT * FROM jobs WHERE id = $1")
+            sqlx::query_as("SELECT * FROM jobs WHERE id = $1 FOR UPDATE")
                 .bind(id)
                 .fetch_optional(&mut **tx)
                 .await?
@@ -161,10 +227,10 @@ pub async fn claim_callback_tx(
         None => None,
     };
     let Some(job) = job else {
-        return Ok(true); // nothing to deduplicate against — apply
+        return Ok(ClaimOutcome::NotCurrent);
     };
     if !job.job_type.eq_ignore_ascii_case(job_type) {
-        return Ok(true);
+        return Ok(ClaimOutcome::NotCurrent);
     }
     if job.image_id != Some(image_id) {
         tracing::warn!(
@@ -172,22 +238,82 @@ pub async fn claim_callback_tx(
             job.id,
             job.image_id
         );
-        return Ok(true);
+        return Ok(ClaimOutcome::NotCurrent);
     }
     let res = sqlx::query(
-        "UPDATE jobs SET callback_applied_at = now() WHERE id = $1 AND callback_applied_at IS NULL",
+        "UPDATE jobs SET callback_applied_at = now(), status='COMPLETED', updated_at=now() \
+         WHERE id = $1 AND status='PROCESSING' AND attempt=$2 AND input_generation=$3 \
+           AND lease_token=$4 AND callback_applied_at IS NULL \
+           AND (jobs.page_id IS NULL \
+                OR jobs.input_generation \
+                   = (SELECT p.input_generation FROM pages p WHERE p.id = jobs.page_id)) \
+           AND (started_at IS NULL OR started_at > now() - make_interval(secs => $5))",
     )
     .bind(&job.id)
+    .bind(identity.attempt)
+    .bind(identity.input_generation)
+    .bind(&identity.lease_token)
+    .bind(JOB_MAX_RUNTIME_SECS as f64)
     .execute(&mut **tx)
     .await?;
     if res.rows_affected() == 0 {
-        tracing::warn!(
-            "Ignoring duplicate {job_type} callback for image {image_id} — job {} already applied its result",
-            job.id
-        );
-        return Ok(false);
+        // The row exists and belongs to this image, so the only ways to land here are: the result
+        // was already applied, or this delivery is not speaking for the current attempt. One more
+        // read separates them, and the caller answers the worker differently for each.
+        let outcome = if job.callback_applied_at.is_some() {
+            tracing::warn!(
+                "Ignoring duplicate {job_type} callback for image {image_id} — job {} already applied its result",
+                job.id
+            );
+            ClaimOutcome::AlreadyApplied
+        } else {
+            tracing::warn!(
+                "Refusing superseded {job_type} callback for image {image_id} — job {} is {} at attempt {:?}/generation {}, not the attempt that called",
+                job.id,
+                job.status,
+                job.attempt,
+                job.input_generation
+            );
+            ClaimOutcome::NotCurrent
+        };
+        return Ok(outcome);
     }
-    Ok(true)
+    Ok(ClaimOutcome::Claimed)
+}
+
+/// Marks a job whose result was claimed but whose application then failed.
+///
+/// `claim_callback` (the pool variant, used by panel/OCR/translation/QA/QA-re-OCR) marks the row
+/// COMPLETED in a statement of its own, so a handler that errors *after* the claim — a rolled-back
+/// result transaction, a missing row — would otherwise leave a job that reads as a finished stage
+/// with nothing applied and no retry. The reliability gate wants an explicit failure state, so say
+/// so on the row. The worker's own retry PATCH is what re-arms it (FAILED -> PENDING, one attempt
+/// further on), which the transition table in `routes::internal` permits for exactly this case.
+pub async fn mark_claimed_callback_failed(state: &AppState, job_id: &str, error: &str) {
+    let updated: Result<Option<Job>, sqlx::Error> = sqlx::query_as(
+        "UPDATE jobs SET status = 'FAILED', error = $2, updated_at = now() \
+         WHERE id = $1 AND status <> 'FAILED' RETURNING *",
+    )
+    .bind(job_id)
+    .bind(error)
+    .fetch_optional(&state.pool)
+    .await;
+    match updated {
+        Ok(Some(job)) => {
+            if let Some(image_id) = job.image_id {
+                state
+                    .sse
+                    .emit_event_for_image(
+                        image_id,
+                        "job_update",
+                        &serde_json::to_string(&job).unwrap_or_default(),
+                    )
+                    .await;
+            }
+        }
+        Ok(None) => {}
+        Err(err) => tracing::error!("Could not mark claimed job {job_id} FAILED: {err}"),
+    }
 }
 
 /// Resolves the page a callback reports on: exact pageId first, then first page for
@@ -341,6 +467,51 @@ pub async fn enqueue_job_directly(
     .await;
 }
 
+/// Persist a successor while applying a callback result. The caller publishes it only after its
+/// transaction commits; the pending-job reconciler is the durable fallback if that process dies.
+/// It intentionally derives the immutable routing/config fields from the accepted parent payload.
+pub async fn persist_next_job_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    parent: &Job,
+    job_type: &str,
+    image_id: Uuid,
+    page: &Page,
+    customize: impl FnOnce(&mut serde_json::Map<String, Value>),
+) -> Result<(String, String), sqlx::Error> {
+    let job_id = Uuid::new_v4().to_string();
+    let lease_token = Uuid::new_v4().to_string();
+    let mut payload = parent
+        .payload
+        .as_deref()
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default();
+    payload.insert("jobId".into(), json!(job_id));
+    payload.insert("type".into(), json!(job_type));
+    payload.insert("imageId".into(), json!(image_id.to_string()));
+    payload.insert("pageId".into(), json!(page.id.to_string()));
+    payload.insert("attempt".into(), json!(1));
+    payload.insert("inputGeneration".into(), json!(page.input_generation));
+    payload.insert("leaseToken".into(), json!(lease_token));
+    customize(&mut payload);
+    let payload = Value::Object(payload).to_string();
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, image_id, page_id, attempt, max_attempts, trace_id, payload, input_generation, lease_token, created_at, updated_at) \
+         VALUES ($1,$2,'PENDING',$3,$4,1,3,$5,$6,$7,$8,now(),now())",
+    )
+    .bind(&job_id)
+    .bind(job_type)
+    .bind(image_id)
+    .bind(page.id)
+    .bind(&parent.trace_id)
+    .bind(&payload)
+    .bind(page.input_generation)
+    .bind(&lease_token)
+    .execute(&mut **tx)
+    .await?;
+    Ok((job_id, payload))
+}
+
 /// `enqueue_job_directly` plus an immutable-render ledger row for the same job id. Returns
 /// whether the job (and its ledger row) were persisted.
 #[allow(clippy::too_many_arguments)]
@@ -382,6 +553,7 @@ pub async fn enqueue_job_with_ledger(
     };
 
     let job_row_id = Uuid::new_v4().to_string();
+    let lease_token = Uuid::new_v4().to_string();
     let mut job = serde_json::Map::new();
     job.insert("jobId".into(), json!(job_row_id));
     job.insert("traceId".into(), json!(trace_id));
@@ -389,6 +561,7 @@ pub async fn enqueue_job_with_ledger(
     job.insert("imageId".into(), json!(image_id.to_string()));
     job.insert("priority".into(), json!(priority));
     job.insert("attempt".into(), json!(1));
+    job.insert("leaseToken".into(), json!(lease_token));
     job.insert("maxAttempts".into(), json!(3));
     job.insert("createdAt".into(), json!(chrono::Utc::now().to_rfc3339()));
 
@@ -582,6 +755,11 @@ pub async fn enqueue_job_with_ledger(
         }
     }
 
+    // A page's source/geometry generation fences OCR, layout, cleanup and translation
+    // attempts. Image-only legacy jobs deliberately use generation zero.
+    let input_generation = page_opt.as_ref().map(|p| p.input_generation).unwrap_or(0);
+    job.insert("inputGeneration".into(), json!(input_generation));
+
     // AUDIT-R1/F16: the rectangle text is fitted into. Sent on every job rather than only render
     // jobs, because layout also reasons about the text box and the two must not diverge again.
     // Clamped in the same directions as the settings route: a 0% safety margin or a padding wider
@@ -619,8 +797,8 @@ pub async fn enqueue_job_with_ledger(
 
     let inserted: Result<(), sqlx::Error> = async {
         sqlx::query(
-            "INSERT INTO jobs (id, type, status, image_id, page_id, attempt, max_attempts, trace_id, payload, created_at, updated_at) \
-             VALUES ($1, $2, 'PENDING', $3, $4, 1, 3, $5, $6, now(), now())",
+            "INSERT INTO jobs (id, type, status, image_id, page_id, attempt, max_attempts, trace_id, payload, input_generation, lease_token, created_at, updated_at) \
+             VALUES ($1, $2, 'PENDING', $3, $4, 1, 3, $5, $6, $7, $8, now(), now())",
         )
         .bind(&job_row_id)
         .bind(job_type)
@@ -632,6 +810,8 @@ pub async fn enqueue_job_with_ledger(
         .bind(page_opt.as_ref().map(|p| p.id))
         .bind(&trace_id)
         .bind(&payload)
+        .bind(input_generation)
+        .bind(&lease_token)
         .execute(&state.pool)
         .await?;
         if let Some(ledger) = &ledger {
@@ -669,6 +849,11 @@ pub async fn enqueue_job_with_ledger(
                 updated_at: None,
                 callback_applied_at: None,
                 page_id: page_opt.map(|p| p.id),
+                input_generation,
+                lease_token: Some(lease_token),
+                lease_expires_at: None,
+                heartbeat_at: None,
+                progress_at: None,
             };
             state
                 .sse
@@ -708,6 +893,11 @@ struct JobRowSnapshot {
     status: String,
     trace_id: Option<String>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    input_generation: i32,
+    lease_token: Option<String>,
+    lease_expires_at: Option<chrono::DateTime<chrono::Utc>>,
+    heartbeat_at: Option<chrono::DateTime<chrono::Utc>>,
+    progress_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// afterCommit parity: push to the stage queue unless the global pause gate is closed.
@@ -773,6 +963,19 @@ pub fn update_payload_attempt(payload: &str, attempt: i32) -> String {
             tracing::error!("Failed to update payload attempt: {err}");
             payload.to_string()
         }
+    }
+}
+
+/// Re-arm a durable job with a fresh authority token. Redis may still contain the previous
+/// payload; dispatcher/start CAS rejects it before a worker can begin that stale attempt.
+pub fn update_payload_attempt_and_lease(payload: &str, attempt: i32, lease_token: &str) -> String {
+    match serde_json::from_str::<Value>(payload) {
+        Ok(Value::Object(mut obj)) => {
+            obj.insert("attempt".into(), json!(attempt));
+            obj.insert("leaseToken".into(), json!(lease_token));
+            Value::Object(obj).to_string()
+        }
+        _ => update_payload_attempt(payload, attempt),
     }
 }
 
@@ -846,6 +1049,18 @@ pub async fn trigger_redo(
     Ok(())
 }
 
+/// Which redo kinds replace a page's *source* geometry rather than only its scene.
+///
+/// A whole-page OCR redo purges and re-derives every `ocr_regions` row, which is exactly the
+/// geometry cleanup and translation were computed from. Nothing else here does: a translation
+/// redo reuses the boxes, panel detection writes `panels` rather than regions, and a region redo
+/// rewrites one region's *text* (see `region_callback`, which never touches a bbox). Advancing
+/// the generation for a region redo would also be actively wrong — several run concurrently on
+/// one image by design, so each would fence out the others' in-flight jobs.
+fn supersedes_page_inputs(job_type: &str) -> bool {
+    job_type == "ocr"
+}
+
 fn reason_key_for(job_type: &str, image_id: Uuid) -> Option<(String, &'static str)> {
     match job_type {
         "ocr" => Some((format!("image:ocr:reason:{image_id}"), "manual-re-ocr")),
@@ -881,6 +1096,15 @@ pub async fn trigger_page_redo(
         .ok_or_else(|| format!("Page not found: {page_id}"))?;
 
     clear_trace_and_set_reason(state, page.image_id, job_type).await;
+    // An OCR redo replaces the page's source geometry; a translation/render redo does not.
+    // Bumping before the enqueue is what puts the new generation into the job's own payload.
+    if supersedes_page_inputs(job_type) {
+        let _ = crate::page_freshness::advance_page_input_generation_pool(&state.pool, page.id)
+            .await
+            .inspect_err(|err| {
+                tracing::error!("Could not advance input generation for page {page_id}: {err}")
+            });
+    }
 
     let effective_chapter = chapter_id.or(Some(page.chapter_id));
     enqueue_job_directly(
@@ -904,6 +1128,16 @@ pub async fn trigger_image_redo(
     chapter_id: Option<Uuid>,
 ) {
     clear_trace_and_set_reason(state, image_id, job_type).await;
+    if supersedes_page_inputs(job_type)
+        && let Err(err) = sqlx::query(
+            "UPDATE pages SET input_generation = input_generation + 1 WHERE image_id = $1",
+        )
+        .bind(image_id)
+        .execute(&state.pool)
+        .await
+    {
+        tracing::error!("Could not advance input generation for image {image_id}: {err}");
+    }
     enqueue_job_directly(
         state,
         job_type,
@@ -1159,6 +1393,17 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
     purge_page_regions(&mut tx, page.id)
         .await
         .map_err(|e| format!("could not replace regions for page {}: {e}", page.id))?;
+    // These rows ARE the source geometry every later stage is fenced against. Advancing the
+    // generation in the same transaction is what makes an in-flight cleanup or translation from
+    // the previous pass unable to claim its callback afterwards.
+    crate::page_freshness::advance_page_input_generation(&mut tx, page.id)
+        .await
+        .map_err(|e| {
+            format!(
+                "could not advance input generation for page {}: {e}",
+                page.id
+            )
+        })?;
     for r in &regions {
         let rx = r.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
         let ry = r.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
@@ -1353,6 +1598,66 @@ pub fn find_matching_panel(rx: i32, ry: i32, rw: i32, rh: i32, panels: &[Panel])
 }
 
 /// Layout callback: region types, conversations, reader-mode short-circuit.
+/// One immutable `cleanupRegions` entry: the geometry the worker must process, the policy that
+/// applies to it, and a digest binding both to the page generation they came from.
+///
+/// SFX are never typeset, so their source lettering must stay on the page — the cleanup stage is
+/// told to leave them alone rather than being left to infer it.
+fn cleanup_region_entry(input_generation: i32, region: &OcrRegion) -> Value {
+    let action = if region
+        .region_type
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("sfx"))
+    {
+        "exclude"
+    } else {
+        "replace"
+    };
+    let digest_input = format!(
+        "{input_generation}:{}:{}:{}:{}:{}:{action}",
+        region.id, region.bbox_x, region.bbox_y, region.bbox_w, region.bbox_h
+    );
+    json!({
+        "regionId": region.id,
+        "x": region.bbox_x,
+        "y": region.bbox_y,
+        "width": region.bbox_w,
+        "height": region.bbox_h,
+        "policyAction": action,
+        "inputDigest": hex::encode(Sha256::digest(digest_input.as_bytes())),
+    })
+}
+
+/// Whether this page's series translates into its own source language, in which case the pipeline
+/// stops after layout. Resolved from the page's chapter/series, exactly as the post-commit block
+/// used to, but early enough that nothing downstream gets persisted for a page that is done.
+async fn reader_mode_for_page(state: &AppState, page_id: Option<Uuid>, image_id: Uuid) -> bool {
+    let Some(page) = resolve_page_for_callback(&state.pool, image_id, page_id).await else {
+        return false;
+    };
+    let Some(chapter): Option<Chapter> = sqlx::query_as("SELECT * FROM chapters WHERE id = $1")
+        .bind(page.chapter_id)
+        .fetch_optional(&state.pool)
+        .await
+        .ok()
+        .flatten()
+    else {
+        return false;
+    };
+    let series: Option<Series> = sqlx::query_as("SELECT * FROM series WHERE id = $1")
+        .bind(chapter.series_id)
+        .fetch_optional(&state.pool)
+        .await
+        .ok()
+        .flatten();
+    series.is_some_and(|s| {
+        s.source_language
+            .as_deref()
+            .zip(s.target_language.as_deref())
+            .is_some_and(|(src, tgt)| src.trim().eq_ignore_ascii_case(tgt.trim()))
+    })
+}
+
 pub async fn handle_layout_callback(
     state: &AppState,
     job_id: Option<&str>,
@@ -1360,18 +1665,34 @@ pub async fn handle_layout_callback(
     callback_page_id: Option<Uuid>,
     payload: &Value,
 ) -> Result<(), String> {
-    if !claim_callback(state, job_id, image_id, "layout").await {
-        return Ok(());
-    }
-
-    sqlx::query_as::<_, Image>("SELECT * FROM images WHERE id = $1")
+    let image = sqlx::query_as::<_, Image>("SELECT * FROM images WHERE id = $1")
         .bind(image_id)
         .fetch_optional(&state.pool)
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Image not found: {image_id}"))?;
 
+    // Reader mode is decided BEFORE the transaction because it decides whether a cleanup job is
+    // persisted at all. Deciding it after the commit (as this function used to) left a committed
+    // PENDING cleanup row on a page the pipeline had just stopped, which `requeue_orphaned_
+    // pending_jobs` then pushed onto the queue two minutes later — a full CTD pass nobody asked
+    // for, on a page that needs no translation.
+    let reader_mode = reader_mode_for_page(state, callback_page_id, image_id).await;
+
     let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+    let parent: Job = sqlx::query_as("SELECT * FROM jobs WHERE id = $1 FOR UPDATE")
+        .bind(job_id.ok_or("layout callback missing jobId")?)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    if !claim_callback_tx(&mut tx, job_id, image_id, "layout")
+        .await
+        .map_err(|e| e.to_string())?
+        .is_claimed()
+    {
+        tx.rollback().await.map_err(|e| e.to_string())?;
+        return Ok(());
+    }
 
     if let Some(region_types) = payload.get("regionTypes").and_then(|v| v.as_array()) {
         for rt in region_types {
@@ -1434,45 +1755,54 @@ pub async fn handle_layout_callback(
             }
         }
     }
+    // Cleanup is persisted in the SAME commit as the classifications it is computed from. The
+    // region list it carries is immutable for the life of the attempt: a later OCR pass or
+    // geometry redo advances `pages.input_generation`, and the fence in `claim_callback_tx` then
+    // refuses this attempt's callback rather than letting it write patches for boxes that no
+    // longer exist.
+    let cleanup_dispatch = match (&callback_page, reader_mode) {
+        (Some(page), false) => {
+            let regions: Vec<OcrRegion> =
+                sqlx::query_as("SELECT * FROM ocr_regions WHERE page_id = $1 ORDER BY id")
+                    .bind(page.id)
+                    .fetch_all(&mut *tx)
+                    .await
+                    .map_err(|e| e.to_string())?;
+            let source_sha = image.hash.clone().unwrap_or_default();
+            let image_url = state
+                .storage
+                .presigned_get_url(&image.storage_path)
+                .await
+                .map_err(|err| format!("could not presign source for cleanup: {err}"))?;
+            let cleanup_regions = regions
+                .iter()
+                .map(|region| cleanup_region_entry(page.input_generation, region))
+                .collect::<Vec<_>>();
+            let cleanup_input_digest = hex::encode(Sha256::digest(
+                serde_json::to_string(&cleanup_regions)
+                    .unwrap_or_default()
+                    .as_bytes(),
+            ));
+            Some(
+                persist_next_job_tx(&mut tx, &parent, "cleanup", image_id, page, move |job| {
+                    job.insert("imageUrl".into(), json!(image_url));
+                    job.insert("sourceSha256".into(), json!(source_sha));
+                    job.insert("cleanupRegions".into(), Value::Array(cleanup_regions));
+                    job.insert("cleanupInputDigest".into(), json!(cleanup_input_digest));
+                })
+                .await
+                .map_err(|e| e.to_string())?,
+            )
+        }
+        _ => None,
+    };
     tx.commit().await.map_err(|e| e.to_string())?;
 
     // Reader mode: source==target ends the pipeline here; complete the layout job.
-    let series: Option<Series> = match &callback_page {
-        Some(page) => {
-            let chapter: Option<Chapter> = sqlx::query_as("SELECT * FROM chapters WHERE id = $1")
-                .bind(page.chapter_id)
-                .fetch_optional(&state.pool)
-                .await
-                .ok()
-                .flatten();
-            match chapter {
-                Some(ch) => sqlx::query_as("SELECT * FROM series WHERE id = $1")
-                    .bind(ch.series_id)
-                    .fetch_optional(&state.pool)
-                    .await
-                    .ok()
-                    .flatten(),
-                None => None,
-            }
-        }
-        None => None,
-    };
-
-    let reader_mode = series.as_ref().is_some_and(|s| {
-        s.source_language
-            .as_deref()
-            .zip(s.target_language.as_deref())
-            .map(|(src, tgt)| src.trim().eq_ignore_ascii_case(tgt.trim()))
-            .unwrap_or(false)
-    });
-
     if reader_mode {
-        if let Some(series) = &series {
-            tracing::info!(
-                "Reader mode detected (source=target={}) for image {image_id}. Skipping translation, render, and QA.",
-                series.source_language.as_deref().unwrap_or("")
-            );
-        }
+        tracing::info!(
+            "Reader mode detected for image {image_id}. Skipping cleanup, translation, render and QA."
+        );
         if let Some(mut layout_job) =
             resolve_callback_job(&state.pool, job_id, image_id, "layout").await
         {
@@ -1494,16 +1824,9 @@ pub async fn handle_layout_callback(
         return Ok(());
     }
 
-    enqueue_job_directly(
-        state,
-        "translation",
-        image_id,
-        callback_page.map(|p| p.id),
-        None,
-        "normal",
-        |_| {},
-    )
-    .await;
+    if let Some((cleanup_id, cleanup_payload)) = cleanup_dispatch {
+        push_persisted_job_if_queue_running(state, &cleanup_id, "cleanup", &cleanup_payload).await;
+    }
     Ok(())
 }
 
@@ -2418,6 +2741,7 @@ pub async fn handle_render_callback(
     if !claim_callback_tx(&mut tx, job_id, image_id, "render")
         .await
         .map_err(|err| err.to_string())?
+        .is_claimed()
     {
         tx.rollback().await.map_err(|err| err.to_string())?;
         return Ok(RenderCallbackOutcome::default());

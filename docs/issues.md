@@ -255,7 +255,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-W14`](#audit-w14-medium-the-slot-policy-lets-slow-network-work-crowd-out-local-work) | Medium | Worker/Backend | Four light slots + a per-cycle capacity snapshot; OCR waits behind LLM calls | Needs measurement |
 | [`AUDIT-B17`](#audit-b17-low-jobspage_id-was-never-written) | Low | Backend | `jobs.page_id` existed, was deserialised, and was never populated by the INSERT | **Fixed 2026-09-03** |
 | [`AUDIT-B18`](#audit-b18-medium-there-is-no-schema-migration-runner) | Medium | Backend | `init.sql` only runs on a fresh volume, so no column can ever be added to a live deployment | **Closed by decision 2026-09-19** ([`LOCK-3`](#lock-3--databaseinitsql-is-the-whole-schema-there-is-no-migration-runner)) |
-| [`AUDIT-B21`](#audit-b21-high-a-retryable-translation-callback-consumes-the-exactly-once-claim) | High | Worker/Backend | A retryable outage posts and claims a callback before retrying, so a later successful result is dropped | Ready |
+| [`AUDIT-B21`](#audit-b21-high-a-retryable-translation-callback-consumes-the-exactly-once-claim) | High | Worker/Backend | A retryable outage posts and claims a callback before retrying, so a later successful result is dropped | **Fixed in code 2026-09-22** — not yet verified live |
 | [`AUDIT-B19`](#audit-b19-low-jwt-signing-failure-reported-as-successful-login) | Low | Backend | `unwrap_or_default()` yields empty token answered as 200 OK on signing error | Ready |
 | [`AUDIT-B20`](#audit-b20-low-database-query-errors-converted-to-empty-results) | Low | Backend | 53 sites convert query errors into empty lists/options disguised as 200 OK | Backlog |
 | [`AUDIT-B13`](#audit-b13-medium-a-page-with-no-translatable-text-fails-the-job) | Medium | Worker/Backend | An untranslatable page raises and burns 3 attempts; it should warn | **Fixed 2026-09-02** |
@@ -910,6 +910,14 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   retryable outage, raise without posting; on a terminal callback, use `claim_callback_tx` in the
   same transaction as every layer/job write so a failed application releases the claim. Test the
   outage-then-success path and a database write failure after claiming.
+- **Fixed in code 2026-09-22 (R3 Packet 2), not yet verified live.** Every re-arm to `PENDING` —
+  the worker's bounded retry, startup recovery and the stale sweep — now clears
+  `callback_applied_at` along with `started_at`/`lease_expires_at`/`heartbeat_at` and issues a
+  fresh lease token, so a retry's own result is no longer read as a duplicate. The claim itself is
+  fenced on `(jobId, attempt, inputGeneration, leaseToken)` from request headers, so the first
+  attempt's callback cannot claim the row the retry owns. Covered by
+  `backend-rust/tests/internal_endpoints.rs` (failed stage → retry at attempt 2 → full result
+  applied) and `tests/stage_recovery.rs`. Closes on live evidence, not on these tests.
 
 ### `AUDIT-B14` (medium): Delete then re-add leaves a chapter inconsistent — **Fixed 2026-09-04**
 
@@ -1151,6 +1159,14 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   stale window instead of the current fixed timeout, and drop a callback for an attempt the
   recovery sweep has already superseded — matching R5's existing note. File as its own R5 packet;
   run `impact()` on the recovery/requeue symbols before touching them.
+- **Fixed in code 2026-09-22 (R3 Packet 2), not yet verified live.** Staleness now keys off
+  `jobs.lease_expires_at` (`JOB_LEASE_SECS` 120, renewed by a 30-second worker heartbeat bounded by
+  `JOB_MAX_RUNTIME_SECS` 3600) instead of ten minutes of silence on `updated_at`, so a job that is
+  genuinely working is not re-dispatched however long it takes; rows with no lease keep the old
+  ten-minute rule so an upgrade strands nothing. Re-arming is a compare-and-swap on the attempt and
+  lease the sweep observed, and a superseded attempt's callback is refused with 409 rather than
+  applied. Note the recovery window is the **five-minute sweep plus the lease**, not two minutes.
+  Covered by `backend-rust/tests/stage_recovery.rs`. Closes on live evidence, not on these tests.
 
 ### `AUDIT-F29` (feature): No way to manually re-group OCR fragments when automatic clubbing fails
 

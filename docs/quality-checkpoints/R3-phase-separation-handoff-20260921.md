@@ -4,6 +4,8 @@ Updated 2026-09-21 after reviewing the tracker, retained runs, representative ed
 
 This handoff supersedes earlier summaries that say quality passed on six fixtures, describe cleanup as parallel/deferred, promise a measured post-fix speedup, or equate the editor with the render service. Historical run artifacts remain unchanged. This update records a proposed execution plan; it does not claim implementation, live validation, deployment, or user quality sign-off.
 
+> **Status 2026-09-22: Packets 1 and 2 are delivered; resume at Packet 3.** The contract is written ([design](../superpowers/specs/2026-09-21-r3-phase-separation-design.md)), cleanup is its own sequential heavy stage, attempt/generation fencing and lease-based recovery are implemented, and the second CTD pass is removed. Backend 202 tests / worker 569 / frontend 409 green. **No live run has been made since, so no speedup is measured and R3 remains NOT PASSED on all three gates.** Durable in-transaction dispatch covers 2 of the 5 stage edges. See the tracker's [2026-09-22 addendum](../output-quality-implementation-tracker.md#resume-packet) for the full delivery record, limits and next steps.
+
 ## Current state
 
 **R3 is NOT PASSED. The worker → backend → scene data path exists. Performance fails; visual cleanup acceptance and complete fixture coverage remain open.** Cleanup still runs inside OCR with two CTD calls per eligible region. The separate cleanup job, heartbeat protocol, and removal of the second call are not implemented.
@@ -119,6 +121,6 @@ If capped per-region CTD without recheck still misses the eventual budget, retai
 
 ## Resume checklist
 
-Read this handoff, the [tracker summary](../output-quality-implementation-tracker.md#status-at-a-glance-2026-09-21--read-this-first-then-the-r-track-table), and [R3 measurements](R3.md). Check worktrees, heads and applicable instructions. Start **Packet 1**, then **Packet 2** before another expensive full run. Packets 3/4 must land before declaring quality acceptance.
+Read this handoff, the [tracker summary](../output-quality-implementation-tracker.md#status-at-a-glance-2026-09-21--read-this-first-then-the-r-track-table), and [R3 measurements](R3.md). Check worktrees, heads and applicable instructions. Packets **1** and **2** are delivered (2026-09-22, see the status note above); start **Packet 3** before another expensive full run. Packets 3/4 must land before declaring quality acceptance.
 
 GitNexus impact before symbol edits; worker index is `manga-tl-worker`, separate from parent. Detect changes in each changed repository before committing. Worker development uses root `.venv`; backend API changes require live OpenAPI regeneration. Deliver worker commits before the parent pointer. Preserve runs, sources, references and uploads. This handoff does not authorize volume resets, expanded paid corpus work or deployment, and records no new quality sign-off.

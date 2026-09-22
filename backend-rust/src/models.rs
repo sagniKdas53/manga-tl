@@ -107,6 +107,7 @@ pub struct Page {
     pub last_edited_at: Option<DateTime<Utc>>,
     pub last_rendered_at: Option<DateTime<Utc>>,
     pub scene_revision: i32,
+    pub input_generation: i32,
 }
 
 // ---------------------------------------------------------------- images
@@ -331,6 +332,12 @@ pub struct Job {
     pub payload: Option<String>,
     pub started_at: Option<DateTime<Utc>>,
     pub status: String,
+    pub input_generation: i32,
+    pub lease_token: Option<String>,
+    pub lease_expires_at: Option<DateTime<Utc>>,
+    pub heartbeat_at: Option<DateTime<Utc>>,
+    pub progress_at: Option<DateTime<Utc>>,
+    pub progress_count: i32,
     pub trace_id: Option<String>,
     #[sqlx(rename = "type")]
     #[serde(rename = "type")]

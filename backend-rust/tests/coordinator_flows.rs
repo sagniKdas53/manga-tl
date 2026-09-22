@@ -133,6 +133,48 @@ async fn seed_pipeline(
     (series_id, chapter_id, page_id, image_id)
 }
 
+/// Seed the PROCESSING job row a stage callback reports on, and return its identity.
+///
+/// Callbacks are fenced on `(jobId, attempt, input_generation, lease_token)` now, so a test that
+/// calls a handler directly has to speak for a real attempt exactly as the internal route does.
+/// The lease token is the job id: unique per row, and readable in a failure message.
+async fn seed_stage_job(
+    pool: &sqlx::PgPool,
+    job_type: &str,
+    image_id: Uuid,
+    page_id: Option<Uuid>,
+) -> (String, manga_backend::jobs::coordinator::CallbackIdentity) {
+    let job_id = format!("{job_type}-{}", Uuid::new_v4());
+    let input_generation: i32 = match page_id {
+        Some(page_id) => sqlx::query_scalar("SELECT input_generation FROM pages WHERE id = $1")
+            .bind(page_id)
+            .fetch_one(pool)
+            .await
+            .unwrap_or(0),
+        None => 0,
+    };
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, image_id, page_id, attempt, max_attempts, \
+           input_generation, lease_token, started_at, created_at, updated_at) \
+         VALUES ($1,$2,'PROCESSING',$3,$4,1,3,$5,$1,now(),now(),now())",
+    )
+    .bind(&job_id)
+    .bind(job_type)
+    .bind(image_id)
+    .bind(page_id)
+    .bind(input_generation)
+    .execute(pool)
+    .await
+    .expect("stage job");
+    let identity = manga_backend::jobs::coordinator::CallbackIdentity {
+        job_id: job_id.clone(),
+        attempt: 1,
+        input_generation,
+        lease_token: job_id.clone(),
+    };
+    (job_id, identity)
+}
+
 async fn cleanup_series(pool: &sqlx::PgPool, series_id: Uuid) {
     let _ = sqlx::query(
         "DELETE FROM layer_elements WHERE layer_id IN (SELECT l.id FROM layers l JOIN pages p ON p.id=l.page_id WHERE p.chapter_id IN (SELECT id FROM chapters WHERE series_id=$1))",
@@ -193,8 +235,9 @@ async fn callback_claim_does_not_consume_another_images_job() {
     .expect("other image");
     let job_id = format!("redo-other-{other_image}");
     sqlx::query(
-        "INSERT INTO jobs (id, type, status, image_id, attempt, max_attempts, created_at, updated_at) \
-         VALUES ($1,'region-redo-tl','PROCESSING',$2,1,3,now(),now())",
+        "INSERT INTO jobs (id, type, status, image_id, attempt, max_attempts, lease_token, \
+           started_at, created_at, updated_at) \
+         VALUES ($1,'region-redo-tl','PROCESSING',$2,1,3,$1,now(),now(),now())",
     )
     .bind(&job_id)
     .bind(other_image)
@@ -202,16 +245,32 @@ async fn callback_claim_does_not_consume_another_images_job() {
     .await
     .expect("job");
 
+    // Before R3 a mismatched image made the claim fail *open* — it returned "apply anyway", on
+    // the reasoning that a lost race must never discard a genuine result. Under the attempt fence
+    // that is the wrong default: a caller that cannot prove which attempt it is has no business
+    // writing one's results, and the worker's own bounded retry is what recovers a genuine result.
+    let identity = manga_backend::jobs::coordinator::CallbackIdentity {
+        job_id: job_id.clone(),
+        attempt: 1,
+        input_generation: 0,
+        lease_token: job_id.clone(),
+    };
     let mut tx = pool.begin().await.expect("transaction");
-    assert!(
-        manga_backend::jobs::coordinator::claim_callback_tx(
-            &mut tx,
-            Some(&job_id),
-            current_image,
-            "region-redo-tl",
-        )
-        .await
-        .expect("mismatched claim")
+    assert_eq!(
+        manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+            .scope(
+                identity.clone(),
+                manga_backend::jobs::coordinator::claim_callback_tx(
+                    &mut tx,
+                    Some(&job_id),
+                    current_image,
+                    "region-redo-tl",
+                ),
+            )
+            .await
+            .expect("mismatched claim"),
+        manga_backend::jobs::coordinator::ClaimOutcome::NotCurrent,
+        "a callback naming another image's job must be refused, not applied"
     );
     tx.commit().await.expect("commit mismatch");
     let claimed: Option<chrono::DateTime<chrono::Utc>> =
@@ -226,15 +285,20 @@ async fn callback_claim_does_not_consume_another_images_job() {
     );
 
     let mut tx = pool.begin().await.expect("transaction");
-    assert!(
-        manga_backend::jobs::coordinator::claim_callback_tx(
-            &mut tx,
-            Some(&job_id),
-            other_image,
-            "region-redo-tl",
-        )
-        .await
-        .expect("matching claim")
+    assert_eq!(
+        manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+            .scope(
+                identity,
+                manga_backend::jobs::coordinator::claim_callback_tx(
+                    &mut tx,
+                    Some(&job_id),
+                    other_image,
+                    "region-redo-tl",
+                ),
+            )
+            .await
+            .expect("matching claim"),
+        manga_backend::jobs::coordinator::ClaimOutcome::Claimed
     );
     tx.commit().await.expect("commit claim");
     let claimed: Option<chrono::DateTime<chrono::Utc>> =
@@ -345,20 +409,25 @@ async fn full_translation_pass_restores_overlay_predecessors() {
     )
     .await;
 
-    manga_backend::jobs::coordinator::handle_translation_callback(
-        &state,
-        None,
-        image_id,
-        &[serde_json::json!({
-            "regionId": region_id.to_string(),
-            "pageId": page_id.to_string(),
-            "translatedText": "fresh pass",
-            "translationFailed": false,
-        })],
-        None,
-    )
-    .await
-    .expect("translation callback");
+    let (tl_job, tl_identity) = seed_stage_job(&pool, "translation", image_id, Some(page_id)).await;
+    manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            tl_identity,
+            manga_backend::jobs::coordinator::handle_translation_callback(
+                &state,
+                Some(&tl_job),
+                image_id,
+                &[serde_json::json!({
+                    "regionId": region_id.to_string(),
+                    "pageId": page_id.to_string(),
+                    "translatedText": "fresh pass",
+                    "translationFailed": false,
+                })],
+                None,
+            ),
+        )
+        .await
+        .expect("translation callback");
 
     let old_layer_visibility: Vec<(Uuid, Option<bool>)> =
         sqlx::query_as("SELECT id, visible FROM layers WHERE id = ANY($1) ORDER BY id")
@@ -428,16 +497,21 @@ async fn qa_direct_fix_edits_only_the_rendered_overlay() {
         "qaScore": 0.9,
         "directFix": {"correctedText": "normal QA fixed"},
     });
-    manga_backend::jobs::coordinator::handle_qa_callback(
-        &state,
-        None,
-        image_id,
-        Some(page_id),
-        std::slice::from_ref(&result),
-        None,
-    )
-    .await
-    .expect("QA callback");
+    let (qa_job, qa_identity) = seed_stage_job(&pool, "qa", image_id, Some(page_id)).await;
+    manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            qa_identity,
+            manga_backend::jobs::coordinator::handle_qa_callback(
+                &state,
+                Some(&qa_job),
+                image_id,
+                Some(page_id),
+                std::slice::from_ref(&result),
+                None,
+            ),
+        )
+        .await
+        .expect("QA callback");
 
     let texts = |pool: sqlx::PgPool| async move {
         sqlx::query_as::<_, (Uuid, Option<String>)>(
@@ -496,20 +570,25 @@ async fn qa_retry_budget_exhaustion_completes_without_retranslate() {
         .expect("seed retry counter");
 
     // A failed QA verdict WITHOUT manual intervention asks for a retry.
-    let result = manga_backend::jobs::coordinator::handle_qa_callback(
-        &state,
-        None,
-        image_id,
-        Some(page_id),
-        &[serde_json::json!({
-            "regionId": Uuid::new_v4().to_string(),
-            "qaStatus": "failed",
-            "qaScore": 0.2,
-        })],
-        None,
-    )
-    .await
-    .expect("qa callback handled");
+    let (qa_job, qa_identity) = seed_stage_job(&pool, "qa", image_id, Some(page_id)).await;
+    let result = manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            qa_identity,
+            manga_backend::jobs::coordinator::handle_qa_callback(
+                &state,
+                Some(&qa_job),
+                image_id,
+                Some(page_id),
+                &[serde_json::json!({
+                    "regionId": Uuid::new_v4().to_string(),
+                    "qaStatus": "failed",
+                    "qaScore": 0.2,
+                })],
+                None,
+            ),
+        )
+        .await
+        .expect("qa callback handled");
 
     assert_eq!(
         result, "COMPLETED",
@@ -544,20 +623,25 @@ async fn qa_retry_within_budget_retranslates() {
         seed_pipeline(&pool, Some("ja"), Some("en")).await;
 
     // Fresh budget (no key): a plain failure must RETRY via translation.
-    let result = manga_backend::jobs::coordinator::handle_qa_callback(
-        &state,
-        None,
-        image_id,
-        Some(page_id),
-        &[serde_json::json!({
-            "regionId": Uuid::new_v4().to_string(),
-            "qaStatus": "failed",
-            "qaScore": 0.3,
-        })],
-        None,
-    )
-    .await
-    .expect("qa callback handled");
+    let (qa_job, qa_identity) = seed_stage_job(&pool, "qa", image_id, Some(page_id)).await;
+    let result = manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            qa_identity,
+            manga_backend::jobs::coordinator::handle_qa_callback(
+                &state,
+                Some(&qa_job),
+                image_id,
+                Some(page_id),
+                &[serde_json::json!({
+                    "regionId": Uuid::new_v4().to_string(),
+                    "qaStatus": "failed",
+                    "qaScore": 0.3,
+                })],
+                None,
+            ),
+        )
+        .await
+        .expect("qa callback handled");
     assert_eq!(result, "RETRIED");
 
     let translations: i64 =
@@ -665,15 +749,21 @@ async fn reader_mode_short_circuits_after_layout() {
     let (series_id, _chapter_id, page_id, image_id) =
         seed_pipeline(&pool, Some("en"), Some("en")).await;
 
-    manga_backend::jobs::coordinator::handle_layout_callback(
-        &state,
-        None,
-        image_id,
-        Some(page_id),
-        &serde_json::json!({ "panels": [] }),
-    )
-    .await
-    .expect("layout callback handled");
+    let (layout_job, layout_identity) =
+        seed_stage_job(&pool, "layout", image_id, Some(page_id)).await;
+    manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            layout_identity,
+            manga_backend::jobs::coordinator::handle_layout_callback(
+                &state,
+                Some(&layout_job),
+                image_id,
+                Some(page_id),
+                &serde_json::json!({ "panels": [] }),
+            ),
+        )
+        .await
+        .expect("layout callback handled");
 
     let downstream: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM jobs WHERE image_id=$1 AND type IN ('translation','render','qa')",
@@ -736,15 +826,20 @@ async fn failed_translation_does_not_create_a_visible_masking_element() {
         }),
     ];
 
-    manga_backend::jobs::coordinator::handle_translation_callback(
-        &state,
-        None,
-        image_id,
-        &translations,
-        None,
-    )
-    .await
-    .expect("translation callback");
+    let (tl_job, tl_identity) = seed_stage_job(&pool, "translation", image_id, Some(page_id)).await;
+    manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            tl_identity,
+            manga_backend::jobs::coordinator::handle_translation_callback(
+                &state,
+                Some(&tl_job),
+                image_id,
+                &translations,
+                None,
+            ),
+        )
+        .await
+        .expect("translation callback");
 
     // mask_polygon is JSONB, so it decodes as Value rather than String.
     async fn element(

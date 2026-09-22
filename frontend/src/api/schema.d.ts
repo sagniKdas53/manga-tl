@@ -316,6 +316,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/internal/jobs/callback/cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cleanupCallback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/internal/jobs/callback/layout": {
         parameters: {
             query?: never;
@@ -1028,6 +1044,36 @@ export interface components {
             updatedAt?: string;
             useContextMemory?: boolean;
             useFallbackModels?: boolean;
+        };
+        CleanupCallbackDto: {
+            /** @description Echo of the digest of the dispatched region list. */
+            cleanupInputDigest?: string;
+            /** Format: uuid */
+            imageId?: string;
+            jobId?: string;
+            /** Format: uuid */
+            pageId?: string;
+            /** @description One outcome per dispatched region. A missing, repeated or foreign region fails the whole cleanup and withholds translation. */
+            regions?: components["schemas"]["CleanupRegionResultDto"][];
+        };
+        CleanupRegionResultDto: {
+            cleanupBounds?: Record<string, never> | null;
+            cleanupGeneratorSha256?: string | null;
+            cleanupMaskAssetId?: string | null;
+            /** Format: int64 */
+            cleanupMaskByteLength?: number | null;
+            cleanupMaskSha256?: string | null;
+            cleanupPatchAssetId?: string | null;
+            /** Format: int64 */
+            cleanupPatchByteLength?: number | null;
+            cleanupPatchSha256?: string | null;
+            diagnostics?: string[];
+            /** @description Echo of the digest this region was dispatched with. */
+            inputDigest?: string;
+            /** Format: uuid */
+            regionId?: string;
+            /** @enum {string} */
+            status?: "complete" | "degraded" | "excluded" | "failed";
         };
         JsonNode: Record<string, never>;
         Layer: {
@@ -1964,10 +2010,61 @@ export interface operations {
             };
         };
     };
+    cleanupCallback: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CleanupCallbackDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
     layoutCallback: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1988,12 +2085,30 @@ export interface operations {
                     "*/*": Record<string, never>;
                 };
             };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     ocrCallback: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2012,12 +2127,30 @@ export interface operations {
                     "*/*": Record<string, never>;
                 };
             };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     panelCallback: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2036,12 +2169,30 @@ export interface operations {
                     "*/*": Record<string, never>;
                 };
             };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     qaCallback: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2060,6 +2211,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
                 };
             };
         };
@@ -2067,7 +2227,16 @@ export interface operations {
     qaReOcrCallback: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2088,12 +2257,30 @@ export interface operations {
                     "*/*": Record<string, never>;
                 };
             };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     renderCallback: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2114,12 +2301,30 @@ export interface operations {
                     "*/*": Record<string, never>;
                 };
             };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     translationCallback: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2138,6 +2343,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
                 };
             };
         };
@@ -2167,7 +2381,16 @@ export interface operations {
     updateJobStatus: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path: {
                 jobId: string;
             };
@@ -2188,6 +2411,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
                 };
             };
         };
