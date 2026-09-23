@@ -167,11 +167,26 @@ pub async fn retry_job(
     let Some(job) = find_job(&state.pool, &id).await else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    sqlx::query("UPDATE jobs SET status = 'PENDING', error = NULL, attempt = 1 WHERE id = $1")
-        .bind(&id)
-        .execute(&state.pool)
-        .await
-        .expect("job retry update");
+    // Re-arm exactly as stale recovery does: a fresh lease fences out any earlier attempt, and the
+    // callback claim is cleared so the retried attempt's result is applied, not read as a
+    // duplicate of the result that made the job fail (e.g. an incomplete QA verdict set).
+    let lease_token = uuid::Uuid::new_v4().to_string();
+    let payload = job
+        .payload
+        .as_deref()
+        .map(|p| crate::jobs::coordinator::update_payload_attempt_and_lease(p, 1, &lease_token));
+    sqlx::query(
+        "UPDATE jobs SET status = 'PENDING', error = NULL, attempt = 1, started_at = NULL, \
+           payload = COALESCE($2, payload), lease_token = $3, lease_expires_at = NULL, \
+           heartbeat_at = NULL, callback_applied_at = NULL, updated_at = now() \
+         WHERE id = $1",
+    )
+    .bind(&id)
+    .bind(payload)
+    .bind(&lease_token)
+    .execute(&state.pool)
+    .await
+    .expect("job retry update");
 
     let refreshed = find_job(&state.pool, &id).await.unwrap_or(job);
     push_if_unpaused(&state, &refreshed).await;

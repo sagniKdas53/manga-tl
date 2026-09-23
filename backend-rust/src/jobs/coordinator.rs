@@ -137,6 +137,188 @@ pub fn latest_complete_layer<'a>(layers: &'a [Layer], layer_type: &str) -> Optio
         .max_by_key(|l| l.z_order)
 }
 
+/// Why a QA callback's verdicts cannot be accepted as a judgement of the page as it is now.
+#[derive(Debug, PartialEq, Eq)]
+pub enum QaRejection {
+    /// The verdicts judge an older scene revision or a different artifact. Nothing is applied: a
+    /// newer revision gets its own render and QA, and an old verdict must not edit it.
+    Stale(String),
+    /// The verdict set does not cover exactly what the page shows: missing, duplicate, foreign or
+    /// malformed verdicts, or a displayed region that was never submitted. Nothing is applied and
+    /// the page is not reported as passed.
+    Incomplete(Vec<String>),
+}
+
+/// Checks the verdict set against the stated targets and the worker's raw-response integrity
+/// report. Pure, so every rejection rule is unit-tested without a database.
+pub fn qa_coverage_problems(
+    results: &[Value],
+    accounting: &Value,
+    displayed_region_ids: &std::collections::BTreeSet<String>,
+) -> Vec<String> {
+    let mut problems = Vec::new();
+    let Some(targets) = accounting.get("qaTargetIds").and_then(Value::as_array) else {
+        return vec!["QA callback does not state which regions it judged".into()];
+    };
+    let targets: std::collections::BTreeSet<String> = targets
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::to_owned)
+        .collect();
+    match accounting.get("qaResponseIntegrity") {
+        Some(integrity) if integrity.get("complete").and_then(Value::as_bool) == Some(true) => {}
+        Some(integrity) => problems.extend(
+            integrity
+                .get("errors")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(|e| format!("model response: {e}")),
+        ),
+        None => problems.push("QA callback carries no response-integrity report".into()),
+    }
+    for missing in displayed_region_ids.difference(&targets) {
+        problems.push(format!(
+            "displayed region {missing} was not submitted to QA"
+        ));
+    }
+    let mut judged = std::collections::BTreeSet::new();
+    for result in results {
+        let Some(id) = result.get("regionId").and_then(Value::as_str) else {
+            problems.push("verdict without regionId".into());
+            continue;
+        };
+        if Uuid::parse_str(id).is_err() || !targets.contains(id) {
+            problems.push(format!("verdict for foreign region {id}"));
+            continue;
+        }
+        if !judged.insert(id.to_owned()) {
+            problems.push(format!("duplicate verdict for {id}"));
+        }
+        let valid = match result.get("qaStatus").and_then(Value::as_str) {
+            Some("passed") | Some("failed") | Some("reject_sfx") => true,
+            Some("direct_fix") => result.get("directFix").is_some_and(Value::is_object),
+            _ => false,
+        };
+        if !valid {
+            problems.push(format!("malformed verdict for {id}"));
+        }
+    }
+    for missing in targets.difference(&judged) {
+        problems.push(format!("missing verdict for {missing}"));
+    }
+    problems.sort();
+    problems.dedup();
+    problems
+}
+
+/// Regions the current scene draws translated text for. Each one must carry a QA verdict.
+async fn displayed_translation_regions(
+    state: &AppState,
+    page_id: Uuid,
+) -> Result<std::collections::BTreeSet<String>, String> {
+    let ids: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT e.region_id::text FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
+         WHERE l.page_id = $1 AND l.type ILIKE 'translation' AND e.region_id IS NOT NULL \
+           AND COALESCE(l.visible, TRUE) AND COALESCE(e.visible, TRUE) \
+           AND btrim(COALESCE(e.text, '')) <> ''",
+    )
+    .bind(page_id)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|err| err.to_string())?;
+    Ok(ids.into_iter().collect())
+}
+
+/// Whether the verdicts judge the page's current scene. Non-hybrid QA must judge exactly the
+/// artifact its render bound to the job; hybrid QA renders its own prepared scene, which must be
+/// stored under this QA attempt's key.
+async fn qa_judged_current_scene(
+    state: &AppState,
+    job_id: Option<&str>,
+    image_id: Uuid,
+    page: &Page,
+    accounting: &Value,
+) -> Result<(), String> {
+    let judged = accounting
+        .get("judgedArtifact")
+        .ok_or("QA callback does not identify the artifact it judged")?;
+    let revision = judged
+        .get("pageRevision")
+        .and_then(Value::as_i64)
+        .ok_or("judged artifact has no page revision")?;
+    let digest = judged
+        .get("logicalSceneSha256")
+        .and_then(Value::as_str)
+        .ok_or("judged artifact has no scene digest")?;
+    if revision != i64::from(page.scene_revision) {
+        return Err(format!(
+            "verdicts judge revision {revision}; the page is at revision {}",
+            page.scene_revision
+        ));
+    }
+    let current: Option<String> = sqlx::query_scalar(
+        "SELECT logical_scene_sha256 FROM page_scene_snapshots WHERE page_id = $1 AND revision = $2",
+    )
+    .bind(page.id)
+    .bind(page.scene_revision)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|err| err.to_string())?;
+    if current.as_deref() != Some(digest) {
+        return Err("judged scene digest is not the current snapshot".into());
+    }
+    let identity = CALLBACK_IDENTITY
+        .try_with(Clone::clone)
+        .map_err(|_| "QA callback has no attempt identity")?;
+    let bound: Option<Value> = match job_id {
+        Some(id) => {
+            sqlx::query_scalar::<_, Option<String>>("SELECT payload FROM jobs WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&state.pool)
+                .await
+                .map_err(|err| err.to_string())?
+                .flatten()
+                .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+                .and_then(|payload| payload.get("renderArtifact").cloned())
+        }
+        None => None,
+    };
+    let artifact = judged.get("artifact");
+    let own_prefix = format!(
+        "rendered/{image_id}/jobs/{}/attempts/{}/",
+        identity.job_id, identity.attempt
+    );
+    let is_bound = bound.is_some() && artifact == bound.as_ref();
+    let is_own_render = artifact
+        .and_then(|a| a.get("storagePath"))
+        .and_then(Value::as_str)
+        .is_some_and(|path| path.starts_with(&own_prefix));
+    if is_bound || is_own_render {
+        Ok(())
+    } else {
+        Err("judged artifact is neither the bound render nor this QA attempt's own render".into())
+    }
+}
+
+/// Validates a QA callback before any verdict is applied.
+pub async fn check_qa_callback(
+    state: &AppState,
+    job_id: Option<&str>,
+    image_id: Uuid,
+    page: &Page,
+    results: &[Value],
+    accounting: &Value,
+) -> Result<Option<QaRejection>, String> {
+    if let Err(reason) = qa_judged_current_scene(state, job_id, image_id, page, accounting).await {
+        return Ok(Some(QaRejection::Stale(reason)));
+    }
+    let displayed = displayed_translation_regions(state, page.id).await?;
+    let problems = qa_coverage_problems(results, accounting, &displayed);
+    Ok((!problems.is_empty()).then_some(QaRejection::Incomplete(problems)))
+}
+
 /// Claims the right to apply a result callback (AUDIT-P4). False ⇒ already applied:
 /// log and drop the duplicate.
 pub async fn claim_callback(
@@ -2588,9 +2770,24 @@ async fn enqueue_final_pass_render(
     };
     let snapshot =
         crate::page_scene_builder::snapshot_pipeline_scene(state, &mut tx, page_id).await;
-    if let Err(err) = snapshot {
-        tracing::error!("Could not snapshot page {page_id} for QA final pass: {err}");
-        return;
+    let (snapshot, _) = match snapshot {
+        Ok(snapshot) => snapshot,
+        Err(err) => {
+            tracing::error!("Could not snapshot page {page_id} for QA final pass: {err}");
+            return;
+        }
+    };
+    // Keep the final-pass intent beside its exact snapshot before dispatch. Recovery must not
+    // turn this into a new QA cycle, or claim success on a review-required page.
+    if let Ok(identity) = CALLBACK_IDENTITY.try_with(Clone::clone) {
+        let intent = json!({"pageRevision": snapshot.revision,
+            "logicalSceneSha256": snapshot.logical_scene_sha256,
+            "finalPass": true, "completesPipeline": completes_pipeline});
+        if let Err(err) = sqlx::query("UPDATE jobs SET payload=(COALESCE(payload::jsonb, '{}'::jsonb) || jsonb_build_object('requiredRender', $2::jsonb))::text WHERE id=$1")
+            .bind(&identity.job_id).bind(intent).execute(&mut *tx).await {
+            tracing::error!("Could not persist final-pass intent for {page_id}: {err}");
+            return;
+        }
     }
     if let Err(err) = tx.commit().await {
         tracing::error!("Could not commit final-pass snapshot of {page_id}: {err}");
@@ -2681,6 +2878,45 @@ pub fn resolved_font_sizes(layout: &Value) -> Vec<(Uuid, f64)> {
         .unwrap_or_default()
 }
 
+/// Read only the content-addressed output owned by this job attempt. Never resolve a mutable
+/// image-level staging key: another render can overwrite it before this callback arrives.
+pub async fn verify_job_artifact(
+    state: &AppState,
+    image_id: Uuid,
+    identity: &CallbackIdentity,
+    artifact: &Value,
+) -> Result<Vec<u8>, String> {
+    let digest = artifact
+        .get("sha256")
+        .and_then(Value::as_str)
+        .filter(|s| {
+            s.len() == 64
+                && s.bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        })
+        .ok_or("render artifact requires a SHA-256 digest")?;
+    let expected_path = format!(
+        "rendered/{image_id}/jobs/{}/attempts/{}/{digest}.png",
+        identity.job_id, identity.attempt
+    );
+    if artifact.get("storagePath").and_then(Value::as_str) != Some(expected_path.as_str())
+        || artifact.get("contentType").and_then(Value::as_str) != Some("image/png")
+    {
+        return Err("render artifact does not belong to this job attempt".into());
+    }
+    let bytes = state
+        .storage
+        .download_bytes(&expected_path)
+        .await
+        .ok_or("render artifact unavailable; callback remains retryable")?;
+    if artifact.get("byteLength").and_then(Value::as_u64) != Some(bytes.len() as u64)
+        || hex::encode(Sha256::digest(&bytes)) != digest
+    {
+        return Err("render artifact bytes do not match the callback digest/length".into());
+    }
+    Ok(bytes)
+}
+
 pub async fn handle_render_callback(
     state: &AppState,
     job_id: Option<&str>,
@@ -2688,7 +2924,20 @@ pub async fn handle_render_callback(
     page_id: Option<Uuid>,
     diagnostics: Value,
     layout: Value,
+    reported_artifact: Value,
 ) -> Result<RenderCallbackOutcome, String> {
+    let mut tx = state.pool.begin().await.map_err(|err| err.to_string())?;
+    if !claim_callback_tx(&mut tx, job_id, image_id, "render")
+        .await
+        .map_err(|err| err.to_string())?
+        .is_claimed()
+    {
+        tx.rollback().await.map_err(|err| err.to_string())?;
+        return Ok(RenderCallbackOutcome::default());
+    }
+    let identity = CALLBACK_IDENTITY
+        .try_with(Clone::clone)
+        .map_err(|err| err.to_string())?;
     let ledger: Option<(Uuid, i32, String)> = match job_id.filter(|id| !id.is_empty()) {
         Some(job_id) => sqlx::query_as(
             "SELECT page_id, page_revision, logical_scene_sha256 \
@@ -2708,16 +2957,7 @@ pub async fn handle_render_callback(
                 page_id.unwrap()
             ));
         }
-        let source_path = format!("rendered/{image_id}.png");
-        let bytes = state
-            .storage
-            .download_bytes(&source_path)
-            .await
-            .ok_or_else(|| {
-                format!(
-                    "render callback has no output at {source_path}; callback remains retryable"
-                )
-            })?;
+        let bytes = verify_job_artifact(state, image_id, &identity, &reported_artifact).await?;
         let rendered_png_sha256 = hex::encode(Sha256::digest(&bytes));
         let storage_path = rendered_artifact_path(
             *ledger_page_id,
@@ -2737,16 +2977,15 @@ pub async fn handle_render_callback(
         None
     };
 
-    let mut tx = state.pool.begin().await.map_err(|err| err.to_string())?;
-    if !claim_callback_tx(&mut tx, job_id, image_id, "render")
-        .await
-        .map_err(|err| err.to_string())?
-        .is_claimed()
-    {
-        tx.rollback().await.map_err(|err| err.to_string())?;
-        return Ok(RenderCallbackOutcome::default());
-    }
-
+    let qa_render_binding = ledger.as_ref().zip(artifact.as_ref()).map(
+        |((_, revision, logical_sha), (path, png_sha))| {
+            json!({
+                "pageRevision": revision, "logicalSceneSha256": logical_sha, "renderJobId": job_id,
+                "renderArtifact": {"storagePath": path, "sha256": png_sha,
+                    "byteLength": reported_artifact["byteLength"], "contentType": "image/png"}
+            })
+        },
+    );
     let mut artifact_current = false;
     if let (
         Some((ledger_page_id, revision, logical_scene_sha256)),
@@ -2769,21 +3008,6 @@ pub async fn handle_render_callback(
         .map_err(|err| err.to_string())?;
 
         if persisted.rows_affected() > 0 {
-            // Tracker R2 (c): the resolved font px goes back onto the element it was fitted for,
-            // so the export's project.json (and the R4 harness's `ours font px` column) carries
-            // what the page was actually set in. Only auto-sized elements: a size the user typed
-            // is theirs. Line breaks stay in the ledger's layout_json with the rest of the layout.
-            for (element_id, font_size) in resolved_font_sizes(&layout) {
-                sqlx::query(
-                    "UPDATE layer_elements SET size = $2 \
-                     WHERE id = $1 AND COALESCE(auto_size, TRUE) = TRUE",
-                )
-                .bind(element_id)
-                .bind(font_size)
-                .execute(&mut *tx)
-                .await
-                .map_err(|err| err.to_string())?;
-            }
             let pointer = sqlx::query(
                 "UPDATE pages SET current_render_job_id = $1, last_rendered_at = now() \
                  WHERE id = $2 AND scene_revision = $3 \
@@ -2800,9 +3024,22 @@ pub async fn handle_render_callback(
             .await
             .map_err(|err| err.to_string())?;
             artifact_current = pointer.rows_affected() > 0;
+            if artifact_current {
+                // An obsolete layout must never resize elements belonging to the newer scene.
+                for (element_id, font_size) in resolved_font_sizes(&layout) {
+                    sqlx::query("UPDATE layer_elements SET size = $2 WHERE id = $1 AND COALESCE(auto_size, TRUE) = TRUE AND layer_id IN (SELECT id FROM layers WHERE page_id=$3)")
+                        .bind(element_id).bind(font_size).bind(ledger_page_id)
+                        .execute(&mut *tx).await.map_err(|err| err.to_string())?;
+                }
+            }
         }
     }
     tx.commit().await.map_err(|err| err.to_string())?;
+
+    if !artifact_current {
+        // Accepted historical output is retained for diagnosis, but cannot judge/advance a new scene.
+        return Ok(RenderCallbackOutcome::default());
+    }
 
     let pages: Vec<Page> = match page_id {
         Some(page_id) => sqlx::query_as("SELECT * FROM pages WHERE id = $1")
@@ -2862,6 +3099,9 @@ pub async fn handle_render_callback(
             "normal",
             move |job| {
                 job.insert("qaPass".into(), json!(retries + 1));
+                if let Some(Value::Object(binding)) = qa_render_binding {
+                    job.extend(binding);
+                }
             },
         )
         .await;
@@ -3695,6 +3935,45 @@ pub async fn relink_overlay_successors(
     Ok(())
 }
 
+/// Records an incomplete QA pass on the newest translation layer, which is where the reader and
+/// queue read QA status from. No per-region verdict is written: a partial set cannot be trusted.
+async fn record_incomplete_qa(
+    state: &AppState,
+    page: &Page,
+    problems: &[String],
+    cost: Option<&Value>,
+) {
+    let newest: Option<Layer> = sqlx::query_as(
+        "SELECT * FROM layers WHERE page_id = $1 AND type ILIKE 'translation' ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(page.id)
+    .fetch_optional(&state.pool)
+    .await
+    .ok()
+    .flatten();
+    let Some(layer) = newest else {
+        return;
+    };
+    let mut metadata = layer
+        .metadata_json
+        .clone()
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    let mut qa = serde_json::Map::new();
+    qa.insert("status".into(), json!("incomplete"));
+    qa.insert("problems".into(), json!(problems));
+    qa.insert("last_qa_at".into(), json!(chrono::Utc::now().to_rfc3339()));
+    if let Some(cost) = cost.filter(|c| !c.is_null()) {
+        qa.insert("cost".into(), cost.clone());
+    }
+    metadata.insert("qa".into(), Value::Object(qa));
+    let _ = sqlx::query("UPDATE layers SET metadata_json=$2 WHERE id=$1")
+        .bind(layer.id)
+        .bind(Value::Object(metadata))
+        .execute(&state.pool)
+        .await;
+}
+
 /// The full QA verdict. Returns one of DUPLICATE / MANUAL_REVIEW / RETRIED /
 /// COMPLETED_NO_QA / COMPLETED — the controller turns the last two into SSE notifications.
 pub async fn handle_qa_callback(
@@ -3704,6 +3983,7 @@ pub async fn handle_qa_callback(
     callback_page_id: Option<Uuid>,
     qa_results: &[Value],
     cost: Option<&Value>,
+    accounting: &Value,
 ) -> Result<&'static str, String> {
     tracing::info!(
         "Received QA callback for image: {} with {} results",
@@ -3713,6 +3993,67 @@ pub async fn handle_qa_callback(
 
     if !claim_callback(state, job_id, image_id, "qa").await {
         return Ok("DUPLICATE");
+    }
+
+    // OQ-01/OQ-02: decide whether these verdicts may be applied at all before touching anything.
+    let Some(checked_page) =
+        resolve_page_for_callback(&state.pool, image_id, callback_page_id).await
+    else {
+        tracing::warn!("QA callback for image {image_id} has no page; not applying verdicts");
+        return Ok("STALE");
+    };
+    match check_qa_callback(
+        state,
+        job_id,
+        image_id,
+        &checked_page,
+        qa_results,
+        accounting,
+    )
+    .await?
+    {
+        None => {}
+        Some(QaRejection::Stale(reason)) => {
+            tracing::warn!(
+                "Ignoring stale QA verdicts for page {}: {reason}",
+                checked_page.id
+            );
+            return Ok("STALE");
+        }
+        Some(QaRejection::Incomplete(problems)) => {
+            tracing::error!(
+                "QA for page {} is incomplete ({} problem(s)); applying no verdicts: {:?}",
+                checked_page.id,
+                problems.len(),
+                problems.iter().take(10).collect::<Vec<_>>()
+            );
+            record_incomplete_qa(state, &checked_page, &problems, cost).await;
+            if let Some(redis) = &state.redis {
+                let _ = redis
+                    .delete(&qa_retry_key(image_id, Some(checked_page.id)))
+                    .await;
+                let _ = redis.delete(&format!("pipeline:trace:{image_id}")).await;
+            }
+            if let Some(cost) = cost {
+                save_job_costs(state, image_id, job_id, cost).await;
+            }
+            // FAILED, with the cause, so the queue shows it and offers Retry. A retry re-runs QA
+            // against the same bound artifact; a newer revision gets its own QA instead.
+            if let Some(job_id) = job_id {
+                let summary = format!(
+                    "QA incomplete ({} problem(s)): {}",
+                    problems.len(),
+                    problems
+                        .iter()
+                        .take(3)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                );
+                mark_claimed_callback_failed(state, job_id, &summary).await;
+            }
+            return Ok("QA_INCOMPLETE");
+        }
     }
 
     let mut needs_retry = false;
@@ -4098,14 +4439,19 @@ pub async fn handle_qa_callback(
         //
         // `qa_unusable` cannot coincide with `qa_changed_the_page`: unusable means no verdict was
         // applied, so there is nothing to re-render and COMPLETED_NO_QA still answers here.
+        // Retry exhaustion leaves failed verdicts standing: the page is finished, not passed, so
+        // no render may announce "Page Processing Complete" for it.
+        let exhausted = needs_retry;
         if qa_changed_the_page {
-            enqueue_final_pass_render(state, image_id, qa_page_id, true).await;
+            enqueue_final_pass_render(state, image_id, qa_page_id, !exhausted).await;
         }
         if let Some(redis) = &state.redis {
             let _ = redis.delete(&qa_retry_key(image_id, qa_page_id)).await;
             let _ = redis.delete(&format!("pipeline:trace:{image_id}")).await;
         }
-        Ok(if qa_unusable {
+        Ok(if exhausted {
+            "COMPLETED_WITH_FAILURES"
+        } else if qa_unusable {
             "COMPLETED_NO_QA"
         } else if qa_changed_the_page {
             "COMPLETED_PENDING_RENDER"
@@ -4373,5 +4719,79 @@ mod textbox_tests {
         // Free-floating text grows outward — the case that can go negative.
         assert!(text_box_geometry(&region(direct_text_region(0, 0, 200, 200)), None).x >= 0.0);
         assert!(text_box_geometry(&region(direct_text_region(0, 0, 200, 200)), None).y >= 0.0);
+    }
+}
+
+#[cfg(test)]
+mod qa_coverage_tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    fn id() -> String {
+        Uuid::new_v4().to_string()
+    }
+    fn accounting(targets: &[&String], complete: bool) -> Value {
+        json!({"qaTargetIds": targets, "qaResponseIntegrity": {"complete": complete, "errors":
+               if complete { json!([]) } else { json!(["missing verdict for x"]) }}})
+    }
+    fn verdict(region: &str, status: &str) -> Value {
+        json!({"regionId": region, "qaStatus": status})
+    }
+
+    #[test]
+    fn complete_set_has_no_problems() {
+        let (a, b) = (id(), id());
+        let shown: BTreeSet<String> = [a.clone(), b.clone()].into();
+        let results = [verdict(&a, "passed"), verdict(&b, "reject_sfx")];
+        assert!(qa_coverage_problems(&results, &accounting(&[&a, &b], true), &shown).is_empty());
+    }
+
+    #[test]
+    fn every_kind_of_gap_is_reported() {
+        let (a, b, c) = (id(), id(), id());
+        let shown: BTreeSet<String> = [a.clone(), b.clone(), c.clone()].into();
+        let results = [
+            verdict(&a, "passed"),
+            verdict(&a, "passed"),
+            verdict(&id(), "passed"),
+            verdict(&b, "direct_fix"),
+            json!({"qaStatus": "passed"}),
+        ];
+        let problems = qa_coverage_problems(&results, &accounting(&[&a, &b], false), &shown);
+        let joined = problems.join("\n");
+        for expected in [
+            format!("duplicate verdict for {a}"),
+            "verdict for foreign region".into(),
+            format!("malformed verdict for {b}"),
+            "verdict without regionId".into(),
+            format!("displayed region {c} was not submitted to QA"),
+            "model response: missing verdict for x".into(),
+        ] {
+            assert!(joined.contains(&expected), "{expected} not in {joined}");
+        }
+    }
+
+    #[test]
+    fn empty_response_for_submitted_targets_is_incomplete() {
+        let a = id();
+        let shown: BTreeSet<String> = [a.clone()].into();
+        let problems = qa_coverage_problems(&[], &accounting(&[&a], true), &shown);
+        assert_eq!(problems, vec![format!("missing verdict for {a}")]);
+    }
+
+    #[test]
+    fn missing_accounting_fails_closed() {
+        let problems = qa_coverage_problems(&[], &json!({}), &BTreeSet::new());
+        assert_eq!(problems.len(), 1);
+        let problems = qa_coverage_problems(&[], &json!({"qaTargetIds": []}), &BTreeSet::new());
+        assert_eq!(
+            problems,
+            vec!["QA callback carries no response-integrity report"]
+        );
+    }
+
+    #[test]
+    fn a_page_with_nothing_to_judge_passes() {
+        assert!(qa_coverage_problems(&[], &accounting(&[], true), &BTreeSet::new()).is_empty());
     }
 }

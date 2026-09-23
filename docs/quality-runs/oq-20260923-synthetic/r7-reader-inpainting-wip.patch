@@ -1,0 +1,437 @@
+diff --git a/backend-rust/src/routes/layers_ops.rs b/backend-rust/src/routes/layers_ops.rs
+index 9e236b0..524c2ba 100644
+--- a/backend-rust/src/routes/layers_ops.rs
++++ b/backend-rust/src/routes/layers_ops.rs
+@@ -39,6 +39,31 @@ pub async fn delete_layer(
+         .fetch_optional(&mut *tx)
+         .await
+         .unwrap_or(None);
++    // An inpainting layer is also the durable materialization marker.  Retain the empty hidden
++    // layer after delete so revisiting the Reader cannot silently recreate patches the user
++    // removed; source pixels then show through and overlapping surviving patches recompose.
++    let is_inpainting: bool = sqlx::query_scalar(
++        "SELECT type = 'inpainting' AND metadata_json->>'kind' = 'inpainting' FROM layers WHERE id=$1",
++    )
++    .bind(id)
++    .fetch_optional(&mut *tx)
++    .await
++    .unwrap_or(None)
++    .unwrap_or(false);
++    if is_inpainting {
++        if let Some(page_id) = page_id {
++            let _ = sqlx::query("DELETE FROM layer_elements WHERE layer_id=$1")
++                .bind(id).execute(&mut *tx).await;
++            let _ = sqlx::query("UPDATE layers SET visible=false WHERE id=$1")
++                .bind(id).execute(&mut *tx).await;
++            if crate::page_freshness::advance_page_revision(&mut tx, page_id).await.is_ok()
++                && tx.commit().await.is_ok()
++            {
++                return StatusCode::OK.into_response();
++            }
++            return error::internal_error("/api/layers/{id}");
++        }
++    }
+     if let Err(err) = crate::jobs::coordinator::sync_superseded_elements(&mut tx, id, false).await {
+         tracing::error!(
+             "Could not restore what overlay {id} superseded, refusing to delete: {err}"
+diff --git a/backend-rust/src/routes/page.rs b/backend-rust/src/routes/page.rs
+index 830ace3..c8cc2fe 100644
+--- a/backend-rust/src/routes/page.rs
++++ b/backend-rust/src/routes/page.rs
+@@ -42,6 +42,7 @@ use crate::models::{
+     PageSceneSnapshot, Panel,
+ };
+ use crate::page_scene::{CurrentRenderArtifact, current_render_artifact};
++use crate::page_scene_builder::scene_asset_path;
+ use crate::state::AppState;
+ 
+ // ---------------------------------------------------------------------------
+@@ -874,6 +875,152 @@ pub async fn get_page(State(state): State<AppState>, Path(page_id): Path<Uuid>)
+     }
+ }
+ 
++/// Materialize worker cleanup patches once as normal editable elements.  The marker is the
++/// inpainting layer itself: an intentionally emptied/hidden layer is still a completed choice,
++/// so a deleted patch is never resurrected by a later Reader refresh.
++pub async fn materialize_inpainting(
++    State(state): State<AppState>,
++    user: AuthUser,
++    Path(page_id): Path<Uuid>,
++) -> Response {
++    let instance = "/api/pages/{pageId}/inpainting";
++    if user.role.eq_ignore_ascii_case("viewer") {
++        return error::access_denied(instance);
++    }
++    let mut tx = match state.pool.begin().await {
++        Ok(tx) => tx,
++        Err(_) => return error::internal_error(instance),
++    };
++    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pages WHERE id = $1 FOR UPDATE)")
++        .bind(page_id)
++        .fetch_one(&mut *tx)
++        .await
++        .unwrap_or(false);
++    if !exists {
++        return error::not_found(&format!("Page not found: {page_id}"), instance);
++    }
++    let existing: Option<Uuid> = sqlx::query_scalar(
++        "SELECT id FROM layers WHERE page_id = $1 AND type = 'inpainting' \
++         AND metadata_json->>'kind' = 'inpainting' LIMIT 1",
++    )
++    .bind(page_id)
++    .fetch_optional(&mut *tx)
++    .await
++    .unwrap_or(None);
++    if existing.is_some() {
++        let _ = tx.rollback().await;
++        return Json(json!({ "status": "already_materialized" })).into_response();
++    }
++
++    let regions: Vec<OcrRegion> = sqlx::query_as(
++        "SELECT * FROM ocr_regions WHERE page_id = $1 AND cleanup_patch_asset_id IS NOT NULL \
++         AND cleanup_patch_sha256 IS NOT NULL AND cleanup_bounds IS NOT NULL \
++         AND COALESCE(approved, TRUE) = TRUE AND COALESCE(LOWER(region_type), '') <> 'sfx'",
++    )
++    .bind(page_id)
++    .fetch_all(&mut *tx)
++    .await
++    .unwrap_or_default();
++    let mut candidates = Vec::new();
++    for region in regions {
++        let Some(bounds) = region.cleanup_bounds.as_ref() else { continue };
++        let (Some(x), Some(y), Some(width), Some(height)) = (
++            bounds.get("x").and_then(|v| v.as_i64()),
++            bounds.get("y").and_then(|v| v.as_i64()),
++            bounds.get("width").and_then(|v| v.as_i64()),
++            bounds.get("height").and_then(|v| v.as_i64()),
++        ) else { continue };
++        if width <= 0 || height <= 0 { continue; }
++        let sha = region.cleanup_patch_sha256.clone().unwrap();
++        if state.storage.exists(&scene_asset_path(page_id, &sha)).await {
++            candidates.push((region, x, y, width, height, sha));
++        }
++    }
++    if candidates.is_empty() {
++        let _ = tx.rollback().await;
++        return (StatusCode::CONFLICT, Json(json!({ "status": "cleanup_not_ready" }))).into_response();
++    }
++    let layer_id = Uuid::new_v4();
++    let text_floor: i32 = sqlx::query_scalar(
++        "SELECT COALESCE(MIN(z_order), 0) FROM layers WHERE page_id=$1 AND LOWER(type) IN ('translation','sfx')",
++    ).bind(page_id).fetch_one(&mut *tx).await.unwrap_or(0);
++    if sqlx::query(
++        "INSERT INTO layers (id, created_at, metadata_json, target_language, type, visible, z_order, page_id) \
++         VALUES ($1,now(),'{\"kind\":\"inpainting\",\"assets\":{}}'::jsonb,NULL,'inpainting',true,$2,$3)",
++    ).bind(layer_id).bind(text_floor.saturating_sub(1)).bind(page_id).execute(&mut *tx).await.is_err() {
++        return error::internal_error(instance);
++    }
++    let mut assets = serde_json::Map::new();
++    for (region, x, y, width, height, sha) in candidates {
++        let element_id = Uuid::new_v4();
++        sqlx::query(
++            "INSERT INTO layer_elements (id, auto_size, box_shape, font, font_style, font_weight, is_manually_edited, \
++             max_height, max_width, overflow, rotation, size, text, visible, word_wrap, x, y, layer_id, region_id) \
++             VALUES ($1,false,'rectangular','Comic Neue','normal','normal',false,$2,$3,false,0,16,'',true,false,$4,$5,$6,$7)",
++        )
++        .bind(element_id).bind(height as i32).bind(width as i32).bind(x as f64).bind(y as f64)
++        .bind(layer_id).bind(region.id).execute(&mut *tx).await.is_err() {
++            return error::internal_error(instance);
++        }
++        assets.insert(
++            element_id.to_string(),
++            json!({
++                "assetId": region.cleanup_patch_asset_id,
++                "sha256": sha,
++                "byteLength": region.cleanup_patch_byte_length.unwrap_or(0),
++                "mimeType": "image/png",
++                "bounds": { "x": x, "y": y, "width": width, "height": height },
++                "archivePath": format!("inpainting/{element_id}.png"),
++            }),
++        );
++    }
++    let metadata = json!({ "kind": "inpainting", "assets": assets });
++    if sqlx::query("UPDATE layers SET metadata_json=$2 WHERE id=$1")
++        .bind(layer_id)
++        .bind(metadata)
++        .execute(&mut *tx)
++        .await
++        .is_err()
++    {
++        return error::internal_error(instance);
++    }
++    if crate::page_freshness::advance_page_revision(&mut tx, page_id)
++        .await
++        .is_err()
++        || tx.commit().await.is_err()
++    {
++        return error::internal_error(instance);
++    }
++    Json(json!({ "status": "materialized", "layerId": layer_id })).into_response()
++}
++
++/// Authenticated, page-scoped access to a patch owned by a materialized inpainting element.
++pub async fn get_inpainting_asset(
++    State(state): State<AppState>,
++    _user: AuthUser,
++    Path((page_id, element_id)): Path<(Uuid, Uuid)>,
++) -> Response {
++    let metadata: Option<serde_json::Value> = sqlx::query_scalar(
++        "SELECT l.metadata_json FROM layers l JOIN layer_elements e ON e.layer_id=l.id \
++         WHERE l.page_id=$1 AND e.id=$2 AND l.type='inpainting' AND l.metadata_json->>'kind'='inpainting'",
++    ).bind(page_id).bind(element_id).fetch_optional(&state.pool).await.unwrap_or(None);
++    let Some(metadata) = metadata else {
++        return StatusCode::NOT_FOUND.into_response();
++    };
++    let Some(sha) = metadata
++        .get("assets")
++        .and_then(|v| v.get(element_id.to_string()))
++        .and_then(|v| v.get("sha256"))
++        .and_then(|v| v.as_str())
++    else {
++        return StatusCode::NOT_FOUND.into_response();
++    };
++    if sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
++        return StatusCode::NOT_FOUND.into_response();
++    }
++    stream_cached_image(&state.storage, &scene_asset_path(page_id, sha), "cleanup").await
++}
++
+ /// GET /api/pages/{pageId}/scene — reads the immutable logical scene at the page's current revision.
+ pub async fn get_page_scene(State(state): State<AppState>, Path(page_id): Path<Uuid>) -> Response {
+     match sqlx::query_as::<_, PageSceneSnapshot>(
+@@ -1147,7 +1294,7 @@ pub async fn get_page_rendered(
+     if find_page(&state.pool, page_id).await.is_none() {
+         return StatusCode::NOT_FOUND.into_response();
+     }
+-    match current_render_artifact(&state.pool, page_id).await {
++    let mut response = match current_render_artifact(&state.pool, page_id).await {
+         Ok(CurrentRenderArtifact::Ready(artifact)) => {
+             let path = artifact
+                 .rendered_png_storage_path
+@@ -1176,7 +1323,14 @@ pub async fn get_page_rendered(
+             tracing::error!("Could not resolve current render for page {page_id}: {err}");
+             StatusCode::INTERNAL_SERVER_ERROR.into_response()
+         }
+-    }
++    };
++    // This URL resolves a mutable current pointer, even when the selected object is immutable.
++    // Caching it can keep an earlier QA pass exportable after newer revisions or render failure.
++    response.headers_mut().insert(
++        header::CACHE_CONTROL,
++        axum::http::HeaderValue::from_static("private, no-store"),
++    );
++    response
+ }
+ 
+ /// GET /api/images/{imageId}/reader — WebP variant or the original fallback.
+@@ -1740,6 +1894,11 @@ pub fn router() -> Router<AppState> {
+             axum::routing::patch(update_page_number),
+         )
+         .route("/pages/{pageId}/rendered", get(get_page_rendered))
++        .route("/pages/{pageId}/inpainting", post(materialize_inpainting))
++        .route(
++            "/pages/{pageId}/inpainting-assets/{elementId}",
++            get(get_inpainting_asset),
++        )
+         .route("/chapters/{chapterId}/pages", get(list_pages))
+         .route(
+             "/chapters/{chapterId}/pages/reorder",
+diff --git a/frontend/src/components/Reader.tsx b/frontend/src/components/Reader.tsx
+index 3df718a..f0b9a7f 100644
+--- a/frontend/src/components/Reader.tsx
++++ b/frontend/src/components/Reader.tsx
+@@ -25,6 +25,7 @@ import {
+ } from "../utils/fitText";
+ import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
+ import { paintLayerMask } from "../utils/maskPaint";
++import { inpaintingAssetForElement } from "../utils/inpainting";
+ import {
+   DEFAULT_TEXT_BOX_INSET,
+   textFitBox,
+@@ -436,6 +437,9 @@ export const Reader: React.FC<ReaderProps> = ({
+   const [layers, setLayers] = useState<
+     { layer: Layer; elements: LayerElement[] }[]
+   >([]);
++  const [inpaintingUrls, setInpaintingUrls] = useState<Map<string, string>>(
++    () => new Map(),
++  );
+   const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
+   const [cleanScanlationView, setCleanScanlationView] = usePersistedState(
+     "manga_clean_view",
+@@ -848,7 +852,27 @@ export const Reader: React.FC<ReaderProps> = ({
+ 
+       if (!detailsRes.ok) throw new Error("Image details fetch failed");
+ 
+-      const detailsData = await detailsRes.json();
++      let detailsData = await detailsRes.json();
++      const needsInpainting =
++        (detailsData.ocrRegions || []).some(
++          (region: OcrRegion & { cleanupPatchAssetId?: string | null }) =>
++            !!region.cleanupPatchAssetId,
++        ) &&
++        !(detailsData.layers || []).some(
++          (item: { layer?: Layer }) => item.layer?.type === "inpainting",
++        );
++      if (needsInpainting) {
++        const materialized = await safeFetch(`/api/pages/${pageId}/inpainting`, {
++          method: "POST",
++          headers: { Authorization: `Bearer ${user.token}` },
++        });
++        if (materialized.ok) {
++          const refreshed = await safeFetch(detailsUrl, {
++            headers: { Authorization: `Bearer ${user.token}` },
++          });
++          if (refreshed.ok) detailsData = await refreshed.json();
++        }
++      }
+ 
+       const cachedData = {
+         panels: detailsData.panels || [],
+@@ -996,6 +1020,38 @@ export const Reader: React.FC<ReaderProps> = ({
+     cacheEpoch,
+   ]);
+ 
++  useEffect(() => {
++    let cancelled = false;
++    const urls: string[] = [];
++    const load = async () => {
++      const next = new Map<string, string>();
++      for (const layer of layers) {
++        if (layer.layer.type !== "inpainting") continue;
++        for (const element of layer.elements) {
++          const asset = inpaintingAssetForElement(
++            layer.layer.metadataJson,
++            element.id,
++          );
++          if (!asset || !element.visible || !layer.layer.visible) continue;
++          const response = await safeFetch(
++            `/api/pages/${selectedPage?.id}/inpainting-assets/${element.id}`,
++            { headers: { Authorization: `Bearer ${user.token}` } },
++          );
++          if (!response.ok) continue;
++          const url = URL.createObjectURL(await response.blob());
++          urls.push(url);
++          next.set(element.id, url);
++        }
++      }
++      if (!cancelled) setInpaintingUrls(next);
++    };
++    void load();
++    return () => {
++      cancelled = true;
++      urls.forEach((url) => URL.revokeObjectURL(url));
++    };
++  }, [layers, selectedPage?.id, user.token]);
++
+   // Reset pan/zoom on page changes
+   useEffect(() => {
+     Promise.resolve().then(() => {
+@@ -2403,6 +2459,8 @@ export const Reader: React.FC<ReaderProps> = ({
+     // finished render is reported as such rather than exported from something else.
+     const doExport = async () => {
+       const res = await safeFetch(`/api/pages/${selectedPage.id}/rendered`, {
++        // Bypass artifacts cached by older servers at this stable current-render URL.
++        cache: "no-store",
+         headers: { Authorization: `Bearer ${user.token}` },
+       });
+       if (res.status === 409) {
+@@ -2498,6 +2556,22 @@ export const Reader: React.FC<ReaderProps> = ({
+       // `import_project` reads only that. These PNGs are the rasterised deliverable, and an OCR
+       // layer has no business in one. See `isExportableLayer`.
+       for (const lData of layers) {
++        if (lData.layer.type === "inpainting") {
++          for (const element of lData.elements) {
++            const asset = inpaintingAssetForElement(
++              lData.layer.metadataJson,
++              element.id,
++            );
++            if (!asset?.archivePath) continue;
++            const patch = await safeFetch(
++              `/api/pages/${selectedPage.id}/inpainting-assets/${element.id}`,
++              { headers: { Authorization: `Bearer ${user.token}` } },
++            );
++            if (!patch.ok) throw new Error("Could not fetch cleanup patch for project export");
++            zip.file(asset.archivePath, await patch.blob());
++          }
++          continue;
++        }
+         if (!isExportableLayer(lData.layer)) continue;
+         const layerId = lData.layer.id;
+ 
+@@ -3340,6 +3414,37 @@ export const Reader: React.FC<ReaderProps> = ({
+                       : "visible",
+                 }}
+               >
++                {sortedLayers
++                  .filter((layer) => layer.layer.type === "inpainting")
++                  .flatMap((layer) =>
++                    layer.elements.map((element) => ({ layer, element })),
++                  )
++                  .map(({ layer, element }) => {
++                    const href = inpaintingUrls.get(element.id);
++                    if (!href || !layer.layer.visible || !element.visible) return null;
++                    const width = element.maxWidth || 1;
++                    const height = element.maxHeight || 1;
++                    const cx = element.x + width / 2;
++                    const cy = element.y + height / 2;
++                    return (
++                      <image
++                        key={`inpainting-${element.id}`}
++                        href={href}
++                        x={element.x}
++                        y={element.y}
++                        width={width}
++                        height={height}
++                        preserveAspectRatio="none"
++                        opacity={1}
++                        transform={`rotate(${element.rotation || 0}, ${cx}, ${cy})`}
++                        onClick={(event) => {
++                          event.stopPropagation();
++                          setSelectedItem({ ...element, isLayerElement: true });
++                          setActiveLayerId(element.layerId);
++                        }}
++                      />
++                    );
++                  })}
+                 {showPanels &&
+                   !cleanScanlationView &&
+                   panels.map((p) => (
+diff --git a/frontend/src/utils/inpainting.ts b/frontend/src/utils/inpainting.ts
+new file mode 100644
+index 0000000..f63427c
+--- /dev/null
++++ b/frontend/src/utils/inpainting.ts
+@@ -0,0 +1,33 @@
++/**
++ * Metadata for an immutable cleanup patch attached to a normal editable layer element.
++ *
++ * Geometry and visibility deliberately stay on the element: changing text must never move a
++ * cleanup patch, while normal element edits remain enough to move, resize, hide, or delete it.
++ */
++export interface InpaintingAsset {
++  assetId: string;
++  sha256: string;
++  byteLength: number;
++  mimeType: string;
++  bounds: { x: number; y: number; width: number; height: number };
++  archivePath?: string;
++  url?: string;
++}
++
++export type InpaintingAssets = Record<string, InpaintingAsset>;
++
++export function inpaintingAssets(
++  metadata: Record<string, unknown> | null | undefined,
++): InpaintingAssets {
++  if (!metadata || metadata.kind !== "inpainting") return {};
++  const assets = metadata.assets;
++  if (!assets || typeof assets !== "object" || Array.isArray(assets)) return {};
++  return assets as InpaintingAssets;
++}
++
++export function inpaintingAssetForElement(
++  metadata: Record<string, unknown> | null | undefined,
++  elementId: string,
++): InpaintingAsset | undefined {
++  return inpaintingAssets(metadata)[elementId];
++}

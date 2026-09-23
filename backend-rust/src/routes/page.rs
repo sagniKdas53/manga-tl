@@ -1147,7 +1147,7 @@ pub async fn get_page_rendered(
     if find_page(&state.pool, page_id).await.is_none() {
         return StatusCode::NOT_FOUND.into_response();
     }
-    match current_render_artifact(&state.pool, page_id).await {
+    let mut response = match current_render_artifact(&state.pool, page_id).await {
         Ok(CurrentRenderArtifact::Ready(artifact)) => {
             let path = artifact
                 .rendered_png_storage_path
@@ -1176,7 +1176,14 @@ pub async fn get_page_rendered(
             tracing::error!("Could not resolve current render for page {page_id}: {err}");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
-    }
+    };
+    // This URL resolves a mutable current pointer, even when the selected object is immutable.
+    // Caching it can keep an earlier QA pass exportable after newer revisions or render failure.
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("private, no-store"),
+    );
+    response
 }
 
 /// GET /api/images/{imageId}/reader — WebP variant or the original fallback.
@@ -1211,61 +1218,81 @@ pub async fn get_image_thumbnail(
     }
 }
 
-/// The object holding a thumbnail of the rendered page, as opposed to the original.
-pub fn rendered_thumbnail_path(image_id: Uuid) -> String {
-    format!("thumbnails/rendered/{image_id}.webp")
+/// The object holding a thumbnail of one rendered artifact, keyed by that artifact's PNG digest so
+/// a newer render can never be answered with an older render's thumbnail.
+pub fn rendered_thumbnail_path(rendered_png_sha256: &str) -> String {
+    format!("thumbnails/rendered/{rendered_png_sha256}.webp")
 }
 
-/// AUDIT-F26. Derives the rendered page's thumbnail and stores it, replacing any previous one.
-///
-/// Called from the render callback so the object always matches the newest render — a re-render
-/// after an edit overwrites it rather than leaving the old translation behind.
-pub async fn generate_rendered_thumbnail(storage: &MinioService, image_id: Uuid) -> bool {
-    let Some(bytes) = storage
-        .download_bytes(&format!("rendered/{image_id}.png"))
-        .await
-    else {
+/// AUDIT-F26. Derives the thumbnail of one immutable rendered artifact and stores it.
+pub async fn generate_rendered_thumbnail(
+    storage: &MinioService,
+    rendered_png_path: &str,
+    rendered_png_sha256: &str,
+) -> bool {
+    let Some(bytes) = storage.download_bytes(rendered_png_path).await else {
         return false;
     };
     let Ok(output) = crate::thumbnails::generate_thumbnail(&bytes) else {
-        tracing::warn!("rendered thumbnail generation failed for image {image_id}");
+        tracing::warn!("rendered thumbnail generation failed for {rendered_png_path}");
         return false;
     };
     if let Err(err) = storage
         .upload_bytes(
-            &rendered_thumbnail_path(image_id),
+            &rendered_thumbnail_path(rendered_png_sha256),
             output.webp_bytes,
             "image/webp",
         )
         .await
     {
-        tracing::error!("rendered thumbnail upload failed for image {image_id}: {err}");
+        tracing::error!("rendered thumbnail upload failed for {rendered_png_path}: {err}");
         return false;
     }
     true
 }
 
-/// GET /api/images/{imageId}/thumbnail/rendered — a thumbnail of the pipeline's output.
+/// GET /api/images/{imageId}/thumbnail/rendered — thumbnail of the image's current render.
 ///
 /// AUDIT-F26. The page grid cannot show the rendered PNGs directly: they average ~1.7 MB, so a
-/// single screen of twenty would be ~34 MB. It needs a thumbnail of the render, which is what this
-/// serves — the same 512px WebP treatment the original gets.
-///
-/// Generates on a miss rather than 404ing. Every page rendered before this endpoint existed has a
-/// `last_rendered_at` and a `rendered/` object but no thumbnail, and that backlog would otherwise
-/// need a migration; here the first request for each page fills it in and every later request is
-/// served from storage.
+/// single screen of twenty would be ~34 MB. Generated on a miss from the current immutable
+/// artifact only; a page with no current render answers 404 rather than an older render.
 pub async fn get_image_rendered_thumbnail(
     State(state): State<AppState>,
     Path(image_id): Path<Uuid>,
 ) -> Response {
-    let path = rendered_thumbnail_path(image_id);
+    let page_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT id FROM pages WHERE image_id = $1 ORDER BY page_number LIMIT 1")
+            .bind(image_id)
+            .fetch_optional(&state.pool)
+            .await
+            .unwrap_or(None);
+    let Some(page_id) = page_id else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let Ok(CurrentRenderArtifact::Ready(artifact)) =
+        current_render_artifact(&state.pool, page_id).await
+    else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let (Some(png_path), Some(png_sha)) = (
+        artifact.rendered_png_storage_path.as_deref(),
+        artifact.rendered_png_sha256.as_deref(),
+    ) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let path = rendered_thumbnail_path(png_sha);
     if !state.storage.exists(&path).await
-        && !generate_rendered_thumbnail(&state.storage, image_id).await
+        && !generate_rendered_thumbnail(&state.storage, png_path, png_sha).await
     {
         return StatusCode::NOT_FOUND.into_response();
     }
-    stream_cached_image(&state.storage, &path, "rthumb").await
+    let mut response = stream_cached_image(&state.storage, &path, "rthumb").await;
+    // The URL names the image, not the render; the object behind it changes with each render.
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("private, no-store"),
+    );
+    response
 }
 
 // ---------------------------------------------------------------------------

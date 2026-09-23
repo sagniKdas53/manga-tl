@@ -139,7 +139,8 @@ class DevSetupTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         config = json.loads(result.stdout)
         self.assertEqual(
-            set(config["services"]), {"db", "redis", "minio", "backend", "worker"}
+            set(config["services"]),
+            {"db", "redis", "minio", "backend", "worker", "page-renderer"},
         )
         self.assertEqual(
             config["services"]["worker"]["environment"]["QA_VLM_MODEL"], "vision"

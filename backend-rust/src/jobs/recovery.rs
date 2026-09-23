@@ -229,7 +229,7 @@ pub async fn recover_stale_processing_jobs(state: &AppState) {
 pub async fn enqueue_current_snapshot_render(
     state: &AppState,
     page: &crate::models::Page,
-    extra: serde_json::Map<String, serde_json::Value>,
+    mut extra: serde_json::Map<String, serde_json::Value>,
 ) -> Result<bool, String> {
     let Some(snapshot) = crate::page_scene::current_snapshot(&state.pool, page.id)
         .await
@@ -242,6 +242,25 @@ pub async fn enqueue_current_snapshot_render(
         );
         return Ok(false);
     };
+    let intent: Option<serde_json::Value> = sqlx::query_scalar(
+        "SELECT payload::jsonb->'requiredRender' FROM jobs WHERE page_id=$1 AND type='qa' \
+         AND payload::jsonb->'requiredRender'->>'pageRevision'=$2 \
+         AND payload::jsonb->'requiredRender'->>'logicalSceneSha256'=$3 \
+         ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(page.id)
+    .bind(snapshot.revision.to_string())
+    .bind(&snapshot.logical_scene_sha256)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|err| err.to_string())?;
+    if let Some(intent) = intent {
+        for key in ["finalPass", "completesPipeline"] {
+            if let Some(value) = intent.get(key).and_then(serde_json::Value::as_bool) {
+                extra.insert(key.into(), serde_json::json!(value));
+            }
+        }
+    }
     let mut asset_urls = serde_json::Map::new();
     for (asset_id, path) in
         crate::page_scene_builder::current_asset_paths(&state.pool, page.id, snapshot.revision)

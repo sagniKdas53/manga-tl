@@ -277,6 +277,7 @@ describe("Reader project ZIP export", () => {
         call[0].endsWith(`/api/pages/${mockPage.id}/rendered`),
     );
     expect(renderedRequest).toBeDefined();
+    expect(renderedRequest?.[1]).toMatchObject({ cache: "no-store" });
     const contexts = vi
       .mocked(HTMLCanvasElement.prototype.getContext)
       .mock.results.map((result) => result.value)

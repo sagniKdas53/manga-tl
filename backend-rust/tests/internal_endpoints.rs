@@ -93,11 +93,15 @@ async fn app() -> Option<(
     };
     let _ = &mut config;
 
+    // The disposable MinIO container starts empty. Match the production startup and the other
+    // HTTP suites so callbacks can stage their attempt-scoped render artifact.
+    let storage = MinioService::new(&minio);
+    storage.ensure_bucket().await;
     let state = AppState::new(
         config,
         pool.clone(),
         JwtUtils::new(SECRET.into(), 3_600_000),
-        MinioService::new(&minio),
+        storage,
         Some(redis.clone()),
     );
     let router = manga_backend::routes::build_router(state.clone());
@@ -774,21 +778,33 @@ async fn full_pipeline_walks_every_stage() {
     let render_payload = render_payload.expect("render queued");
 
     // --- render callback stamps rendered, queues QA ---
-    // The callback reads the worker's output from storage and files it as the revision's
-    // immutable artifact; without bytes at this path it stays retryable and answers 500.
+    // The worker stores its output under the render attempt's own immutable key and names it in
+    // the callback; the backend verifies bytes, digest and length before filing the artifact.
+    let rendered = b"rendered page".to_vec();
+    let rendered_sha = {
+        use sha2::{Digest, Sha256};
+        hex::encode(Sha256::digest(&rendered))
+    };
+    let render_job = render_payload["jobId"].as_str().unwrap().to_string();
+    let artifact_path =
+        format!("rendered/{image_id}/jobs/{render_job}/attempts/1/{rendered_sha}.png");
     state
         .storage
-        .upload_bytes(
-            &format!("rendered/{image_id}.png"),
-            b"rendered page".to_vec(),
-            "image/png",
-        )
+        .upload_bytes(&artifact_path, rendered.clone(), "image/png")
         .await
         .expect("stage render output");
+    let artifact = serde_json::json!({
+        "storagePath": artifact_path, "sha256": rendered_sha,
+        "byteLength": rendered.len(), "contentType": "image/png",
+    });
     let render_callback = serde_json::json!({
         "jobId": render_payload["jobId"],
         "imageId": image_id.to_string(),
-        "pageId": page_id.to_string()
+        "pageId": page_id.to_string(),
+        "pageRevision": render_payload["pageRevision"],
+        "logicalSceneSha256": render_payload["logicalSceneSha256"],
+        "renderedPngSha256": rendered_sha,
+        "artifact": artifact,
     });
     let (status, _, body) = worker_runs(
         &app,
@@ -806,33 +822,161 @@ async fn full_pipeline_walks_every_stage() {
         .expect("qa queued");
     let qa_payload: serde_json::Value = serde_json::from_str(&qa_raw).unwrap();
     assert_eq!(qa_payload["qaPass"], 1);
+    // QA is bound to the ledger's immutable copy of exactly these bytes, not the staging key.
+    assert_eq!(qa_payload["renderArtifact"]["sha256"], rendered_sha);
+    assert_eq!(qa_payload["renderArtifact"]["byteLength"], rendered.len());
+    assert!(
+        qa_payload["renderArtifact"]["storagePath"]
+            .as_str()
+            .unwrap()
+            .starts_with(&format!("rendered/revisions/{page_id}/")),
+        "QA judges the revision-addressed artifact"
+    );
 
-    // --- QA callback passes: pipeline completes, retry counter cleared ---
-    let translated_region: (Uuid,) = sqlx::query_as(
-        "SELECT id FROM ocr_regions WHERE page_id=$1 AND translated_text IS NOT NULL LIMIT 1",
+    // --- Initial QA fails, so the HTTP path retries translation and renders a new snapshot ---
+    // Every region the page shows text for gets a verdict, and the callback names what it judged.
+    let displayed: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT DISTINCT e.region_id FROM layer_elements e JOIN layers l ON l.id=e.layer_id \
+         WHERE l.page_id=$1 AND l.type ILIKE 'translation' AND e.region_id IS NOT NULL \
+           AND COALESCE(l.visible,TRUE) AND COALESCE(e.visible,TRUE) AND btrim(COALESCE(e.text,''))<>''",
     )
     .bind(page_id)
-    .fetch_one(&pool)
+    .fetch_all(&pool)
     .await
     .unwrap();
-    let qa_callback = serde_json::json!({
+    assert!(
+        !displayed.is_empty(),
+        "the pipeline typeset at least one region"
+    );
+    let failed_verdicts: Vec<serde_json::Value> = displayed
+        .iter()
+        .map(|id| serde_json::json!({"regionId": id.to_string(), "qaStatus": "failed", "qaScore": 0.20, "qaFeedback": "retry this synthetic text"}))
+        .collect();
+    let initial_qa_callback = serde_json::json!({
         "jobId": qa_payload["jobId"],
         "imageId": image_id.to_string(),
         "pageId": page_id.to_string(),
-        "qaResults": [
-            {"regionId": translated_region.0.to_string(), "qaStatus": "passed", "qaScore": 0.99, "qaFeedback": ""}
-        ]
+        "qaResults": failed_verdicts,
+        "qaTargetIds": displayed.iter().map(Uuid::to_string).collect::<Vec<_>>(),
+        "qaResponseIntegrity": {"complete": true, "errors": []},
+        "judgedArtifact": {
+            "artifact": qa_payload["renderArtifact"],
+            "pageRevision": qa_payload["pageRevision"],
+            "logicalSceneSha256": qa_payload["logicalSceneSha256"],
+        },
     });
     let (status, _, body) = worker_runs(
         &app,
         &pool,
         "/tlhub/api/internal/jobs/callback/qa",
-        &qa_callback,
+        &initial_qa_callback,
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
 
-    // The newest translation layer carries the recorded QA verdict.
+    let retry_translation = pop_for_page(&redis, "queue:translation", page_id)
+        .await
+        .expect("failed QA queued a bounded translation retry");
+    assert_ne!(retry_translation["jobId"], tl_payload["jobId"]);
+    let retry_translation_callback = serde_json::json!({
+        "jobId": retry_translation["jobId"],
+        "imageId": image_id.to_string(),
+        "pageId": page_id.to_string(),
+        "translations": [
+            {"regionId": region_id.0.to_string(), "translatedText": "Hello after retry", "translationFailed": false, "translationScore": 0.99, "modelIdentifier": "openai/gpt-4o", "confidence": 0.95}
+        ],
+        "cost": {"estimated_cost": 0.002, "provider": "openai", "model": "gpt-4o"}
+    });
+    let (status, _, body) = worker_runs(
+        &app,
+        &pool,
+        "/tlhub/api/internal/jobs/callback/translation",
+        &retry_translation_callback,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let retry_render = pop_for_page(&redis, "queue:render", page_id)
+        .await
+        .expect("retry translation queued a new render");
+    assert_ne!(retry_render["jobId"], render_payload["jobId"]);
+    assert!(
+        retry_render["pageRevision"].as_i64() > render_payload["pageRevision"].as_i64(),
+        "the retry must render a newer page revision"
+    );
+    assert_ne!(
+        retry_render["logicalSceneSha256"], render_payload["logicalSceneSha256"],
+        "the retry must render the retranslation snapshot, not the initial scene"
+    );
+    let retry_scene: serde_json::Value = sqlx::query_scalar(
+        "SELECT scene_json FROM page_scene_snapshots WHERE page_id=$1 AND revision=$2",
+    )
+    .bind(page_id)
+    .bind(retry_render["pageRevision"].as_i64().unwrap() as i32)
+    .fetch_one(&pool)
+    .await
+    .expect("snapshot for retry render");
+    assert!(
+        retry_scene.to_string().contains("Hello after retry"),
+        "the retry snapshot carries the retried translation text"
+    );
+    let retry_rendered = b"rendered page after retry".to_vec();
+    let retry_rendered_sha = {
+        use sha2::{Digest, Sha256};
+        hex::encode(Sha256::digest(&retry_rendered))
+    };
+    let retry_render_job = retry_render["jobId"].as_str().unwrap().to_string();
+    let retry_artifact_path =
+        format!("rendered/{image_id}/jobs/{retry_render_job}/attempts/1/{retry_rendered_sha}.png");
+    state
+        .storage
+        .upload_bytes(&retry_artifact_path, retry_rendered.clone(), "image/png")
+        .await
+        .expect("stage retried render output");
+    let retry_render_callback = serde_json::json!({
+        "jobId": retry_render["jobId"], "imageId": image_id.to_string(),
+        "pageId": page_id.to_string(), "pageRevision": retry_render["pageRevision"],
+        "logicalSceneSha256": retry_render["logicalSceneSha256"],
+        "renderedPngSha256": retry_rendered_sha,
+        "artifact": {"storagePath": retry_artifact_path, "sha256": retry_rendered_sha,
+                      "byteLength": retry_rendered.len(), "contentType": "image/png"},
+    });
+    let (status, _, body) = worker_runs(
+        &app,
+        &pool,
+        "/tlhub/api/internal/jobs/callback/render",
+        &retry_render_callback,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let retry_qa = pop_for_page(&redis, "queue:qa", page_id)
+        .await
+        .expect("retried render queued QA for its own artifact");
+    assert_eq!(retry_qa["renderArtifact"]["sha256"], retry_rendered_sha);
+
+    // --- Retried QA passes, and its accepted render is the final export ---
+    let passed_verdicts: Vec<serde_json::Value> = displayed
+        .iter()
+        .map(|id| serde_json::json!({"regionId": id.to_string(), "qaStatus": "passed", "qaScore": 0.99, "qaFeedback": ""}))
+        .collect();
+    let retry_qa_callback = serde_json::json!({
+        "jobId": retry_qa["jobId"], "imageId": image_id.to_string(), "pageId": page_id.to_string(),
+        "qaResults": passed_verdicts,
+        "qaTargetIds": displayed.iter().map(Uuid::to_string).collect::<Vec<_>>(),
+        "qaResponseIntegrity": {"complete": true, "errors": []},
+        "judgedArtifact": {"artifact": retry_qa["renderArtifact"],
+            "pageRevision": retry_qa["pageRevision"], "logicalSceneSha256": retry_qa["logicalSceneSha256"]},
+    });
+    let (status, _, body) = worker_runs(
+        &app,
+        &pool,
+        "/tlhub/api/internal/jobs/callback/qa",
+        &retry_qa_callback,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
     let qa_status: (Option<String>,) = sqlx::query_as(
         "SELECT metadata_json->'qa'->>'status' FROM layers \
          WHERE page_id=$1 AND type='translation' ORDER BY created_at DESC LIMIT 1",
@@ -842,6 +986,56 @@ async fn full_pipeline_walks_every_stage() {
     .await
     .unwrap();
     assert_eq!(qa_status.0.as_deref(), Some("passed"));
+    let (status, _, exported) = request(
+        &app,
+        "GET",
+        &format!("/tlhub/api/pages/{page_id}/rendered"),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(exported.as_bytes(), retry_rendered.as_slice());
+
+    // --- hybrid prepare is fenced to the current QA attempt ---
+    // Prepare edits layers and advances the revision, so the finished QA job may not call it.
+    let prepare_uri = format!("/tlhub/api/internal/images/{image_id}/qa-hybrid-prepare");
+    let prepare_body = serde_json::json!({
+        "jobId": qa_payload["jobId"], "pageId": page_id.to_string(), "qaResults": [],
+    });
+    let (status, _, body) = worker_post(&app, &pool, &prepare_uri, &prepare_body).await;
+    assert_eq!(status, StatusCode::CONFLICT, "finished QA attempt: {body}");
+    let (status, _, _) = request_with_headers(
+        &app,
+        "POST",
+        &prepare_uri,
+        &[],
+        Some(prepare_body.to_string()),
+    )
+    .await;
+    assert_ne!(status, StatusCode::OK, "no attempt identity, no prepare");
+    let live_qa = format!("qa-live-{}", Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, image_id, page_id, attempt, max_attempts, \
+           input_generation, lease_token, started_at, created_at, updated_at) \
+         SELECT $1, 'qa', 'PROCESSING', $2, $3, 1, 3, p.input_generation, $1, now(), now(), now() \
+         FROM pages p WHERE p.id = $3",
+    )
+    .bind(&live_qa)
+    .bind(image_id)
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("live QA attempt");
+    let live_body = serde_json::json!({
+        "jobId": live_qa, "pageId": page_id.to_string(), "qaResults": [],
+    });
+    let (status, _, body) = worker_post(&app, &pool, &prepare_uri, &live_body).await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "current QA attempt may prepare: {body}"
+    );
 
     cleanup_series(&pool, series_id).await;
 }

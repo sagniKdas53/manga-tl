@@ -22,6 +22,37 @@ use manga_backend::state::AppState;
 
 const SECRET: &str = "test-secret-long-enough-for-hmac-signing-1234567890";
 
+async fn stage_attempt_artifact(
+    state: &AppState,
+    job_id: &str,
+    image_id: uuid::Uuid,
+    bytes: &[u8],
+) -> (
+    manga_backend::jobs::coordinator::CallbackIdentity,
+    serde_json::Value,
+) {
+    use sha2::{Digest, Sha256};
+    let lease = uuid::Uuid::new_v4().to_string();
+    let generation: i32 = sqlx::query_scalar("UPDATE jobs SET status='PROCESSING', attempt=1, lease_token=$2, started_at=now(), callback_applied_at=NULL WHERE id=$1 RETURNING input_generation")
+        .bind(job_id).bind(&lease).fetch_one(&state.pool).await.expect("arm render attempt");
+    let sha = hex::encode(Sha256::digest(bytes));
+    let path = format!("rendered/{image_id}/jobs/{job_id}/attempts/1/{sha}.png");
+    state
+        .storage
+        .upload_bytes(&path, bytes.to_vec(), "image/png")
+        .await
+        .expect("stage immutable attempt output");
+    (
+        manga_backend::jobs::coordinator::CallbackIdentity {
+            job_id: job_id.into(),
+            attempt: 1,
+            input_generation: generation,
+            lease_token: lease,
+        },
+        serde_json::json!({"storagePath":path,"sha256":sha,"byteLength":bytes.len(),"contentType":"image/png"}),
+    )
+}
+
 fn db_config_from_jobs_env() -> Option<DatabaseConfig> {
     let url = std::env::var("JOBS_E2E_DATABASE_URL").ok()?;
     let rest = url.strip_prefix("jdbc:postgresql://")?;
@@ -45,7 +76,11 @@ async fn app() -> Option<(Router, sqlx::PgPool, Arc<RedisService>, AppState)> {
         eprintln!("skipping: JOBS_E2E_DATABASE_URL not set (refusing shared DB)");
         return None;
     }
-    let pool = db::connect(&db_config_from_jobs_env()?).await.ok()?;
+    let database = db_config_from_jobs_env()
+        .expect("JOBS_E2E_DATABASE_URL must be jdbc:postgresql://host:port/database");
+    let pool = db::connect(&database)
+        .await
+        .expect("dedicated jobs test database must be reachable");
     let addr = std::env::var("REDIS_TEST_ADDR").ok()?;
     let (host, port) = addr.split_once(':')?;
     let redis = Arc::new(
@@ -54,7 +89,8 @@ async fn app() -> Option<(Router, sqlx::PgPool, Arc<RedisService>, AppState)> {
             .expect("redis connect"),
     );
     let minio = MinioConfig {
-        endpoint: "http://localhost:9000".into(),
+        endpoint: std::env::var("MINIO_TEST_ENDPOINT")
+            .expect("MINIO_TEST_ENDPOINT required for jobs integration tests"),
         external_url: None,
         access_key: Some("minioadmin".into()),
         secret_key: Some("minioadmin".into()),
@@ -79,11 +115,13 @@ async fn app() -> Option<(Router, sqlx::PgPool, Arc<RedisService>, AppState)> {
             port: 6379,
         },
     };
+    let storage = MinioService::new(&minio);
+    storage.ensure_bucket().await;
     let state = AppState::new(
         config,
         pool.clone(),
         JwtUtils::new(SECRET.into(), 3_600_000),
-        MinioService::new(&minio),
+        storage,
         Some(redis.clone()),
     );
     Some((
@@ -595,6 +633,13 @@ async fn recovery_reset_stale_and_debounced_render() {
     .execute(&pool)
     .await
     .expect("newer immutable scene snapshot");
+    // Model a QA commit followed by death before render dispatch. The persisted intent must
+    // survive the poller creating the job, including the review-required non-completion flag.
+    let qa_intent_id = uuid::Uuid::new_v4().to_string();
+    sqlx::query("INSERT INTO jobs (id,type,status,image_id,page_id,payload,created_at,updated_at) VALUES ($1,'qa','COMPLETED',$2,$3,$4,now(),now())")
+        .bind(&qa_intent_id).bind(image_id).bind(page_id)
+        .bind(serde_json::json!({"requiredRender":{"pageRevision":1,"logicalSceneSha256":"c".repeat(64),"finalPass":true,"completesPipeline":false}}).to_string())
+        .execute(&pool).await.expect("durable QA final render intent");
     manga_backend::jobs::recovery::process_pending_renders(&state).await;
     let queued_revisions: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM page_render_jobs WHERE page_id = $1")
@@ -616,25 +661,23 @@ async fn recovery_reset_stale_and_debounced_render() {
     .fetch_one(&pool)
     .await
     .expect("old render ledger");
-    state
-        .storage
-        .upload_bytes(
-            &format!("rendered/{image_id}.png"),
-            b"old revision output".to_vec(),
-            "image/png",
+    let (old_identity, old_artifact) =
+        stage_attempt_artifact(&state, &old_job_id, image_id, b"old revision output").await;
+    let old_callback = manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            old_identity,
+            manga_backend::jobs::coordinator::handle_render_callback(
+                &state,
+                Some(&old_job_id),
+                image_id,
+                Some(page_id),
+                serde_json::json!([]),
+                serde_json::json!([]),
+                old_artifact,
+            ),
         )
         .await
-        .expect("stage old render output");
-    let old_callback = manga_backend::jobs::coordinator::handle_render_callback(
-        &state,
-        Some(&old_job_id),
-        image_id,
-        Some(page_id),
-        serde_json::json!([]),
-        serde_json::json!([]),
-    )
-    .await
-    .expect("old callback");
+        .expect("old callback");
     assert!(!old_callback.artifact_current);
     let old_pointer: Option<String> =
         sqlx::query_scalar("SELECT current_render_job_id FROM pages WHERE id = $1")
@@ -656,6 +699,10 @@ async fn recovery_reset_stale_and_debounced_render() {
         StatusCode::CONFLICT,
         "the page read boundary must not expose the old callback"
     );
+    assert_eq!(
+        pending_response.headers()["cache-control"],
+        "private, no-store"
+    );
     let pending_body = pending_response
         .into_body()
         .collect()
@@ -675,27 +722,68 @@ async fn recovery_reset_stale_and_debounced_render() {
     .fetch_one(&pool)
     .await
     .expect("current render ledger");
+    let recovered_payload: String = sqlx::query_scalar("SELECT payload FROM jobs WHERE id=$1")
+        .bind(&current_job_id)
+        .fetch_one(&pool)
+        .await
+        .expect("recovered payload");
+    let recovered_payload: serde_json::Value = serde_json::from_str(&recovered_payload).unwrap();
+    assert_eq!(recovered_payload["finalPass"], true);
+    assert_eq!(recovered_payload["completesPipeline"], false);
     let current_output = b"current revision output".to_vec();
+    let (current_identity, current_artifact) =
+        stage_attempt_artifact(&state, &current_job_id, image_id, &current_output).await;
+    // An older/concurrent worker overwrites the historical shared staging key. This must
+    // neither poison the new ledger nor determine the bytes downloaded by the public route.
     state
         .storage
         .upload_bytes(
             &format!("rendered/{image_id}.png"),
-            current_output.clone(),
+            b"superseded output".to_vec(),
             "image/png",
         )
         .await
-        .expect("stage current render output");
-    let current_callback = manga_backend::jobs::coordinator::handle_render_callback(
-        &state,
-        Some(&current_job_id),
-        image_id,
-        Some(page_id),
-        serde_json::json!([]),
-        serde_json::json!([]),
-    )
-    .await
-    .expect("current callback");
+        .expect("interleaved shared write");
+    let mut corrupt_artifact = current_artifact.clone();
+    corrupt_artifact["byteLength"] = serde_json::json!(9999);
+    let rejected = manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            current_identity.clone(),
+            manga_backend::jobs::coordinator::handle_render_callback(
+                &state,
+                Some(&current_job_id),
+                image_id,
+                Some(page_id),
+                serde_json::json!([]),
+                serde_json::json!([]),
+                corrupt_artifact,
+            ),
+        )
+        .await;
+    assert!(
+        rejected.is_err(),
+        "wrong bytes cannot consume the callback claim"
+    );
+    let current_callback = manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            current_identity.clone(),
+            manga_backend::jobs::coordinator::handle_render_callback(
+                &state,
+                Some(&current_job_id),
+                image_id,
+                Some(page_id),
+                serde_json::json!([]),
+                serde_json::json!([]),
+                current_artifact.clone(),
+            ),
+        )
+        .await
+        .expect("current callback");
     assert!(current_callback.artifact_current);
+    assert!(
+        !current_callback.completes_pipeline,
+        "review-required final render must not announce success"
+    );
     let (current_pointer, artifact_path): (Option<String>, Option<String>) = sqlx::query_as(
         "SELECT p.current_render_job_id, r.rendered_png_storage_path \
          FROM pages p JOIN page_render_jobs r ON r.job_id = p.current_render_job_id \
@@ -721,6 +809,10 @@ async fn recovery_reset_stale_and_debounced_render() {
     .await;
     assert_eq!(ready_response.status(), StatusCode::OK);
     assert_eq!(
+        ready_response.headers()["cache-control"],
+        "private, no-store"
+    );
+    assert_eq!(
         ready_response
             .into_body()
             .collect()
@@ -731,16 +823,21 @@ async fn recovery_reset_stale_and_debounced_render() {
         current_output,
         "the public page read returns exactly the current immutable artifact"
     );
-    let duplicate = manga_backend::jobs::coordinator::handle_render_callback(
-        &state,
-        Some(&current_job_id),
-        image_id,
-        Some(page_id),
-        serde_json::json!([]),
-        serde_json::json!([]),
-    )
-    .await
-    .expect("duplicate callback");
+    let duplicate = manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            current_identity,
+            manga_backend::jobs::coordinator::handle_render_callback(
+                &state,
+                Some(&current_job_id),
+                image_id,
+                Some(page_id),
+                serde_json::json!([]),
+                serde_json::json!([]),
+                current_artifact,
+            ),
+        )
+        .await
+        .expect("duplicate callback");
     assert!(
         !duplicate.artifact_current,
         "duplicate completion cannot advance the current artifact again"

@@ -1239,6 +1239,34 @@ pub async fn qa_hybrid_prepare(
     if let Some(denied) = guard(&state, &headers) {
         return denied;
     }
+    // Prepare edits layers and advances the page revision, so only the current attempt of this
+    // image's QA job may call it: a superseded attempt must not rewrite a newer run's page.
+    let identity = match callback_identity(&headers, None) {
+        Ok(identity) => identity,
+        Err(rejection) => return rejection.into_response(),
+    };
+    let current: Result<Option<i32>, sqlx::Error> = sqlx::query_scalar(
+        "SELECT 1 FROM jobs WHERE id = $1 AND type = 'qa' AND image_id = $2 \
+           AND status = 'PROCESSING' AND attempt = $3 AND lease_token = $4 \
+           AND callback_applied_at IS NULL",
+    )
+    .bind(&identity.job_id)
+    .bind(image_id)
+    .bind(identity.attempt)
+    .bind(&identity.lease_token)
+    .fetch_optional(&state.pool)
+    .await;
+    match current {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return (
+                StatusCode::CONFLICT,
+                "Hybrid QA prepare is not from the current QA attempt",
+            )
+                .into_response();
+        }
+        Err(err) => return internal_error_text(err.to_string()),
+    }
     let qa_results = string_array(&payload, "qaResults")
         .into_iter()
         .cloned()
@@ -1297,6 +1325,7 @@ pub async fn qa_callback(
                 page_id_of(&payload),
                 &qa_results,
                 cost.as_ref(),
+                &payload,
             ),
         )
         .await
@@ -1323,6 +1352,32 @@ pub async fn qa_callback(
                 "WARNING",
                 "Processing Complete, QA Skipped",
                 "Processing finished, but QA returned no usable results and was not applied.",
+                &ctx,
+            )
+            .await;
+            StatusCode::OK.into_response()
+        }
+        Ok("QA_INCOMPLETE") => {
+            emit_qa_notification(
+                &state,
+                image_id,
+                "WARNING",
+                "QA Incomplete — Review Needed",
+                "QA did not return a complete, valid verdict for every translated region. No verdict \
+                 was applied and the page is not marked as passed; retry the failed QA job from the queue \
+                 or review the page by hand.",
+                &ctx,
+            )
+            .await;
+            StatusCode::OK.into_response()
+        }
+        Ok("COMPLETED_WITH_FAILURES") => {
+            emit_qa_notification(
+                &state,
+                image_id,
+                "WARNING",
+                "Processing Finished With QA Failures",
+                "QA still rejected some regions after the retry limit. Review the flagged regions.",
                 &ctx,
             )
             .await;
@@ -1741,6 +1796,34 @@ async fn render_callback_route(
         .cloned()
         .unwrap_or_else(|| json!([]));
 
+    let expected: Option<(i32, String)> = match sqlx::query_as(
+        "SELECT page_revision, logical_scene_sha256 FROM page_render_jobs WHERE job_id=$1",
+    )
+    .bind(&identity.job_id)
+    .fetch_optional(&state.pool)
+    .await
+    {
+        Ok(row) => row,
+        Err(err) => return internal_error_text(err.to_string()),
+    };
+    let Some((revision, digest)) = expected else {
+        return (
+            StatusCode::CONFLICT,
+            "Render job has no immutable scene ledger",
+        )
+            .into_response();
+    };
+    if payload.get("pageRevision").and_then(Value::as_i64) != Some(i64::from(revision))
+        || payload.get("logicalSceneSha256").and_then(Value::as_str) != Some(digest.as_str())
+        || payload.get("renderedPngSha256") != payload.get("artifact").and_then(|a| a.get("sha256"))
+    {
+        return (
+            StatusCode::CONFLICT,
+            "Render callback identity does not match its queued scene",
+        )
+            .into_response();
+    }
+
     match coordinator::CALLBACK_IDENTITY
         .scope(
             identity,
@@ -1751,6 +1834,7 @@ async fn render_callback_route(
                 page_id,
                 diagnostics,
                 layout,
+                payload.get("artifact").cloned().unwrap_or(Value::Null),
             ),
         )
         .await

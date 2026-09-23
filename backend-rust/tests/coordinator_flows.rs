@@ -43,7 +43,8 @@ async fn app() -> Option<(sqlx::PgPool, Arc<RedisService>, AppState)> {
             .expect("redis connect"),
     );
     let minio = MinioConfig {
-        endpoint: "http://localhost:9000".into(),
+        endpoint: std::env::var("MINIO_TEST_ENDPOINT")
+            .unwrap_or_else(|_| "http://localhost:9000".into()),
         external_url: None,
         access_key: Some("minioadmin".into()),
         secret_key: Some("minioadmin".into()),
@@ -173,6 +174,64 @@ async fn seed_stage_job(
         lease_token: job_id.clone(),
     };
     (job_id, identity)
+}
+
+/// Bind a QA job to the page's current scene and a render artifact, the way the render callback
+/// does, and return the accounting fields a worker sends back for a complete verdict set.
+async fn bind_qa(
+    pool: &sqlx::PgPool,
+    qa_job: &str,
+    image_id: Uuid,
+    page_id: Uuid,
+    targets: &[Uuid],
+) -> serde_json::Value {
+    let revision: i32 = sqlx::query_scalar("SELECT scene_revision FROM pages WHERE id = $1")
+        .bind(page_id)
+        .fetch_one(pool)
+        .await
+        .expect("revision");
+    sqlx::query(
+        "INSERT INTO page_scene_snapshots \
+         (page_id, revision, contract_version, source_sha256, logical_scene_sha256, scene_json) \
+         VALUES ($1, $2, 'page-scene/v1', repeat('a', 64), lpad($2::text, 64, 'd'), '{}'::jsonb) \
+         ON CONFLICT DO NOTHING",
+    )
+    .bind(page_id)
+    .bind(revision)
+    .execute(pool)
+    .await
+    .expect("snapshot");
+    let digest: String = sqlx::query_scalar(
+        "SELECT logical_scene_sha256 FROM page_scene_snapshots WHERE page_id=$1 AND revision=$2",
+    )
+    .bind(page_id)
+    .bind(revision)
+    .fetch_one(pool)
+    .await
+    .expect("digest");
+    let png = "e".repeat(64);
+    let artifact = serde_json::json!({
+        "storagePath": format!("rendered/{image_id}/jobs/render-bound/attempts/1/{png}.png"),
+        "sha256": png, "byteLength": 10, "contentType": "image/png",
+    });
+    sqlx::query("UPDATE jobs SET payload = $2 WHERE id = $1")
+        .bind(qa_job)
+        .bind(
+            serde_json::json!({
+                "renderArtifact": artifact, "pageRevision": revision, "logicalSceneSha256": digest,
+            })
+            .to_string(),
+        )
+        .execute(pool)
+        .await
+        .expect("bind QA job");
+    serde_json::json!({
+        "qaTargetIds": targets.iter().map(Uuid::to_string).collect::<Vec<_>>(),
+        "qaResponseIntegrity": {"complete": true, "errors": []},
+        "judgedArtifact": {
+            "artifact": artifact, "pageRevision": revision, "logicalSceneSha256": digest,
+        },
+    })
 }
 
 async fn cleanup_series(pool: &sqlx::PgPool, series_id: Uuid) {
@@ -498,6 +557,7 @@ async fn qa_direct_fix_edits_only_the_rendered_overlay() {
         "directFix": {"correctedText": "normal QA fixed"},
     });
     let (qa_job, qa_identity) = seed_stage_job(&pool, "qa", image_id, Some(page_id)).await;
+    let accounting = bind_qa(&pool, &qa_job, image_id, page_id, &[region_id]).await;
     manga_backend::jobs::coordinator::CALLBACK_IDENTITY
         .scope(
             qa_identity,
@@ -508,6 +568,7 @@ async fn qa_direct_fix_edits_only_the_rendered_overlay() {
                 Some(page_id),
                 std::slice::from_ref(&result),
                 None,
+                &accounting,
             ),
         )
         .await
@@ -571,6 +632,8 @@ async fn qa_retry_budget_exhaustion_completes_without_retranslate() {
 
     // A failed QA verdict WITHOUT manual intervention asks for a retry.
     let (qa_job, qa_identity) = seed_stage_job(&pool, "qa", image_id, Some(page_id)).await;
+    let region = Uuid::new_v4();
+    let accounting = bind_qa(&pool, &qa_job, image_id, page_id, &[region]).await;
     let result = manga_backend::jobs::coordinator::CALLBACK_IDENTITY
         .scope(
             qa_identity,
@@ -580,19 +643,20 @@ async fn qa_retry_budget_exhaustion_completes_without_retranslate() {
                 image_id,
                 Some(page_id),
                 &[serde_json::json!({
-                    "regionId": Uuid::new_v4().to_string(),
+                    "regionId": region.to_string(),
                     "qaStatus": "failed",
                     "qaScore": 0.2,
                 })],
                 None,
+                &accounting,
             ),
         )
         .await
         .expect("qa callback handled");
 
     assert_eq!(
-        result, "COMPLETED",
-        "exhausted budget completes the pipeline"
+        result, "COMPLETED_WITH_FAILURES",
+        "exhausted budget finishes the pipeline without reporting a pass"
     );
 
     // No retranslation job was enqueued for this image.
@@ -624,6 +688,8 @@ async fn qa_retry_within_budget_retranslates() {
 
     // Fresh budget (no key): a plain failure must RETRY via translation.
     let (qa_job, qa_identity) = seed_stage_job(&pool, "qa", image_id, Some(page_id)).await;
+    let region = Uuid::new_v4();
+    let accounting = bind_qa(&pool, &qa_job, image_id, page_id, &[region]).await;
     let result = manga_backend::jobs::coordinator::CALLBACK_IDENTITY
         .scope(
             qa_identity,
@@ -633,11 +699,12 @@ async fn qa_retry_within_budget_retranslates() {
                 image_id,
                 Some(page_id),
                 &[serde_json::json!({
-                    "regionId": Uuid::new_v4().to_string(),
+                    "regionId": region.to_string(),
                     "qaStatus": "failed",
                     "qaScore": 0.3,
                 })],
                 None,
+                &accounting,
             ),
         )
         .await
@@ -872,6 +939,143 @@ async fn failed_translation_does_not_create_a_visible_masking_element() {
         failed_mask.is_some(),
         "the element still carries the mask — visibility is the only thing keeping it off the page"
     );
+
+    cleanup_series(&pool, series_id).await;
+}
+
+/// OQ-02 / OQ-01: a verdict set is only applied when it covers exactly what the page displays
+/// and judges the page's current scene. Missing, duplicate and unsubmitted-region sets are
+/// incomplete; a verdict about an older revision is stale. Neither edits the page or passes it.
+#[tokio::test]
+async fn qa_rejects_incomplete_and_stale_verdicts() {
+    let Some((pool, _redis, state)) = app().await else {
+        panic!("coordinator_flows requires SPRING_DATASOURCE_URL and REDIS_TEST_ADDR");
+    };
+    let (series_id, _chapter_id, page_id, image_id) =
+        seed_pipeline(&pool, Some("ja"), Some("en")).await;
+    let mut regions = Vec::new();
+    for (z, text) in [(0, "first"), (1, "second")] {
+        let region: Uuid = sqlx::query_scalar(
+            "INSERT INTO ocr_regions (id, text, translated_text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) \
+             VALUES (uuid_generate_v4(),'src',$2,'ja',10,20,100,50,$1) RETURNING id",
+        )
+        .bind(page_id)
+        .bind(text)
+        .fetch_one(&pool)
+        .await
+        .expect("region");
+        insert_translation_version(&pool, page_id, region, z, text, true, None).await;
+        regions.push(region);
+    }
+    let (r1, r2) = (regions[0], regions[1]);
+    let verdict = |id: Uuid, status: &str| {
+        serde_json::json!({"regionId": id.to_string(), "qaStatus": status, "qaScore": 0.9,
+                           "directFix": {"correctedText": "changed"}})
+    };
+    let run = |targets: Vec<Uuid>, results: Vec<serde_json::Value>, advance: bool| {
+        let pool = pool.clone();
+        let state = state.clone();
+        async move {
+            let (job, identity) = seed_stage_job(&pool, "qa", image_id, Some(page_id)).await;
+            let accounting = bind_qa(&pool, &job, image_id, page_id, &targets).await;
+            if advance {
+                sqlx::query("UPDATE pages SET scene_revision = scene_revision + 1 WHERE id = $1")
+                    .bind(page_id)
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+            }
+            manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+                .scope(
+                    identity,
+                    manga_backend::jobs::coordinator::handle_qa_callback(
+                        &state,
+                        Some(&job),
+                        image_id,
+                        Some(page_id),
+                        &results,
+                        None,
+                        &accounting,
+                    ),
+                )
+                .await
+                .expect("qa callback")
+        }
+    };
+    let untouched = |pool: sqlx::PgPool| async move {
+        let statuses: Vec<Option<String>> =
+            sqlx::query_scalar("SELECT qa_status FROM ocr_regions WHERE page_id=$1")
+                .bind(page_id)
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        let changed: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM layer_elements e JOIN layers l ON l.id=e.layer_id \
+             WHERE l.page_id=$1 AND e.text='changed'",
+        )
+        .bind(page_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        statuses.iter().all(Option::is_none) && changed == 0
+    };
+
+    // Truncated: one of two submitted regions has no verdict.
+    let outcome = run(vec![r1, r2], vec![verdict(r1, "direct_fix")], false).await;
+    assert_eq!(outcome, "QA_INCOMPLETE");
+    assert!(
+        untouched(pool.clone()).await,
+        "a partial set applies nothing"
+    );
+    let qa_status: Option<String> = sqlx::query_scalar(
+        "SELECT metadata_json->'qa'->>'status' FROM layers WHERE page_id=$1 \
+         ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(qa_status.as_deref(), Some("incomplete"));
+
+    // A displayed region was never submitted to QA.
+    let outcome = run(vec![r1], vec![verdict(r1, "passed")], false).await;
+    assert_eq!(outcome, "QA_INCOMPLETE");
+
+    // Duplicate verdicts for one region.
+    let outcome = run(
+        vec![r1, r2],
+        vec![
+            verdict(r1, "passed"),
+            verdict(r1, "direct_fix"),
+            verdict(r2, "passed"),
+        ],
+        false,
+    )
+    .await;
+    assert_eq!(outcome, "QA_INCOMPLETE");
+    assert!(untouched(pool.clone()).await);
+
+    // Complete, but about a revision the page has moved past.
+    let outcome = run(
+        vec![r1, r2],
+        vec![verdict(r1, "direct_fix"), verdict(r2, "passed")],
+        true,
+    )
+    .await;
+    assert_eq!(outcome, "STALE");
+    assert!(
+        untouched(pool.clone()).await,
+        "a stale verdict cannot edit a newer scene"
+    );
+
+    // Complete and current: applied.
+    let outcome = run(
+        vec![r1, r2],
+        vec![verdict(r1, "passed"), verdict(r2, "passed")],
+        false,
+    )
+    .await;
+    assert_eq!(outcome, "COMPLETED");
 
     cleanup_series(&pool, series_id).await;
 }

@@ -2403,6 +2403,8 @@ export const Reader: React.FC<ReaderProps> = ({
     // finished render is reported as such rather than exported from something else.
     const doExport = async () => {
       const res = await safeFetch(`/api/pages/${selectedPage.id}/rendered`, {
+        // Bypass artifacts cached by older servers at this stable current-render URL.
+        cache: "no-store",
         headers: { Authorization: `Bearer ${user.token}` },
       });
       if (res.status === 409) {
