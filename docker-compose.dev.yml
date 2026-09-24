@@ -70,7 +70,8 @@ services:
       CONTEXT_PATH: ${CONTEXT_PATH:-/tlhub}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     secrets: [ db_password, minio_password, jwt_secret, internal_api_token, worker_api_secret ]
-    ports: [ "127.0.0.1:${DEV_HTTP_PORT:-18080}:8080" ]
+    # DEV_HTTP_BIND=0.0.0.0 in .env opens the Reader to the LAN (phones, tablets); MinIO stays local.
+    ports: [ "${DEV_HTTP_BIND:-127.0.0.1}:${DEV_HTTP_PORT:-18080}:8080" ]
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }

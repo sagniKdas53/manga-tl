@@ -270,6 +270,61 @@ fn legacy_patch_and_mask(raster: &Raster, colour: [u8; 3]) -> Result<(Vec<u8>, V
     ))
 }
 
+/// A region's cleanup replaced by a flat plate: what "cover with a plain mask" stores.
+pub struct PlainPlate {
+    pub mask_asset_id: String,
+    pub mask_sha256: String,
+    pub mask_byte_length: i64,
+    pub patch_asset_id: String,
+    pub patch_sha256: String,
+    pub patch_byte_length: i64,
+    pub bounds: Value,
+    pub generator_sha256: String,
+}
+
+/// Paints `polygon` flat in `colour` and uploads it as a region's cleanup assets.
+///
+/// This is the Reader's fallback for a region whose inpainting left lettering behind (or found
+/// none): a plain plate of the bubble colour. It is written into the region's `cleanup_*` columns,
+/// so the scene, the render, QA and export all treat it as that region's cleanup with no special
+/// case, and a later cleanup pass simply replaces it. Assets are content-addressed like the
+/// worker's, under the same `mask-<sha>` / `patch-<sha>` ids.
+pub async fn plain_plate_cleanup(
+    state: &AppState,
+    page_id: Uuid,
+    polygon: &Value,
+    colour: Option<&str>,
+    page_w: i32,
+    page_h: i32,
+) -> Result<PlainPlate, String> {
+    let points = parse_polygon(Some(polygon)).ok_or("the mask polygon has fewer than 3 points")?;
+    let raster = rasterize_polygon(&points, page_w as i64, page_h as i64)
+        .ok_or("the mask lies outside the page")?;
+    let (patch_png, mask_png) = legacy_patch_and_mask(&raster, parse_hex_colour(colour))?;
+    let patch_sha = hex::encode(Sha256::digest(&patch_png));
+    let mask_sha = hex::encode(Sha256::digest(&mask_png));
+    for (sha, bytes) in [(&patch_sha, &patch_png), (&mask_sha, &mask_png)] {
+        let path = scene_asset_path(page_id, sha);
+        if !state.storage.exists(&path).await {
+            state
+                .storage
+                .upload_bytes(&path, bytes.clone(), "image/png")
+                .await
+                .map_err(|e| format!("could not upload plain mask {path}: {e}"))?;
+        }
+    }
+    Ok(PlainPlate {
+        mask_asset_id: format!("mask-{mask_sha}"),
+        mask_byte_length: mask_png.len() as i64,
+        mask_sha256: mask_sha,
+        patch_asset_id: format!("patch-{patch_sha}"),
+        patch_byte_length: patch_png.len() as i64,
+        patch_sha256: patch_sha,
+        bounds: json!({ "x": raster.x, "y": raster.y, "width": raster.width, "height": raster.height }),
+        generator_sha256: hex::encode(Sha256::digest(b"plain-mask/v1")),
+    })
+}
+
 /// R3: the `cleanup_artifact` JSON for a worker-supplied glyph mask + reconstructed patch.
 /// `region`'s own `cleanup_generator_sha256` is trusted when present (the worker's own record
 /// of which method -- TELEA or AOT -- produced it); `fallback_generator_sha256` only covers a

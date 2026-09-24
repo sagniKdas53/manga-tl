@@ -1355,3 +1355,65 @@ async fn rejecting_the_last_flagged_region_lifts_manual_review() {
     assert_eq!(qa["failed_regions"], serde_json::json!([]));
     cleanup_series(&pool, series_id).await;
 }
+
+/// A fresh OCR pass replaces the page's regions (R1: re-runs must not double what translation is
+/// charged for) but keeps every earlier layer as hidden history with its text intact. Only the
+/// link to the superseded regions is cut.
+#[tokio::test]
+async fn ocr_redo_replaces_regions_but_keeps_earlier_layers() {
+    let Some((pool, _redis, state)) = app().await else {
+        return;
+    };
+    let (series_id, page_id, image_id, _, _) = seed_uncertain_page(&pool).await;
+    let (job, identity) = seed_stage_job(&pool, "ocr", image_id, Some(page_id)).await;
+    let dto = serde_json::json!({
+        "jobId": job,
+        "imageId": image_id.to_string(),
+        "pageId": page_id.to_string(),
+        "regions": [{"text": "新しい", "detectedLanguage": "ja", "confidence": 0.9,
+                     "x": 5, "y": 5, "width": 30, "height": 20, "bubbleReadingOrder": 1}],
+    });
+    manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            identity,
+            manga_backend::jobs::coordinator::handle_ocr_callback(&state, &dto),
+        )
+        .await
+        .expect("ocr callback");
+
+    let regions: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ocr_regions WHERE page_id = $1")
+        .bind(page_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(regions, 1, "the new pass replaces the old regions");
+
+    let kept: Vec<(bool, Option<String>, Option<Uuid>)> = sqlx::query_as(
+        "SELECT l.visible, e.text, e.region_id FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
+         WHERE l.page_id = $1 AND l.type = 'translation' ORDER BY e.text",
+    )
+    .bind(page_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        kept.iter().map(|(_, t, _)| t.clone()).collect::<Vec<_>>(),
+        vec![Some("Hello".to_string()), Some("Sign".to_string())],
+        "the earlier translation layer survives with its text"
+    );
+    assert!(
+        kept.iter()
+            .all(|(visible, _, region)| !visible && region.is_none()),
+        "it is hidden and no longer points at a deleted region"
+    );
+    let ocr_layers: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM layers WHERE page_id = $1 AND type = 'ocr' AND visible",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(ocr_layers, 1, "only the new OCR layer is shown");
+
+    cleanup_series(&pool, series_id).await;
+}

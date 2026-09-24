@@ -39,7 +39,17 @@ describe("ReaderRightSidebar", () => {
         handleDeleteElement={vi.fn()}
         ocrRegions={[]}
         isRedoingRegionTl={false}
-        handleReviewRegion={vi.fn()}
+        issues={[]}
+        onSelectIssue={vi.fn()}
+        onStepIssue={vi.fn()}
+        handleRegionAction={vi.fn()}
+        handleSaveIssueTranslation={vi.fn()}
+        mergeMode={false}
+        mergeSelection={[]}
+        onToggleMergeMode={vi.fn()}
+        onToggleMergeRegion={vi.fn()}
+        onConfirmMerge={vi.fn()}
+        isMerging={false}
         isReviewingRegion={false}
         handleRedoRegion={vi.fn()}
         handleSetElementVisibility={vi.fn()}
@@ -117,7 +127,17 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
-        handleReviewRegion={vi.fn()}
+        issues={[]}
+        onSelectIssue={vi.fn()}
+        onStepIssue={vi.fn()}
+        handleRegionAction={vi.fn()}
+        handleSaveIssueTranslation={vi.fn()}
+        mergeMode={false}
+        mergeSelection={[]}
+        onToggleMergeMode={vi.fn()}
+        onToggleMergeRegion={vi.fn()}
+        onConfirmMerge={vi.fn()}
+        isMerging={false}
         isReviewingRegion={false}
         handleSetElementVisibility={vi.fn()}
       />,
@@ -190,7 +210,17 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
         handleRedoRegion={handleRedoRegion}
         isRedoingRegionTl={false}
-        handleReviewRegion={vi.fn()}
+        issues={[]}
+        onSelectIssue={vi.fn()}
+        onStepIssue={vi.fn()}
+        handleRegionAction={vi.fn()}
+        handleSaveIssueTranslation={vi.fn()}
+        mergeMode={false}
+        mergeSelection={[]}
+        onToggleMergeMode={vi.fn()}
+        onToggleMergeRegion={vi.fn()}
+        onConfirmMerge={vi.fn()}
+        isMerging={false}
         isReviewingRegion={false}
         handleSetElementVisibility={vi.fn()}
       />,
@@ -249,7 +279,17 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
-        handleReviewRegion={vi.fn()}
+        issues={[]}
+        onSelectIssue={vi.fn()}
+        onStepIssue={vi.fn()}
+        handleRegionAction={vi.fn()}
+        handleSaveIssueTranslation={vi.fn()}
+        mergeMode={false}
+        mergeSelection={[]}
+        onToggleMergeMode={vi.fn()}
+        onToggleMergeRegion={vi.fn()}
+        onConfirmMerge={vi.fn()}
+        isMerging={false}
         isReviewingRegion={false}
         handleSetElementVisibility={vi.fn()}
       />,
@@ -293,7 +333,17 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
-        handleReviewRegion={vi.fn()}
+        issues={[]}
+        onSelectIssue={vi.fn()}
+        onStepIssue={vi.fn()}
+        handleRegionAction={vi.fn()}
+        handleSaveIssueTranslation={vi.fn()}
+        mergeMode={false}
+        mergeSelection={[]}
+        onToggleMergeMode={vi.fn()}
+        onToggleMergeRegion={vi.fn()}
+        onConfirmMerge={vi.fn()}
+        isMerging={false}
         isReviewingRegion={false}
         handleSetElementVisibility={vi.fn()}
       />,
@@ -366,7 +416,17 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
-        handleReviewRegion={vi.fn()}
+        issues={[]}
+        onSelectIssue={vi.fn()}
+        onStepIssue={vi.fn()}
+        handleRegionAction={vi.fn()}
+        handleSaveIssueTranslation={vi.fn()}
+        mergeMode={false}
+        mergeSelection={[]}
+        onToggleMergeMode={vi.fn()}
+        onToggleMergeRegion={vi.fn()}
+        onConfirmMerge={vi.fn()}
+        isMerging={false}
         isReviewingRegion={false}
         handleSetElementVisibility={vi.fn()}
       />,
@@ -475,7 +535,17 @@ describe("ReaderRightSidebar", () => {
         handleDeleteElement={vi.fn()}
         ocrRegions={[]}
         isRedoingRegionTl={false}
-        handleReviewRegion={vi.fn()}
+        issues={[]}
+        onSelectIssue={vi.fn()}
+        onStepIssue={vi.fn()}
+        handleRegionAction={vi.fn()}
+        handleSaveIssueTranslation={vi.fn()}
+        mergeMode={false}
+        mergeSelection={[]}
+        onToggleMergeMode={vi.fn()}
+        onToggleMergeRegion={vi.fn()}
+        onConfirmMerge={vi.fn()}
+        isMerging={false}
         isReviewingRegion={false}
         handleRedoRegion={vi.fn()}
         handleSetElementVisibility={vi.fn()}
@@ -563,7 +633,17 @@ describe("ReaderRightSidebar", () => {
         handleDeleteElement={vi.fn()}
         ocrRegions={[mockRegion]}
         isRedoingRegionTl={false}
-        handleReviewRegion={vi.fn()}
+        issues={[]}
+        onSelectIssue={vi.fn()}
+        onStepIssue={vi.fn()}
+        handleRegionAction={vi.fn()}
+        handleSaveIssueTranslation={vi.fn()}
+        mergeMode={false}
+        mergeSelection={[]}
+        onToggleMergeMode={vi.fn()}
+        onToggleMergeRegion={vi.fn()}
+        onConfirmMerge={vi.fn()}
+        isMerging={false}
         isReviewingRegion={false}
         handleRedoRegion={mockHandleRedoRegion}
         handleSetElementVisibility={vi.fn()}
@@ -641,8 +721,18 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr: false,
         handleRedoRegion: vi.fn(),
         isRedoingRegionTl: false,
-        handleReviewRegion: vi.fn(),
+        issues: [],
+        onSelectIssue: vi.fn(),
+        onStepIssue: vi.fn(),
+        handleRegionAction: vi.fn(),
+        handleSaveIssueTranslation: vi.fn(),
         isReviewingRegion: false,
+        mergeMode: false,
+        mergeSelection: [],
+        onToggleMergeMode: vi.fn(),
+        onToggleMergeRegion: vi.fn(),
+        onConfirmMerge: vi.fn(),
+        isMerging: false,
         ...over,
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

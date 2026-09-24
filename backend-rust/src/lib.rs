@@ -22,6 +22,7 @@ pub mod page_scene_builder;
 pub mod password;
 pub mod providers;
 pub mod redis_service;
+pub mod region_merge;
 pub mod resolve;
 pub mod routes;
 pub mod settings;

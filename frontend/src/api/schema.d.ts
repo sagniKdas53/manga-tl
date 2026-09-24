@@ -761,7 +761,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Answer a region flagged for review. `reject` marks it rejected and hides its translations; `delete` removes the region and its elements. Both refresh the page QA summary and advance its revision. */
+        /** @description Quick resolution for a region that needs a look. `reject` keeps the original (marks it rejected, hides its translations); `accept` keeps the translation (clears the flag, shows it); `mask` covers the region with a plain plate of its background colour, stored as its cleanup; `delete` removes the region and its elements. All refresh the page QA summary and advance its revision. */
         post: operations["reviewOcrRegion"];
         delete?: never;
         options?: never;
@@ -857,6 +857,23 @@ export interface paths {
         get: operations["getPageRenderedFile"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pages/{pageId}/regions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Merge two or more OCR regions on the page into one text block. The first in reading order survives with the union box and the text joined in reading order; the others and their elements are deleted. One cleanup job is queued for the merged box and carries on into that region's translation only. */
+        post: operations["mergeOcrRegions"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2894,7 +2911,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    action: "reject" | "delete";
+                    action: "reject" | "accept" | "mask" | "delete";
                 };
             };
         };
@@ -2923,6 +2940,13 @@ export interface operations {
             };
             /** @description Region not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The plain mask could not be built (no page size, or the box lies off the page) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3164,6 +3188,56 @@ export interface operations {
                         status: "pending" | "failed";
                     };
                 };
+            };
+        };
+    };
+    mergeOcrRegions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    regionIds: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        merged?: number;
+                        /** Format: uuid */
+                        pageId?: string;
+                        queued?: boolean;
+                        /** Format: uuid */
+                        regionId?: string;
+                        text?: string;
+                    };
+                };
+            };
+            /** @description Fewer than two regions named */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A region is not on this page */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

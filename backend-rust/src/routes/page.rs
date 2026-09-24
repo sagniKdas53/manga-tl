@@ -1664,12 +1664,20 @@ pub async fn update_ocr_region(
     Json(updated).into_response()
 }
 
-/// POST /api/ocr-regions/{id}/review — `{"action": "reject" | "delete"}`, ADMIN/TRANSLATOR.
+/// POST /api/ocr-regions/{id}/review — `{"action": "reject" | "accept" | "mask" | "delete"}`,
+/// ADMIN/TRANSLATOR.
 ///
-/// The Reader's answer to a region flagged for review. `reject` keeps the region but marks it
-/// `rejected` and hides its translations, so it drops out of the page and of later QA; `delete`
-/// removes the region and every element that draws it. Both refresh the page's QA summary and
-/// advance its revision in the same transaction, so the next render/export reflects the choice.
+/// The Reader's quick resolutions for a region that needs a look:
+/// - `reject` keeps the original: the region is marked `rejected` and its translations hidden, so
+///   it drops out of the page and of later QA.
+/// - `accept` keeps the translation: the flag is cleared and the translation shown.
+/// - `mask` covers the region with a plain plate of its background colour — the fallback when
+///   inpainting left lettering behind. The plate becomes the region's cleanup (so the render and
+///   export use it) and the translation elements get the same polygon (so the Reader draws it).
+/// - `delete` removes the region and every element that draws it.
+///
+/// Every action refreshes the page's QA summary and advances its revision in the same transaction,
+/// so the next render/export reflects the choice.
 pub async fn review_ocr_region(
     State(state): State<AppState>,
     user: AuthUser,
@@ -1684,10 +1692,10 @@ pub async fn review_ocr_region(
         return error::unreadable_body(instance);
     };
     let action = payload.get("action").and_then(|v| v.as_str()).unwrap_or("");
-    if action != "reject" && action != "delete" {
+    if !matches!(action, "reject" | "accept" | "mask" | "delete") {
         return (
             StatusCode::BAD_REQUEST,
-            "action must be \"reject\" or \"delete\"",
+            "action must be \"reject\", \"accept\", \"mask\" or \"delete\"",
         )
             .into_response();
     }
@@ -1700,35 +1708,100 @@ pub async fn review_ocr_region(
         return StatusCode::NOT_FOUND.into_response();
     };
 
+    // The plate is uploaded before the transaction: storage cannot roll back, and a content-addressed
+    // object nothing points at is harmless.
+    let plate = if action == "mask" {
+        match plain_mask_for(&state, &region).await {
+            Ok(plate) => Some(plate),
+            Err(err) => return (StatusCode::UNPROCESSABLE_ENTITY, err).into_response(),
+        }
+    } else {
+        None
+    };
+
     let result: Result<(), String> = async {
         let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
-        if action == "reject" {
-            sqlx::query(
-                "UPDATE ocr_regions SET qa_status = 'rejected', qa_feedback = 'Rejected in review.' WHERE id = $1",
-            )
-            .bind(id)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
-            sqlx::query(
-                "UPDATE layer_elements e SET visible = FALSE FROM layers l \
-                 WHERE e.layer_id = l.id AND l.type ILIKE 'translation' AND e.region_id = $1",
-            )
-            .bind(id)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
-        } else {
-            sqlx::query("DELETE FROM layer_elements WHERE region_id = $1")
+        match action {
+            "reject" => {
+                sqlx::query(
+                    "UPDATE ocr_regions SET qa_status = 'rejected', qa_feedback = 'Rejected in review.' WHERE id = $1",
+                )
                 .bind(id)
                 .execute(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
-            sqlx::query("DELETE FROM ocr_regions WHERE id = $1")
+                sqlx::query(
+                    "UPDATE layer_elements e SET visible = FALSE FROM layers l \
+                     WHERE e.layer_id = l.id AND l.type ILIKE 'translation' AND e.region_id = $1",
+                )
                 .bind(id)
                 .execute(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
+            }
+            "accept" => {
+                sqlx::query(
+                    "UPDATE ocr_regions SET qa_status = 'passed', qa_feedback = 'Accepted in review.', \
+                     translation_failed = FALSE WHERE id = $1",
+                )
+                .bind(id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+                show_translations(&mut tx, id).await?;
+            }
+            "mask" => {
+                let (plate, polygon, colour) = plate.as_ref().expect("built above for mask");
+                sqlx::query(
+                    "UPDATE ocr_regions SET cleanup_mask_asset_id = $2, cleanup_mask_sha256 = $3, \
+                       cleanup_mask_byte_length = $4, cleanup_patch_asset_id = $5, \
+                       cleanup_patch_sha256 = $6, cleanup_patch_byte_length = $7, \
+                       cleanup_bounds = $8, cleanup_generator_sha256 = $9, \
+                       cleanup_diagnostics = $10, \
+                       qa_status = CASE WHEN qa_status IN ('cleanup_review', 'manual_review', 'failed') \
+                                        THEN 'fixed' ELSE qa_status END, \
+                       qa_feedback = CASE WHEN qa_status IN ('cleanup_review', 'manual_review', 'failed') \
+                                          THEN 'Covered with a plain mask in review.' ELSE qa_feedback END \
+                     WHERE id = $1",
+                )
+                .bind(id)
+                .bind(&plate.mask_asset_id)
+                .bind(&plate.mask_sha256)
+                .bind(plate.mask_byte_length)
+                .bind(&plate.patch_asset_id)
+                .bind(&plate.patch_sha256)
+                .bind(plate.patch_byte_length)
+                .bind(&plate.bounds)
+                .bind(&plate.generator_sha256)
+                .bind(serde_json::json!([format!("plain mask {colour} applied in review")]))
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+                // `word_wrap` is the Reader's per-element "draw my plate" switch.
+                sqlx::query(
+                    "UPDATE layer_elements e SET mask_polygon = $2, background_color = $3, word_wrap = TRUE \
+                     FROM layers l WHERE e.layer_id = l.id AND l.type NOT ILIKE 'ocr' AND e.region_id = $1",
+                )
+                .bind(id)
+                .bind(polygon)
+                .bind(colour)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+                show_translations(&mut tx, id).await?;
+            }
+            _ => {
+                sqlx::query("DELETE FROM layer_elements WHERE region_id = $1")
+                    .bind(id)
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                sqlx::query("DELETE FROM ocr_regions WHERE id = $1")
+                    .bind(id)
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
         }
         crate::jobs::coordinator::refresh_review_summary(&mut tx, region.page_id).await?;
         crate::page_freshness::advance_page_revision(&mut tx, region.page_id)
@@ -1747,6 +1820,338 @@ pub async fn review_ocr_region(
             (StatusCode::INTERNAL_SERVER_ERROR, err).into_response()
         }
     }
+}
+
+/// POST /api/pages/{pageId}/regions/merge — `{"regionIds": [...]}` (two or more), ADMIN/TRANSLATOR.
+///
+/// The Reader's "these fragments are one text block". The first region in reading order survives
+/// with the union box and the fragments' text joined in reading order; the others and their
+/// elements are deleted. The survivor's elements take the union box, its translation is cleared
+/// (it translated one fragment), and one cleanup job is queued for the new box whose callback
+/// carries on into this region's translation only — the rest of the page is left as it is.
+pub async fn merge_ocr_regions(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(page_id): Path<Uuid>,
+    body: Result<Json<serde_json::Value>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    let instance = "/api/pages/{pageId}/regions/merge";
+    if !user.role.eq_ignore_ascii_case("admin") && !user.role.eq_ignore_ascii_case("translator") {
+        return error::access_denied(instance);
+    }
+    let Ok(Json(payload)) = body else {
+        return error::unreadable_body(instance);
+    };
+    let mut ids: Vec<Uuid> = payload
+        .get("regionIds")
+        .and_then(|v| v.as_array())
+        .map(|ids| {
+            ids.iter()
+                .filter_map(|id| id.as_str().and_then(|id| Uuid::parse_str(id).ok()))
+                .collect()
+        })
+        .unwrap_or_default();
+    ids.sort();
+    ids.dedup();
+    if ids.len() < 2 {
+        return (
+            StatusCode::BAD_REQUEST,
+            "regionIds must name at least two regions",
+        )
+            .into_response();
+    }
+    let regions: Vec<OcrRegion> =
+        match sqlx::query_as("SELECT * FROM ocr_regions WHERE page_id = $1 AND id = ANY($2)")
+            .bind(page_id)
+            .bind(&ids)
+            .fetch_all(&state.pool)
+            .await
+        {
+            Ok(regions) => regions,
+            Err(err) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+            }
+        };
+    if regions.len() != ids.len() {
+        return (
+            StatusCode::NOT_FOUND,
+            "every region must exist on this page",
+        )
+            .into_response();
+    }
+
+    use crate::region_merge::{Fragment, joined_text, reading_order, union_box};
+    let fragments: Vec<Fragment> = regions
+        .iter()
+        .map(|r| Fragment {
+            x: r.bbox_x,
+            y: r.bbox_y,
+            w: r.bbox_w,
+            h: r.bbox_h,
+            text: r.text.clone().unwrap_or_default(),
+        })
+        .collect();
+    let order = reading_order(&fragments);
+    // The survivor keeps the lowest Reader number, so the merged block takes the first fragment's
+    // place in the list rather than whichever region happened to read first geometrically.
+    let survivor = regions
+        .iter()
+        .min_by_key(|r| {
+            (
+                r.bubble_reading_order.unwrap_or(i32::MAX),
+                r.bbox_y,
+                r.bbox_x,
+            )
+        })
+        .expect("at least two regions");
+    let absorbed: Vec<Uuid> = regions
+        .iter()
+        .map(|r| r.id)
+        .filter(|id| *id != survivor.id)
+        .collect();
+    let text = joined_text(&fragments, &order, &survivor.detected_language);
+    let (x, y, w, h) = union_box(
+        regions
+            .iter()
+            .map(|r| (r.bbox_x, r.bbox_y, r.bbox_w, r.bbox_h)),
+    )
+    .expect("non-empty");
+    let polygon = serde_json::json!([[x, y], [x + w, y], [x + w, y + h], [x, y + h]]);
+    let bubble = union_box(
+        regions
+            .iter()
+            .filter_map(|r| Some((r.bubble_x?, r.bubble_y?, r.bubble_w?, r.bubble_h?))),
+    );
+    let safe = union_box(regions.iter().filter_map(|r| {
+        Some((
+            r.safe_text_x?,
+            r.safe_text_y?,
+            r.safe_text_w?,
+            r.safe_text_h?,
+        ))
+    }));
+    let merged_from: Vec<String> = regions.iter().map(|r| r.id.to_string()).collect();
+
+    let result: Result<OcrRegion, String> = async {
+        let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+        for table in ["conversation_regions", "translation_regions", "layer_elements"] {
+            sqlx::query(AssertSqlSafe(format!("DELETE FROM {table} WHERE region_id = ANY($1)")))
+                .bind(&absorbed)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        sqlx::query("DELETE FROM ocr_regions WHERE id = ANY($1)")
+            .bind(&absorbed)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+        let merged: OcrRegion = sqlx::query_as(
+            "UPDATE ocr_regions SET text = $2, bbox_x = $3, bbox_y = $4, bbox_w = $5, bbox_h = $6, \
+               mask_polygon = $7, bubble_x = $8, bubble_y = $9, bubble_w = $10, bubble_h = $11, \
+               safe_text_x = $12, safe_text_y = $13, safe_text_w = $14, safe_text_h = $15, \
+               qa_status = NULL, qa_feedback = NULL, qa_score = NULL, \
+               translated_text = NULL, translation_failed = NULL, \
+               cleanup_mask_asset_id = NULL, cleanup_mask_sha256 = NULL, cleanup_mask_byte_length = NULL, \
+               cleanup_patch_asset_id = NULL, cleanup_patch_sha256 = NULL, cleanup_patch_byte_length = NULL, \
+               cleanup_bounds = NULL, cleanup_generator_sha256 = NULL, \
+               cleanup_diagnostics = '[\"merged in review; cleanup pending\"]'::jsonb, \
+               ownership_provenance = COALESCE(ownership_provenance, '{}'::jsonb) || jsonb_build_object('mergedFrom', $16::jsonb) \
+             WHERE id = $1 RETURNING *",
+        )
+        .bind(survivor.id)
+        .bind(&text)
+        .bind(x)
+        .bind(y)
+        .bind(w)
+        .bind(h)
+        .bind(&polygon)
+        .bind(bubble.map(|b| b.0))
+        .bind(bubble.map(|b| b.1))
+        .bind(bubble.map(|b| b.2))
+        .bind(bubble.map(|b| b.3))
+        .bind(safe.map(|b| b.0))
+        .bind(safe.map(|b| b.1))
+        .bind(safe.map(|b| b.2))
+        .bind(safe.map(|b| b.3))
+        .bind(serde_json::json!(merged_from))
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+        // Every element that draws the survivor takes the block's box; the OCR ones show the joined
+        // text, the translations wait (hidden, empty) for the block's own translation.
+        sqlx::query(
+            "UPDATE layer_elements e SET x = $2, y = $3, max_width = $4, max_height = $5, mask_polygon = $6, \
+               text = CASE WHEN l.type ILIKE 'ocr' THEN $7 ELSE NULL END, \
+               visible = CASE WHEN l.type ILIKE 'ocr' THEN e.visible ELSE FALSE END \
+             FROM layers l WHERE e.layer_id = l.id AND e.region_id = $1",
+        )
+        .bind(survivor.id)
+        .bind(f64::from(x))
+        .bind(f64::from(y))
+        .bind(w)
+        .bind(h)
+        .bind(&polygon)
+        .bind(&text)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+        crate::jobs::coordinator::refresh_review_summary(&mut tx, page_id).await?;
+        crate::page_freshness::advance_page_revision(&mut tx, page_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        tx.commit().await.map_err(|e| e.to_string())?;
+        Ok(merged)
+    }
+    .await;
+    let merged = match result {
+        Ok(merged) => merged,
+        Err(err) => {
+            tracing::error!("Merging regions on page {page_id} failed: {err}");
+            return (StatusCode::INTERNAL_SERVER_ERROR, err).into_response();
+        }
+    };
+
+    let queued = queue_region_cleanup(&state, page_id, &merged).await;
+    if let Err(err) = &queued {
+        tracing::error!(
+            "Regions on page {page_id} were merged into {} but its cleanup could not be queued: {err}",
+            merged.id
+        );
+    }
+    if let Ok(Some(image_id)) =
+        sqlx::query_scalar::<_, Uuid>("SELECT image_id FROM pages WHERE id = $1")
+            .bind(page_id)
+            .fetch_optional(&state.pool)
+            .await
+    {
+        state.sse.map_image_to_user(image_id, user.id).await;
+    }
+    Json(serde_json::json!({
+        "regionId": merged.id,
+        "pageId": page_id,
+        "merged": ids.len(),
+        "text": text,
+        "queued": queued.is_ok(),
+    }))
+    .into_response()
+}
+
+/// Queue cleanup for one region, carrying on into its translation when it lands.
+async fn queue_region_cleanup(
+    state: &AppState,
+    page_id: Uuid,
+    region: &OcrRegion,
+) -> Result<(), String> {
+    let (image_id, storage_path, hash, input_generation): (Uuid, String, Option<String>, i32) =
+        sqlx::query_as(
+            "SELECT i.id, i.storage_path, i.hash, p.input_generation FROM pages p \
+             JOIN images i ON i.id = p.image_id WHERE p.id = $1",
+        )
+        .bind(page_id)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    let image_url = state
+        .storage
+        .presigned_get_url(&storage_path)
+        .await
+        .map_err(|err| format!("could not presign source for cleanup: {err}"))?;
+    let entries = vec![crate::jobs::coordinator::cleanup_region_entry(
+        input_generation,
+        region,
+    )];
+    let digest = hex::encode(Sha256::digest(
+        serde_json::to_string(&entries)
+            .unwrap_or_default()
+            .as_bytes(),
+    ));
+    let region_id = region.id.to_string();
+    crate::jobs::coordinator::enqueue_job_directly(
+        state,
+        "cleanup",
+        image_id,
+        Some(page_id),
+        None,
+        "high",
+        move |job| {
+            job.insert("imageUrl".into(), json!(image_url));
+            job.insert("sourceSha256".into(), json!(hash.unwrap_or_default()));
+            job.insert("cleanupRegions".into(), serde_json::Value::Array(entries));
+            job.insert("cleanupInputDigest".into(), json!(digest));
+            job.insert(
+                "followUp".into(),
+                json!({ "type": "region-redo-tl", "regionId": region_id }),
+            );
+        },
+    )
+    .await;
+    Ok(())
+}
+
+/// Shows the region's translation elements that have text; an empty one stays hidden, since
+/// showing it would only paint a plate with nothing on it.
+async fn show_translations(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    region_id: Uuid,
+) -> Result<(), String> {
+    sqlx::query(
+        "UPDATE layer_elements e SET visible = TRUE FROM layers l \
+         WHERE e.layer_id = l.id AND l.type ILIKE 'translation' AND e.region_id = $1 \
+           AND COALESCE(TRIM(e.text), '') <> ''",
+    )
+    .bind(region_id)
+    .execute(&mut **tx)
+    .await
+    .map(|_| ())
+    .map_err(|e| e.to_string())
+}
+
+/// The plate for `mask`: the region's box padded a little so anti-aliased glyph edges are covered,
+/// clamped to the page, in the region's sampled background colour.
+async fn plain_mask_for(
+    state: &AppState,
+    region: &OcrRegion,
+) -> Result<
+    (
+        crate::page_scene_builder::PlainPlate,
+        serde_json::Value,
+        String,
+    ),
+    String,
+> {
+    let (page_w, page_h): (Option<i32>, Option<i32>) = sqlx::query_as(
+        "SELECT i.width, i.height FROM pages p JOIN images i ON i.id = p.image_id WHERE p.id = $1",
+    )
+    .bind(region.page_id)
+    .fetch_one(&state.pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    let (page_w, page_h) = match (page_w, page_h) {
+        (Some(w), Some(h)) if w > 0 && h > 0 => (w, h),
+        _ => return Err("the page image has no recorded size".into()),
+    };
+    let pad = (region.bbox_w.min(region.bbox_h) / 6).max(3);
+    let x0 = (region.bbox_x - pad).max(0);
+    let y0 = (region.bbox_y - pad).max(0);
+    let x1 = (region.bbox_x + region.bbox_w + pad).min(page_w);
+    let y1 = (region.bbox_y + region.bbox_h + pad).min(page_h);
+    let polygon = serde_json::json!([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
+    let colour = region
+        .background_color
+        .clone()
+        .filter(|c| c.trim_start_matches('#').len() == 6)
+        .unwrap_or_else(|| "#ffffff".into());
+    let plate = crate::page_scene_builder::plain_plate_cleanup(
+        state,
+        region.page_id,
+        &polygon,
+        Some(&colour),
+        page_w,
+        page_h,
+    )
+    .await?;
+    Ok((plate, polygon, colour))
 }
 
 // ---------------------------------------------------------------------------
@@ -1867,6 +2272,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::post(redo_ocr_region),
         )
         .route("/images/{imageId}/redo", axum::routing::post(redo_image))
+        .route(
+            "/pages/{pageId}/regions/merge",
+            axum::routing::post(merge_ocr_regions),
+        )
         .route(
             "/chapters/{chapterId}/import-project",
             axum::routing::post(import_project),

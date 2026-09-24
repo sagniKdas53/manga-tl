@@ -992,6 +992,20 @@ fn dispatched_cleanup_regions(parent: &Job) -> HashMap<Uuid, String> {
         .collect()
 }
 
+/// The region a cleanup job was queued for on its own, when its callback should translate just
+/// that region: `{"followUp": {"type": "region-redo-tl", "regionId": ...}}` in the job payload.
+fn region_redo_follow_up(parent: &Job) -> Option<Uuid> {
+    let payload: Value = serde_json::from_str(parent.payload.as_deref()?).ok()?;
+    let follow_up = payload.get("followUp")?;
+    if follow_up.get("type").and_then(Value::as_str) != Some("region-redo-tl") {
+        return None;
+    }
+    follow_up
+        .get("regionId")
+        .and_then(Value::as_str)
+        .and_then(|id| Uuid::parse_str(id).ok())
+}
+
 async fn apply_cleanup_callback(
     state: &AppState,
     image_id: Uuid,
@@ -1194,10 +1208,20 @@ async fn apply_cleanup_callback(
         ));
     }
 
+    // A cleanup queued for one merged region (see `merge_ocr_regions`) carries on into that
+    // region's translation, not the page's: the rest of the page is already translated and paid for.
+    let region_follow_up = region_redo_follow_up(&parent);
+
     // A failed cleanup withholds translation rather than translating a page whose Japanese is
     // still on it. The job is FAILED explicitly so it shows up as one, and the worker's bounded
     // retry (or a manual page redo) is what tries again.
-    let dispatch = if problems.is_empty() {
+    let dispatch = if problems.is_empty() && region_follow_up.is_some() {
+        // The new patch changes what the page draws even before its translation lands.
+        crate::page_freshness::advance_page_revision(&mut tx, page.id)
+            .await
+            .map_err(|e| e.to_string())?;
+        None
+    } else if problems.is_empty() {
         Some(
             coordinator::persist_next_job_tx(
                 &mut tx,
@@ -1231,6 +1255,15 @@ async fn apply_cleanup_callback(
         None
     };
     tx.commit().await.map_err(|e| e.to_string())?;
+
+    if problems.is_empty()
+        && let Some(region_id) = region_follow_up
+        && let Err(err) = coordinator::trigger_redo(state, region_id, "translation").await
+    {
+        tracing::error!(
+            "Region {region_id} was cleaned after a merge but its translation could not be queued: {err}"
+        );
+    }
 
     // Redis publication happens only after the row is durable. A crash in between leaves a PENDING
     // row that startup recovery and `requeue_orphaned_pending_jobs` republish.
@@ -1715,7 +1748,7 @@ pub async fn region_callback(
     // Ok(None) means there was nothing to supersede, which is fine. An Err means the history layer
     // genuinely failed to write, and acknowledging that would leave the canonical text changed with
     // no record of what it replaced and no retry able to repair it.
-    if let Err(err) = coordinator::create_region_redo_overlay(
+    match coordinator::create_region_redo_overlay(
         &mut tx,
         region_id,
         new_text,
@@ -1724,9 +1757,30 @@ pub async fn region_callback(
     )
     .await
     {
-        tracing::error!("Region {region_id} redo overlay could not be written: {err}");
-        let _ = tx.rollback().await;
-        return internal_error_text(err);
+        // A new overlay changes what the page draws, so the page advances with it; otherwise the
+        // render and export kept showing the reading this redo replaced.
+        Ok(Some(_)) => {
+            let advanced = async {
+                let page_id: Uuid =
+                    sqlx::query_scalar("SELECT page_id FROM ocr_regions WHERE id = $1")
+                        .bind(region_id)
+                        .fetch_one(&mut *tx)
+                        .await?;
+                crate::page_freshness::advance_page_revision(&mut tx, page_id).await
+            }
+            .await;
+            if let Err(err) = advanced {
+                tracing::error!("Region {region_id} redo could not advance its page: {err}");
+                let _ = tx.rollback().await;
+                return internal_error_text(err);
+            }
+        }
+        Ok(None) => {}
+        Err(err) => {
+            tracing::error!("Region {region_id} redo overlay could not be written: {err}");
+            let _ = tx.rollback().await;
+            return internal_error_text(err);
+        }
     }
 
     // The callback claim and its paid-model spend are one delivery. If the cost insert fails,

@@ -1407,22 +1407,27 @@ pub async fn handle_panel_callback(state: &AppState, dto: &Value) -> Result<(), 
     Ok(())
 }
 
-/// Deletes every OCR region on the page and everything that references one. See the note at
-/// the call site in `handle_ocr_callback`.
+/// Deletes every OCR region on the page, and what only makes sense with it, but keeps every layer.
+///
+/// Layers are the user's history: a layer that drew the superseded regions is hidden, and its
+/// elements keep their text, geometry and edit history with the region link cut. They are then
+/// region-less, like manual text, so turning an old layer back on shows exactly what it said. See
+/// the note at the call site in `handle_ocr_callback`.
 async fn purge_page_regions(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     page_id: Uuid,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "DELETE FROM layer_edit_history WHERE layer_element_id IN ( \
-             SELECT le.id FROM layer_elements le \
+        "UPDATE layers SET visible = FALSE WHERE page_id = $1 AND id IN ( \
+             SELECT le.layer_id FROM layer_elements le \
              JOIN ocr_regions r ON r.id = le.region_id WHERE r.page_id = $1)",
     )
     .bind(page_id)
     .execute(&mut **tx)
     .await?;
     sqlx::query(
-        "DELETE FROM layer_elements WHERE region_id IN (SELECT id FROM ocr_regions WHERE page_id = $1)",
+        "UPDATE layer_elements SET region_id = NULL \
+         WHERE region_id IN (SELECT id FROM ocr_regions WHERE page_id = $1)",
     )
     .bind(page_id)
     .execute(&mut **tx)
@@ -1446,13 +1451,6 @@ async fn purge_page_regions(
     sqlx::query(
         "DELETE FROM conversations WHERE page_id = $1 \
          AND NOT EXISTS (SELECT 1 FROM conversation_regions cr WHERE cr.conversation_id = conversations.id)",
-    )
-    .bind(page_id)
-    .execute(&mut **tx)
-    .await?;
-    sqlx::query(
-        "DELETE FROM layers WHERE page_id = $1 \
-         AND NOT EXISTS (SELECT 1 FROM layer_elements le WHERE le.layer_id = layers.id)",
     )
     .bind(page_id)
     .execute(&mut **tx)
@@ -1569,9 +1567,9 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
     // hid the old OCR *layer*, but `ocr_regions` has no pass column: every consumer selects
     // `WHERE page_id = $1`, so each rerun doubled what translation was charged for and what the
     // scene drew. sample61 in the 2026-09-17 evidence had 214 rows for 63 distinct boxes and cost
-    // US$0.25 for one page. Elements, conversation links and translation rows that hang off the
-    // superseded regions go with them; layers left with no elements go too, so a re-OCR'd page
-    // does not keep empty shells. Manual elements (no region) survive. Tracker R1.
+    // US$0.25 for one page. Conversation links and translation rows that hang off the superseded
+    // regions go with them. The layers that drew those regions do not: they are hidden
+    // and kept as history with their text, because a redo never deletes a user's layers. Tracker R1.
     purge_page_regions(&mut tx, page.id)
         .await
         .map_err(|e| format!("could not replace regions for page {}: {e}", page.id))?;
@@ -1785,7 +1783,7 @@ pub fn find_matching_panel(rx: i32, ry: i32, rw: i32, rh: i32, panels: &[Panel])
 ///
 /// SFX are never typeset, so their source lettering must stay on the page — the cleanup stage is
 /// told to leave them alone rather than being left to infer it.
-fn cleanup_region_entry(input_generation: i32, region: &OcrRegion) -> Value {
+pub fn cleanup_region_entry(input_generation: i32, region: &OcrRegion) -> Value {
     let action = if region
         .region_type
         .as_deref()

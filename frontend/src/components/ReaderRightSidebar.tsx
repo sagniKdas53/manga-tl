@@ -26,12 +26,13 @@ import UndoIcon from "@mui/icons-material/Undo";
 import OpenWithIcon from "@mui/icons-material/OpenWith";
 import CropIcon from "@mui/icons-material/Crop";
 import LayersIcon from "@mui/icons-material/Layers";
-import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import { ColorPicker } from "./ColorPicker";
 import SidebarSection from "./SidebarSection";
 import type { SystemStyleObject, Theme } from "@mui/system";
 import type { Layer, LayerElement, OcrRegion } from "../types";
 import { inReadingOrder, regionRowStatus } from "../utils/regionReview";
+import type { IssueAction, RegionIssue } from "../utils/regionIssues";
+import { IssueCard, IssueList, MergePanel } from "./ReaderIssues";
 
 // --- AUDIT-F2: static sx literals hoisted to module scope --------------------
 //
@@ -377,100 +378,56 @@ const MetaBadge: React.FC<{
   </Box>
 );
 
-const reviewTitle = (region: OcrRegion) =>
-  region.qaStatus === "rejected"
-    ? "Rejected"
-    : region.qaStatus === "manual_review"
-      ? "QA asked for a manual look"
-      : "Needs review";
-
-const reviewExplanation = (region: OcrRegion) =>
-  region.qaFeedback?.trim() ||
-  (region.qaStatus === "cleanup_review"
-    ? "The text detector found no lettering in this region, so its source pixels were left untouched."
-    : "QA could not settle this region on its own.");
-
-/** The inspector's answer to a flagged region: why it is flagged, and what can be done. */
-const RegionReviewCard: React.FC<{
+/** A settled region (rejected in review or by QA): why, and the one thing left to do with it. */
+const RejectedRegionNote: React.FC<{
   region: OcrRegion;
   busy: boolean;
-  onAction: (region: OcrRegion, action: "reject" | "delete") => void;
-}> = ({ region, busy, onAction }) => {
-  const rejected = region.qaStatus === "rejected";
-  const accent = rejected ? "var(--text-muted)" : "var(--warning)";
-  return (
-    <Box
-      role="status"
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 1,
-        p: 1.25,
-        borderRadius: "8px",
-        border: `1px solid ${accent}`,
-        backgroundColor: rejected
-          ? "var(--bg-input, rgba(0,0,0,0.04))"
-          : "color-mix(in srgb, var(--warning) 10%, transparent)",
-      }}
+  onDelete: (region: OcrRegion) => void;
+}> = ({ region, busy, onDelete }) => (
+  <Box
+    role="note"
+    sx={{
+      display: "flex",
+      flexDirection: "column",
+      gap: 0.75,
+      p: 1.25,
+      borderRadius: "8px",
+      border: "1px solid var(--border-color)",
+      backgroundColor: "var(--bg-input, rgba(0,0,0,0.04))",
+    }}
+  >
+    <Typography
+      component="span"
+      sx={{ fontSize: "13px", fontWeight: 700, color: "var(--text-muted)" }}
     >
-      <Box
-        sx={{ display: "flex", alignItems: "center", gap: 0.75, color: accent }}
-      >
-        {!rejected && <WarningAmberRoundedIcon sx={{ fontSize: 16 }} />}
-        <Typography
-          component="span"
-          sx={{ fontSize: "13px", fontWeight: 700 }}
-        >
-          {reviewTitle(region)}
-        </Typography>
-      </Box>
+      Rejected — the original is kept
+    </Typography>
+    {region.qaFeedback && (
       <Typography
         component="p"
         sx={{
           fontSize: "12px",
           lineHeight: 1.45,
-          color: "var(--text-main)",
           m: 0,
+          color: "var(--text-main)",
         }}
       >
-        {reviewExplanation(region)}
+        {region.qaFeedback}
       </Typography>
-      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-        {!rejected && (
-          <Button
-            variant="outlined"
-            size="small"
-            disabled={busy}
-            onClick={() => onAction(region, "reject")}
-            title="Leave the source as it is and stop flagging this region"
-            sx={{
-              color: "var(--warning)",
-              borderColor: "var(--warning)",
-              textTransform: "none",
-              "&:hover": {
-                borderColor: "var(--warning)",
-                backgroundColor:
-                  "color-mix(in srgb, var(--warning) 12%, transparent)",
-              },
-            }}
-          >
-            Reject — leave as is
-          </Button>
-        )}
-        <Button
-          variant="text"
-          size="small"
-          disabled={busy}
-          onClick={() => onAction(region, "delete")}
-          title="Remove this region and anything drawn for it"
-          sx={{ color: "var(--error)", textTransform: "none" }}
-        >
-          Delete region
-        </Button>
-      </Box>
+    )}
+    <Box>
+      <Button
+        variant="text"
+        size="small"
+        disabled={busy}
+        onClick={() => onDelete(region)}
+        sx={{ color: "var(--error)", textTransform: "none", px: 0 }}
+      >
+        Delete region
+      </Button>
     </Box>
-  );
-};
+  </Box>
+);
 
 // Assuming types are defined here or imported
 // You may need to adjust types based on actual project structure
@@ -520,8 +477,23 @@ export interface ReaderRightSidebarProps {
   isRedoingRegionOcr: boolean;
   handleRedoRegion: (region: OcrRegion, type: "ocr" | "translation") => void;
   isRedoingRegionTl: boolean;
-  handleReviewRegion: (region: OcrRegion, action: "reject" | "delete") => void;
+  /** Regions needing a person, in reading order. */
+  issues: RegionIssue[];
+  onSelectIssue: (issue: RegionIssue) => void;
+  onStepIssue: (delta: -1 | 1) => void;
+  handleRegionAction: (
+    region: OcrRegion,
+    action: IssueAction,
+    element?: LayerElement,
+  ) => void;
+  handleSaveIssueTranslation: (issue: RegionIssue, text: string) => void;
   isReviewingRegion: boolean;
+  mergeMode: boolean;
+  mergeSelection: string[];
+  onToggleMergeMode: () => void;
+  onToggleMergeRegion: (regionId: string) => void;
+  onConfirmMerge: () => void;
+  isMerging: boolean;
 }
 
 const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
@@ -573,8 +545,18 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     isRedoingRegionOcr,
     handleRedoRegion,
     isRedoingRegionTl,
-    handleReviewRegion,
+    issues,
+    onSelectIssue,
+    onStepIssue,
+    handleRegionAction,
+    handleSaveIssueTranslation,
     isReviewingRegion,
+    mergeMode,
+    mergeSelection,
+    onToggleMergeMode,
+    onToggleMergeRegion,
+    onConfirmMerge,
+    isMerging,
   } = props;
 
   const regionById = React.useMemo(
@@ -595,6 +577,24 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               Select an OCR region or a text layer to inspect and edit details.
             </Typography>
           </Box>
+
+          {mergeMode && (
+            <MergePanel
+              regions={ocrRegions}
+              selected={mergeSelection}
+              busy={isMerging}
+              onToggle={onToggleMergeRegion}
+              onMerge={onConfirmMerge}
+              onCancel={onToggleMergeMode}
+            />
+          )}
+          {!mergeMode && (
+            <IssueList
+              issues={issues}
+              selectedRegionId={null}
+              onSelect={onSelectIssue}
+            />
+          )}
 
           {/* Translation Layers Section */}
           <SidebarSection
@@ -989,6 +989,21 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               title="Sample color from screen to apply to selected element's background"
             >
               Color Dropper
+            </Button>
+            <Button
+              variant={mergeMode ? "contained" : "outlined"}
+              size="small"
+              fullWidth
+              sx={
+                mergeMode
+                  ? { mt: 1, boxShadow: "none" }
+                  : [colorDropperButtonSx, { mt: 1 }]
+              }
+              onClick={onToggleMergeMode}
+              disabled={ocrRegions.length < 2}
+              title="Join fragments that belong to one text block, then clean and translate them as one"
+            >
+              {mergeMode ? "Cancel merge" : "Merge regions"}
             </Button>
           </SidebarSection>
 
@@ -1825,21 +1840,36 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             {selectedItem.bboxW}x{selectedItem.bboxH})
           </Grid>
 
-          {(selectedItem.regions as OcrRegion[])
-            .filter(
-              (r) =>
-                r.qaStatus === "cleanup_review" ||
-                r.qaStatus === "manual_review" ||
-                r.qaStatus === "rejected",
-            )
-            .map((r) => (
-              <RegionReviewCard
-                key={`review-${r.id}`}
-                region={r}
-                busy={isReviewingRegion}
-                onAction={handleReviewRegion}
-              />
-            ))}
+          {(selectedItem.regions as OcrRegion[]).map((r) => {
+            const index = issues.findIndex((i) => i.region.id === r.id);
+            if (index >= 0) {
+              return (
+                <IssueCard
+                  key={`issue-${r.id}`}
+                  issue={issues[index]}
+                  position={index + 1}
+                  total={issues.length}
+                  busy={isReviewingRegion}
+                  onAction={(issue, action) =>
+                    handleRegionAction(issue.region, action, issue.element)
+                  }
+                  onSaveTranslation={handleSaveIssueTranslation}
+                  onStep={onStepIssue}
+                />
+              );
+            }
+            if (r.qaStatus === "rejected" || r.qaStatus === "reject_sfx") {
+              return (
+                <RejectedRegionNote
+                  key={`rejected-${r.id}`}
+                  region={r}
+                  busy={isReviewingRegion}
+                  onDelete={(region) => handleRegionAction(region, "delete")}
+                />
+              );
+            }
+            return null;
+          })}
 
           <Grid
             style={{
@@ -1870,7 +1900,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     textTransform: "uppercase",
                   }}
                 >
-                  Region #{idx + 1} Original
+                  Region #{reg.bubbleReadingOrder ?? idx + 1} Original
                 </Grid>
                 <Grid
                   className="ocr-text-preview"
@@ -1890,7 +1920,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                         textTransform: "uppercase",
                       }}
                     >
-                      Region #{idx + 1} Translation
+                      Region #{reg.bubbleReadingOrder ?? idx + 1} Translation
                     </Grid>
                     <Grid
                       className="ocr-text-preview"

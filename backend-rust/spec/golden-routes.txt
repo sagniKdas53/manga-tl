@@ -54,6 +54,7 @@ GET     /api/pages/{pageId}  [pageId]
 POST    /api/pages/{pageId}/layers  [pageId] body
 PATCH   /api/pages/{pageId}/number  [pageId] body
 GET     /api/pages/{pageId}/rendered  [pageId] 
+POST    /api/pages/{pageId}/regions/merge  [pageId] body
 GET     /api/series  [] 
 POST    /api/series  [] body
 GET     /api/series/chapters/exports/{exportId}/download  [exportId] 

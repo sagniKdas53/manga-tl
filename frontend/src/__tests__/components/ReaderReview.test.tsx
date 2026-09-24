@@ -5,6 +5,12 @@ import ReaderRightSidebar, {
 } from "../../components/ReaderRightSidebar";
 import ReaderTopNav from "../../components/ReaderTopNav";
 import { inReadingOrder, regionRowStatus } from "../../utils/regionReview";
+import {
+  regionIssue,
+  regionIssues,
+  translationElementByRegion,
+} from "../../utils/regionIssues";
+import { IssueList, MergePanel } from "../../components/ReaderIssues";
 import type { Layer, LayerElement, OcrRegion } from "../../types";
 
 const region = (id: string, order: number, extra: Partial<OcrRegion> = {}) =>
@@ -75,8 +81,18 @@ function sidebar(overrides: Partial<ReaderRightSidebarProps>) {
     isRedoingRegionOcr: false,
     handleRedoRegion: vi.fn(),
     isRedoingRegionTl: false,
-    handleReviewRegion: vi.fn(),
+    issues: [],
+    onSelectIssue: vi.fn(),
+    onStepIssue: vi.fn(),
+    handleRegionAction: vi.fn(),
+    handleSaveIssueTranslation: vi.fn(),
     isReviewingRegion: false,
+    mergeMode: false,
+    mergeSelection: [],
+    onToggleMergeMode: vi.fn(),
+    onToggleMergeRegion: vi.fn(),
+    onConfirmMerge: vi.fn(),
+    isMerging: false,
     ...overrides,
   } as ReaderRightSidebarProps;
   render(<ReaderRightSidebar {...props} />);
@@ -162,13 +178,16 @@ describe("Reader review UI", () => {
     expect(screen.getByText("source 1")).toBeInTheDocument();
   });
 
-  it("offers Reject and Delete for a flagged region", () => {
+  it("offers the issue's quick resolutions in the inspector", () => {
     const flagged = region("r1", 4, {
       qaStatus: "cleanup_review",
-      qaFeedback: "Rejected by nobody yet: a faded sign.",
+      qaFeedback: "CTD found no glyphs inside the region.",
     });
+    const tl = element("e1", "r1", "Hello", true);
+    const issue = regionIssue(flagged, tl, false)!;
     const props = sidebar({
       ocrRegions: [flagged],
+      issues: [issue],
       selectedItem: {
         id: "region-r1",
         isConversation: false,
@@ -180,13 +199,38 @@ describe("Reader review UI", () => {
       },
     });
     const card = screen.getByRole("status");
-    expect(within(card).getByText("Needs review")).toBeInTheDocument();
-    expect(within(card).getByText(/a faded sign/)).toBeInTheDocument();
+    expect(
+      within(card).getByText("#4 · No lettering found here"),
+    ).toBeInTheDocument();
+    // The raw detector text is behind "Details", not the headline.
+    expect(within(card).queryByText(/CTD found no glyphs/)).toBeNull();
+    fireEvent.click(within(card).getByText("Details"));
+    expect(within(card).getByText(/CTD found no glyphs/)).toBeInTheDocument();
 
-    fireEvent.click(within(card).getByText("Reject — leave as is"));
-    expect(props.handleReviewRegion).toHaveBeenCalledWith(flagged, "reject");
+    fireEvent.click(within(card).getByText("Cover with plain mask"));
+    expect(props.handleRegionAction).toHaveBeenCalledWith(flagged, "mask", tl);
+    fireEvent.click(within(card).getByText("Keep original"));
+    expect(props.handleRegionAction).toHaveBeenCalledWith(
+      flagged,
+      "reject",
+      tl,
+    );
     fireEvent.click(within(card).getByText("Delete region"));
-    expect(props.handleReviewRegion).toHaveBeenCalledWith(flagged, "delete");
+    expect(props.handleRegionAction).toHaveBeenCalledWith(
+      flagged,
+      "delete",
+      tl,
+    );
+
+    fireEvent.click(within(card).getByText("Type translation"));
+    fireEvent.change(within(card).getByLabelText("Translation"), {
+      target: { value: "A shop sign" },
+    });
+    fireEvent.click(within(card).getByText("Save"));
+    expect(props.handleSaveIssueTranslation).toHaveBeenCalledWith(
+      issue,
+      "A shop sign",
+    );
   });
 
   it("shows a review chip in the top bar only when something needs a look", () => {
@@ -214,5 +258,100 @@ describe("Reader review UI", () => {
     );
     fireEvent.click(screen.getByText("2 to review"));
     expect(onReviewClick).toHaveBeenCalledOnce();
+  });
+});
+
+describe("issues view", () => {
+  const tl = (
+    id: string,
+    regionId: string,
+    text: string | null,
+    visible = true,
+  ) => element(id, regionId, text, visible);
+
+  it("names what is wrong and never counts settled regions", () => {
+    const regions = [
+      region("a", 3, {
+        qaStatus: "manual_review",
+        qaFeedback: "Fragment 「あたって」; this bubble is a single sentence.",
+      }),
+      region("b", 1, { translationFailed: true }),
+      region("c", 2),
+      region("d", 4, { qaStatus: "rejected" }),
+      region("e", 5, { qaStatus: "reject_sfx" }),
+      region("f", 6, { qaStatus: "passed" }),
+      region("g", 7, { qaStatus: "passed" }),
+    ];
+    const elements = new Map([
+      ["a", tl("ea", "a", "I'd like to")],
+      ["b", tl("eb", "b", null, false)],
+      ["f", tl("ef", "f", "Too long for its box")],
+      ["g", tl("eg", "g", "Fine")],
+    ]);
+    const issues = regionIssues(regions, elements, new Set(["ef"]));
+    expect(issues.map((i) => [i.region.id, i.kind])).toEqual([
+      ["b", "failed"],
+      ["c", "untranslated"],
+      ["a", "qa"],
+      ["f", "overflow"],
+    ]);
+    expect(issues[2].hint).toMatch(/Merge regions/);
+    expect(issues[3].actions).toEqual(["fit", "edit"]);
+  });
+
+  it("resolves each region to the element that is drawn", () => {
+    const layer = (id: string, zOrder: number, visible: boolean) =>
+      ({ id, type: "translation", visible, zOrder }) as unknown as Layer;
+    const map = translationElementByRegion([
+      { layer: layer("base", 1, true), elements: [tl("old", "r", "old")] },
+      { layer: layer("redo", 2, true), elements: [tl("new", "r", "new")] },
+      { layer: layer("hidden", 3, false), elements: [tl("gone", "r", "gone")] },
+    ]);
+    expect(map.get("r")?.id).toBe("new");
+  });
+
+  it("lists issues and opens one on click", () => {
+    const onSelect = vi.fn();
+    const issue = regionIssue(region("a", 2), undefined, false)!;
+    render(
+      <IssueList
+        issues={[issue]}
+        selectedRegionId={null}
+        onSelect={onSelect}
+      />,
+    );
+    fireEvent.click(screen.getByText("Not translated"));
+    expect(onSelect).toHaveBeenCalledWith(issue);
+  });
+
+  it("merges only once two pieces are picked", () => {
+    const onToggle = vi.fn();
+    const onMerge = vi.fn();
+    const regions = [region("a", 4), region("b", 5), region("c", 6)];
+    const { rerender } = render(
+      <MergePanel
+        regions={regions}
+        selected={["a"]}
+        busy={false}
+        onToggle={onToggle}
+        onMerge={onMerge}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Merge" })).toBeDisabled();
+    fireEvent.click(screen.getByLabelText("Region 5"));
+    expect(onToggle).toHaveBeenCalledWith("b");
+    rerender(
+      <MergePanel
+        regions={regions}
+        selected={["a", "b"]}
+        busy={false}
+        onToggle={onToggle}
+        onMerge={onMerge}
+        onCancel={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Merge #4 #5" }));
+    expect(onMerge).toHaveBeenCalledOnce();
   });
 });

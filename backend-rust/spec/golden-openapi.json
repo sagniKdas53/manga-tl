@@ -3357,7 +3357,7 @@
     },
     "/api/ocr-regions/{id}/review": {
       "post": {
-        "description": "Answer a region flagged for review. `reject` marks it rejected and hides its translations; `delete` removes the region and its elements. Both refresh the page QA summary and advance its revision.",
+        "description": "Quick resolution for a region that needs a look. `reject` keeps the original (marks it rejected, hides its translations); `accept` keeps the translation (clears the flag, shows it); `mask` covers the region with a plain plate of its background colour, stored as its cleanup; `delete` removes the region and its elements. All refresh the page QA summary and advance its revision.",
         "operationId": "reviewOcrRegion",
         "parameters": [
           {
@@ -3378,6 +3378,8 @@
                   "action": {
                     "enum": [
                       "reject",
+                      "accept",
+                      "mask",
                       "delete"
                     ],
                     "type": "string"
@@ -3421,6 +3423,9 @@
           },
           "404": {
             "description": "Region not found"
+          },
+          "422": {
+            "description": "The plain mask could not be built (no page size, or the box lies off the page)"
           }
         },
         "tags": [
@@ -3758,6 +3763,86 @@
               }
             },
             "description": "Current render is pending or failed"
+          }
+        },
+        "tags": [
+          "Page Controller"
+        ]
+      }
+    },
+    "/api/pages/{pageId}/regions/merge": {
+      "post": {
+        "description": "Merge two or more OCR regions on the page into one text block. The first in reading order survives with the union box and the text joined in reading order; the others and their elements are deleted. One cleanup job is queued for the merged box and carries on into that region's translation only.",
+        "operationId": "mergeOcrRegions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pageId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "regionIds": {
+                    "items": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "minItems": 2,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "regionIds"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "properties": {
+                    "merged": {
+                      "type": "integer"
+                    },
+                    "pageId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "queued": {
+                      "type": "boolean"
+                    },
+                    "regionId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "Fewer than two regions named"
+          },
+          "404": {
+            "description": "A region is not on this page"
           }
         },
         "tags": [
