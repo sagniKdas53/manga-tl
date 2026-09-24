@@ -26,10 +26,12 @@ import UndoIcon from "@mui/icons-material/Undo";
 import OpenWithIcon from "@mui/icons-material/OpenWith";
 import CropIcon from "@mui/icons-material/Crop";
 import LayersIcon from "@mui/icons-material/Layers";
+import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import { ColorPicker } from "./ColorPicker";
 import SidebarSection from "./SidebarSection";
 import type { SystemStyleObject, Theme } from "@mui/system";
 import type { Layer, LayerElement, OcrRegion } from "../types";
+import { inReadingOrder, regionRowStatus } from "../utils/regionReview";
 
 // --- AUDIT-F2: static sx literals hoisted to module scope --------------------
 //
@@ -375,6 +377,101 @@ const MetaBadge: React.FC<{
   </Box>
 );
 
+const reviewTitle = (region: OcrRegion) =>
+  region.qaStatus === "rejected"
+    ? "Rejected"
+    : region.qaStatus === "manual_review"
+      ? "QA asked for a manual look"
+      : "Needs review";
+
+const reviewExplanation = (region: OcrRegion) =>
+  region.qaFeedback?.trim() ||
+  (region.qaStatus === "cleanup_review"
+    ? "The text detector found no lettering in this region, so its source pixels were left untouched."
+    : "QA could not settle this region on its own.");
+
+/** The inspector's answer to a flagged region: why it is flagged, and what can be done. */
+const RegionReviewCard: React.FC<{
+  region: OcrRegion;
+  busy: boolean;
+  onAction: (region: OcrRegion, action: "reject" | "delete") => void;
+}> = ({ region, busy, onAction }) => {
+  const rejected = region.qaStatus === "rejected";
+  const accent = rejected ? "var(--text-muted)" : "var(--warning)";
+  return (
+    <Box
+      role="status"
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 1,
+        p: 1.25,
+        borderRadius: "8px",
+        border: `1px solid ${accent}`,
+        backgroundColor: rejected
+          ? "var(--bg-input, rgba(0,0,0,0.04))"
+          : "color-mix(in srgb, var(--warning) 10%, transparent)",
+      }}
+    >
+      <Box
+        sx={{ display: "flex", alignItems: "center", gap: 0.75, color: accent }}
+      >
+        {!rejected && <WarningAmberRoundedIcon sx={{ fontSize: 16 }} />}
+        <Typography
+          component="span"
+          sx={{ fontSize: "13px", fontWeight: 700 }}
+        >
+          {reviewTitle(region)}
+        </Typography>
+      </Box>
+      <Typography
+        component="p"
+        sx={{
+          fontSize: "12px",
+          lineHeight: 1.45,
+          color: "var(--text-main)",
+          m: 0,
+        }}
+      >
+        {reviewExplanation(region)}
+      </Typography>
+      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+        {!rejected && (
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={busy}
+            onClick={() => onAction(region, "reject")}
+            title="Leave the source as it is and stop flagging this region"
+            sx={{
+              color: "var(--warning)",
+              borderColor: "var(--warning)",
+              textTransform: "none",
+              "&:hover": {
+                borderColor: "var(--warning)",
+                backgroundColor:
+                  "color-mix(in srgb, var(--warning) 12%, transparent)",
+              },
+            }}
+          >
+            Reject — leave as is
+          </Button>
+        )}
+        <Button
+          variant="text"
+          size="small"
+          disabled={busy}
+          onClick={() => onAction(region, "delete")}
+          title="Remove this region and anything drawn for it"
+          sx={{ color: "var(--error)", textTransform: "none" }}
+        >
+          Delete region
+        </Button>
+      </Box>
+    </Box>
+  );
+};
+
 // Assuming types are defined here or imported
 // You may need to adjust types based on actual project structure
 export interface LayerData {
@@ -423,6 +520,8 @@ export interface ReaderRightSidebarProps {
   isRedoingRegionOcr: boolean;
   handleRedoRegion: (region: OcrRegion, type: "ocr" | "translation") => void;
   isRedoingRegionTl: boolean;
+  handleReviewRegion: (region: OcrRegion, action: "reject" | "delete") => void;
+  isReviewingRegion: boolean;
 }
 
 const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
@@ -474,7 +573,14 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     isRedoingRegionOcr,
     handleRedoRegion,
     isRedoingRegionTl,
+    handleReviewRegion,
+    isReviewingRegion,
   } = props;
+
+  const regionById = React.useMemo(
+    () => new Map(ocrRegions.map((r) => [r.id, r])),
+    [ocrRegions],
+  );
 
   return (
     <Grid className="reader-right-sidebar-nhentai">
@@ -712,78 +818,126 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     </Box>
                     {isExpanded && (
                       <Box sx={elementListSx}>
-                        {lData.elements.map((element) => {
-                          // AUDIT-F25. This was `!== false`, which made a null-visible element
-                          // read as visible here while the canvas, the hidden-count above and the
-                          // worker's renderer all treated it as hidden. The row then offered
-                          // "Hide element" for something already invisible, wrote `false`, and the
-                          // first click changed nothing on screen. `=== true` is the same rule the
-                          // other three readers use.
-                          const elementVisible = element.visible === true;
-                          const isSelectedElement =
-                            selectedItem?.id === element.id &&
-                            selectedItem?.isLayerElement;
-                          const label =
-                            (element.text || "").trim() || "(no text)";
-                          return (
-                            <Box
-                              key={element.id}
-                              onClick={() => {
-                                setActiveLayerId(lData.layer.id);
-                                setSelectedItem({
-                                  ...element,
-                                  isLayerElement: true,
-                                });
-                              }}
-                              sx={[
-                                elementRowSx,
-                                {
-                                  opacity: elementVisible ? 1 : 0.55,
-                                  backgroundColor: isSelectedElement
-                                    ? "var(--primary-glow)"
-                                    : "transparent",
-                                },
-                              ]}
-                            >
-                              <Typography
-                                component="span"
-                                sx={elementLabelSx}
-                                title={label}
+                        {inReadingOrder(lData.elements, regionById).map(
+                          (element) => {
+                            // AUDIT-F25. This was `!== false`, which made a null-visible element
+                            // read as visible here while the canvas, the hidden-count above and the
+                            // worker's renderer all treated it as hidden. The row then offered
+                            // "Hide element" for something already invisible, wrote `false`, and the
+                            // first click changed nothing on screen. `=== true` is the same rule the
+                            // other three readers use.
+                            const elementVisible = element.visible === true;
+                            const isSelectedElement =
+                              selectedItem?.id === element.id &&
+                              selectedItem?.isLayerElement;
+                            const region = element.regionId
+                              ? regionById.get(element.regionId)
+                              : undefined;
+                            const rowStatus = regionRowStatus(region, element);
+                            const label =
+                              (element.text || "").trim() ||
+                              (region?.text || "").trim() ||
+                              "(no text)";
+                            return (
+                              <Box
+                                key={element.id}
+                                onClick={() => {
+                                  setActiveLayerId(lData.layer.id);
+                                  setSelectedItem({
+                                    ...element,
+                                    isLayerElement: true,
+                                  });
+                                }}
+                                sx={[
+                                  elementRowSx,
+                                  {
+                                    opacity: elementVisible ? 1 : 0.55,
+                                    backgroundColor: isSelectedElement
+                                      ? "var(--primary-glow)"
+                                      : "transparent",
+                                  },
+                                ]}
                               >
-                                {label}
-                              </Typography>
-                              <Tooltip
-                                title={
-                                  elementVisible
-                                    ? "Hide element"
-                                    : "Show element"
-                                }
-                              >
-                                <IconButton
-                                  size="small"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleSetElementVisibility(
-                                      element,
-                                      !elementVisible,
-                                    );
-                                  }}
-                                  sx={{
-                                    color: elementVisible
-                                      ? "var(--primary)"
-                                      : "var(--text-dim, var(--text-muted))",
-                                  }}
+                                {region?.bubbleReadingOrder ? (
+                                  <Box
+                                    component="span"
+                                    sx={{
+                                      flex: "0 0 auto",
+                                      minWidth: "22px",
+                                      fontSize: "11px",
+                                      fontWeight: 700,
+                                      color: "var(--text-muted)",
+                                      fontVariantNumeric: "tabular-nums",
+                                    }}
+                                  >
+                                    #{region.bubbleReadingOrder}
+                                  </Box>
+                                ) : null}
+                                <Typography
+                                  component="span"
+                                  sx={elementLabelSx}
+                                  title={label}
                                 >
-                                  {elementVisible ? (
-                                    <VisibilityIcon fontSize="small" />
-                                  ) : (
-                                    <VisibilityOffIcon fontSize="small" />
-                                  )}
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
-                          );
-                        })}
+                                  {label}
+                                </Typography>
+                                {rowStatus && (
+                                  <Box
+                                    component="span"
+                                    title={region?.qaFeedback || undefined}
+                                    sx={{
+                                      flex: "0 0 auto",
+                                      px: 0.75,
+                                      borderRadius: "999px",
+                                      fontSize: "10px",
+                                      fontWeight: 700,
+                                      lineHeight: "16px",
+                                      color:
+                                        rowStatus.tone === "warning"
+                                          ? "var(--warning)"
+                                          : "var(--text-muted)",
+                                      border: `1px solid ${
+                                        rowStatus.tone === "warning"
+                                          ? "var(--warning)"
+                                          : "var(--border-color)"
+                                      }`,
+                                    }}
+                                  >
+                                    {rowStatus.label}
+                                  </Box>
+                                )}
+                                <Tooltip
+                                  title={
+                                    elementVisible
+                                      ? "Hide element"
+                                      : "Show element"
+                                  }
+                                >
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSetElementVisibility(
+                                        element,
+                                        !elementVisible,
+                                      );
+                                    }}
+                                    sx={{
+                                      color: elementVisible
+                                        ? "var(--primary)"
+                                        : "var(--text-dim, var(--text-muted))",
+                                    }}
+                                  >
+                                    {elementVisible ? (
+                                      <VisibilityIcon fontSize="small" />
+                                    ) : (
+                                      <VisibilityOffIcon fontSize="small" />
+                                    )}
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                            );
+                          },
+                        )}
                       </Box>
                     )}
                   </React.Fragment>
@@ -1670,6 +1824,22 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             Position: x={selectedItem.bboxX}, y={selectedItem.bboxY} (
             {selectedItem.bboxW}x{selectedItem.bboxH})
           </Grid>
+
+          {(selectedItem.regions as OcrRegion[])
+            .filter(
+              (r) =>
+                r.qaStatus === "cleanup_review" ||
+                r.qaStatus === "manual_review" ||
+                r.qaStatus === "rejected",
+            )
+            .map((r) => (
+              <RegionReviewCard
+                key={`review-${r.id}`}
+                region={r}
+                busy={isReviewingRegion}
+                onAction={handleReviewRegion}
+              />
+            ))}
 
           <Grid
             style={{

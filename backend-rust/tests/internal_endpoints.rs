@@ -885,14 +885,17 @@ async fn full_pipeline_walks_every_stage() {
             .unwrap();
     assert_eq!(layer_count, 1);
 
-    let element_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM layer_elements le JOIN layers l ON l.id=le.layer_id WHERE l.page_id=$1 AND l.type='translation'",
+    // One Translation row per OCR region: the translated one is drawn, the excluded SFX keeps a
+    // hidden, textless row so the layer still lists every region.
+    let (element_count, drawn): (i64, i64) = sqlx::query_as(
+        "SELECT COUNT(*), COUNT(*) FILTER (WHERE COALESCE(le.visible, FALSE)) \
+         FROM layer_elements le JOIN layers l ON l.id=le.layer_id WHERE l.page_id=$1 AND l.type='translation'",
     )
     .bind(page_id)
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(element_count, 1);
+    assert_eq!((element_count, drawn), (2, 1));
 
     // `queue:render` outlives this binary: the coordinator_flows suite snapshots and queues
     // renders it never pops, so the head of the queue may be another page's job. Search for

@@ -1120,3 +1120,238 @@ async fn cleanup_review_prevents_a_subset_qa_pass() {
     assert_eq!(status.as_deref(), Some("cleanup_review"));
     cleanup_series(&pool, series_id).await;
 }
+
+async fn insert_region(
+    pool: &sqlx::PgPool,
+    page_id: Uuid,
+    order: i32,
+    qa_status: Option<&str>,
+) -> Uuid {
+    sqlx::query_scalar(
+        "INSERT INTO ocr_regions (id, bbox_x, bbox_y, bbox_w, bbox_h, detected_language, text, \
+         mask_polygon, region_type, page_id, bubble_reading_order, qa_status) \
+         VALUES (uuid_generate_v4(), 10, 10, 20, 20, 'ja', 'テキスト', '[[10,10],[30,10],[30,30],[10,30]]', \
+                 'speech', $1, $2, $3) RETURNING id",
+    )
+    .bind(page_id)
+    .bind(order)
+    .bind(qa_status)
+    .fetch_one(pool)
+    .await
+    .expect("region")
+}
+
+async fn translation_element(
+    pool: &sqlx::PgPool,
+    region_id: Uuid,
+) -> (bool, Option<String>, Option<serde_json::Value>) {
+    sqlx::query_as(
+        "SELECT COALESCE(e.visible, FALSE), e.text, e.mask_polygon FROM layer_elements e \
+         JOIN layers l ON l.id = e.layer_id \
+         WHERE e.region_id = $1 AND l.type = 'translation' ORDER BY l.z_order DESC LIMIT 1",
+    )
+    .bind(region_id)
+    .fetch_one(pool)
+    .await
+    .expect("translation element")
+}
+
+/// Uncertain regions (cleanup found no glyphs) are translated but start hidden with no mask, and
+/// every OCR region gets a Translation row -- the worker's untranslated ones as hidden rows.
+#[tokio::test]
+async fn translation_keeps_one_row_per_region_and_hides_uncertain_ones() {
+    let Some((pool, _redis, state)) = app().await else {
+        return;
+    };
+    let (series_id, _, page_id, image_id) = seed_pipeline(&pool, Some("ja"), Some("en")).await;
+    let normal = insert_region(&pool, page_id, 1, None).await;
+    let uncertain = insert_region(&pool, page_id, 2, Some("cleanup_review")).await;
+    let rejected = insert_region(&pool, page_id, 3, Some("rejected")).await;
+
+    let translations = vec![
+        serde_json::json!({"regionId": normal, "pageId": page_id, "translatedText": "Hello"}),
+        serde_json::json!({"regionId": uncertain, "pageId": page_id, "translatedText": "Sign"}),
+    ];
+    let (job, identity) = seed_stage_job(&pool, "translation", image_id, Some(page_id)).await;
+    manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            identity,
+            manga_backend::jobs::coordinator::handle_translation_callback(
+                &state,
+                Some(&job),
+                image_id,
+                &translations,
+                None,
+            ),
+        )
+        .await
+        .expect("translation callback");
+
+    let (visible, text, mask) = translation_element(&pool, normal).await;
+    assert!(visible && text.as_deref() == Some("Hello") && mask.is_some());
+    let (visible, text, mask) = translation_element(&pool, uncertain).await;
+    assert!(!visible, "uncertain text waits for QA");
+    assert_eq!(text.as_deref(), Some("Sign"));
+    assert!(
+        mask.is_none(),
+        "no plate may be painted where cleanup found no glyphs"
+    );
+    let (visible, text, _) = translation_element(&pool, rejected).await;
+    assert!(
+        !visible && text.is_none(),
+        "an untranslated region still has its row"
+    );
+
+    cleanup_series(&pool, series_id).await;
+}
+
+async fn seed_uncertain_page(pool: &sqlx::PgPool) -> (Uuid, Uuid, Uuid, Uuid, Uuid) {
+    let (series_id, _, page_id, image_id) = seed_pipeline(pool, Some("ja"), Some("en")).await;
+    let shown = insert_region(pool, page_id, 1, None).await;
+    let uncertain = insert_region(pool, page_id, 2, Some("cleanup_review")).await;
+    let layer_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) \
+         VALUES ($1, 'translation', 'en', TRUE, 2, '{}'::jsonb, $2, now())",
+    )
+    .bind(layer_id)
+    .bind(page_id)
+    .execute(pool)
+    .await
+    .expect("layer");
+    for (region, visible, text) in [(shown, true, "Hello"), (uncertain, false, "Sign")] {
+        sqlx::query(
+            "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, word_wrap, layer_id, region_id) \
+             VALUES (uuid_generate_v4(), $1, 10, 10, 20, 20, $2, TRUE, $3, $4)",
+        )
+        .bind(text)
+        .bind(visible)
+        .bind(layer_id)
+        .bind(region)
+        .execute(pool)
+        .await
+        .expect("element");
+    }
+    (series_id, page_id, image_id, shown, uncertain)
+}
+
+async fn qa_with_checks(
+    pool: &sqlx::PgPool,
+    state: &manga_backend::state::AppState,
+    image_id: Uuid,
+    page_id: Uuid,
+    shown: Uuid,
+    checks: serde_json::Value,
+) -> &'static str {
+    let (job, identity) = seed_stage_job(pool, "qa", image_id, Some(page_id)).await;
+    let mut accounting = bind_qa(pool, &job, image_id, page_id, &[shown]).await;
+    accounting["uncertainChecks"] = checks;
+    manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            identity,
+            manga_backend::jobs::coordinator::handle_qa_callback(
+                state,
+                Some(&job),
+                image_id,
+                Some(page_id),
+                &[serde_json::json!({"regionId": shown, "qaStatus": "passed", "qaScore": 1.0})],
+                None,
+                &accounting,
+            ),
+        )
+        .await
+        .expect("qa callback")
+}
+
+/// QA calls the uncertain region a sign: it is rejected and stops holding the page for review.
+#[tokio::test]
+async fn qa_rejects_uncertain_background_text_without_asking_the_user() {
+    let Some((pool, _redis, state)) = app().await else {
+        return;
+    };
+    let (series_id, page_id, image_id, shown, uncertain) = seed_uncertain_page(&pool).await;
+    let checks =
+        serde_json::json!([{"regionId": uncertain, "kind": "sfx", "reason": "a drawn slurp"}]);
+    let outcome = qa_with_checks(&pool, &state, image_id, page_id, shown, checks).await;
+
+    assert_ne!(outcome, "MANUAL_REVIEW");
+    let (status, feedback): (Option<String>, Option<String>) =
+        sqlx::query_as("SELECT qa_status, qa_feedback FROM ocr_regions WHERE id = $1")
+            .bind(uncertain)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(status.as_deref(), Some("rejected"));
+    assert!(feedback.unwrap_or_default().contains("sound effect"));
+    assert!(!translation_element(&pool, uncertain).await.0);
+    cleanup_series(&pool, series_id).await;
+}
+
+/// QA calls it dialogue: the translation is drawn over the source (no plate) and stays flagged.
+#[tokio::test]
+async fn qa_shows_uncertain_dialogue_over_the_source_and_keeps_the_flag() {
+    let Some((pool, _redis, state)) = app().await else {
+        return;
+    };
+    let (series_id, page_id, image_id, shown, uncertain) = seed_uncertain_page(&pool).await;
+    let checks = serde_json::json!([{"regionId": uncertain, "kind": "dialogue", "reason": "speech in a balloon."}]);
+    let outcome = qa_with_checks(&pool, &state, image_id, page_id, shown, checks).await;
+
+    assert_eq!(outcome, "MANUAL_REVIEW");
+    let status: Option<String> =
+        sqlx::query_scalar("SELECT qa_status FROM ocr_regions WHERE id = $1")
+            .bind(uncertain)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(status.as_deref(), Some("cleanup_review"));
+    let (visible, _, mask) = translation_element(&pool, uncertain).await;
+    assert!(visible, "QA-confirmed dialogue is drawn");
+    assert!(mask.is_none());
+    cleanup_series(&pool, series_id).await;
+}
+
+/// The Reader's Reject lifts a manual_review that only the rejected region was holding.
+#[tokio::test]
+async fn rejecting_the_last_flagged_region_lifts_manual_review() {
+    let Some((pool, _redis, state)) = app().await else {
+        return;
+    };
+    let (series_id, page_id, image_id, shown, uncertain) = seed_uncertain_page(&pool).await;
+    let outcome = qa_with_checks(
+        &pool,
+        &state,
+        image_id,
+        page_id,
+        shown,
+        serde_json::json!([]),
+    )
+    .await;
+    assert_eq!(
+        outcome, "MANUAL_REVIEW",
+        "an unanswered uncertain region still needs review"
+    );
+
+    sqlx::query("UPDATE ocr_regions SET qa_status = 'rejected' WHERE id = $1")
+        .bind(uncertain)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    manga_backend::jobs::coordinator::refresh_review_summary(&mut tx, page_id)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    let qa: serde_json::Value = sqlx::query_scalar(
+        "SELECT metadata_json->'qa' FROM layers WHERE page_id = $1 AND type = 'translation'",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(qa["status"], "passed");
+    assert_eq!(qa["cleanup_review"], 0);
+    assert_eq!(qa["failed_regions"], serde_json::json!([]));
+    cleanup_series(&pool, series_id).await;
+}

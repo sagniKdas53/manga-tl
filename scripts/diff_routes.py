@@ -94,6 +94,7 @@ PORTED = {
     "POST /api/internal/ocr-regions/{id}/callback",
     "POST /api/images/{imageId}/redo",
     "POST /api/ocr-regions/{id}/redo",
+    "POST /api/ocr-regions/{id}/review",
     # import/export (Phase 3 completion)
     "POST /api/series/{seriesId}/chapters/import",
     "POST /api/chapters/{chapterId}/import-project",

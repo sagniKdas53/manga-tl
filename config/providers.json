@@ -4,7 +4,7 @@
     "provider": "openrouter",
     "tl": "deepseek/deepseek-v4-pro",
     "qaLLM": "deepseek/deepseek-v4-pro",
-    "qaVLM": "qwen/qwen3.7-plus",
+    "qaVLM": "z-ai/glm-5.3-flash",
     "ocr": "qwen/qwen3.7-plus",
     "qaMode": "auto",
     "useFallbackModels": true,
@@ -561,6 +561,30 @@
         ],
         "qaVLM": [
           {
+            "id": "mistralai/mistral-small-3.2-24b-instruct",
+            "name": "Mistral: Mistral Small 3.2 24B",
+            "free": false,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.094,
+              "completionPerMillion": 0.25
+            },
+            "pinned": true
+          },
+          {
+            "id": "z-ai/glm-5.3-flash",
+            "name": "Z.ai: GLM 5.3 Flash",
+            "free": false,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.15,
+              "completionPerMillion": 0.5
+            },
+            "pinned": true
+          },
+          {
             "id": "qwen/qwen3-vl-32b-instruct",
             "name": "Qwen: Qwen3 VL 32B Instruct",
             "free": false,
@@ -631,7 +655,8 @@
               "completionPerMillion": 1.5,
               "cacheReadPerMillion": 0.025,
               "image": 2.5e-07
-            }
+            },
+            "pinned": true
           },
           {
             "id": "google/gemini-3.5-flash",
@@ -969,7 +994,7 @@
       },
       "defaultTLModel": "deepseek/deepseek-v4-pro",
       "defaultQALLMModel": "deepseek/deepseek-v4-pro",
-      "defaultQAVLMModel": "qwen/qwen3.7-flash",
+      "defaultQAVLMModel": "z-ai/glm-5.3-flash",
       "defaultOCRModel": "qwen/qwen3.7-flash"
     },
     "nvidia": {

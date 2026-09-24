@@ -336,6 +336,7 @@ services:
       - QA_VLM_MODEL=${QA_VLM_MODEL:-}
       - QA_LLM_MODEL_LIST=${QA_LLM_MODEL_LIST:-}
       - QA_VLM_MODEL_LIST=${QA_VLM_MODEL_LIST:-}
+      - QA_VLM_FALLBACK_MODELS=${QA_VLM_FALLBACK_MODELS:-}
       # AUDIT-W2: unset, i.e. unlimited. Every provider in config/providers.json carries its own
       # `rateLimits`; this is only the fallback for one that does not, and it used to default to
       # 10 RPM, so such a provider silently inherited one call every 6 seconds.

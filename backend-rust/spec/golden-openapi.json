@@ -3355,6 +3355,79 @@
         ]
       }
     },
+    "/api/ocr-regions/{id}/review": {
+      "post": {
+        "description": "Answer a region flagged for review. `reject` marks it rejected and hides its translations; `delete` removes the region and its elements. Both refresh the page QA summary and advance its revision.",
+        "operationId": "reviewOcrRegion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "reject",
+                      "delete"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "properties": {
+                    "action": {
+                      "type": "string"
+                    },
+                    "pageId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "regionId": {
+                      "format": "uuid",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "Unknown action"
+          },
+          "404": {
+            "description": "Region not found"
+          }
+        },
+        "tags": [
+          "Page Controller"
+        ]
+      }
+    },
     "/api/pages/{pageId}/scene": {
       "get": {
         "operationId": "getPageScene",

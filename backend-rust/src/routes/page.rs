@@ -1664,6 +1664,91 @@ pub async fn update_ocr_region(
     Json(updated).into_response()
 }
 
+/// POST /api/ocr-regions/{id}/review — `{"action": "reject" | "delete"}`, ADMIN/TRANSLATOR.
+///
+/// The Reader's answer to a region flagged for review. `reject` keeps the region but marks it
+/// `rejected` and hides its translations, so it drops out of the page and of later QA; `delete`
+/// removes the region and every element that draws it. Both refresh the page's QA summary and
+/// advance its revision in the same transaction, so the next render/export reflects the choice.
+pub async fn review_ocr_region(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    body: Result<Json<serde_json::Value>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    let instance = "/api/ocr-regions/{id}/review";
+    if !user.role.eq_ignore_ascii_case("admin") && !user.role.eq_ignore_ascii_case("translator") {
+        return error::access_denied(instance);
+    }
+    let Ok(Json(payload)) = body else {
+        return error::unreadable_body(instance);
+    };
+    let action = payload.get("action").and_then(|v| v.as_str()).unwrap_or("");
+    if action != "reject" && action != "delete" {
+        return (
+            StatusCode::BAD_REQUEST,
+            "action must be \"reject\" or \"delete\"",
+        )
+            .into_response();
+    }
+    let Some(region) = sqlx::query_as::<_, OcrRegion>("SELECT * FROM ocr_regions WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.pool)
+        .await
+        .unwrap_or(None)
+    else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+
+    let result: Result<(), String> = async {
+        let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+        if action == "reject" {
+            sqlx::query(
+                "UPDATE ocr_regions SET qa_status = 'rejected', qa_feedback = 'Rejected in review.' WHERE id = $1",
+            )
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+            sqlx::query(
+                "UPDATE layer_elements e SET visible = FALSE FROM layers l \
+                 WHERE e.layer_id = l.id AND l.type ILIKE 'translation' AND e.region_id = $1",
+            )
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+        } else {
+            sqlx::query("DELETE FROM layer_elements WHERE region_id = $1")
+                .bind(id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+            sqlx::query("DELETE FROM ocr_regions WHERE id = $1")
+                .bind(id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        crate::jobs::coordinator::refresh_review_summary(&mut tx, region.page_id).await?;
+        crate::page_freshness::advance_page_revision(&mut tx, region.page_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        tx.commit().await.map_err(|e| e.to_string())
+    }
+    .await;
+    match result {
+        Ok(()) => {
+            Json(serde_json::json!({ "regionId": id, "pageId": region.page_id, "action": action }))
+                .into_response()
+        }
+        Err(err) => {
+            tracing::error!("Review action {action} on region {id} failed: {err}");
+            (StatusCode::INTERNAL_SERVER_ERROR, err).into_response()
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Redo triggers (Phase 3)
 // ---------------------------------------------------------------------------
@@ -1773,6 +1858,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::put(reorder_pages),
         )
         .route("/ocr-regions/{id}", axum::routing::patch(update_ocr_region))
+        .route(
+            "/ocr-regions/{id}/review",
+            axum::routing::post(review_ocr_region),
+        )
         .route(
             "/ocr-regions/{id}/redo",
             axum::routing::post(redo_ocr_region),

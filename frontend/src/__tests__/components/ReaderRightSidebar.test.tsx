@@ -39,6 +39,8 @@ describe("ReaderRightSidebar", () => {
         handleDeleteElement={vi.fn()}
         ocrRegions={[]}
         isRedoingRegionTl={false}
+        handleReviewRegion={vi.fn()}
+        isReviewingRegion={false}
         handleRedoRegion={vi.fn()}
         handleSetElementVisibility={vi.fn()}
         isRedoingRegionOcr={false}
@@ -115,6 +117,8 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
+        handleReviewRegion={vi.fn()}
+        isReviewingRegion={false}
         handleSetElementVisibility={vi.fn()}
       />,
     );
@@ -186,6 +190,8 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
         handleRedoRegion={handleRedoRegion}
         isRedoingRegionTl={false}
+        handleReviewRegion={vi.fn()}
+        isReviewingRegion={false}
         handleSetElementVisibility={vi.fn()}
       />,
     );
@@ -243,6 +249,8 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
+        handleReviewRegion={vi.fn()}
+        isReviewingRegion={false}
         handleSetElementVisibility={vi.fn()}
       />,
     );
@@ -285,6 +293,8 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
+        handleReviewRegion={vi.fn()}
+        isReviewingRegion={false}
         handleSetElementVisibility={vi.fn()}
       />,
     );
@@ -356,6 +366,8 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
+        handleReviewRegion={vi.fn()}
+        isReviewingRegion={false}
         handleSetElementVisibility={vi.fn()}
       />,
     );
@@ -463,6 +475,8 @@ describe("ReaderRightSidebar", () => {
         handleDeleteElement={vi.fn()}
         ocrRegions={[]}
         isRedoingRegionTl={false}
+        handleReviewRegion={vi.fn()}
+        isReviewingRegion={false}
         handleRedoRegion={vi.fn()}
         handleSetElementVisibility={vi.fn()}
         isRedoingRegionOcr={false}
@@ -549,6 +563,8 @@ describe("ReaderRightSidebar", () => {
         handleDeleteElement={vi.fn()}
         ocrRegions={[mockRegion]}
         isRedoingRegionTl={false}
+        handleReviewRegion={vi.fn()}
+        isReviewingRegion={false}
         handleRedoRegion={mockHandleRedoRegion}
         handleSetElementVisibility={vi.fn()}
         isRedoingRegionOcr={false}
@@ -625,6 +641,8 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr: false,
         handleRedoRegion: vi.fn(),
         isRedoingRegionTl: false,
+        handleReviewRegion: vi.fn(),
+        isReviewingRegion: false,
         ...over,
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

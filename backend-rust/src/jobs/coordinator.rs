@@ -2328,6 +2328,52 @@ fn contrasting_text_color(hex_color: Option<&str>) -> String {
 // ---------------------------------------------------------------------------
 
 /// Translation callback. `payload` is the raw translations array plus optional cost map.
+/// A region whose cleanup found no glyphs (`cleanup_review`) is translated, but its element stays
+/// hidden until vision QA says what is there, and it never carries a mask polygon: with no
+/// cleanup patch, a polygon would make the scene paint a flat plate over the art. QA's
+/// `dialogue` verdict shows the text over the untouched source; `background_text` and `not_text`
+/// reject the region and it stays hidden.
+fn awaits_uncertain_check(region: &OcrRegion) -> bool {
+    region.qa_status.as_deref() == Some("cleanup_review")
+}
+
+/// One Translation row per OCR region. A region the worker did not translate (rejected, skipped,
+/// or absent from the callback) still gets a hidden, textless element, so the layer lists the
+/// same numbered regions as OCR and shows why a row is not drawn instead of silently omitting it.
+async fn add_untranslated_region_rows(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    page_id: Uuid,
+    layer_id: Uuid,
+) -> Result<(), String> {
+    let missing: Vec<OcrRegion> = sqlx::query_as(
+        "SELECT * FROM ocr_regions r WHERE r.page_id = $1 AND NOT EXISTS \
+         (SELECT 1 FROM layer_elements e WHERE e.layer_id = $2 AND e.region_id = r.id)",
+    )
+    .bind(page_id)
+    .bind(layer_id)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    for region in &missing {
+        sqlx::query(
+            "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, auto_size, font, \
+             font_weight, word_wrap, layer_id, region_id) \
+             VALUES ($1,NULL,$2,$3,$4,$5,FALSE,TRUE,'Comic Neue','bold',TRUE,$6,$7)",
+        )
+        .bind(Uuid::new_v4())
+        .bind(f64::from(region.bbox_x))
+        .bind(f64::from(region.bbox_y))
+        .bind(region.bbox_w)
+        .bind(region.bbox_h)
+        .bind(layer_id)
+        .bind(region.id)
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 pub async fn handle_translation_callback(
     state: &AppState,
     job_id: Option<&str>,
@@ -2656,6 +2702,7 @@ pub async fn handle_translation_callback(
                         .map_err(|e| e.to_string())?;
                 } else {
                     let box_geom = text_box_for(&state.pool, region).await;
+                    let uncertain = awaits_uncertain_check(region);
                     sqlx::query(
                         "UPDATE layer_elements SET text=$2, x=$3, y=$4, max_width=$5, max_height=$6, mask_polygon=$7, visible=$8 WHERE id=$1",
                     )
@@ -2665,8 +2712,8 @@ pub async fn handle_translation_callback(
                     .bind(box_geom.y)
                     .bind(box_geom.w)
                     .bind(box_geom.h)
-                    .bind(&region.mask_polygon)
-                    .bind(!failed)
+                    .bind(if uncertain { None } else { region.mask_polygon.clone() })
+                    .bind(!failed && !uncertain)
                     .execute(&mut *tx)
                     .await
                     .map_err(|e| e.to_string())?;
@@ -2674,6 +2721,7 @@ pub async fn handle_translation_callback(
             }
             (_, Some(region)) => {
                 let box_geom = text_box_for(&state.pool, region).await;
+                let uncertain = awaits_uncertain_check(region);
                 // visible = !failed. The worker reports a region it could not translate as
                 // translationFailed:true with a null translatedText, having already tried the
                 // batch, a retry pass and a per-region fallback. Creating that element visible
@@ -2691,7 +2739,7 @@ pub async fn handle_translation_callback(
                 .bind(box_geom.y)
                 .bind(box_geom.w)
                 .bind(box_geom.h)
-                .bind(!failed)
+                .bind(!failed && !uncertain)
                 .bind(&region.background_color)
                 .bind(contrasting_text_color(region.background_color.as_deref()))
                 // AUDIT-R19 (tracker R2): the shape says what was *found*, not what the layout
@@ -2703,7 +2751,7 @@ pub async fn handle_translation_callback(
                 } else {
                     "rectangular"
                 })
-                .bind(&region.mask_polygon)
+                .bind(if uncertain { None } else { region.mask_polygon.clone() })
                 .bind(layer_id)
                 .bind(region_id)
                 .execute(&mut *tx)
@@ -2730,6 +2778,7 @@ pub async fn handle_translation_callback(
         tracing::warn!("translation callback for image {image_id} has no page; nothing to render");
         return Ok(());
     };
+    add_untranslated_region_rows(&mut tx, page.id, layer_id).await?;
     let snapshot =
         crate::page_scene_builder::snapshot_pipeline_scene(state, &mut tx, page.id).await;
     tx.commit().await.map_err(|e| e.to_string())?;
@@ -4023,6 +4072,170 @@ async fn record_incomplete_qa(
 
 /// The full QA verdict. Returns one of DUPLICATE / MANUAL_REVIEW / RETRIED /
 /// COMPLETED_NO_QA / COMPLETED — the controller turns the last two into SSE notifications.
+/// Applies vision QA's `uncertainChecks`: what is really inside regions whose cleanup found no
+/// glyphs. `not_text` (artwork misread as text), `sfx` (sound effects stay as drawn) and
+/// `background_text` (signs, spines, labels) reject the region -- it stays hidden and drops out of review. `dialogue` shows its translation
+/// over the untouched source (no plate, no cleanup) and keeps the region flagged for review.
+/// A region QA did not answer for keeps its hidden, flagged state. Returns whether a drawn element
+/// changed, i.e. whether the page needs its final render.
+/// Brings the newest Translation layer's QA summary in line with the regions after a user review
+/// action (reject/delete): drops resolved regions from `failed_regions`, recounts
+/// `cleanup_review`, and lifts a `manual_review` status that only those regions were holding.
+pub async fn refresh_review_summary(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    page_id: Uuid,
+) -> Result<(), String> {
+    let layer: Option<Layer> = sqlx::query_as(
+        "SELECT * FROM layers WHERE page_id = $1 AND type ILIKE 'translation' ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(page_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let Some(layer) = layer else { return Ok(()) };
+    let mut metadata = layer
+        .metadata_json
+        .clone()
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    let Some(mut qa) = metadata.get("qa").and_then(Value::as_object).cloned() else {
+        return Ok(());
+    };
+    let open: Vec<(Uuid, String)> = sqlx::query_as(
+        "SELECT id, qa_status FROM ocr_regions WHERE page_id = $1 \
+         AND qa_status IN ('failed', 'manual_review', 'cleanup_review')",
+    )
+    .bind(page_id)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let open_ids: std::collections::HashSet<String> =
+        open.iter().map(|(id, _)| id.to_string()).collect();
+    let remaining: Vec<Value> = qa
+        .get("failed_regions")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|entry| {
+            entry
+                .get("regionId")
+                .and_then(Value::as_str)
+                .is_some_and(|id| open_ids.contains(id))
+        })
+        .cloned()
+        .collect();
+    let cleanup_reviews = open.iter().filter(|(_, s)| s == "cleanup_review").count();
+    let still_manual = open
+        .iter()
+        .any(|(_, s)| s == "manual_review" || s == "cleanup_review");
+    qa.insert("cleanup_review".into(), json!(cleanup_reviews));
+    qa.insert("failed_regions".into(), Value::Array(remaining));
+    if qa.get("status").and_then(Value::as_str) == Some("manual_review") && !still_manual {
+        let count = |key: &str| qa.get(key).and_then(Value::as_i64).unwrap_or(0);
+        let status = if count("failed") > 0 || count("direct_fix") > 0 {
+            "partial_pass"
+        } else {
+            "passed"
+        };
+        qa.insert("status".into(), json!(status));
+        if let Some(name) = metadata.get("layer_name").and_then(Value::as_str) {
+            let cleaned = name
+                .replace(" (qa-manual-review-needed)", "")
+                .replace("qa-manual-review-needed", "");
+            let cleaned = cleaned.replace(" ()", "").trim().to_string();
+            metadata.insert(
+                "layer_name".into(),
+                json!(if cleaned.is_empty() {
+                    "Translation".to_string()
+                } else {
+                    cleaned
+                }),
+            );
+        }
+    }
+    metadata.insert("qa".into(), Value::Object(qa));
+    sqlx::query("UPDATE layers SET metadata_json = $2 WHERE id = $1")
+        .bind(layer.id)
+        .bind(Value::Object(metadata))
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+async fn apply_uncertain_checks(
+    state: &AppState,
+    accounting: &Value,
+    awaiting: &[Uuid],
+    latest_translation: Option<Uuid>,
+) -> Result<bool, String> {
+    let mut changed = false;
+    let checks = accounting
+        .get("uncertainChecks")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for check in &checks {
+        let Some(region_id) = check
+            .get("regionId")
+            .and_then(Value::as_str)
+            .and_then(|s| Uuid::parse_str(s).ok())
+        else {
+            continue;
+        };
+        if !awaiting.contains(&region_id) {
+            continue;
+        }
+        let reason = check
+            .get("reason")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim();
+        let kind = check.get("kind").and_then(Value::as_str).unwrap_or("");
+        let rejected_as = match kind {
+            "not_text" => Some("not text"),
+            "sfx" => Some("sound effect"),
+            "background_text" => Some("background text"),
+            _ => None,
+        };
+        if let Some(label) = rejected_as {
+            sqlx::query(
+                "UPDATE ocr_regions SET qa_status = 'rejected', qa_feedback = $2 WHERE id = $1",
+            )
+            .bind(region_id)
+            .bind(format!("Rejected by QA ({label}): {reason}"))
+            .execute(&state.pool)
+            .await
+            .map_err(|e| e.to_string())?;
+            hide_translation_elements(state, region_id, latest_translation).await;
+        } else if kind == "dialogue" {
+            sqlx::query("UPDATE ocr_regions SET qa_feedback = $2 WHERE id = $1")
+                .bind(region_id)
+                .bind(format!(
+                    "QA found dialogue the text detector missed: {reason} Translated over the \
+                     original lettering; cleanup was not applied. Hide or delete it if it looks wrong."
+                ))
+                .execute(&state.pool)
+                .await
+                .map_err(|e| e.to_string())?;
+            if let Some(layer_id) = latest_translation {
+                let shown = sqlx::query(
+                    "UPDATE layer_elements SET visible = TRUE, mask_polygon = NULL \
+                     WHERE layer_id = $1 AND region_id = $2 AND btrim(COALESCE(text, '')) <> '' \
+                       AND COALESCE(visible, FALSE) = FALSE",
+                )
+                .bind(layer_id)
+                .bind(region_id)
+                .execute(&state.pool)
+                .await
+                .map_err(|e| e.to_string())?;
+                changed |= shown.rows_affected() > 0;
+            }
+        }
+    }
+    Ok(changed)
+}
+
 pub async fn handle_qa_callback(
     state: &AppState,
     job_id: Option<&str>,
@@ -4141,6 +4354,27 @@ pub async fn handle_qa_callback(
             latest_complete_layer(&layers, "translation").map(|l| l.id)
         }
         None => None,
+    };
+    if apply_uncertain_checks(
+        state,
+        accounting,
+        &cleanup_review_regions,
+        latest_translation,
+    )
+    .await?
+    {
+        qa_changed_the_page = true;
+    }
+    // Only regions QA left unresolved (no verdict) or confirmed as dialogue still need review.
+    let cleanup_review_regions: Vec<Uuid> = match &qa_page {
+        Some(page) => sqlx::query_scalar(
+            "SELECT id FROM ocr_regions WHERE page_id = $1 AND qa_status = 'cleanup_review'",
+        )
+        .bind(page.id)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?,
+        None => Vec::new(),
     };
 
     for r in qa_results {
@@ -4302,7 +4536,8 @@ pub async fn handle_qa_callback(
             json!({
                 "regionId": region_id.to_string(),
                 "qaStatus": "cleanup_review",
-                "qaFeedback": "Cleanup review required: source pixels preserved after uncertain cleanup result",
+                "qaFeedback": "Needs review: the text detector found no lettering in this region. \
+                               It is either dialogue drawn over its original lettering, or QA could not judge it.",
             })
         }));
     }

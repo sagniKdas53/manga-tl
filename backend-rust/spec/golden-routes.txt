@@ -48,6 +48,7 @@ GET     /api/notifications/stream  []
 POST    /api/notifications/ticket  [] 
 PATCH   /api/ocr-regions/{id}  [id] body
 POST    /api/ocr-regions/{id}/redo  [id] 
+POST    /api/ocr-regions/{id}/review  [id] body
 DELETE  /api/pages/{pageId}  [pageId] 
 GET     /api/pages/{pageId}  [pageId] 
 POST    /api/pages/{pageId}/layers  [pageId] body

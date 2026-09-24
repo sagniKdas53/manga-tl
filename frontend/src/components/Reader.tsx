@@ -774,6 +774,50 @@ export const Reader: React.FC<ReaderProps> = ({
   }, [filteredConversations, filteredOcrRegions, groupByConversation]);
 
   // Unified list of renderable items (conversations or standalone regions)
+  // Regions a person still has to look at: uncertain cleanup that QA could not settle or found to
+  // be dialogue drawn over its lettering, and regions QA escalated for manual review. Rejected
+  // regions are settled and never counted.
+  const reviewRegions = React.useMemo(
+    () =>
+      ocrRegions
+        .filter(
+          (r) =>
+            r.qaStatus === "cleanup_review" || r.qaStatus === "manual_review",
+        )
+        .sort(
+          (a, b) => (a.bubbleReadingOrder ?? 0) - (b.bubbleReadingOrder ?? 0),
+        ),
+    [ocrRegions],
+  );
+  const reviewCursor = useRef(0);
+
+  const selectRegionForReview = useCallback(
+    (r: OcrRegion) => {
+      setSelectedItem({
+        id: `region-${r.id}`,
+        isConversation: false,
+        regions: [r],
+        bboxX: r.bboxX,
+        bboxY: r.bboxY,
+        bboxW: r.bboxW,
+        bboxH: r.bboxH,
+        approved: r.approved === true,
+        sceneType: "speech",
+        originalRegion: r,
+      });
+      setActiveRegion(r);
+      setShowRightSidebar(true);
+    },
+    [setShowRightSidebar],
+  );
+
+  const handleReviewNext = useCallback(() => {
+    if (reviewRegions.length === 0) return;
+    const next = reviewRegions[reviewCursor.current % reviewRegions.length];
+    reviewCursor.current += 1;
+    selectRegionForReview(next);
+  }, [reviewRegions, selectRegionForReview]);
+
   const renderItems = React.useMemo(() => {
     if (!groupByConversation || filteredConversations.length === 0) {
       return filteredOcrRegions.map((r) => ({
@@ -2933,6 +2977,37 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // --- BUBBLE/CONVERSATION UPDATES ---
 
+  const [isReviewingRegion, setIsReviewingRegion] = useState(false);
+  const handleReviewRegion = async (
+    r: OcrRegion,
+    action: "reject" | "delete",
+  ) => {
+    setIsReviewingRegion(true);
+    try {
+      const res = await safeFetch(`/api/ocr-regions/${r.id}/review`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) throw new Error(`Review request failed (${res.status})`);
+      setSelectedItem(null);
+      setActiveRegion(null);
+      refreshAfterOverlayChange();
+    } catch (err) {
+      console.error("Review action failed:", err);
+      showInfo(
+        action === "reject" ? "Could Not Reject" : "Could Not Delete",
+        "The region was left as it was. Please try again.",
+        "error",
+      );
+    } finally {
+      setIsReviewingRegion(false);
+    }
+  };
+
   const handleRedoRegion = async (
     r: OcrRegion,
     forceType?: "ocr" | "translation",
@@ -3179,40 +3254,11 @@ export const Reader: React.FC<ReaderProps> = ({
         onToggleRightSidebar={() => setShowRightSidebar((prev) => !prev)}
         leftSidebarOpen={showLeftSidebar}
         rightSidebarOpen={showRightSidebar}
+        reviewCount={reviewRegions.length}
+        onReviewClick={handleReviewNext}
       />
 
       {/* Main Workspace split */}
-      {ocrRegions.some((region) => region.qaStatus === "cleanup_review") && (
-        <details
-          role="status"
-          style={{
-            padding: "8px 16px",
-            background: "#fff4d6",
-            color: "#663c00",
-          }}
-        >
-          <summary>
-            Cleanup review required for{" "}
-            {
-              ocrRegions.filter(
-                (region) => region.qaStatus === "cleanup_review",
-              ).length
-            }{" "}
-            region(s). Source pixels preserved; other regions can continue
-            translating.
-          </summary>
-          <ul>
-            {ocrRegions
-              .filter((region) => region.qaStatus === "cleanup_review")
-              .map((region) => (
-                <li key={region.id}>
-                  {region.qaFeedback ||
-                    "Uncertain lettering: inspect this OCR region before replacing it."}
-                </li>
-              ))}
-          </ul>
-        </details>
-      )}
       <div className="reader-workspace-frame-nhentai">
         {/* Left Sidebar (Global Controls) */}
         {showLeftSidebar && (
@@ -3393,17 +3439,20 @@ export const Reader: React.FC<ReaderProps> = ({
                     const isSelected = selectedItem?.id === item.id;
                     const isApproved = item.approved;
                     const qaStatus = item.regions.find(
-                      (r) =>
-                        r.qaStatus === "failed" ||
-                        r.qaStatus === "cleanup_review" ||
-                        r.qaStatus === "manual_review",
+                      (r) => r.qaStatus === "failed",
                     )
                       ? "failed"
-                      : item.regions.find((r) => r.qaStatus === "direct_fix")
-                        ? "direct_fix"
-                        : item.regions.find((r) => r.qaStatus === "passed")
-                          ? "passed"
-                          : null;
+                      : item.regions.find(
+                            (r) =>
+                              r.qaStatus === "cleanup_review" ||
+                              r.qaStatus === "manual_review",
+                          )
+                        ? "review"
+                        : item.regions.find((r) => r.qaStatus === "direct_fix")
+                          ? "direct_fix"
+                          : item.regions.find((r) => r.qaStatus === "passed")
+                            ? "passed"
+                            : null;
                     return (
                       <g
                         key={item.id}
@@ -3444,23 +3493,26 @@ export const Reader: React.FC<ReaderProps> = ({
                                 : "var(--primary)"
                               : qaStatus === "failed"
                                 ? "#ef4444"
-                                : qaStatus === "direct_fix"
-                                  ? "#f59e0b"
-                                  : isApproved
-                                    ? item.isConversation
-                                      ? "var(--conversation)"
-                                      : "var(--primary)"
-                                    : item.isConversation
-                                      ? "var(--conversation)"
-                                      : "var(--success)",
+                                : qaStatus === "review"
+                                  ? "var(--warning)"
+                                  : qaStatus === "direct_fix"
+                                    ? "#f59e0b"
+                                    : isApproved
+                                      ? item.isConversation
+                                        ? "var(--conversation)"
+                                        : "var(--primary)"
+                                      : item.isConversation
+                                        ? "var(--conversation)"
+                                        : "var(--success)",
                             strokeWidth:
                               isSelected || isApproved
                                 ? 2.5
-                                : qaStatus === "failed"
+                                : qaStatus === "failed" || qaStatus === "review"
                                   ? 2.5
                                   : 1.5,
                             strokeDasharray:
-                              !isSelected && qaStatus === "failed"
+                              !isSelected &&
+                              (qaStatus === "failed" || qaStatus === "review")
                                 ? "4 2"
                                 : undefined,
                           }}
@@ -3479,15 +3531,17 @@ export const Reader: React.FC<ReaderProps> = ({
                                   : "var(--primary)"
                                 : qaStatus === "failed"
                                   ? "#ef4444"
-                                  : qaStatus === "direct_fix"
-                                    ? "#f59e0b"
-                                    : isApproved
-                                      ? item.isConversation
-                                        ? "var(--conversation)"
-                                        : "var(--primary)"
-                                      : item.isConversation
-                                        ? "var(--conversation)"
-                                        : "var(--success)"
+                                  : qaStatus === "review"
+                                    ? "var(--warning)"
+                                    : qaStatus === "direct_fix"
+                                      ? "#f59e0b"
+                                      : isApproved
+                                        ? item.isConversation
+                                          ? "var(--conversation)"
+                                          : "var(--primary)"
+                                        : item.isConversation
+                                          ? "var(--conversation)"
+                                          : "var(--success)"
                             }
                           />
                           <text
@@ -3958,6 +4012,66 @@ export const Reader: React.FC<ReaderProps> = ({
                     );
                   });
                 })}
+
+                {/* Regions needing review stay findable with the OCR boxes off: an amber dashed
+                    outline and the region's number. Clicking opens it in the inspector. */}
+                {!(showOcr && !cleanScanlationView) &&
+                  reviewRegions.map((r) => {
+                    const isSelected = selectedItem?.id === `region-${r.id}`;
+                    return (
+                      <g
+                        key={`review-${r.id}`}
+                        onClick={() => selectRegionForReview(r)}
+                        style={{
+                          cursor: "pointer",
+                          pointerEvents:
+                            interactionMode !== "none" ? "none" : "auto",
+                        }}
+                      >
+                        <title>Needs review: click to inspect</title>
+                        <rect
+                          x={r.bboxX}
+                          y={r.bboxY}
+                          width={r.bboxW}
+                          height={r.bboxH}
+                          rx={4}
+                          style={{
+                            fill: isSelected
+                              ? "color-mix(in srgb, var(--warning) 18%, transparent)"
+                              : "color-mix(in srgb, var(--warning) 6%, transparent)",
+                            stroke: "var(--warning)",
+                            strokeWidth: isSelected ? 3 : 2,
+                            strokeDasharray: isSelected ? undefined : "6 4",
+                            vectorEffect: "non-scaling-stroke",
+                          }}
+                        />
+                        <g
+                          transform={`translate(${r.bboxX + 10}, ${r.bboxY + 10})`}
+                        >
+                          <circle
+                            cx="0"
+                            cy="0"
+                            r="9"
+                            fill="var(--warning)"
+                          />
+                          <text
+                            x="0"
+                            y="0"
+                            className="bubble-text-tag"
+                            style={{
+                              textAnchor: "middle",
+                              dominantBaseline: "central",
+                              fontSize: "10px",
+                              fontWeight: "bold",
+                              fill: "#ffffff",
+                            }}
+                          >
+                            {r.bubbleReadingOrder || "!"}
+                          </text>
+                        </g>
+                      </g>
+                    );
+                  })}
               </svg>
             </div>
           </div>
@@ -4001,6 +4115,8 @@ export const Reader: React.FC<ReaderProps> = ({
             ocrRegions={ocrRegions}
             isRedoingRegionOcr={isRedoingRegionOcr}
             handleRedoRegion={handleRedoRegion}
+            handleReviewRegion={handleReviewRegion}
+            isReviewingRegion={isReviewingRegion}
             isRedoingRegionTl={isRedoingRegionTl}
           />
         )}

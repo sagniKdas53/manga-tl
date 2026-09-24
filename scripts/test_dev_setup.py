@@ -57,6 +57,16 @@ class DevSetupTests(unittest.TestCase):
         self.assertEqual(updated["models"]["TL_LLM_MODEL"], "new-text")
         self.assertEqual((self.root / "secrets/db_password.txt").read_bytes(), original)
 
+    def test_qa_vlm_fallbacks_pass_through_only_when_catalogued(self):
+        catalog = json.loads((self.root / "config/providers.json").read_text())
+        catalog["providers"]["test"]["models"]["qaVLM"].append({"id": "backup"})
+        keys = {"TEST_API_KEY": "k"}
+        resolved = dev_setup.resolve_models(catalog, keys, {"QA_VLM_FALLBACK_MODELS": "backup, vision"})
+        self.assertEqual(resolved["QA_VLM_FALLBACK_MODELS"], "backup,vision")
+        self.assertNotIn("QA_VLM_FALLBACK_MODELS", dev_setup.resolve_models(catalog, keys, {}))
+        with self.assertRaises(ValueError):
+            dev_setup.resolve_models(catalog, keys, {"QA_VLM_FALLBACK_MODELS": "missing"})
+
     def test_explicit_overrides_and_fallbacks_remain_explicit(self):
         overrides = {"QA_MODE": "llm", "TL_LLM_MODEL_LIST": "text,other"}
         result = dev_setup.resolve_models(

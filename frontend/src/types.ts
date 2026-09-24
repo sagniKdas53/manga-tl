@@ -123,9 +123,14 @@ export interface OcrRegion {
     | "passed"
     | "failed"
     | "direct_fix"
+    | "fixed"
+    | "reject_sfx"
     | "manual_review"
     | "cleanup_review"
+    | "rejected"
     | null;
+  translationFailed?: boolean | null;
+  regionType?: string | null;
   qaScore?: number | null;
   qaFeedback?: string | null;
   bubbleId?: string | null;

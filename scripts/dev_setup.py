@@ -122,6 +122,22 @@ def resolve_models(catalog: dict, keys: dict, overrides: dict) -> dict[str, str]
         # Existing lists remain opt-in overrides; never generate a stale list from the catalog.
         if fallback:
             result[model_var + "_LIST"] = fallback
+    # Ordered vision-QA fallbacks, tried after the page's own model when it refuses a page,
+    # returns nothing, or leaves regions unjudged. Opt-in; each must be a catalog QA-VLM model.
+    fallbacks = overrides.get("QA_VLM_FALLBACK_MODELS", "").strip()
+    if fallbacks:
+        qa_provider = result.get("QA_MODEL_PROVIDER", "")
+        vlm_ids = {
+            entry["id"]
+            for entry in providers.get(qa_provider, {}).get("models", {}).get("qaVLM") or []
+        }
+        unknown = [m.strip() for m in fallbacks.split(",") if m.strip() not in vlm_ids]
+        if unknown:
+            raise ValueError(
+                f"QA_VLM_FALLBACK_MODELS names models absent from the {qa_provider} qaVLM catalog: "
+                + ", ".join(unknown)
+            )
+        result["QA_VLM_FALLBACK_MODELS"] = ",".join(m.strip() for m in fallbacks.split(","))
     result["QA_MODE"] = overrides.get("QA_MODE") or (
         "auto" if result.get("QA_LLM_MODEL") or result.get("QA_VLM_MODEL") else "none"
     )
