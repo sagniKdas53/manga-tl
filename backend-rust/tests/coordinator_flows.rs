@@ -1079,3 +1079,44 @@ async fn qa_rejects_incomplete_and_stale_verdicts() {
 
     cleanup_series(&pool, series_id).await;
 }
+
+#[tokio::test]
+async fn cleanup_review_prevents_a_subset_qa_pass() {
+    let Some((pool, _redis, state)) = app().await else {
+        return;
+    };
+    let (series_id, _, page_id, image_id) = seed_pipeline(&pool, Some("ja"), Some("en")).await;
+    let uncertain = Uuid::new_v4();
+    sqlx::query("INSERT INTO ocr_regions (id, page_id, text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, qa_status) VALUES ($1,$2,'uncertain','ja',0,0,20,20,'cleanup_review')")
+        .bind(uncertain).bind(page_id).execute(&pool).await.unwrap();
+    let target = Uuid::new_v4();
+    let (job, identity) = seed_stage_job(&pool, "qa", image_id, Some(page_id)).await;
+    let accounting = bind_qa(&pool, &job, image_id, page_id, &[target]).await;
+    let result = manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            identity,
+            manga_backend::jobs::coordinator::handle_qa_callback(
+                &state,
+                Some(&job),
+                image_id,
+                Some(page_id),
+                &[serde_json::json!({"regionId":target,"qaStatus":"passed","qaScore":1.0})],
+                None,
+                &accounting,
+            ),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        result, "MANUAL_REVIEW",
+        "clean translated subset cannot hide uncertain source regions"
+    );
+    let status: Option<String> =
+        sqlx::query_scalar("SELECT qa_status FROM ocr_regions WHERE id=$1")
+            .bind(uncertain)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(status.as_deref(), Some("cleanup_review"));
+    cleanup_series(&pool, series_id).await;
+}

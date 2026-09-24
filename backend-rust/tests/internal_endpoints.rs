@@ -378,6 +378,141 @@ async fn cleanup_series(pool: &sqlx::PgPool, series_id: Uuid) {
 
 use uuid::Uuid;
 
+/// An uncertain cleanup result preserves the source region for review while the other regions
+/// still make progress.  Its callback is complete and idempotent, but it must not silently lose
+/// the detector evidence or leave an obsolete patch attached to the source pixels.
+#[tokio::test]
+async fn cleanup_uncertain_preserves_diagnostics_and_continues_other_regions() {
+    let Some((app, pool, redis, _state)) = app().await else {
+        return;
+    };
+    let _guard = QUEUE_GUARD.lock().await;
+    let (series_id, _chapter_id, page_id, image_id) = seed_pipeline(&pool).await;
+    let uncertain_id = Uuid::new_v4();
+    let complete_id = Uuid::new_v4();
+    for (region_id, x) in [(uncertain_id, 2), (complete_id, 24)] {
+        sqlx::query(
+            "INSERT INTO ocr_regions (id, text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) \
+             VALUES ($1, '文字', 'ja', $2, 2, 12, 12, $3)",
+        )
+        .bind(region_id)
+        .bind(x)
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    let job_id = format!("cleanup-{}", Uuid::new_v4());
+    let cleanup_regions = serde_json::json!([
+        {"regionId": uncertain_id, "inputDigest": "uncertain-input"},
+        {"regionId": complete_id, "inputDigest": "complete-input"},
+    ]);
+    let payload = serde_json::json!({
+        "jobId": job_id,
+        "type": "cleanup",
+        "imageId": image_id,
+        "pageId": page_id,
+        "attempt": 1,
+        "maxAttempts": 3,
+        "inputGeneration": 0,
+        "leaseToken": job_id,
+        "cleanupInputDigest": "whole-input",
+        "cleanupRegions": cleanup_regions,
+    });
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, image_id, page_id, attempt, max_attempts, payload, \
+           input_generation, lease_token, lease_expires_at, heartbeat_at, started_at, created_at, updated_at) \
+         VALUES ($1, 'cleanup', 'PENDING', $2, $3, 1, 3, $4, 0, $1, \
+                 now() + interval '120 seconds', now(), NULL, now(), now())",
+    )
+    .bind(&job_id)
+    .bind(image_id)
+    .bind(page_id)
+    .bind(payload.to_string())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let response = serde_json::json!({
+        "jobId": job_id,
+        "imageId": image_id,
+        "pageId": page_id,
+        "cleanupInputDigest": "whole-input",
+        "regions": [
+            {"regionId": uncertain_id, "inputDigest": "uncertain-input", "status": "uncertain", "diagnostics": ["ctd:no-glyphs", "cleanup-review-required"]},
+            {"regionId": complete_id, "inputDigest": "complete-input", "status": "complete", "diagnostics": ["telea"]},
+        ],
+    });
+    let (status, _, body) = worker_runs(
+        &app,
+        &pool,
+        "/tlhub/api/internal/jobs/callback/cleanup",
+        &response,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (review, feedback, diagnostics, patch): (
+        Option<String>,
+        Option<String>,
+        Option<serde_json::Value>,
+        Option<String>,
+    ) = sqlx::query_as(
+        "SELECT qa_status, qa_feedback, cleanup_diagnostics, cleanup_patch_asset_id \
+             FROM ocr_regions WHERE id = $1",
+    )
+    .bind(uncertain_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(review.as_deref(), Some("cleanup_review"));
+    assert!(
+        feedback
+            .unwrap_or_default()
+            .contains("source pixels preserved")
+    );
+    assert_eq!(
+        diagnostics,
+        Some(serde_json::json!([
+            "ctd:no-glyphs",
+            "cleanup-review-required"
+        ]))
+    );
+    assert!(
+        patch.is_none(),
+        "uncertain cleanup must not leave an old patch active"
+    );
+
+    assert!(
+        pop_for_page(&redis, "queue:translation", page_id)
+            .await
+            .is_some(),
+        "the complete region still advances to translation"
+    );
+    let (duplicate, _, duplicate_body) = worker_post(
+        &app,
+        &pool,
+        "/tlhub/api/internal/jobs/callback/cleanup",
+        &response,
+    )
+    .await;
+    assert_eq!(duplicate, StatusCode::OK, "{duplicate_body}");
+    let translations: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM jobs WHERE image_id = $1 AND type = 'translation'",
+    )
+    .bind(image_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        translations, 1,
+        "duplicate review callback must not enqueue a second translation"
+    );
+
+    cleanup_series(&pool, series_id).await;
+}
+
 #[tokio::test]
 async fn internal_token_guard_rejects_with_exact_bytes() {
     let Some((app, _pool, _redis, _state)) = app().await else {

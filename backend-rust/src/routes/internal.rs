@@ -1071,15 +1071,34 @@ async fn apply_cleanup_callback(
             continue;
         }
         match outcome.get("status").and_then(Value::as_str).unwrap_or("") {
-            // A policy exclusion is a complete outcome, not a missing one.
-            "excluded" => {}
+            // A policy exclusion is a complete outcome, not a missing one.  It can also be the
+            // resolution of a prior cleanup review, so clear that marker and any old patch.
+            "excluded" => {
+                sqlx::query(
+                    "UPDATE ocr_regions SET cleanup_mask_asset_id = NULL, cleanup_mask_sha256 = NULL, \
+                       cleanup_mask_byte_length = NULL, cleanup_patch_asset_id = NULL, \
+                       cleanup_patch_sha256 = NULL, cleanup_patch_byte_length = NULL, \
+                       cleanup_bounds = NULL, cleanup_generator_sha256 = NULL, \
+                       cleanup_diagnostics = $2, qa_status = CASE WHEN qa_status = 'cleanup_review' THEN NULL ELSE qa_status END, \
+                       qa_feedback = CASE WHEN qa_status = 'cleanup_review' THEN NULL ELSE qa_feedback END \
+                     WHERE id = $1 AND page_id = $3",
+                )
+                .bind(region_id)
+                .bind(outcome.get("diagnostics").cloned())
+                .bind(page.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+            }
             status @ ("complete" | "degraded") => {
                 let changed = sqlx::query(
                     "UPDATE ocr_regions SET cleanup_mask_asset_id = $2, cleanup_mask_sha256 = $3, \
                        cleanup_mask_byte_length = $4, cleanup_patch_asset_id = $5, \
                        cleanup_patch_sha256 = $6, cleanup_patch_byte_length = $7, \
                        cleanup_bounds = $8, cleanup_generator_sha256 = $9, \
-                       cleanup_diagnostics = $10 \
+                       cleanup_diagnostics = $10, \
+                       qa_status = CASE WHEN qa_status = 'cleanup_review' THEN NULL ELSE qa_status END, \
+                       qa_feedback = CASE WHEN qa_status = 'cleanup_review' THEN NULL ELSE qa_feedback END \
                      WHERE id = $1 AND page_id = $11",
                 )
                 .bind(region_id)
@@ -1111,7 +1130,59 @@ async fn apply_cleanup_callback(
                     ));
                 }
             }
-            "failed" => problems.push(format!("region {region_id} failed cleanup")),
+            // `uncertain` is a deterministic content finding, not an infrastructure failure:
+            // retain the source pixels, make the review state visible, and continue the other
+            // regions through translation.  It is deliberately distinct from QA's
+            // `manual_review`, which remains the result of a QA verdict.
+            "uncertain" => {
+                let changed = sqlx::query(
+                    "UPDATE ocr_regions SET cleanup_mask_asset_id = NULL, cleanup_mask_sha256 = NULL, \
+                       cleanup_mask_byte_length = NULL, cleanup_patch_asset_id = NULL, \
+                       cleanup_patch_sha256 = NULL, cleanup_patch_byte_length = NULL, \
+                       cleanup_bounds = NULL, cleanup_generator_sha256 = NULL, \
+                       cleanup_diagnostics = $2, qa_status = 'cleanup_review', \
+                       qa_feedback = $4 \
+                     WHERE id = $1 AND page_id = $3",
+                )
+                .bind(region_id)
+                .bind(outcome.get("diagnostics").cloned())
+                .bind(page.id)
+                .bind(format!(
+                    "Cleanup review required: source pixels preserved. {}",
+                    outcome.get("diagnostics").and_then(Value::as_array)
+                        .map(|items| items.iter().filter_map(Value::as_str).collect::<Vec<_>>().join("; "))
+                        .unwrap_or_default()
+                ))
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+                if changed.rows_affected() != 1 {
+                    problems.push(format!(
+                        "region {region_id} reported uncertain cleanup but no longer belongs to page {}",
+                        page.id
+                    ));
+                }
+            }
+            "failed" => {
+                let changed = sqlx::query(
+                    "UPDATE ocr_regions SET cleanup_diagnostics = $2 \
+                     WHERE id = $1 AND page_id = $3",
+                )
+                .bind(region_id)
+                .bind(outcome.get("diagnostics").cloned())
+                .bind(page.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+                if changed.rows_affected() != 1 {
+                    problems.push(format!(
+                        "region {region_id} failed cleanup but no longer belongs to page {}",
+                        page.id
+                    ));
+                } else {
+                    problems.push(format!("region {region_id} failed cleanup"));
+                }
+            }
             other => problems.push(format!(
                 "region {region_id} reported unknown status {other:?}"
             )),

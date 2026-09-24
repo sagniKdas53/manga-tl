@@ -1806,6 +1806,7 @@ fn cleanup_region_entry(input_generation: i32, region: &OcrRegion) -> Value {
         "width": region.bbox_w,
         "height": region.bbox_h,
         "policyAction": action,
+        "ocrText": region.text,
         "inputDigest": hex::encode(Sha256::digest(digest_input.as_bytes())),
     })
 }
@@ -2382,6 +2383,17 @@ pub async fn handle_translation_callback(
         .filter(|r| !r.get("translationFailed").map(falsy).unwrap_or(false))
         .count();
 
+    // Cleanup's `uncertain` outcome deliberately preserves source pixels and asks for review.
+    // Unlike ordinary OCR/translation absence, it must never be presented as a finished clean
+    // page merely because no remaining region produced an English layer.
+    let cleanup_reviews: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM ocr_regions WHERE page_id = $1 AND qa_status = 'cleanup_review'",
+    )
+    .bind(page.as_ref().map(|p| p.id))
+    .fetch_one(&state.pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
     // AUDIT-B13: a page with nothing translatable on it is a warning, not a failure.
     //
     // This used to mark the job FAILED, which put a red row in the queue that the user had to
@@ -2394,6 +2406,41 @@ pub async fn handle_translation_callback(
     // Note this is the *all regions failed* case. Zero regions is handled earlier, and quietly,
     // by the OCR callback — that page never enqueues a translation at all.
     if success_count == 0 {
+        if cleanup_reviews > 0 {
+            let message = format!(
+                "Cleanup review required for {cleanup_reviews} region(s); source pixels were preserved and no translation was produced"
+            );
+            if let Some(mut job) =
+                resolve_callback_job(&state.pool, job_id, image_id, "translation").await
+            {
+                sqlx::query("UPDATE jobs SET error=$2, updated_at=now() WHERE id=$1")
+                    .bind(&job.id)
+                    .bind(&message)
+                    .execute(&state.pool)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                job.error = Some(message.clone());
+                state
+                    .sse
+                    .emit_event_for_image(
+                        image_id,
+                        "job_update",
+                        &serde_json::to_string(&job).unwrap_or_default(),
+                    )
+                    .await;
+            }
+            state
+                .sse
+                .emit_notification_for_image(
+                    image_id,
+                    "WARNING",
+                    "Cleanup Review Required",
+                    &message,
+                    None,
+                )
+                .await;
+            return Ok(());
+        }
         tracing::warn!(
             "No region on image {image_id} produced a translation — completing with a warning rather than failing"
         );
@@ -4074,6 +4121,16 @@ pub async fn handle_qa_callback(
     // prepare_hybrid_qa. None (page unresolved) still works: both helpers read it as "any
     // translation layer".
     let qa_page = resolve_page_for_callback(&state.pool, image_id, callback_page_id).await;
+    let cleanup_review_regions: Vec<Uuid> = match &qa_page {
+        Some(page) => sqlx::query_scalar(
+            "SELECT id FROM ocr_regions WHERE page_id = $1 AND qa_status = 'cleanup_review'",
+        )
+        .bind(page.id)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?,
+        None => Vec::new(),
+    };
     let latest_translation = match &qa_page {
         Some(page) => {
             let layers: Vec<Layer> = sqlx::query_as("SELECT * FROM layers WHERE page_id = $1")
@@ -4235,6 +4292,21 @@ pub async fn handle_qa_callback(
         }
     }
 
+    // These regions were intentionally omitted from translation and therefore are absent from
+    // the QA request's expected visible-element set.  Count them here so QA cannot call the
+    // surviving subset a pass.  The marker is reset only by a later successful/excluded cleanup
+    // callback, never by this QA response.
+    if !cleanup_review_regions.is_empty() {
+        needs_manual_intervention = true;
+        failed_regions_list.extend(cleanup_review_regions.iter().map(|region_id| {
+            json!({
+                "regionId": region_id.to_string(),
+                "qaStatus": "cleanup_review",
+                "qaFeedback": "Cleanup review required: source pixels preserved after uncertain cleanup result",
+            })
+        }));
+    }
+
     // A QA pass that scored nothing is not a QA pass.
     let qa_unusable = discarded_results > 0 && stats[0] == 0;
     if qa_unusable {
@@ -4291,6 +4363,7 @@ pub async fn handle_qa_callback(
             qa_node.insert("failed".into(), json!(stats[2]));
             qa_node.insert("direct_fix".into(), json!(stats[3]));
             qa_node.insert("manual_review".into(), json!(stats[4]));
+            qa_node.insert("cleanup_review".into(), json!(cleanup_review_regions.len()));
             qa_node.insert(
                 "avg_score".into(),
                 json!(if score_count > 0 {

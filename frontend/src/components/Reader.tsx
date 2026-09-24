@@ -3182,6 +3182,37 @@ export const Reader: React.FC<ReaderProps> = ({
       />
 
       {/* Main Workspace split */}
+      {ocrRegions.some((region) => region.qaStatus === "cleanup_review") && (
+        <details
+          role="status"
+          style={{
+            padding: "8px 16px",
+            background: "#fff4d6",
+            color: "#663c00",
+          }}
+        >
+          <summary>
+            Cleanup review required for{" "}
+            {
+              ocrRegions.filter(
+                (region) => region.qaStatus === "cleanup_review",
+              ).length
+            }{" "}
+            region(s). Source pixels preserved; other regions can continue
+            translating.
+          </summary>
+          <ul>
+            {ocrRegions
+              .filter((region) => region.qaStatus === "cleanup_review")
+              .map((region) => (
+                <li key={region.id}>
+                  {region.qaFeedback ||
+                    "Uncertain lettering: inspect this OCR region before replacing it."}
+                </li>
+              ))}
+          </ul>
+        </details>
+      )}
       <div className="reader-workspace-frame-nhentai">
         {/* Left Sidebar (Global Controls) */}
         {showLeftSidebar && (
@@ -3364,6 +3395,7 @@ export const Reader: React.FC<ReaderProps> = ({
                     const qaStatus = item.regions.find(
                       (r) =>
                         r.qaStatus === "failed" ||
+                        r.qaStatus === "cleanup_review" ||
                         r.qaStatus === "manual_review",
                     )
                       ? "failed"

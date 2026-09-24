@@ -119,7 +119,13 @@ export interface OcrRegion {
   bubbleW?: number | null;
   bubbleH?: number | null;
   backgroundColor?: string | null;
-  qaStatus?: "passed" | "failed" | "direct_fix" | "manual_review" | null;
+  qaStatus?:
+    | "passed"
+    | "failed"
+    | "direct_fix"
+    | "manual_review"
+    | "cleanup_review"
+    | null;
   qaScore?: number | null;
   qaFeedback?: string | null;
   bubbleId?: string | null;
