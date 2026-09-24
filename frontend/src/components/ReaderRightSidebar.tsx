@@ -31,7 +31,11 @@ import SidebarSection from "./SidebarSection";
 import type { SystemStyleObject, Theme } from "@mui/system";
 import type { Layer, LayerElement, OcrRegion } from "../types";
 import { inReadingOrder, regionRowStatus } from "../utils/regionReview";
-import type { IssueAction, RegionIssue } from "../utils/regionIssues";
+import {
+  translationElementByRegion,
+  type IssueAction,
+  type RegionIssue,
+} from "../utils/regionIssues";
 import { IssueCard, IssueList, MergePanel } from "./ReaderIssues";
 
 // --- AUDIT-F2: static sx literals hoisted to module scope --------------------
@@ -487,6 +491,7 @@ export interface ReaderRightSidebarProps {
     element?: LayerElement,
   ) => void;
   handleSaveIssueTranslation: (issue: RegionIssue, text: string) => void;
+  handleSaveSourceText: (issue: RegionIssue, text: string) => void;
   isReviewingRegion: boolean;
   mergeMode: boolean;
   mergeSelection: string[];
@@ -550,6 +555,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     onStepIssue,
     handleRegionAction,
     handleSaveIssueTranslation,
+    handleSaveSourceText,
     isReviewingRegion,
     mergeMode,
     mergeSelection,
@@ -558,6 +564,12 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     onConfirmMerge,
     isMerging,
   } = props;
+
+  // The element drawing each region, for tools offered on any region (not only issues).
+  const drawnElementByRegion = React.useMemo(
+    () => translationElementByRegion(props.layers),
+    [props.layers],
+  );
 
   const regionById = React.useMemo(
     () => new Map(ocrRegions.map((r) => [r.id, r])),
@@ -1854,6 +1866,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     handleRegionAction(issue.region, action, issue.element)
                   }
                   onSaveTranslation={handleSaveIssueTranslation}
+                  onSaveSourceText={handleSaveSourceText}
                   onStep={onStepIssue}
                 />
               );
@@ -1866,6 +1879,24 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   busy={isReviewingRegion}
                   onDelete={(region) => handleRegionAction(region, "delete")}
                 />
+              );
+            }
+            // Inpainting can leave lettering behind on a region nothing flagged; the plain mask
+            // is offered wherever there is a translation for the plate to sit under.
+            const drawn = drawnElementByRegion.get(r.id);
+            if (drawn?.visible === true && (drawn.text || "").trim()) {
+              return (
+                <Button
+                  key={`mask-${r.id}`}
+                  variant="outlined"
+                  size="small"
+                  disabled={isReviewingRegion}
+                  onClick={() => handleRegionAction(r, "mask", drawn)}
+                  title="Cover the original lettering with a plate of the bubble colour, in the editor and the export"
+                  sx={{ textTransform: "none", alignSelf: "flex-start" }}
+                >
+                  Cover with plain mask
+                </Button>
               );
             }
             return null;

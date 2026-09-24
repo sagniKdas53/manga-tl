@@ -9,6 +9,7 @@ export type IssueAction =
   | "redo-translation"
   | "redo-ocr"
   | "edit"
+  | "edit-source"
   | "fit";
 
 export type IssueKind =
@@ -38,6 +39,7 @@ export const ISSUE_ACTION_LABELS: Record<IssueAction, string> = {
   "redo-translation": "Redo translation",
   "redo-ocr": "Redo OCR",
   edit: "Type translation",
+  "edit-source": "Type source text",
   fit: "Shrink to fit",
 };
 
@@ -46,10 +48,13 @@ export const ISSUE_ACTION_LABELS: Record<IssueAction, string> = {
 const FRAGMENT_FEEDBACK =
   /fragment|single sentence|part of (a|the|one) (longer )?sentence/i;
 
+// No "mask" here: the scene only draws a region's cleanup under an element with text, so a plate
+// on an untranslated region would never reach the render.
 const NO_TEXT_ACTIONS: IssueAction[] = [
   "redo-translation",
   "edit",
   "redo-ocr",
+  "edit-source",
   "reject",
   "delete",
 ];
@@ -90,7 +95,15 @@ export function regionIssue(
           region.qaFeedback && FRAGMENT_FEEDBACK.test(region.qaFeedback)
             ? "This reads like one piece of a longer sentence. Use Merge regions to join it with its neighbours; the block is then cleaned and translated as one."
             : null,
-        actions: ["redo-translation", "edit", "accept", "redo-ocr", "delete"],
+        actions: [
+          "redo-translation",
+          "edit",
+          "accept",
+          "mask",
+          "redo-ocr",
+          "edit-source",
+          "delete",
+        ],
       };
   }
   if (region.translationFailed) {
@@ -121,7 +134,7 @@ export function regionIssue(
       explanation: element?.autoSize
         ? "The translation is taller than its box even at the smallest size (the red dotted outline). Make the box bigger or the text shorter."
         : "The translation is taller than its box (the red dotted outline). Shrink it to fit, or make the box bigger or the text shorter.",
-      actions: element?.autoSize ? ["edit"] : ["fit", "edit"],
+      actions: element?.autoSize ? ["edit", "mask"] : ["fit", "edit", "mask"],
     };
   }
   return null;

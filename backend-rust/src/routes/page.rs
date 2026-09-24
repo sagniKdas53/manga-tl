@@ -1777,10 +1777,12 @@ pub async fn review_ocr_region(
                 .execute(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
-                // `word_wrap` is the Reader's per-element "draw my plate" switch.
+                // `word_wrap` is the Reader's per-element "draw my plate" switch. Shown layers only:
+                // hidden ones are history and keep what they had.
                 sqlx::query(
                     "UPDATE layer_elements e SET mask_polygon = $2, background_color = $3, word_wrap = TRUE \
-                     FROM layers l WHERE e.layer_id = l.id AND l.type NOT ILIKE 'ocr' AND e.region_id = $1",
+                     FROM layers l WHERE e.layer_id = l.id AND l.type NOT ILIKE 'ocr' AND l.visible \
+                       AND e.region_id = $1",
                 )
                 .bind(id)
                 .bind(polygon)
@@ -2089,15 +2091,15 @@ async fn queue_region_cleanup(
     Ok(())
 }
 
-/// Shows the region's translation elements that have text; an empty one stays hidden, since
-/// showing it would only paint a plate with nothing on it.
+/// Shows the region's translation elements that have text, on shown layers only (hidden layers are
+/// history); an empty one stays hidden, since showing it would only paint a plate with nothing on it.
 async fn show_translations(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     region_id: Uuid,
 ) -> Result<(), String> {
     sqlx::query(
         "UPDATE layer_elements e SET visible = TRUE FROM layers l \
-         WHERE e.layer_id = l.id AND l.type ILIKE 'translation' AND e.region_id = $1 \
+         WHERE e.layer_id = l.id AND l.type ILIKE 'translation' AND l.visible AND e.region_id = $1 \
            AND COALESCE(TRIM(e.text), '') <> ''",
     )
     .bind(region_id)

@@ -138,6 +138,8 @@ export const IssueCard: React.FC<{
   busy: boolean;
   onAction: (issue: RegionIssue, action: IssueAction) => void;
   onSaveTranslation: (issue: RegionIssue, text: string) => void;
+  /** "Type source text": correct what OCR read; the region is then translated again. */
+  onSaveSourceText: (issue: RegionIssue, text: string) => void;
   onStep: (delta: -1 | 1) => void;
 }> = ({
   issue,
@@ -146,9 +148,13 @@ export const IssueCard: React.FC<{
   busy,
   onAction,
   onSaveTranslation,
+  onSaveSourceText,
   onStep,
 }) => {
-  const [draft, setDraft] = React.useState<string | null>(null);
+  const [draft, setDraft] = React.useState<{
+    field: "translation" | "source";
+    text: string;
+  } | null>(null);
   const [showDetails, setShowDetails] = React.useState(false);
   const number = issue.region.bubbleReadingOrder ?? "?";
 
@@ -262,17 +268,19 @@ export const IssueCard: React.FC<{
             minRows={2}
             size="small"
             autoFocus
-            label="Translation"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            label={draft.field === "source" ? "Source text" : "Translation"}
+            value={draft.text}
+            onChange={(e) => setDraft({ ...draft, text: e.target.value })}
           />
           <Box sx={{ display: "flex", gap: 1 }}>
             <Button
               variant="contained"
               size="small"
-              disabled={busy || !draft.trim()}
+              disabled={busy || !draft.text.trim()}
               onClick={() => {
-                onSaveTranslation(issue, draft.trim());
+                (draft.field === "source"
+                  ? onSaveSourceText
+                  : onSaveTranslation)(issue, draft.text.trim());
                 setDraft(null);
               }}
               sx={{ textTransform: "none", boxShadow: "none" }}
@@ -305,8 +313,16 @@ export const IssueCard: React.FC<{
               disabled={busy}
               onClick={() =>
                 action === "edit"
-                  ? setDraft(issue.element?.text || "")
-                  : onAction(issue, action)
+                  ? setDraft({
+                      field: "translation",
+                      text: issue.element?.text || "",
+                    })
+                  : action === "edit-source"
+                    ? setDraft({
+                        field: "source",
+                        text: issue.region.text || "",
+                      })
+                    : onAction(issue, action)
               }
               sx={{
                 textTransform: "none",

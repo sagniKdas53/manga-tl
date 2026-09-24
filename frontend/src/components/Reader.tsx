@@ -3170,7 +3170,8 @@ export const Reader: React.FC<ReaderProps> = ({
       await handleRedoRegion(r, action === "redo-ocr" ? "ocr" : "translation");
       return;
     }
-    if (action === "edit") return; // the card opens its own editor
+    // The card opens its own editor for these.
+    if (action === "edit" || action === "edit-source") return;
     setIsReviewingRegion(true);
     try {
       if (action === "fit") {
@@ -3245,6 +3246,34 @@ export const Reader: React.FC<ReaderProps> = ({
     } finally {
       setIsReviewingRegion(false);
     }
+  };
+
+  /** "Type source text": correct what OCR read, then translate the region again from it. */
+  const handleSaveSourceText = async (issue: RegionIssue, text: string) => {
+    setIsReviewingRegion(true);
+    try {
+      const res = await safeFetch(`/api/ocr-regions/${issue.region.id}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok)
+        throw new Error(`Saving the source text failed (${res.status})`);
+    } catch (err) {
+      console.error("Saving the source text failed:", err);
+      showInfo(
+        "Could Not Save the Source Text",
+        "The region was left as it was. Please try again.",
+        "error",
+      );
+      return;
+    } finally {
+      setIsReviewingRegion(false);
+    }
+    await handleRedoRegion({ ...issue.region, text }, "translation");
   };
 
   /** Merge the picked fragments into one block; it is cleaned and translated again as a whole. */
@@ -4339,6 +4368,7 @@ export const Reader: React.FC<ReaderProps> = ({
             onStepIssue={handleStepIssue}
             handleRegionAction={handleRegionAction}
             handleSaveIssueTranslation={handleSaveIssueTranslation}
+            handleSaveSourceText={handleSaveSourceText}
             isReviewingRegion={isReviewingRegion}
             mergeMode={mergeMode}
             mergeSelection={mergeSelection}

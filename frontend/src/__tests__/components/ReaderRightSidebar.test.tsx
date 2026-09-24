@@ -44,6 +44,7 @@ describe("ReaderRightSidebar", () => {
         onStepIssue={vi.fn()}
         handleRegionAction={vi.fn()}
         handleSaveIssueTranslation={vi.fn()}
+        handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
         onToggleMergeMode={vi.fn()}
@@ -132,6 +133,7 @@ describe("ReaderRightSidebar", () => {
         onStepIssue={vi.fn()}
         handleRegionAction={vi.fn()}
         handleSaveIssueTranslation={vi.fn()}
+        handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
         onToggleMergeMode={vi.fn()}
@@ -215,6 +217,7 @@ describe("ReaderRightSidebar", () => {
         onStepIssue={vi.fn()}
         handleRegionAction={vi.fn()}
         handleSaveIssueTranslation={vi.fn()}
+        handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
         onToggleMergeMode={vi.fn()}
@@ -284,6 +287,7 @@ describe("ReaderRightSidebar", () => {
         onStepIssue={vi.fn()}
         handleRegionAction={vi.fn()}
         handleSaveIssueTranslation={vi.fn()}
+        handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
         onToggleMergeMode={vi.fn()}
@@ -338,6 +342,7 @@ describe("ReaderRightSidebar", () => {
         onStepIssue={vi.fn()}
         handleRegionAction={vi.fn()}
         handleSaveIssueTranslation={vi.fn()}
+        handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
         onToggleMergeMode={vi.fn()}
@@ -421,6 +426,7 @@ describe("ReaderRightSidebar", () => {
         onStepIssue={vi.fn()}
         handleRegionAction={vi.fn()}
         handleSaveIssueTranslation={vi.fn()}
+        handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
         onToggleMergeMode={vi.fn()}
@@ -540,6 +546,7 @@ describe("ReaderRightSidebar", () => {
         onStepIssue={vi.fn()}
         handleRegionAction={vi.fn()}
         handleSaveIssueTranslation={vi.fn()}
+        handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
         onToggleMergeMode={vi.fn()}
@@ -638,6 +645,7 @@ describe("ReaderRightSidebar", () => {
         onStepIssue={vi.fn()}
         handleRegionAction={vi.fn()}
         handleSaveIssueTranslation={vi.fn()}
+        handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
         onToggleMergeMode={vi.fn()}
@@ -726,6 +734,7 @@ describe("ReaderRightSidebar", () => {
         onStepIssue: vi.fn(),
         handleRegionAction: vi.fn(),
         handleSaveIssueTranslation: vi.fn(),
+        handleSaveSourceText: vi.fn(),
         isReviewingRegion: false,
         mergeMode: false,
         mergeSelection: [],

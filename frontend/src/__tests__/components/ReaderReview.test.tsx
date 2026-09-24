@@ -86,6 +86,7 @@ function sidebar(overrides: Partial<ReaderRightSidebarProps>) {
     onStepIssue: vi.fn(),
     handleRegionAction: vi.fn(),
     handleSaveIssueTranslation: vi.fn(),
+    handleSaveSourceText: vi.fn(),
     isReviewingRegion: false,
     mergeMode: false,
     mergeSelection: [],
@@ -296,7 +297,60 @@ describe("issues view", () => {
       ["f", "overflow"],
     ]);
     expect(issues[2].hint).toMatch(/Merge regions/);
-    expect(issues[3].actions).toEqual(["fit", "edit"]);
+    expect(issues[3].actions).toEqual(["fit", "edit", "mask"]);
+    // A plate needs text over it to be drawn, so an untranslated region is not offered one.
+    expect(issues[1].actions).not.toContain("mask");
+  });
+
+  it("corrects the source text of a flagged region", () => {
+    const flagged = region("r1", 2, { qaStatus: "manual_review" });
+    const issue = regionIssue(flagged, element("e1", "r1", "Hi", true), false)!;
+    const props = sidebar({
+      ocrRegions: [flagged],
+      issues: [issue],
+      selectedItem: {
+        id: "region-r1",
+        isConversation: false,
+        regions: [flagged],
+        bboxX: 0,
+        bboxY: 0,
+        bboxW: 10,
+        bboxH: 10,
+      },
+    });
+    const card = screen.getByRole("status");
+    fireEvent.click(within(card).getByText("Type source text"));
+    const field = within(card).getByLabelText("Source text");
+    expect(field).toHaveValue("source 2");
+    fireEvent.change(field, { target: { value: "正しい文" } });
+    fireEvent.click(within(card).getByText("Save"));
+    expect(props.handleSaveSourceText).toHaveBeenCalledWith(issue, "正しい文");
+  });
+
+  it("offers the plain mask on a region nothing flagged", () => {
+    const fine = region("r1", 1, { qaStatus: "passed" });
+    const tlLayer = {
+      id: "tl",
+      type: "translation",
+      visible: true,
+      zOrder: 2,
+    } as unknown as Layer;
+    const drawn = element("e1", "r1", "Hello", true);
+    const props = sidebar({
+      ocrRegions: [fine],
+      layers: [{ layer: tlLayer, elements: [drawn] }],
+      selectedItem: {
+        id: "region-r1",
+        isConversation: false,
+        regions: [fine],
+        bboxX: 0,
+        bboxY: 0,
+        bboxW: 10,
+        bboxH: 10,
+      },
+    });
+    fireEvent.click(screen.getByText("Cover with plain mask"));
+    expect(props.handleRegionAction).toHaveBeenCalledWith(fine, "mask", drawn);
   });
 
   it("resolves each region to the element that is drawn", () => {

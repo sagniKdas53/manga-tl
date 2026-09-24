@@ -310,6 +310,26 @@ async fn plain_mask_becomes_the_regions_cleanup() {
         Some("cleanup_review"),
     )
     .await;
+    // A hidden history layer drawing the same region must be left as it was.
+    let history = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) \
+         VALUES ($1, 'translation', 'en', FALSE, 0, '{}'::jsonb, $2, now())",
+    )
+    .bind(history)
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, word_wrap, layer_id, region_id) \
+         VALUES (uuid_generate_v4(), 'Old', 40, 50, 60, 24, FALSE, FALSE, $1, $2)",
+    )
+    .bind(history)
+    .bind(region)
+    .execute(&pool)
+    .await
+    .unwrap();
     let before = revision(&pool, page_id).await;
     let token = translator(&pool).await;
 
@@ -355,6 +375,17 @@ async fn plain_mask_becomes_the_regions_cleanup() {
     assert_eq!(colour.as_deref(), Some("#fdfdfd"));
     assert_eq!((plate_on, visible), (Some(true), Some(true)));
     assert!(revision(&pool, page_id).await > before);
+    let untouched: (Option<serde_json::Value>, Option<bool>) =
+        sqlx::query_as("SELECT mask_polygon, visible FROM layer_elements WHERE layer_id = $1")
+            .bind(history)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        untouched,
+        (None, Some(false)),
+        "history layers keep what they had"
+    );
 
     cleanup_series(&pool, series_id).await;
 }
