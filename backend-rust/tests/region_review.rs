@@ -153,6 +153,14 @@ async fn worker_post(
     finish(app.clone().oneshot(request).await.unwrap()).await
 }
 
+async fn render_jobs(pool: &sqlx::PgPool, image_id: Uuid) -> i64 {
+    sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE image_id = $1 AND type = 'render'")
+        .bind(image_id)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
 async fn finish(response: axum::http::Response<Body>) -> (StatusCode, String) {
     let status = response.status();
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
@@ -446,7 +454,7 @@ async fn keeping_the_translation_clears_the_flag() {
 /// translation, not the page's; the redone translation advances the page so it renders.
 #[tokio::test]
 async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
-    let Some((app, pool, _state)) = app().await else {
+    let Some((app, pool, state)) = app().await else {
         return;
     };
     let (series_id, page_id, image_id, ocr, tl) = seed_page(&pool).await;
@@ -484,8 +492,54 @@ async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
         None,
     )
     .await;
+    // A hidden history layer that drew the first two fragments before.
+    let history = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) \
+         VALUES ($1, 'translation', 'en', FALSE, 0, '{}'::jsonb, $2, now())",
+    )
+    .bind(history)
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    for (region, text) in [(first, "Old a"), (second, "Old b")] {
+        sqlx::query(
+            "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, word_wrap, layer_id, region_id) \
+             VALUES (uuid_generate_v4(), $1, 1, 2, 3, 4, FALSE, FALSE, $2, $3)",
+        )
+        .bind(text)
+        .bind(history)
+        .bind(region)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
     let before = revision(&pool, page_id).await;
     let token = translator(&pool).await;
+
+    // A dry run shows the order and the text and changes nothing.
+    let (status, body) = post(
+        &app,
+        &format!("/tlhub/api/pages/{page_id}/regions/merge"),
+        &token,
+        serde_json::json!({"regionIds": [third, first, second], "dryRun": true}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let preview: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        preview["order"],
+        serde_json::json!([first.to_string(), second.to_string(), third.to_string()])
+    );
+    assert_eq!(preview["text"], "課外活動なければだろう");
+    let untouched: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ocr_regions WHERE page_id = $1")
+        .bind(page_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(untouched, 3, "a dry run writes nothing");
+    assert_eq!(revision(&pool, page_id).await, before);
 
     let (status, body) = post(
         &app,
@@ -495,6 +549,44 @@ async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
+
+    let history_rows: Vec<(Option<String>, Option<Uuid>, i32)> = sqlx::query_as(
+        "SELECT text, region_id, max_height FROM layer_elements WHERE layer_id = $1 ORDER BY text",
+    )
+    .bind(history)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        history_rows,
+        vec![
+            (Some("Old a".to_string()), Some(first), 4),
+            (Some("Old b".to_string()), None, 4)
+        ],
+        "history keeps what it drew; the absorbed fragment's row is detached, not deleted"
+    );
+
+    // While the block is still being cleaned and translated, the page is not rendered (and so not
+    // judged by QA) however long ago it was edited.
+    sqlx::query("UPDATE pages SET last_edited_at = now() - interval '1 hour' WHERE id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    manga_backend::jobs::recovery::process_pending_renders(&state).await;
+    assert_eq!(render_jobs(&pool, image_id).await, 0, "no render mid-merge");
+    // However long the cleanup has queued behind other pages.
+    sqlx::query("UPDATE jobs SET created_at = now() - interval '2 hours', updated_at = NULL WHERE image_id = $1 AND type = 'cleanup'")
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    manga_backend::jobs::recovery::process_pending_renders(&state).await;
+    assert_eq!(
+        render_jobs(&pool, image_id).await,
+        0,
+        "a long-queued cleanup still holds the render"
+    );
 
     let regions: Vec<RegionRow> = sqlx::query_as(
         "SELECT id, text, bbox_x, bbox_y, bbox_w, bbox_h, qa_status FROM ocr_regions WHERE page_id = $1",
@@ -598,5 +690,30 @@ async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
     assert_eq!(shown, vec!["One whole sentence.".to_string()]);
     assert!(revision(&pool, page_id).await > after_cleanup);
 
+    // Once the work is done the page renders, once.
+    sqlx::query(
+        "UPDATE jobs SET status = 'COMPLETED' WHERE image_id = $1 AND status IN ('PENDING', 'PROCESSING')",
+    )
+    .bind(image_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE pages SET last_edited_at = now() - interval '1 hour' WHERE id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    manga_backend::jobs::recovery::process_pending_renders(&state).await;
+    assert_eq!(
+        render_jobs(&pool, image_id).await,
+        1,
+        "one render after the merge settles"
+    );
+
+    sqlx::query("DELETE FROM page_render_jobs WHERE page_id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
     cleanup_series(&pool, series_id).await;
 }

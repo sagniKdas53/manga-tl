@@ -67,6 +67,7 @@ services:
       WORKER_API_SECRET_FILE: /run/secrets/worker_api_secret
       WORKER_URLS: http://worker:8000
       WORKER_POLL_MS: ${WORKER_POLL_MS:-2000}
+      RENDER_DEBOUNCE_SECONDS: ${RENDER_DEBOUNCE_SECONDS:-30}
       CONTEXT_PATH: ${CONTEXT_PATH:-/tlhub}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     secrets: [ db_password, minio_password, jwt_secret, internal_api_token, worker_api_secret ]

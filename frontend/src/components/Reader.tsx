@@ -26,6 +26,7 @@ import {
 import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
 import { paintLayerMask } from "../utils/maskPaint";
 import { elementFit } from "../utils/elementFit";
+import type { MergePreview } from "./ReaderIssues";
 import {
   regionIssues,
   translationElementByRegion,
@@ -895,6 +896,55 @@ export const Reader: React.FC<ReaderProps> = ({
         : [...prev, regionId],
     );
   }, []);
+  // The order a merge will read the picked pieces in comes from the backend's dry run, the same
+  // code that merges, so what is shown is what will happen. Asked again whenever the pick changes.
+  const [fetchedPreview, setFetchedPreview] = useState<MergePreview | null>(
+    null,
+  );
+  const mergePageId = selectedPage?.id;
+  const wantsPreview = mergeMode && !!mergePageId && mergeSelection.length >= 2;
+  useEffect(() => {
+    if (!wantsPreview) return;
+    let stale = false;
+    const timer = window.setTimeout(() => {
+      void safeFetch(`/api/pages/${mergePageId}/regions/merge`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ regionIds: mergeSelection, dryRun: true }),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((body: { order?: string[]; text?: string } | null) => {
+          if (stale) return;
+          setFetchedPreview(
+            body?.order ? { order: body.order, text: body.text ?? "" } : null,
+          );
+        })
+        .catch(() => {
+          if (!stale) setFetchedPreview(null);
+        });
+    }, 200);
+    return () => {
+      stale = true;
+      window.clearTimeout(timer);
+    };
+  }, [wantsPreview, mergePageId, mergeSelection, user.token]);
+  // Only a preview of exactly the current pick counts; an older answer is not this pick's order.
+  const mergePreview =
+    wantsPreview &&
+    fetchedPreview &&
+    fetchedPreview.order.length === mergeSelection.length &&
+    fetchedPreview.order.every((id) => mergeSelection.includes(id))
+      ? fetchedPreview
+      : null;
+  // Picked piece → its place in the reading order (1-based), for the numbers on the page.
+  const mergePosition = React.useMemo(() => {
+    const positions = new Map<string, number>();
+    mergePreview?.order.forEach((id, i) => positions.set(id, i + 1));
+    return positions;
+  }, [mergePreview]);
 
   const renderItems = React.useMemo(() => {
     if (!groupByConversation || filteredConversations.length === 0) {
@@ -4263,10 +4313,34 @@ export const Reader: React.FC<ReaderProps> = ({
                     );
                   })}
 
-                {/* Merge mode: every region is a target; picked ones fill in. */}
+                {/* Merge mode: the path the picked pieces will be read along. */}
+                {mergeMode && mergePreview && mergePreview.order.length > 1 && (
+                  <polyline
+                    points={mergePreview.order
+                      .map((id) => ocrRegions.find((r) => r.id === id))
+                      .filter((r): r is OcrRegion => !!r)
+                      .map(
+                        (r) =>
+                          `${r.bboxX + r.bboxW / 2},${r.bboxY + r.bboxH / 2}`,
+                      )
+                      .join(" ")}
+                    style={{
+                      fill: "none",
+                      stroke: "var(--primary)",
+                      strokeWidth: 2,
+                      strokeDasharray: "2 3",
+                      strokeLinejoin: "round",
+                      vectorEffect: "non-scaling-stroke",
+                      pointerEvents: "none",
+                    }}
+                  />
+                )}
+                {/* Merge mode: every region is a target; picked ones fill in and are numbered in
+                    the order the merge will read them. */}
                 {mergeMode &&
                   ocrRegions.map((r) => {
                     const picked = mergeSelection.includes(r.id);
+                    const position = mergePosition.get(r.id);
                     return (
                       <g
                         key={`merge-${r.id}`}
@@ -4315,7 +4389,9 @@ export const Reader: React.FC<ReaderProps> = ({
                             pointerEvents: "none",
                           }}
                         >
-                          {r.bubbleReadingOrder || "?"}
+                          {picked
+                            ? (position ?? "…")
+                            : r.bubbleReadingOrder || "?"}
                         </text>
                       </g>
                     );
@@ -4372,6 +4448,7 @@ export const Reader: React.FC<ReaderProps> = ({
             isReviewingRegion={isReviewingRegion}
             mergeMode={mergeMode}
             mergeSelection={mergeSelection}
+            mergePreview={mergePreview}
             onToggleMergeMode={handleToggleMergeMode}
             onToggleMergeRegion={handleToggleMergeRegion}
             onConfirmMerge={handleConfirmMerge}

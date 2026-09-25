@@ -156,6 +156,27 @@ mod tests {
     }
 
     #[test]
+    fn a_merged_block_joins_the_rest_of_its_balloon_in_place() {
+        // The same balloon after #6 and #7 were merged on their own: picking the remaining pieces
+        // plus that block, in the Reader's (OCR) numbering #3 #4 #5 #6 #8 #9, must still read as
+        // one sentence, the merged block last because its column is leftmost.
+        let fragments = vec![
+            frag(2026, 501, 114, 235, "ブラ"),
+            frag(1936, 508, 104, 207, "アイ"),
+            frag(1811, 491, 142, 726, "していなければ"),
+            frag(1628, 487, 232, 633, "縁が無かったでしょう："),
+            frag(2002, 670, 162, 626, "イダルなんて"),
+            frag(1919, 677, 135, 332, "ドルを"),
+        ];
+        let order = reading_order(&fragments);
+        assert_eq!(order, vec![0, 4, 1, 5, 2, 3]);
+        assert_eq!(
+            joined_text(&fragments, &order, "ja"),
+            "ブライダルなんてアイドルをしていなければ縁が無かったでしょう："
+        );
+    }
+
+    #[test]
     fn horizontal_lines_read_top_to_bottom() {
         // Page 4's profile paragraph: three lines of one sentence.
         let fragments = vec![

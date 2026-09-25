@@ -192,6 +192,44 @@ async fn upload_stream_delete_lifecycle() {
     let again: serde_json::Value = serde_json::from_str(&response.2).unwrap();
     assert_eq!(again["status"], "already_exists", "{}", response.2);
 
+    // --- the same bytes into a new slot reuse the processed page (AUDIT-B24) ---
+    // Once the first page has been through OCR, a second upload of its bytes clones its layers
+    // onto a new page. That page is left for the debounced render to snapshot and draw; a bare
+    // render job, which the worker cannot run, is never queued.
+    sqlx::query(
+        "INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) \
+         VALUES (uuid_generate_v4(), 'ocr', TRUE, 1, '{}'::jsonb, $1::uuid, now())",
+    )
+    .bind(&page_id)
+    .execute(&pool)
+    .await
+    .expect("processed source page");
+    let body = multipart_body(&chapter_id, 2, "probe.png", &probe_png);
+    let response = send_multipart(app.clone(), "/tlhub/api/images", &token, body).await;
+    assert_eq!(response.0, StatusCode::OK, "{}", response.2);
+    let cloned: serde_json::Value = serde_json::from_str(&response.2).unwrap();
+    let cloned_page = cloned["pageId"].as_str().unwrap().to_string();
+    assert_ne!(cloned_page, page_id);
+    let (bare_renders, dirty): (i64, bool) = sqlx::query_as(
+        "SELECT (SELECT COUNT(*) FROM jobs WHERE page_id = $1::uuid AND type = 'render'), \
+                (SELECT last_edited_at IS NOT NULL FROM pages WHERE id = $1::uuid)",
+    )
+    .bind(&cloned_page)
+    .fetch_one(&pool)
+    .await
+    .expect("cloned page state");
+    assert_eq!(bare_renders, 0, "no render job without a scene");
+    assert!(dirty, "the cloned page waits for the debounced render");
+    let response = send_json(
+        app.clone(),
+        "DELETE",
+        &format!("/tlhub/api/pages/{cloned_page}"),
+        &token,
+        String::new(),
+    )
+    .await;
+    assert!(response.0.is_success(), "{}", response.2);
+
     // --- list pages ---
     let response = send_get(
         app.clone(),

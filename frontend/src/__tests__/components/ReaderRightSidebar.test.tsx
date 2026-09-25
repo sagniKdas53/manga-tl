@@ -47,6 +47,7 @@ describe("ReaderRightSidebar", () => {
         handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
+        mergePreview={null}
         onToggleMergeMode={vi.fn()}
         onToggleMergeRegion={vi.fn()}
         onConfirmMerge={vi.fn()}
@@ -136,6 +137,7 @@ describe("ReaderRightSidebar", () => {
         handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
+        mergePreview={null}
         onToggleMergeMode={vi.fn()}
         onToggleMergeRegion={vi.fn()}
         onConfirmMerge={vi.fn()}
@@ -220,6 +222,7 @@ describe("ReaderRightSidebar", () => {
         handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
+        mergePreview={null}
         onToggleMergeMode={vi.fn()}
         onToggleMergeRegion={vi.fn()}
         onConfirmMerge={vi.fn()}
@@ -290,6 +293,7 @@ describe("ReaderRightSidebar", () => {
         handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
+        mergePreview={null}
         onToggleMergeMode={vi.fn()}
         onToggleMergeRegion={vi.fn()}
         onConfirmMerge={vi.fn()}
@@ -345,6 +349,7 @@ describe("ReaderRightSidebar", () => {
         handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
+        mergePreview={null}
         onToggleMergeMode={vi.fn()}
         onToggleMergeRegion={vi.fn()}
         onConfirmMerge={vi.fn()}
@@ -429,6 +434,7 @@ describe("ReaderRightSidebar", () => {
         handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
+        mergePreview={null}
         onToggleMergeMode={vi.fn()}
         onToggleMergeRegion={vi.fn()}
         onConfirmMerge={vi.fn()}
@@ -549,6 +555,7 @@ describe("ReaderRightSidebar", () => {
         handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
+        mergePreview={null}
         onToggleMergeMode={vi.fn()}
         onToggleMergeRegion={vi.fn()}
         onConfirmMerge={vi.fn()}
@@ -648,6 +655,7 @@ describe("ReaderRightSidebar", () => {
         handleSaveSourceText={vi.fn()}
         mergeMode={false}
         mergeSelection={[]}
+        mergePreview={null}
         onToggleMergeMode={vi.fn()}
         onToggleMergeRegion={vi.fn()}
         onConfirmMerge={vi.fn()}
@@ -738,6 +746,7 @@ describe("ReaderRightSidebar", () => {
         isReviewingRegion: false,
         mergeMode: false,
         mergeSelection: [],
+        mergePreview: null,
         onToggleMergeMode: vi.fn(),
         onToggleMergeRegion: vi.fn(),
         onConfirmMerge: vi.fn(),

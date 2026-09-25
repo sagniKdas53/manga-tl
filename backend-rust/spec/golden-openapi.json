@@ -3772,7 +3772,7 @@
     },
     "/api/pages/{pageId}/regions/merge": {
       "post": {
-        "description": "Merge two or more OCR regions on the page into one text block. The first in reading order survives with the union box and the text joined in reading order; the others and their elements are deleted. One cleanup job is queued for the merged box and carries on into that region's translation only.",
+        "description": "Merge two or more OCR regions on the page into one text block. The region with the lowest reading number survives with the union box and the text joined in geometric reading order; the others are deleted (their elements on hidden history layers are detached, not deleted). One cleanup job is queued for the merged box and carries on into that region's translation only. With dryRun nothing is written and the response gives the reading order and joined text.",
         "operationId": "mergeOcrRegions",
         "parameters": [
           {
@@ -3790,6 +3790,10 @@
             "application/json": {
               "schema": {
                 "properties": {
+                  "dryRun": {
+                    "description": "Preview only: return the reading order and joined text, change nothing.",
+                    "type": "boolean"
+                  },
                   "regionIds": {
                     "items": {
                       "format": "uuid",
@@ -3814,8 +3818,19 @@
               "*/*": {
                 "schema": {
                   "properties": {
+                    "dryRun": {
+                      "type": "boolean"
+                    },
                     "merged": {
                       "type": "integer"
+                    },
+                    "order": {
+                      "description": "Dry run: the region ids in the order they are read.",
+                      "items": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "type": "array"
                     },
                     "pageId": {
                       "format": "uuid",

@@ -872,7 +872,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Merge two or more OCR regions on the page into one text block. The first in reading order survives with the union box and the text joined in reading order; the others and their elements are deleted. One cleanup job is queued for the merged box and carries on into that region's translation only. */
+        /** @description Merge two or more OCR regions on the page into one text block. The region with the lowest reading number survives with the union box and the text joined in geometric reading order; the others are deleted (their elements on hidden history layers are detached, not deleted). One cleanup job is queued for the merged box and carries on into that region's translation only. With dryRun nothing is written and the response gives the reading order and joined text. */
         post: operations["mergeOcrRegions"];
         delete?: never;
         options?: never;
@@ -3203,6 +3203,8 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description Preview only: return the reading order and joined text, change nothing. */
+                    dryRun?: boolean;
                     regionIds: string[];
                 };
             };
@@ -3215,7 +3217,10 @@ export interface operations {
                 };
                 content: {
                     "*/*": {
+                        dryRun?: boolean;
                         merged?: number;
+                        /** @description Dry run: the region ids in the order they are read. */
+                        order?: string[];
                         /** Format: uuid */
                         pageId?: string;
                         queued?: boolean;

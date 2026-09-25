@@ -387,6 +387,7 @@ describe("issues view", () => {
         regions={regions}
         selected={["a"]}
         busy={false}
+        preview={null}
         onToggle={onToggle}
         onMerge={onMerge}
         onCancel={vi.fn()}
@@ -400,12 +401,99 @@ describe("issues view", () => {
         regions={regions}
         selected={["a", "b"]}
         busy={false}
+        preview={null}
         onToggle={onToggle}
         onMerge={onMerge}
         onCancel={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Merge #4 #5" }));
+    fireEvent.click(screen.getByRole("button", { name: "Merge 2 pieces" }));
     expect(onMerge).toHaveBeenCalledOnce();
+  });
+
+  it("shows the order the merge will read the pieces in, not their numbers", () => {
+    // Ch.3 p2's shape: OCR numbered the top halves of two columns #3 and #4 and their bottom
+    // halves #8 and #9; the merge reads each column top to bottom.
+    const regions = [
+      region("r3", 3, { text: "ブラ" }),
+      region("r4", 4, { text: "アイ" }),
+      region("r8", 8, { text: "イダルなんて" }),
+      region("r9", 9, { text: "ドルを" }),
+    ];
+    const selected = ["r3", "r4", "r8", "r9"];
+    const { rerender } = render(
+      <MergePanel
+        regions={regions}
+        selected={selected}
+        busy={false}
+        preview={null}
+        onToggle={vi.fn()}
+        onMerge={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const preview = screen.getByRole("region", { name: "Merge preview" });
+    expect(preview).toHaveTextContent("Working out the order");
+    rerender(
+      <MergePanel
+        regions={regions}
+        selected={selected}
+        busy={false}
+        preview={{
+          order: ["r3", "r8", "r4", "r9"],
+          text: "ブライダルなんてアイドルを",
+        }}
+        onToggle={vi.fn()}
+        onMerge={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(preview).toHaveTextContent("#3 → #8 → #4 → #9");
+    expect(preview).toHaveTextContent("ブライダルなんてアイドルを");
+    // A preview for an older pick is not shown as if it were this one.
+    rerender(
+      <MergePanel
+        regions={regions}
+        selected={["r3", "r4", "r8"]}
+        busy={false}
+        preview={{
+          order: ["r3", "r8", "r4", "r9"],
+          text: "ブライダルなんてアイドルを",
+        }}
+        onToggle={vi.fn()}
+        onMerge={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("region", { name: "Merge preview" }),
+    ).toHaveTextContent("Working out the order");
+  });
+
+  it("offers the rest of a picked piece's balloon, never a settled region", () => {
+    const onToggle = vi.fn();
+    render(
+      <MergePanel
+        regions={[
+          region("a", 3, { bubbleId: "bubble_2" }),
+          region("b", 4, { bubbleId: "bubble_2" }),
+          region("c", 5, { bubbleId: "bubble_2" }),
+          region("sfx", 6, { bubbleId: "bubble_2", qaStatus: "reject_sfx" }),
+          region("other", 7, { bubbleId: "bubble_0" }),
+        ]}
+        selected={["a"]}
+        busy={false}
+        preview={null}
+        onToggle={onToggle}
+        onMerge={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Add the other 2 pieces in this balloon",
+      }),
+    );
+    expect(onToggle.mock.calls).toEqual([["b"], ["c"]]);
   });
 });

@@ -1824,13 +1824,21 @@ pub async fn review_ocr_region(
     }
 }
 
-/// POST /api/pages/{pageId}/regions/merge — `{"regionIds": [...]}` (two or more), ADMIN/TRANSLATOR.
+/// POST /api/pages/{pageId}/regions/merge — `{"regionIds": [...], "dryRun"?: bool}` (two or more),
+/// ADMIN/TRANSLATOR.
 ///
-/// The Reader's "these fragments are one text block". The first region in reading order survives
-/// with the union box and the fragments' text joined in reading order; the others and their
-/// elements are deleted. The survivor's elements take the union box, its translation is cleared
-/// (it translated one fragment), and one cleanup job is queued for the new box whose callback
-/// carries on into this region's translation only — the rest of the page is left as it is.
+/// The Reader's "these fragments are one text block". The region with the lowest Reader number
+/// survives with the union box and the fragments' text joined in reading order; the others are
+/// deleted. The survivor's current elements take the union box, its translation is cleared (it
+/// translated one fragment), and one cleanup job is queued for the new box whose callback carries
+/// on into this region's translation only — the rest of the page is left as it is.
+///
+/// Hidden translation layers are history and keep what they drew: an absorbed fragment's element
+/// there is detached from its deleted region rather than deleted, and the survivor's is untouched.
+///
+/// `dryRun` writes nothing and answers with the order the fragments will be read in and the text
+/// that makes, so the Reader can show the order before anyone commits to it (the person merging
+/// usually can't read the source language, and the order is geometric, not the Reader numbers).
 pub async fn merge_ocr_regions(
     State(state): State<AppState>,
     user: AuthUser,
@@ -1844,6 +1852,10 @@ pub async fn merge_ocr_regions(
     let Ok(Json(payload)) = body else {
         return error::unreadable_body(instance);
     };
+    let dry_run = payload
+        .get("dryRun")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let mut ids: Vec<Uuid> = payload
         .get("regionIds")
         .and_then(|v| v.as_array())
@@ -1912,6 +1924,17 @@ pub async fn merge_ocr_regions(
         .filter(|id| *id != survivor.id)
         .collect();
     let text = joined_text(&fragments, &order, &survivor.detected_language);
+    if dry_run {
+        let ordered: Vec<String> = order.iter().map(|&i| regions[i].id.to_string()).collect();
+        return Json(serde_json::json!({
+            "pageId": page_id,
+            "regionId": survivor.id,
+            "order": ordered,
+            "text": text,
+            "dryRun": true,
+        }))
+        .into_response();
+    }
     let (x, y, w, h) = union_box(
         regions
             .iter()
@@ -1932,17 +1955,50 @@ pub async fn merge_ocr_regions(
             r.safe_text_h?,
         ))
     }));
-    let merged_from: Vec<String> = regions.iter().map(|r| r.id.to_string()).collect();
+    // A block merged again keeps every fragment it was ever made from.
+    let mut merged_from: Vec<String> = regions
+        .iter()
+        .flat_map(|r| {
+            let earlier = r
+                .ownership_provenance
+                .as_ref()
+                .and_then(|p| p.get("mergedFrom"))
+                .and_then(|m| m.as_array())
+                .map(|m| {
+                    m.iter()
+                        .filter_map(|id| id.as_str().map(str::to_string))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            earlier.into_iter().chain(std::iter::once(r.id.to_string()))
+        })
+        .collect();
+    merged_from.sort();
+    merged_from.dedup();
 
     let result: Result<OcrRegion, String> = async {
         let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
-        for table in ["conversation_regions", "translation_regions", "layer_elements"] {
+        for table in ["conversation_regions", "translation_regions"] {
             sqlx::query(AssertSqlSafe(format!("DELETE FROM {table} WHERE region_id = ANY($1)")))
                 .bind(&absorbed)
                 .execute(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
         }
+        sqlx::query(
+            "UPDATE layer_elements e SET region_id = NULL FROM layers l \
+             WHERE e.layer_id = l.id AND e.region_id = ANY($1) AND l.type NOT ILIKE 'ocr' \
+               AND l.visible IS NOT TRUE",
+        )
+        .bind(&absorbed)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+        sqlx::query("DELETE FROM layer_elements WHERE region_id = ANY($1)")
+            .bind(&absorbed)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
         sqlx::query("DELETE FROM ocr_regions WHERE id = ANY($1)")
             .bind(&absorbed)
             .execute(&mut *tx)
@@ -1980,13 +2036,14 @@ pub async fn merge_ocr_regions(
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
-        // Every element that draws the survivor takes the block's box; the OCR ones show the joined
-        // text, the translations wait (hidden, empty) for the block's own translation.
+        // Every current element that draws the survivor takes the block's box; the OCR ones show
+        // the joined text, the translations wait (hidden, empty) for the block's own translation.
         sqlx::query(
             "UPDATE layer_elements e SET x = $2, y = $3, max_width = $4, max_height = $5, mask_polygon = $6, \
                text = CASE WHEN l.type ILIKE 'ocr' THEN $7 ELSE NULL END, \
                visible = CASE WHEN l.type ILIKE 'ocr' THEN e.visible ELSE FALSE END \
-             FROM layers l WHERE e.layer_id = l.id AND e.region_id = $1",
+             FROM layers l WHERE e.layer_id = l.id AND e.region_id = $1 \
+               AND (l.type ILIKE 'ocr' OR l.visible IS TRUE)",
         )
         .bind(survivor.id)
         .bind(f64::from(x))

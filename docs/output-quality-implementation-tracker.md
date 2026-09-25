@@ -2,7 +2,54 @@
 
 Start with the current checkpoint below and the [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md). The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
 
-Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **Current R3 status: data path and phase separation implemented; all three gates (reliability, performance, quality) still open; NOT PASSED.** Read the summary and [current next-session handoff](output-quality-next-session-20260924.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **Current R3 status (2026-09-25): implementation complete (Packets 1–3, OQ-07/08); Packet 4 measurement not started; all three gates (reliability, performance, quality) still open; NOT PASSED.** Next: the [Packet 4 handoff](quality-checkpoints/R3-packet4-measurement-handoff-20260925.md), after its six decisions. Read the summary and [current next-session handoff](output-quality-next-session-20260924.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+
+## Status at a glance (2026-09-25 — R3 measurement is next)
+
+**How close R3 is.** The implementation is finished; none of the three gates has been measured.
+
+| R3 piece | State |
+|---|---|
+| Packet 1 — phase-separation contract | Done 2026-09-22 |
+| Packet 2 — cleanup as its own stage, attempt/lease fencing, recheck removed | Done 2026-09-22 (`tests/stage_recovery.rs`) |
+| Packet 3 — complete QA verdict accounting (OQ-02) and render/export freshness (OQ-01) | Done 2026-09-23 (`coordinator_flows::qa_rejects_incomplete_and_stale_verdicts`) |
+| OQ-07/OQ-08 — bounded cleanup failure handling | Done 2026-09-24 |
+| **Packet 4 — measurement: reliability, performance, cleanup-only quality** | **Not started.** Delegated runbook: [R3 Packet 4 handoff](quality-checkpoints/R3-packet4-measurement-handoff-20260925.md). Needs six user decisions first (spend cap, latency ceilings, timing host, model pins, reconstruction method, control denominator) and one small read-only tool (cleanup-only composite) |
+
+So R3 is one measurement packet plus six decisions from done. If a gate fails, the fix loop that follows is the unknown part. Small reliability gaps still in code (known, not blocking the measurement): durable in-transaction dispatch covers 2 of 5 stage edges (the rest rely on the orphan sweep); a QA job whose failure the backend accepted still gets a worker `COMPLETED` PATCH and a 409 (OQ-08 was fixed for cleanup only).
+
+**2026-09-25 work outside R3** (Reader review tools, commits `3c5f6ce`, `a6011e0`, `5d451ad` plus this checkpoint):
+- Issues view, plain mask, manual region merge.
+- Redos keep earlier layers.
+- LAN dev access.
+- The merge now previews its reading order: numbered on the page, with the joined text shown in the panel, before anything changes.
+- A region redo's translation now receives the page's other lines as context. The merged Ch.3 p2 #6+#7 block had been translated alone as "we weren't meant to be".
+- Debounced renders, and the paid QA that follows each pipeline render, now wait while OCR, cleanup, translation or region redos run on the page. The debounce is `RENDER_DEBOUNCE_SECONDS` (default 30).
+- `AUDIT-B15`/`B16`/`B19`/`B24` closed; `AUDIT-R21` filed ([issues triage](issues.md)).
+
+**Settled by the user 2026-09-25:**
+- Automatic grouping fixes wait for the grouping phase (`AUDIT-R21`); manual merge is the workaround.
+- Phone and tablet layout waits for the user's own testing.
+- The plain mask is a fallback for the rare failed inpaint once the editor shows the cleanup patches (R7).
+- Translation speed on the series' Qwen model is accepted for now, and GLM Flash is a possible later swap.
+
+**Correction to carry:** the editor showing Japanese under a translation is the source art, not the OCR overlay. The editor does not draw cleanup patches yet (R7/OQ-03); the rendered export does.
+
+**Things the plan has not decided yet** (found in the 2026-09-25 review; each needs a decision, not code):
+1. **Performance ceilings** were never set. Without numbers, R3's speed gate can only be described, not passed. Proposal in the Packet 4 handoff, D2.
+2. **UR03 (ownership) and UR04 (mask and reconstruction providers)** were never recorded, yet CTD + TELEA/AOT is live. LaMa-mpe measured +1.2 dB over AOT and was never adopted, and the pluggable reconstruction router is unbuilt. Decide before Packet 4, or it measures a method that is then replaced (D5).
+3. **Removing the runtime recheck** left the 0.3 threshold and 5 px dilation as the whole recall margin. Packet 4 measures residual ink offline; nothing checks it at runtime.
+4. **The 2026-09-24 "next bounded check"** (page 8/9 final render vs export equality) was never done. Packet 4's export-hash check covers the same property on the fixtures.
+5. **Model pins disagree:**
+   - The harness pins the QA VLM to Gemini 3.1 Flash Lite, but the deployment default is GLM 5.3 Flash (2026-09-24).
+   - The dev series' QA model is still Qwen, which refuses on explicit pages.
+   - The pending `gpt-5.6-luna` comparison has no date.
+6. **Control denominator:** 24 or 25 (`sample641`). The combined six + controls sweep deferred from R2 is still owed after R3 (3–4 h, paid).
+7. **Deploy hazard:** jobs queued before Packet 2 have no lease headers and 409; drain the queues before any deploy.
+8. **The UR register** still says "the immediate work is the OQ-01/OQ-02 packet", which is done. It needs a pass once Packet 4 reports.
+9. **Region redo** runs on the series' translation model. On Ch.2 p6 a merged block took 179 s, over the 60 s bar; the model choice is the lever.
+10. **Settings change re-QAs every page** (`AUDIT-B27`): saving new text-box inset settings dirties every page in the database. Each page then re-renders, and each render queues a paid QA pass.
+11. **Evidence overwritten in a test:** a live test on Ch.2 p6 overwrote one hidden history element's mask (plain-mask test, 2026-09-25). It is harmless, and the route no longer touches hidden layers.
 
 ## Status at a glance (2026-09-24 — cleanup recovery checkpoint)
 

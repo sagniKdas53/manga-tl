@@ -1,6 +1,11 @@
 # Issues & Technical Debt
 
-> **Standing: 117 filed, 86 closed, 31 open.** `AUDIT-B25`, `AUDIT-F29` and `AUDIT-B26` were filed
+> **Standing: 119 filed, 91 closed, 28 open.** 2026-09-25 triage: `AUDIT-B15`, `B16`, `B19`, `B24`
+> closed (fixed or verified on the current tree), `AUDIT-R20` closed on its 2026-09-19 live gate,
+> `AUDIT-R21` filed (line-continuity veto), `AUDIT-B27` filed (settings change re-QAs every page), `AUDIT-F29` merge half shipped (split still open), `AUDIT-R18`
+> narrowed. Closed entries moved to [archive/history.md](archive/history.md#2026-09-25--issues-closed-in-the-r3-triage).
+>
+> Earlier: `AUDIT-B25`, `AUDIT-F29` and `AUDIT-B26` were filed
 > 2026-09-19 from a user review of the `manga-quality-r6-20260919` stack: a live reproduction of the
 > R5 stale-recovery duplicate-layer race, a request for manual OCR-fragment regrouping, and a request
 > to change what `Export Chapter (ZIP)` bundles. `AUDIT-B18` was closed by decision 2026-09-19 (`LOCK-3`: no migration runner; `init.sql` is the schema). Six review items were added 2026-09-03
@@ -36,10 +41,10 @@ its test are present on the branch); nothing in this section was re-tested throu
 
 | # | Bullet (report wording) | ID | State today | Why this rank |
 | :--- | :--- | :--- | :--- | :--- |
-| 1 | Canvas changes are never synced to the rendered output | `AUDIT-B15` | Ready; confirmed in the PR #115–#138 review | Loses edits permanently; everything else is cosmetic next to it |
+| 1 | Canvas changes are never synced to the rendered output | `AUDIT-B15` | **Closed 2026-09-25** (callback-only stamp; lost render re-triggers) | Loses edits permanently; everything else is cosmetic next to it |
 | 2 | Padding control per text box / bubble (image 2) | `AUDIT-F16` follow-up | **Open.** F16 shipped `textBoxPaddingPx` as one *global* setting; there is no per-element field. No longer gated on `AUDIT-B18` (closed by `LOCK-3`): the column goes into `init.sql`, the stack is recreated | The user's ask is per-bubble; the global dial does not answer it |
 | 3 | 2 light + 1 heavy slot logic dropped; all 3 slots stuck on slow steps (image 4) | `AUDIT-W14` | Needs measurement. The capacity-snapshot bug in `dispatcher.rs` is unambiguous; the tier split is a W10 re-measurement, not a revert | Visible every run; the dispatcher half is a small fix |
-| 4 | Translation re-region redo doesn't make a new layer (image 7) | `AUDIT-B16` | Needs repro | Unverified either way since 09-02 |
+| 4 | Translation re-region redo doesn't make a new layer (image 7) | `AUDIT-B16` | **Closed 2026-09-25** (redo now reaches the render) | Unverified either way since 09-02 |
 | 5 | Queue Manager doesn't update quickly | `AUDIT-F20` (sort) fixed; the *latency* half was never filed | **New, narrow:** the sort rank is fixed; refresh cadence is not tracked anywhere |
 | 6 | Dark mode is ugly / washed out | `AUDIT-F21` marked fixed 09-03; **reopened** by the 09-18 list | `AUDIT-F24` (palette kept twice in `theme.ts` and `index.css`) is the structural cause; branch `fix/dark-mode-stops-glaring` exists, unmerged |
 | 7 | Text under-fills or leaks the balloon (image 3) | `AUDIT-R8`, `AUDIT-R16` | Overlaps R1; measured, needs a decision | Renderer is live now, so this can finally be judged on the six R1 fixtures |
@@ -226,15 +231,15 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R7`](#audit-r7-medium-a-rectangle-arrived-as-a-40-vertex-polygon) | Medium | Worker | The simplification tolerance was a fraction of the *perimeter*, so small shapes got a sub-pixel tolerance and kept every vertex | **Fixed 2026-09-03** |
 | [`AUDIT-F15`](#audit-f15-medium-a-hidden-element-could-not-be-reached-again) | Medium | Frontend | Hiding an element removed the only way to select it | **Fixed 2026-09-03** |
 | [`AUDIT-R1`](#audit-r1-medium-four-answers-to-what-rectangle-does-text-go-in) | Medium | Render | Four different fitted rectangles — the live reader used none at all | **Fixed 2026-09-03** |
-| [`AUDIT-R18`](#audit-r18-high-export-lines-are-centred-in-the-raw-box-not-the-fitted-box) | High | Frontend/Render | PNG and ZIP exports fit text in the shared inset box, then centre it in the raw box | Ready |
+| [`AUDIT-R18`](#audit-r18-high-export-lines-are-centred-in-the-raw-box-not-the-fitted-box) | High | Frontend/Render | PNG and ZIP exports fit text in the shared inset box, then centre it in the raw box | Narrowed 2026-09-25: PNG export serves the artifact; ZIP/editor parity → R7/M7 |
 
 ### Seam 2 — the canvas and the artifact are not connected
 
 | ID | Sev | Component | Summary | State |
 | :--- | :--- | :--- | :--- | :--- |
-| [`AUDIT-B15`](#audit-b15-high-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently) | High | Backend | The 5s re-render sweeper marks a page rendered when it *asks* for the render, so a lost render job strands that edit forever | Ready; confirmed in PR #115–#138 review |
+| [`AUDIT-B15`](archive/history.md#audit-b15-high-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently) | High | Backend | The 5s re-render sweeper marks a page rendered when it *asks* for the render, so a lost render job strands that edit forever | **Closed 2026-09-25** — callback-only stamp; lost render re-triggers (test) |
 | [`AUDIT-B12`](#audit-b12-medium-qas-verdicts-never-reach-the-rendered-output) | Medium | Backend/Render | QA runs *after* the only render, so no `direct_fix` or `reject_sfx` reaches the export | **Fixed 2026-09-02** |
-| [`AUDIT-B16`](#audit-b16-low-region-redo-layer-provenance) | Low | Backend | A region redo's new layer is not always what the reader ends up showing | Needs repro |
+| [`AUDIT-B16`](archive/history.md#audit-b16-low-region-redo-layer-provenance) | Low | Backend | A region redo's new layer is not always what the reader ends up showing | **Closed 2026-09-25** — region redo now advances the page revision |
 | [`AUDIT-R11`](#audit-r11-high-no-texture-aware-erasure-d1) | High | Render | Flat-fill erasure only; complex backgrounds are destroyed | = [D1](render_quality_gap_2026-08-05.md), roadmap item |
 
 ### Seam 3 — the UI does not believe the backend
@@ -256,12 +261,13 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-B17`](#audit-b17-low-jobspage_id-was-never-written) | Low | Backend | `jobs.page_id` existed, was deserialised, and was never populated by the INSERT | **Fixed 2026-09-03** |
 | [`AUDIT-B18`](#audit-b18-medium-there-is-no-schema-migration-runner) | Medium | Backend | `init.sql` only runs on a fresh volume, so no column can ever be added to a live deployment | **Closed by decision 2026-09-19** ([`LOCK-3`](#lock-3--databaseinitsql-is-the-whole-schema-there-is-no-migration-runner)) |
 | [`AUDIT-B21`](#audit-b21-high-a-retryable-translation-callback-consumes-the-exactly-once-claim) | High | Worker/Backend | A retryable outage posts and claims a callback before retrying, so a later successful result is dropped | **Fixed in code 2026-09-22** — not yet verified live |
-| [`AUDIT-B19`](#audit-b19-low-jwt-signing-failure-reported-as-successful-login) | Low | Backend | `unwrap_or_default()` yields empty token answered as 200 OK on signing error | Ready |
+| [`AUDIT-B19`](archive/history.md#audit-b19-low-jwt-signing-failure-reported-as-successful-login) | Low | Backend | `unwrap_or_default()` yields empty token answered as 200 OK on signing error | **Fixed 2026-09-25** |
 | [`AUDIT-B20`](#audit-b20-low-database-query-errors-converted-to-empty-results) | Low | Backend | 53 sites convert query errors into empty lists/options disguised as 200 OK | Backlog |
 | [`AUDIT-B13`](#audit-b13-medium-a-page-with-no-translatable-text-fails-the-job) | Medium | Worker/Backend | An untranslatable page raises and burns 3 attempts; it should warn | **Fixed 2026-09-02** |
 | [`AUDIT-B14`](#audit-b14-medium-delete-then-re-add-leaves-a-chapter-inconsistent) | Medium | Backend/Frontend | Page count stale, old slot held, reader hangs on the loading screen | **Fixed 2026-09-04** |
 | [`AUDIT-B22`](#audit-b22-medium-page-ordering-is-validated-before-the-chapter-is-locked) | Medium | Backend | Reorder and move validate outside their transaction, so concurrent page changes can invalidate the result | Ready |
-| [`AUDIT-B24`](#audit-b24-medium-a-re-uploaded-image-is-deduplicated-onto-a-processed-one-and-gets-a-render-job-it-cannot-run) | Medium | Backend | Uploading bytes the backend already has attaches the page to the processed image, skips OCR and queues a bare `render` with no scene, which fails 3× | Filed 2026-09-19 from the R2 run; R5 |
+| [`AUDIT-B24`](archive/history.md#audit-b24-medium-a-re-uploaded-image-is-deduplicated-onto-a-processed-one-and-gets-a-render-job-it-cannot-run) | Medium | Backend | Uploading bytes the backend already has attaches the page to the processed image, skips OCR and queues a bare `render` with no scene, which fails 3× | **Fixed 2026-09-25** — cloned page goes to the debounced render |
+| [`AUDIT-B27`](#audit-b27-medium-changing-the-text-box-inset-settings-re-renders--and-re-qas--every-page) | Medium | Backend | A text-box inset settings change dirties every page; each re-render queues paid QA | Filed 2026-09-25; decision needed |
 | [`AUDIT-B23`](#audit-b23-medium-the-dispatcher-429-cooldown-never-escalates-under-sustained-saturation) | Medium | Backend | `consecutive_429s` is cleared on every healthy `/capabilities` probe, so the exponential cooldown never advances past its 10s base | Ready |
 | [`AUDIT-W3`](#audit-w3-medium-cooldowns-and-lock-waits-burn-a-job-slot) | Medium | Worker | Cooldowns and lock waits block a concurrency slot doing nothing | Deprioritized; needs concurrency test harness |
 | [`AUDIT-F23`](#audit-f23-medium-no-paint-region-redo-and-no-batch-redo) | Medium | Frontend | Redo is per-region and free-form only; no painted region, no batch | Feature |
@@ -278,7 +284,8 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R15`](#audit-r15-high-the-typeset-size-depends-on-which-fonts-the-host-happens-to-have) | High | Render/Testing | The same call returns 48, 56 or 75px depending on which font files the host has | Ready |
 | [`AUDIT-R16`](#audit-r16-medium-a-narrow-box-is-capped-by-its-widest-unbreakable-token) | Medium | Render | Portrait balloons: the type is width-bound and the spare height cannot be spent | Measured; needs a decision |
 | [`AUDIT-R19`](#audit-r19-medium-a-free-standing-caption-gets-a-synthetic-rounded-plate-a-third-larger-than-its-text) | Medium | Worker/Frontend | Text with no detected balloon gets a rounded-rectangle plate padded 18% of its short side with 22%-radius corners; the editor box is 10px inside it and reshape only edits the plate | **Fixed in R2 (2026-09-19)**: no plate for free text, `box_shape` from detection; verified on the p5 caption live |
-| [`AUDIT-R20`](#audit-r20-high-a-balloon-is-emitted-as-one-region-per-column) | High | Worker | The live owner veto splits a balloon into one region per column/line when the detector's container does not enclose every column; each piece is translated and typeset alone | **Fixed in code 2026-09-19** (worker `1c62e13`, [R6](quality-checkpoints/R6.md)); live gate pending |
+| [`AUDIT-R20`](archive/history.md#audit-r20-high-a-balloon-is-emitted-as-one-region-per-column) | High | Worker | The live owner veto splits a balloon into one region per column/line when the detector's container does not enclose every column; each piece is translated and typeset alone | **Closed 2026-09-19** — R6 live gate passed; follow-on split filed as `AUDIT-R21` |
+| [`AUDIT-R21`](#audit-r21-medium-the-line-continuity-veto-splits-a-balloon-whose-column-ocr-broke-in-two) | Medium | Worker | The line-continuity veto splits a balloon when OCR broke one column in two; page-4 line gaps miss the 0.35 budget | Grouping phase (user decision 2026-09-25); manual merge is the workaround |
 | [`AUDIT-R17`](#audit-r17-unranked-shaperectangular-is-not-ignored) | Unranked | Render | Reported as an ignored API parameter; the branch exists and the contract holds end to end | **Closed on assessment 2026-09-05** |
 
 ### Cosmetic & long tail
@@ -545,42 +552,11 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Fix:** calculate each export's `startY` from `fitBox.y` and `fitBox.height`, and test PNG and
   ZIP line positions against the worker's fitted-box geometry. Do not change the fitting helper or
   the configured margin as part of this fix.
+- **Narrowed 2026-09-25.** The page PNG export now serves the rendered artifact (`/api/pages/{pageId}/rendered`), so it no longer lays text out in the browser. The ZIP's per-layer text raster (`Reader.tsx`, the ZIP export loop) and the editor canvas both still centre lines on `el.y + height / 2`, so they agree with each other; whether they agree with page-renderer's layout is the R7/M7 editor–artifact parity question and is judged there, not patched here.
 
 ---
 
 ## 2. Seam 2 — the canvas and the artifact are not connected
-
-### `AUDIT-B15` (high): The debounced re-render is one-shot and can lose an edit permanently
-
-- **Correction, 2026-09-02.** This was first filed as "no edit anywhere enqueues a render job". That
-  is **wrong** — I missed the sweeper. `recovery::process_pending_renders`
-  (`backend-rust/src/jobs/recovery.rs:145-197`) runs every 5s (`jobs/mod.rs:34-40`), finds pages
-  with `last_edited_at` older than 10s whose `last_rendered_at` predates the edit, and enqueues a
-  render redo. `touch_page` is called from all six mutating layer routes. The link exists.
-- **What is actually wrong with it.** The sweeper stamps `last_rendered_at = now()` at *enqueue*
-  time (`recovery.rs:187`), not when the render lands, and it gates that on
-  `trigger_page_redo(...).is_ok()` — which is not a real check, because `trigger_page_redo` returns
-  `Ok(())` unconditionally after calling `enqueue_job_directly`, and `enqueue_job_directly` swallows
-  its own insert failure with a `tracing::error!` and returns `()`.
-
-  So the stamp says "rendered" the moment the job is *asked for*. If that job is then lost — the
-  insert failed, the queue was cleared, the worker was down long enough for the row to exhaust its
-  attempts — the page's `last_rendered_at` is already newer than its `last_edited_at`, the sweeper's
-  own predicate excludes it forever, and that edit never renders again. There is no retry, because
-  the only trigger is the predicate that was just falsified.
-- **Why this is a plausible reading of the report** ("changes to the canvas are not synced to the
-  rendered output like ever"): the failure is sticky. One lost render per page is enough to make the
-  feature look permanently broken for that page, and editing more does not recover it — a *new*
-  edit does re-arm the predicate, so the symptom is intermittent rather than total, which is exactly
-  how it would be described.
-- **Next Step:** stamp `last_rendered_at` from the render callback only — it already does this
-  (`internal.rs:1157-1161` for the image, `coordinator.rs:2077-2082` for the page) — and give the
-  sweeper a separate "render requested at" marker so it debounces without claiming completion.
-  Make `trigger_page_redo` propagate the enqueue failure rather than returning `Ok(())` regardless.
-- **Confirmed in the PR #115–#138 review.** This is not only a plausible explanation: an enqueue
-  insert or Redis push failure is swallowed, and a worker failure after the timestamp update leaves
-  the same permanently false predicate. The remediation must be guarded by failures at each of
-  those points, not only by a successful-render test.
 
 ### `AUDIT-B12` (medium): QA's verdicts never reach the rendered output
 
@@ -626,25 +602,8 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
      nothing.
 - **Note:** human edits have their own path to a re-render (the 5s debounced sweeper), which is why
   this needed a fix of its own. QA is not an editor and never went through it. See
-  [`AUDIT-B15`](#audit-b15-high-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently)
+  [`AUDIT-B15`](archive/history.md#audit-b15-high-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently)
   for the defect in that sweeper.
-
-### `AUDIT-B16` (low): Region-redo layer provenance
-
-- **Locations:** `backend-rust/src/jobs/coordinator.rs:2425-2503` (`create_region_redo_overlay`).
-- **Problem:** The report says a translation region redo "doesn't make a new layer", but the attached
-  screenshot shows a `Translation (region redo)` layer with 1 element sitting above an 11-element
-  `Translation` layer — i.e. the layer *is* created. The likely real complaint is that the redo
-  result does not become what the page shows or exports, which would make it indistinguishable from
-  "no new layer" at the reader.
-- **Next Step:** needs a repro before any code change. Capture the layer list, the element's
-  `visible`/`region_id`, and what `/rendered` returns, on one page where this happens.
-- **Evidence from the R2 run (2026-09-19):** `handle_translation_callback` inserts a new
-  translation layer on *every* pass (`coordinator.rs`, the `INSERT INTO layers` after the
-  `is_redo` block) and hides the previous ones on a redo; sample177 finished with three translation
-  layers, two hidden, after two QA retries. So "a redo makes no new layer" is not reproducible —
-  a redo always makes one — and R1's note that a retry "updates the existing layer" describes only
-  the per-element update within a layer. No pixel effect; the hidden layers are not in the scene.
 
 ### `AUDIT-R11` (high): No texture-aware erasure (D1)
 
@@ -656,6 +615,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   roadmap, already scoped, already the reason the 6.85%-vs-1.92% flattening gap exists. Filed here
   only so the field report maps cleanly onto the tracker. Do not start it before the seams above are
   closed — a better fill on a page whose edits never render is wasted.
+- **Status 2026-09-25.** Being replaced by R3 (per-region CTD glyph mask + TELEA/AOT reconstruction, its own cleanup stage). The editor still does not draw the cleanup (R7/OQ-03). Closes with R3's quality gate, not before.
 
 ---
 
@@ -1007,30 +967,18 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   live on the same page: the left caption came back with the same bbox (69,78 178×394), **no
   polygon, `rectangular`, size 36**; before: 14 vertices spanning 37–279 × 48–502, `elliptical`.
 
-### `AUDIT-B24` (medium): A re-uploaded image is deduplicated onto a processed one and gets a render job it cannot run
+### `AUDIT-B27` (medium): Changing the text-box inset settings re-renders — and re-QAs — every page
 
-- **Seen:** R2 six-fixture run, 2026-09-19 07:06 (`R2.md`, stack notes). The harness was relaunched
-  on a database that already held a processed `sample177`; the second upload of the same bytes
-  came back with the *same* `imageId` (`c14a56b7…`), a new page, no OCR job, and a bare `render`
-  job for the new page, which the worker rejected three times with `render job carries no
-  logicalScene` — the new page has no regions, no layers and no snapshot to build one from. The
-  harness then reported "pipeline stopped with 1 failed job".
-- **Where:** `routes/page.rs:486` finds the image by hash and calls
-  `clone::handle_duplicate_image_cloning` (`clone.rs:267`), which clones the source page's OCR
-  regions and translation layers to the new page and then calls
-  `trigger_page_redo(new_page, "render")` — `enqueue_job_directly` of a bare `render`, the
-  pre-R1 job shape. Since R1 a render job needs the page's snapshot (`snapshot_pipeline_scene` →
-  `enqueue_snapshot_render`); nothing here writes one, so the worker refuses the job. (On the R2
-  run the clone also found no source page in the same chapter/series — the six run in one
-  chapter each — so it may have queued the render with nothing copied at all; either way the
-  outcome is the same.)
-- **Fix:** in the `tl_matches` branch, replace `trigger_page_redo(…, "render")` with a
-  transaction that runs `snapshot_pipeline_scene` for the new page and then
-  `enqueue_snapshot_render`; if the snapshot cannot be built (no regions were cloned), fall
-  through to the `"translation"` branch or start OCR. Never queue a `render` for a page without a
-  snapshot — `recovery.rs`'s poller already follows that rule.
-- **Schedule:** R5 (provider/job hygiene). Until then, quality runs must never re-upload a sample
-  on the same database (noted in the R2 controls runbook).
+- **Location:** `backend-rust/src/routes/settings.rs` (the `changed` branch of the settings save):
+  `UPDATE pages SET last_edited_at = now(), scene_revision = scene_revision + 1` with no `WHERE`.
+- **Problem:** every page in the database becomes dirty, the debounced sweeper renders each one, and
+  the render callback queues a paid QA pass for every page without manual edits
+  (`coordinator.rs`, render callback → `enqueue_job_directly("qa", …)`). One padding tweak on a
+  library of a few hundred pages is a few hundred QA calls. Found 2026-09-25 while checking which
+  writes dirty a page for the new render gate.
+- **Decision needed:** a settings re-render changes layout, not translation, so it probably should
+  not re-run QA (mark those renders like QA's own final pass), and may want to be scoped (per
+  series, or on next open) rather than global. Not changed.
 
 ### `AUDIT-B23` (medium): The dispatcher 429 cooldown never escalates under sustained saturation
 
@@ -1051,15 +999,6 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Fix:** reset `consecutive_429s` only when a job submission actually succeeds, not on a
   capabilities probe. The probe may still clear `cooldown_until`; the streak should persist until
   the worker accepts work.
-
-### `AUDIT-B19` (low): JWT signing failure reported as successful login
-
-- **Locations:** `backend-rust/src/routes/auth.rs:298` (register), `:326` (login), `:346` (refresh).
-- **Problem:** `let token = state.jwt.generate_token(&user.email).unwrap_or_default();`
-  `generate_token` returns `Result`. On `Err`, `unwrap_or_default()` yields an empty string `""`, and all
-  three endpoints answer `200 OK` with `token: ""`. An empty token fails subsequent decode, so while not
-  an auth bypass, it produces silent session failure on the client with 401s rather than a legible error.
-- **Fix:** Map `Err` to a 500 error response at all three sites.
 
 ### `AUDIT-B20` (low): Database query errors converted to empty results
 
@@ -1184,6 +1123,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   "User-Test") are reference material once this is picked up.
 - **Next step:** write a bounded task card under M7 (after H01b/H02) once H01a/F04's ownership
   contract is finalized; do not build a parallel ownership representation.
+- **Merge shipped 2026-09-25** (`a6011e0`): Reader → Editor Tools → *Merge regions*, `POST /api/pages/{pageId}/regions/merge`. The picked fragments become one region (union box, text joined in geometric reading order), which alone is cleaned and retranslated; hidden history layers keep what they drew. A dry run shows the order (1, 2, 3… on the page, the joined text in the panel) before anything changes, and *Add the other pieces in this balloon* picks the detector container's siblings. **Still open: splitting a wrongly merged region.** Reclassify to *partly done*; close when split exists or is declined.
 
 ### `AUDIT-B26` (feature): "Export Chapter (ZIP)" should export page projects, not rendered images
 
@@ -1211,43 +1151,20 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Next Step:** union rather than hull for the mask, keeping the hull only for the text box. The
   renderer already fills a polygon; a multi-polygon is the schema change.
 
-### `AUDIT-R20` (high): A balloon is emitted as one region per column
+### `AUDIT-R21` (medium): The line-continuity veto splits a balloon whose column OCR broke in two
 
-- **Report (2026-09-19, R2 short list — [`R2.md`](quality-checkpoints/R2.md#short-list)):** on the
-  first conventional-balloon pages measured live (`sample7` ja, `sample197` ko, `sample641` zh),
-  region counts are 1.3–1.9× the August exports. `sample641`'s five-column balloon became five
-  regions, each translated on its own (*"I still" / "can't believe this" / "is homemade!" / …*)
-  and each set in a 30–41 px column at 8–33 px; `sample7` has five such balloons (18 regions),
-  `sample197` three. Crop: [`compare/sample641-balloon.png`](quality-runs/r2-20260919-shortlist/compare/sample641-balloon.png).
-- **Root cause, from the persisted `ownerDecision` on every region:** F04's live owner veto
-  (`worker/src/worker/handlers/ocr.py` `owner_aware_grouping_context` — *"a rejected decision can
-  only split a component"*) applies F01's rule (`services/owner_assignment.py`
-  `assign_captured_owners`): a multi-fragment owner needs every fragment's quad with all four
-  corners inside one validated detector container (`_containing_container`, `:276`). Line
-  continuity passes (`lc=vertical, gap 0`); the decline is `incomplete-validated-container`
-  (some columns outside the polygon: sample641 `bubble_3` → `[None, 'bubble-3', 'bubble-3', 'bubble-3', 'bubble-3']`;
-  sample7 `bubble_4` → `[None, None, 'bubble-4', None]`) or `missing-validated-container` (none
-  found at all). The detector's container is frequently column-sized (sample641 `bubble_3`:
-  72×176 for a 150 px-wide balloon). When the decision is `unknown` the whole group falls to
-  singletons; the only partial-merge path is exactly two members with one outsider (`:142`).
-  August's `merge_regions` had no veto and merged the balloon. The six fixtures could not show
-  it: their text is free-standing (`direct_text`, mostly single fragments).
-- **Not the R2 area gate** (`OCR_COMPONENT_MAX_AREA_FRACTION`): no group came near 25 %.
-- **Where it lands:** the same detector-container family as `AUDIT-R10`. Options are (a) a
-  container test that tolerates a column crossing the polygon edge (containment by centre or by
-  ≥ N % of quad area, not all four corners), (b) merging the members that *are* inside one
-  container and leaving only the outsiders as singletons, (c) fixing the container itself (why
-  YOLO/contour returns a column-sized box for a full balloon). Any of them changes what R3's
-  region-masked gate and the 24 controls measure, so the order relative to R3 is the user's call.
-- **Fixed in code 2026-09-19 (R6, worker `1c62e13`).** The user chose R6 before R3. It was (a), and
-  the "column-sized container" was a misreading: the persisted 72×176 polygon is the *post-split*
-  local crop (`containerResolution = resolved-local-split`), and the real YOLO container is the
-  full balloon. The mechanism is that a balloon is an ellipse and a column is a rectangle — the
-  outer columns' corners are past the curve on every multi-line balloon, so all-four-corners
-  failed exactly the balloons that hold sentences. `_containing_container` now needs ≥ 0.75 of the
-  quad's area inside one container (measured floor on the three pages: 0.875 for every fragment
-  that belongs). Details, the 42-fragment table and the gate runbook in
-  [R6.md](quality-checkpoints/R6.md). Stays open until the live gate runs.
+- **Measured 2026-09-25 on the dev stack's "Tests" series.** The owner veto
+  (`worker/src/worker/services/owner_assignment.py::_line_continuity`) split 8 grouping components
+  back into singletons — 42 regions on 5 pages: 25 for `insufficient-lateral-line-overlap`, 17
+  for `mixed-line-orientation`. 7 of the 8 had every member inside one detected balloon.
+- **Mechanism.** The check sorts members by x and needs each neighbour to overlap the next along
+  the line. When OCR breaks one vertical column in two (Ch.3 p2: ブラ above イダルなんて), the top
+  piece's x-neighbour is the next column (overlap ≈ 28 %), and the whole balloon is vetoed.
+- **Separate miss (Ch.1 p4).** Horizontal profile lines 8–9 px apart against a proximity budget of
+  0.35 × line height ≈ 7 px (`OCR_MERGE_THRESHOLD=0.35`), so a paragraph's lines stay separate.
+- **Decision (user, 2026-09-25):** handled in the upcoming grouping phase, not now. Workaround:
+  Reader *Merge regions* (`AUDIT-F29`). Fix idea: join collinear pieces of one column before the
+  continuity test, opt-in (the grouping frozen-equivalence test), measured on the corpus.
 
 ### `AUDIT-R12` (medium): SFX appear to shrink neighbouring balloons
 
@@ -1481,6 +1398,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   responsive rendering or touch drawer behaviour at tablet viewports.
 - **Next Step / Blocker:** jsdom does not calculate CSS layout. Needs a real-browser smoke test via
   Playwright.
+- **Live finding 2026-09-25 (LAN access, `DEV_HTTP_BIND=0.0.0.0`).** At phone and tablet widths both Reader sidebars open side by side and leave the page almost no width. Candidate fix: below a breakpoint the sidebars become overlay drawers, one at a time. The user is testing the UI on their devices first and will say what to change; not started.
 
 ### `AUDIT-D5` (low): No memory limits on auxiliary containers
 

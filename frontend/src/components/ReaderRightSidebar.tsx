@@ -36,7 +36,12 @@ import {
   type IssueAction,
   type RegionIssue,
 } from "../utils/regionIssues";
-import { IssueCard, IssueList, MergePanel } from "./ReaderIssues";
+import {
+  IssueCard,
+  IssueList,
+  MergePanel,
+  type MergePreview,
+} from "./ReaderIssues";
 
 // --- AUDIT-F2: static sx literals hoisted to module scope --------------------
 //
@@ -495,6 +500,8 @@ export interface ReaderRightSidebarProps {
   isReviewingRegion: boolean;
   mergeMode: boolean;
   mergeSelection: string[];
+  /** The backend's dry run for the current selection: reading order and joined text. */
+  mergePreview: MergePreview | null;
   onToggleMergeMode: () => void;
   onToggleMergeRegion: (regionId: string) => void;
   onConfirmMerge: () => void;
@@ -559,6 +566,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     isReviewingRegion,
     mergeMode,
     mergeSelection,
+    mergePreview,
     onToggleMergeMode,
     onToggleMergeRegion,
     onConfirmMerge,
@@ -595,6 +603,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               regions={ocrRegions}
               selected={mergeSelection}
               busy={isMerging}
+              preview={mergePreview}
               onToggle={onToggleMergeRegion}
               onMerge={onConfirmMerge}
               onCancel={onToggleMergeMode}

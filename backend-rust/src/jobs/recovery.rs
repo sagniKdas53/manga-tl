@@ -359,8 +359,43 @@ fn snapshot_backoff_record(page_id: Uuid) {
         .insert(page_id, std::time::Instant::now());
 }
 
-/// DebouncedRenderService port. Pages edited more than 10s ago whose last render is
-/// older than their last edit get a debounced render redo.
+/// How long a page must sit unedited before its debounced render (`RENDER_DEBOUNCE_SECONDS`,
+/// default 30). A burst of edits renders once, after the last of them.
+pub fn render_debounce_seconds() -> i64 {
+    std::env::var("RENDER_DEBOUNCE_SECONDS")
+        .ok()
+        .and_then(|v| v.trim().parse::<i64>().ok())
+        .filter(|v| *v >= 0)
+        .unwrap_or(30)
+}
+
+/// Stages that change what a page will show. While one is queued or running for a page, its
+/// debounced render waits: rendering now would draw a half-finished page, and every pipeline
+/// render is followed by a paid QA pass. A merge is the case that showed it — the merge edits the
+/// page at once, its translation lands minutes later, and QA judged the page in between. The
+/// page stays dirty, so the first sweep after the work ends renders it once. `render` and `qa`
+/// are not here, or a page would wait on itself.
+const RENDER_BLOCKING_JOBS: &[&str] = &[
+    "panel-detection",
+    "ocr",
+    "layout",
+    "cleanup",
+    "translation",
+    "region-redo-tl",
+    "region-redo-ocr",
+    "qa-re-ocr",
+];
+
+/// How long a PROCESSING row with no lease (queued before leases existed) holds a render back —
+/// the same ten minutes recovery gives such rows before re-dispatching them. A leased row blocks
+/// while its lease is live; a PENDING row always blocks, however long it has queued, because
+/// the dispatcher will either run it or fail it and a long queue is exactly when a page's merge
+/// sits waiting for its cleanup.
+const RENDER_BLOCK_UNLEASED_MINUTES: i64 = 10;
+
+/// DebouncedRenderService port. Pages edited more than [`render_debounce_seconds`] ago whose last
+/// render is older than their last edit, and with no [`RENDER_BLOCKING_JOBS`] in flight, get a
+/// debounced render redo.
 ///
 /// A page whose current revision has no immutable snapshot gets one built here from its rows
 /// (`page_scene_builder`) before the render is queued. That is what editor edits rely on: the
@@ -373,15 +408,24 @@ fn snapshot_backoff_record(page_id: Uuid) {
 /// render triggered" every 5 s per page — 3,130 lines and zero renders in one afternoon's
 /// `logs/run-1.log`.
 pub async fn process_pending_renders(state: &AppState) {
-    let threshold = chrono::Utc::now() - chrono::Duration::seconds(10);
+    let threshold = chrono::Utc::now() - chrono::Duration::seconds(render_debounce_seconds());
+    let unleased_after =
+        chrono::Utc::now() - chrono::Duration::minutes(RENDER_BLOCK_UNLEASED_MINUTES);
     // findPagesNeedingRender: last_edited_at < threshold AND (last_rendered_at IS NULL
-    // OR last_edited_at > last_rendered_at).
+    // OR last_edited_at > last_rendered_at), and nothing still working on the page.
     let pages: Vec<crate::models::Page> = sqlx::query_as(
-        "SELECT * FROM pages \
-         WHERE last_edited_at IS NOT NULL AND last_edited_at < $1 \
-           AND (last_rendered_at IS NULL OR last_edited_at > last_rendered_at)",
+        "SELECT * FROM pages p \
+         WHERE p.last_edited_at IS NOT NULL AND p.last_edited_at < $1 \
+           AND (p.last_rendered_at IS NULL OR p.last_edited_at > p.last_rendered_at) \
+           AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.page_id = p.id AND j.type = ANY($2) \
+                 AND (j.status = 'PENDING' \
+                      OR (j.status = 'PROCESSING' AND (j.lease_expires_at > now() \
+                          OR (j.lease_expires_at IS NULL \
+                              AND COALESCE(j.updated_at, j.created_at) > $3)))))",
     )
     .bind(threshold)
+    .bind(RENDER_BLOCKING_JOBS)
+    .bind(unleased_after)
     .fetch_all(&state.pool)
     .await
     .unwrap_or_default();

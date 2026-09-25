@@ -358,24 +358,61 @@ export const IssueCard: React.FC<{
   );
 };
 
+/** What a merge would do, from the backend's dry run: pieces in reading order, and their text. */
+export interface MergePreview {
+  order: string[];
+  text: string;
+}
+
+// A settled decision is never suggested back into a block.
+const SETTLED = new Set(["rejected", "reject_sfx"]);
+
 /**
  * Picking the fragments that form one text block. A list with checkboxes, so it works by touch as
  * well as by clicking boxes on the page.
+ *
+ * The pieces are read in the order the backend's dry run gives — columns right to left for
+ * vertical text, lines top to bottom for horizontal — not in their Reader numbers, which follow
+ * OCR's order. The panel shows that order and the joined text before anything is merged, and the
+ * page numbers the picked pieces 1, 2, 3… along the same path, so the order can be checked by
+ * where the pieces sit without reading the source language.
  */
 export const MergePanel: React.FC<{
   regions: OcrRegion[];
   selected: string[];
   busy: boolean;
+  preview: MergePreview | null;
   onToggle: (regionId: string) => void;
   onMerge: () => void;
   onCancel: () => void;
-}> = ({ regions, selected, busy, onToggle, onMerge, onCancel }) => {
+}> = ({ regions, selected, busy, preview, onToggle, onMerge, onCancel }) => {
   const ordered = [...regions].sort(
     (a, b) =>
       (a.bubbleReadingOrder ?? Number.MAX_SAFE_INTEGER) -
       (b.bubbleReadingOrder ?? Number.MAX_SAFE_INTEGER),
   );
   const chosen = ordered.filter((r) => selected.includes(r.id));
+  const byId = new Map(regions.map((r) => [r.id, r]));
+  // The preview answers for one selection; while a newer one is on its way, show none.
+  const current =
+    preview &&
+    preview.order.length === selected.length &&
+    preview.order.every((id) => selected.includes(id))
+      ? preview
+      : null;
+  // Pieces the detector put in the same balloon as a picked one, not yet picked.
+  const balloons = new Set(
+    chosen
+      .map((r) => r.bubbleId)
+      .filter((id): id is string => !!id && id.startsWith("bubble")),
+  );
+  const siblings = ordered.filter(
+    (r) =>
+      !selected.includes(r.id) &&
+      !!r.bubbleId &&
+      balloons.has(r.bubbleId) &&
+      !SETTLED.has(r.qaStatus ?? ""),
+  );
   // Merge mode is started from Editor Tools, further down the sidebar; bring the list into view.
   const panelRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
@@ -460,6 +497,74 @@ export const MergePanel: React.FC<{
             );
           })}
         </Box>
+        {siblings.length > 0 && (
+          <Button
+            variant="text"
+            size="small"
+            onClick={() => siblings.forEach((r) => onToggle(r.id))}
+            sx={{ textTransform: "none", mt: 0.5, px: 0.5 }}
+          >
+            {`Add the other ${siblings.length === 1 ? "piece" : `${siblings.length} pieces`} in this balloon`}
+          </Button>
+        )}
+        {chosen.length >= 2 && (
+          <Box
+            role="region"
+            aria-label="Merge preview"
+            sx={{
+              mt: 1,
+              p: 1,
+              borderRadius: "6px",
+              backgroundColor: "var(--bg-input, rgba(0,0,0,0.04))",
+            }}
+          >
+            <Typography
+              component="p"
+              sx={{ ...smallTextSx, fontWeight: 600, mb: 0.5 }}
+            >
+              Read in this order
+            </Typography>
+            {current ? (
+              <>
+                <Typography
+                  component="p"
+                  sx={{ fontSize: "12px", color: "var(--text-main)" }}
+                >
+                  {current.order
+                    .map((id) => `#${byId.get(id)?.bubbleReadingOrder ?? "?"}`)
+                    .join(" → ")}
+                </Typography>
+                <Typography
+                  component="p"
+                  lang={chosen[0]?.detectedLanguage || undefined}
+                  sx={{
+                    fontSize: "13px",
+                    color: "var(--text-main)",
+                    my: 0.5,
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {current.text}
+                </Typography>
+                <Typography
+                  component="p"
+                  sx={smallTextSx}
+                >
+                  The page numbers the picked pieces 1, 2, 3… in this order.
+                  Japanese columns read right to left, each top to bottom;
+                  horizontal lines read top to bottom.
+                </Typography>
+              </>
+            ) : (
+              <Typography
+                component="p"
+                sx={smallTextSx}
+              >
+                Working out the order…
+              </Typography>
+            )}
+          </Box>
+        )}
         <Box sx={{ display: "flex", gap: 1, mt: 1.25, alignItems: "center" }}>
           <Button
             variant="contained"
@@ -468,9 +573,7 @@ export const MergePanel: React.FC<{
             onClick={onMerge}
             sx={{ textTransform: "none", boxShadow: "none" }}
           >
-            {chosen.length >= 2
-              ? `Merge ${chosen.map((r) => `#${r.bubbleReadingOrder ?? "?"}`).join(" ")}`
-              : "Merge"}
+            {chosen.length >= 2 ? `Merge ${chosen.length} pieces` : "Merge"}
           </Button>
           <Button
             variant="text"
