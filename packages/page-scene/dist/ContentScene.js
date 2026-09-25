@@ -1,4 +1,19 @@
 import { clampLineCenter, fitTextInBox, textFitBox, } from "./layout.js";
+/**
+ * Stroke width as a fraction of the resolved font px (tracker R2, user decision 2 of 2026-09-17).
+ * Read off Torii's client (`renderPipelineVectorText`, 2026-09-18): 6 px at 24 px, 8-12 px at
+ * 40-77 px, i.e. 15-25 %. The previous 4 % was about five times too thin to read as a halo.
+ */
+export const STROKE_WIDTH_RATIO = 0.18;
+export function resolvedTextLayout(scene) {
+    return scene.objects
+        .filter((object) => object.lineBoxes.length > 0)
+        .map((object) => ({
+        object_id: object.objectId,
+        font_size: object.fontSize,
+        lines: object.lineBoxes.map((line) => line.text),
+    }));
+}
 function fontSpec(style, fontSize) {
     return `${style.weight} ${fontSize}px "${style.fontFamily}", sans-serif`;
 }
@@ -39,7 +54,7 @@ export function resolvePageScene(input, measureText) {
         }
         const fitBox = textFitBox(object.transform, {
             paddingPx: object.style.padding,
-            safetyPercent: 100,
+            safetyPercent: object.style.safetyPercent ?? 100,
         });
         const fit = fitTextInBox({
             text: object.text,
@@ -72,6 +87,18 @@ export function resolvePageScene(input, measureText) {
     }
     return { input, objects, diagnostics };
 }
+/**
+ * Formats a scene number for an SVG attribute. The scene arrives from outside this package, so
+ * a numeric field is coerced and refused unless it is a finite number; nothing but digits, a sign,
+ * a point, or an exponent can reach the markup through it (CodeQL js/html-constructed-from-input).
+ */
+function svgNumber(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+        throw new TypeError(`page-scene: expected a finite number, got ${String(value)}`);
+    }
+    return String(numeric);
+}
 function escapeXml(value) {
     return value.replace(/[&<>"']/g, (character) => ({
         "&": "&amp;",
@@ -91,7 +118,7 @@ export function renderPageSceneSvg(scene) {
     const cleanupMarkup = [...scene.input.cleanupAssets]
         .filter((asset) => asset.visible)
         .sort((left, right) => left.zIndex - right.zIndex)
-        .map((asset) => `<image data-cleanup-id="${escapeXml(asset.cleanupId)}" href="${escapeXml(asset.href)}" x="${asset.x}" y="${asset.y}" width="${asset.width}" height="${asset.height}"/>`)
+        .map((asset) => `<image data-cleanup-id="${escapeXml(asset.cleanupId)}" href="${escapeXml(asset.href)}" x="${svgNumber(asset.x)}" y="${svgNumber(asset.y)}" width="${svgNumber(asset.width)}" height="${svgNumber(asset.height)}"/>`)
         .join("");
     const glyphMarkup = [...scene.input.textObjects]
         .filter((object) => object.visible)
@@ -102,15 +129,23 @@ export function renderPageSceneSvg(scene) {
             return "";
         const centerX = object.transform.x + object.transform.width / 2;
         const centerY = object.transform.y + object.transform.height / 2;
-        const stroke = object.style.stroke || "none";
-        const strokeWidth = object.style.stroke
-            ? Math.max(1, resolved.fontSize * 0.04)
-            : 0;
-        const lines = resolved.lineBoxes
-            .map((line) => `<text x="${line.x}" y="${line.y + line.height * 0.8}" fill="${escapeXml(object.style.fill)}" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" paint-order="stroke fill" font-family="${escapeXml(object.style.fontFamily)}" font-size="${resolved.fontSize}" font-weight="${object.style.weight}" text-anchor="start" style="writing-mode:${object.writingMode}">${escapeXml(line.text)}</text>`)
+        const common = `font-family="${escapeXml(object.style.fontFamily)}" font-size="${svgNumber(resolved.fontSize)}" font-weight="${svgNumber(object.style.weight)}" text-anchor="start" style="writing-mode:${escapeXml(object.writingMode)}"`;
+        const lineText = (line, paint) => `<text x="${svgNumber(line.x)}" y="${svgNumber(line.y + line.height * 0.8)}" ${paint} ${common}>${escapeXml(line.text)}</text>`;
+        // Torii's order: the stroke pass for every line first, then the fill pass for every line.
+        // One <text> per line with paint-order would let line 2's halo cover line 1's glyphs
+        // wherever ascenders and descenders meet, which at this width they do.
+        const strokePass = object.style.stroke
+            ? resolved.lineBoxes
+                .map((line) => lineText(line, `fill="none" stroke="${escapeXml(object.style.stroke)}" stroke-width="${svgNumber(Math.max(1, resolved.fontSize * STROKE_WIDTH_RATIO))}" stroke-linejoin="round" stroke-linecap="round"`))
+                .join("")
+            : "";
+        const fillPass = resolved.lineBoxes
+            .map((line) => lineText(line, `fill="${escapeXml(object.style.fill)}" stroke="none"`))
             .join("");
-        return `<g data-text-object-id="${escapeXml(object.objectId)}" transform="rotate(${object.transform.rotationDegrees} ${centerX} ${centerY})">${lines}</g>`;
+        return `<g data-text-object-id="${escapeXml(object.objectId)}" transform="rotate(${svgNumber(object.transform.rotationDegrees)} ${svgNumber(centerX)} ${svgNumber(centerY)})"><g data-text-pass="stroke">${strokePass}</g><g data-text-pass="fill">${fillPass}</g></g>`;
     })
         .join("");
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${source.width}" height="${source.height}" viewBox="0 0 ${source.width} ${source.height}" data-scene-content="page-scene-v1"><image data-scene-layer="source" href="${escapeXml(source.href)}" x="0" y="0" width="${source.width}" height="${source.height}"/><g data-scene-layer="cleanup">${cleanupMarkup}</g><g data-scene-layer="glyphs">${glyphMarkup}</g></svg>`;
+    const width = svgNumber(source.width);
+    const height = svgNumber(source.height);
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" data-scene-content="page-scene-v1"><image data-scene-layer="source" href="${escapeXml(source.href)}" x="0" y="0" width="${width}" height="${height}"/><g data-scene-layer="cleanup">${cleanupMarkup}</g><g data-scene-layer="glyphs">${glyphMarkup}</g></svg>`;
 }

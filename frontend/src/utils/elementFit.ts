@@ -1,9 +1,14 @@
 import type { LayerElement } from "../types";
 import { fitTextInBox, type FitResult } from "./fitText";
-import { textFitBox, type FitBox, type TextBoxInset } from "./textFitBox";
+import {
+  insetForBox,
+  textFitBox,
+  type FitBox,
+  type TextBoxGeometry,
+} from "./textFitBox";
 
 export interface ElementFit {
-  /** The rectangle the text was fitted into: the element's box minus the configured inset. */
+  /** The rectangle the text was fitted into: the element's box minus its resolved inset. */
   box: FitBox;
   fit: FitResult;
   fontSize: number;
@@ -19,17 +24,17 @@ export interface ElementFit {
  */
 export function elementFit(
   element: LayerElement,
-  inset: TextBoxInset,
+  geometry: TextBoxGeometry,
 ): ElementFit {
-  const box = textFitBox(
-    {
-      x: element.x,
-      y: element.y,
-      width: element.maxWidth || 100,
-      height: element.maxHeight || 100,
-    },
-    inset,
-  );
+  const raw = {
+    x: element.x,
+    y: element.y,
+    width: element.maxWidth || 100,
+    height: element.maxHeight || 100,
+  };
+  // The inset scales with this box (System Settings: padding %, max px, safety %), the same rule
+  // the scene builder applies for the renderer.
+  const box = textFitBox(raw, insetForBox(raw, geometry));
   const fit = fitTextInBox(
     element.text || "",
     box.width,

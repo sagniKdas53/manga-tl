@@ -1975,6 +1975,13 @@ pub async fn merge_ocr_regions(
         .collect();
     merged_from.sort();
     merged_from.dedup();
+    // The pieces as read, for the translator: OCR splits and geometric order can both be wrong,
+    // and a model shown the pieces can put them back in the order that makes sense.
+    let merged_texts: Vec<String> = order
+        .iter()
+        .map(|&i| fragments[i].text.trim().to_string())
+        .filter(|text| !text.is_empty())
+        .collect();
 
     let result: Result<OcrRegion, String> = async {
         let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
@@ -2014,7 +2021,7 @@ pub async fn merge_ocr_regions(
                cleanup_patch_asset_id = NULL, cleanup_patch_sha256 = NULL, cleanup_patch_byte_length = NULL, \
                cleanup_bounds = NULL, cleanup_generator_sha256 = NULL, \
                cleanup_diagnostics = '[\"merged in review; cleanup pending\"]'::jsonb, \
-               ownership_provenance = COALESCE(ownership_provenance, '{}'::jsonb) || jsonb_build_object('mergedFrom', $16::jsonb) \
+               ownership_provenance = COALESCE(ownership_provenance, '{}'::jsonb) || jsonb_build_object('mergedFrom', $16::jsonb, 'mergedTexts', $17::jsonb) \
              WHERE id = $1 RETURNING *",
         )
         .bind(survivor.id)
@@ -2033,6 +2040,7 @@ pub async fn merge_ocr_regions(
         .bind(safe.map(|b| b.2))
         .bind(safe.map(|b| b.3))
         .bind(serde_json::json!(merged_from))
+        .bind(serde_json::json!(merged_texts))
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;

@@ -64,6 +64,9 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   const [routingStrategy, setRoutingStrategy] = useState(
     editingSeries?.routingStrategy || "",
   );
+  const [cleanupMode, setCleanupMode] = useState(
+    editingSeries?.cleanupMode || "",
+  );
   const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
     editingSeries?.useFallbackModels ?? null,
   );
@@ -94,6 +97,7 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
       setQaVlmModel(editingSeries.qaVlmModel || "");
       setQaMode(editingSeries.qaMode || "");
       setRoutingStrategy(editingSeries.routingStrategy || "");
+      setCleanupMode(editingSeries.cleanupMode || "");
       setUseFallbackModels(editingSeries.useFallbackModels ?? null);
     } else {
       setTitle("");
@@ -109,6 +113,7 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
       setQaVlmModel("");
       setQaMode("");
       setRoutingStrategy("");
+      setCleanupMode("");
       setUseFallbackModels(null);
     }
   } else if (!open && prevOpen) {
@@ -138,6 +143,7 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
     qaVlmModel,
     qaMode,
     routingStrategy,
+    cleanupMode,
     useFallbackModels,
   };
 
@@ -153,6 +159,7 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
     qaVlmModel: setQaVlmModel,
     qaMode: setQaMode,
     routingStrategy: setRoutingStrategy,
+    cleanupMode: setCleanupMode,
     useFallbackModels: setUseFallbackModels,
   };
 
@@ -190,6 +197,7 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
           qaVlmModel: qaVlmModel || null,
           qaMode: qaMode || null,
           routingStrategy: routingStrategy || null,
+          cleanupMode: cleanupMode || null,
           useFallbackModels: useFallbackModels,
         }),
       });
@@ -300,6 +308,7 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
             qaLlmModel: settings?.qaLlmModel,
             qaVlmModel: settings?.qaVlmModel,
             routingStrategy: settings?.routingStrategy,
+            cleanupMode: settings?.cleanupMode,
             useFallbackModels: settings?.useFallbackModels,
           }}
         />

@@ -404,6 +404,7 @@ pub async fn build_pipeline_scene(
     page_id: Uuid,
     revision: i32,
 ) -> Result<PipelineScene, String> {
+    let geometry = crate::settings::text_box_geometry(&state.pool).await;
     let page: Page = sqlx::query_as("SELECT * FROM pages WHERE id = $1")
         .bind(page_id)
         .fetch_optional(&mut **tx)
@@ -556,7 +557,7 @@ pub async fn build_pipeline_scene(
                 "transform": transform_for(element),
                 "writing_mode": "horizontal-tb",
                 "alignment": "center",
-                "style": style_for(element, &font.font_id),
+                "style": style_for(element, &font.font_id, &geometry),
                 "visible": true,
                 "z_index": *layer_z as i64 * 1000 + z_index,
             }));
@@ -726,7 +727,7 @@ pub async fn build_pipeline_scene(
             "transform": transform_for(element),
             "writing_mode": "horizontal-tb",
             "alignment": "center",
-            "style": style_for(element, &font.font_id),
+            "style": style_for(element, &font.font_id, &geometry),
             "visible": true,
             "z_index": *layer_z as i64 * 1000 + z_index,
         }));
@@ -783,7 +784,13 @@ fn transform_for(element: &LayerElement) -> Value {
     })
 }
 
-fn style_for(element: &LayerElement, font_id: &str) -> Value {
+fn style_for(
+    element: &LayerElement,
+    font_id: &str,
+    geometry: &crate::settings::TextBoxGeometry,
+) -> Value {
+    let width = element.max_width.filter(|w| *w > 0).unwrap_or(1) as f64;
+    let height = element.max_height.filter(|h| *h > 0).unwrap_or(1) as f64;
     json!({
         "font_id": font_id,
         "fill": element.text_color.clone().filter(|c| !c.trim().is_empty()).unwrap_or_else(|| "#000000".into()),
@@ -793,8 +800,10 @@ fn style_for(element: &LayerElement, font_id: &str) -> Value {
         // of the resolved font px; the colour is the worker's local-background sample.
         "stroke": element.background_color.clone().filter(|c| !c.trim().is_empty()).unwrap_or_default(),
         "weight": weight_for(element.font_weight.as_deref()),
-        // The Pillow path's DEFAULT_TEXT_BOX_PADDING_PX; the safety percent lives in the layout module.
-        "padding": 4.0,
+        // The inset from System Settings (percent of the box's shorter side, capped), resolved to
+        // px for this box so the frozen contract's single number carries it. It used to be a
+        // literal 4.0 whatever the settings said; only the editor read them.
+        "padding": geometry.padding_px(width, height),
     })
 }
 

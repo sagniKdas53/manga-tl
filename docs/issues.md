@@ -1,8 +1,8 @@
 # Issues & Technical Debt
 
-> **Standing: 119 filed, 91 closed, 28 open.** 2026-09-25 triage: `AUDIT-B15`, `B16`, `B19`, `B24`
+> **Standing: 121 filed, 92 closed, 29 open.** 2026-09-25 triage: `AUDIT-B15`, `B16`, `B19`, `B24`
 > closed (fixed or verified on the current tree), `AUDIT-R20` closed on its 2026-09-19 live gate,
-> `AUDIT-R21` filed (line-continuity veto), `AUDIT-B27` filed (settings change re-QAs every page), `AUDIT-F29` merge half shipped (split still open), `AUDIT-R18`
+> `AUDIT-R21` filed (line-continuity veto), `AUDIT-B27` filed (settings change re-QAs every page), `AUDIT-B28` filed and fixed (busy renderer failed renders), `AUDIT-R22` filed (LaMa-mpe mode), `AUDIT-F29` merge half shipped (split still open), `AUDIT-R18`
 > narrowed. Closed entries moved to [archive/history.md](archive/history.md#2026-09-25--issues-closed-in-the-r3-triage).
 >
 > Earlier: `AUDIT-B25`, `AUDIT-F29` and `AUDIT-B26` were filed
@@ -42,7 +42,7 @@ its test are present on the branch); nothing in this section was re-tested throu
 | # | Bullet (report wording) | ID | State today | Why this rank |
 | :--- | :--- | :--- | :--- | :--- |
 | 1 | Canvas changes are never synced to the rendered output | `AUDIT-B15` | **Closed 2026-09-25** (callback-only stamp; lost render re-triggers) | Loses edits permanently; everything else is cosmetic next to it |
-| 2 | Padding control per text box / bubble (image 2) | `AUDIT-F16` follow-up | **Open.** F16 shipped `textBoxPaddingPx` as one *global* setting; there is no per-element field. No longer gated on `AUDIT-B18` (closed by `LOCK-3`): the column goes into `init.sql`, the stack is recreated | The user's ask is per-bubble; the global dial does not answer it |
+| 2 | Padding control per text box / bubble (image 2) | `AUDIT-F16` follow-up | **Open (narrowed 2026-09-25).** Global padding is now % of each box with a px cap, and reaches the export; there is still no per-element field. No longer gated on `AUDIT-B18` (closed by `LOCK-3`): the column goes into `init.sql`, the stack is recreated | The user's ask is per-bubble; the global dial does not answer it |
 | 3 | 2 light + 1 heavy slot logic dropped; all 3 slots stuck on slow steps (image 4) | `AUDIT-W14` | Needs measurement. The capacity-snapshot bug in `dispatcher.rs` is unambiguous; the tier split is a W10 re-measurement, not a revert | Visible every run; the dispatcher half is a small fix |
 | 4 | Translation re-region redo doesn't make a new layer (image 7) | `AUDIT-B16` | **Closed 2026-09-25** (redo now reaches the render) | Unverified either way since 09-02 |
 | 5 | Queue Manager doesn't update quickly | `AUDIT-F20` (sort) fixed; the *latency* half was never filed | **New, narrow:** the sort rank is fixed; refresh cadence is not tracked anywhere |
@@ -286,6 +286,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R19`](#audit-r19-medium-a-free-standing-caption-gets-a-synthetic-rounded-plate-a-third-larger-than-its-text) | Medium | Worker/Frontend | Text with no detected balloon gets a rounded-rectangle plate padded 18% of its short side with 22%-radius corners; the editor box is 10px inside it and reshape only edits the plate | **Fixed in R2 (2026-09-19)**: no plate for free text, `box_shape` from detection; verified on the p5 caption live |
 | [`AUDIT-R20`](archive/history.md#audit-r20-high-a-balloon-is-emitted-as-one-region-per-column) | High | Worker | The live owner veto splits a balloon into one region per column/line when the detector's container does not enclose every column; each piece is translated and typeset alone | **Closed 2026-09-19** — R6 live gate passed; follow-on split filed as `AUDIT-R21` |
 | [`AUDIT-R21`](#audit-r21-medium-the-line-continuity-veto-splits-a-balloon-whose-column-ocr-broke-in-two) | Medium | Worker | The line-continuity veto splits a balloon when OCR broke one column in two; page-4 line gaps miss the 0.35 budget | Grouping phase (user decision 2026-09-25); manual merge is the workaround |
+| [`AUDIT-R22`](#audit-r22-feature-lama-mpe-as-a-cleanup-mode) | Feature | Worker | LaMa-mpe beat AOT by 1.2 dB but its model/code are gone; needs a clean-room network before it can be a cleanup mode | Filed 2026-09-25 |
 | [`AUDIT-R17`](#audit-r17-unranked-shaperectangular-is-not-ignored) | Unranked | Render | Reported as an ignored API parameter; the branch exists and the contract holds end to end | **Closed on assessment 2026-09-05** |
 
 ### Cosmetic & long tail
@@ -417,6 +418,14 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Not done:** *per-element* padding. That needs a column on `layer_elements`, and there is no
   migration runner — `init.sql` only runs on a fresh volume, so a new column would break every
   existing deployment until one exists. Filed as [`AUDIT-B18`](#audit-b18-medium-there-is-no-schema-migration-runner).
+- **2026-09-25: the setting now scales with the box and reaches the export.** It became *Text Box
+  Padding (%)* of each box's shorter side, capped by *Max Padding (px)*, plus *Text Safety Margin
+  (%)*; either padding knob at 0 turns padding off. Until then only the editor read the setting:
+  the scene builder wrote a literal `padding: 4.0` and the renderer fitted at 100 % safety. Now
+  `page_scene_builder::style_for` resolves each box's padding (`settings::TextBoxGeometry`) and the
+  render job carries the safety share to the renderer (outside the frozen scene contract, inside
+  the render-input digest). Defaults 4 % / 4 px / 100 % reproduce the old export. The per-bubble
+  override (priority list #2) is still open.
 
 ### `AUDIT-B18` (medium): There is no schema migration runner
 
@@ -979,6 +988,8 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Decision needed:** a settings re-render changes layout, not translation, so it probably should
   not re-run QA (mark those renders like QA's own final pass), and may want to be scoped (per
   series, or on next open) rather than global. Not changed.
+- **More relevant since 2026-09-25:** the padding and safety settings now change the export, so the
+  re-render is real work rather than an identical redraw; each one is still followed by QA.
 
 ### `AUDIT-B23` (medium): The dispatcher 429 cooldown never escalates under sustained saturation
 
@@ -1165,6 +1176,21 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Decision (user, 2026-09-25):** handled in the upcoming grouping phase, not now. Workaround:
   Reader *Merge regions* (`AUDIT-F29`). Fix idea: join collinear pieces of one column before the
   continuity test, opt-in (the grouping frozen-equivalence test), measured on the corpus.
+
+### `AUDIT-R22` (feature): LaMa-mpe as a cleanup mode
+
+- **Why:** on the 23-region erasure corpus (2026-09-20) LaMa-mpe scored 24.34 dB / MAE 9.45 against
+  AOT-GAN's 23.11 dB / 10.43, visibly cleaner on dark textured backgrounds.
+- **Why it is not a mode yet:** neither the ONNX export nor the prototype code survived. The
+  prototype lived in a scratch harness, and its ZITS positional-encoding inputs (`rel_pos`, `direct`)
+  were reproduced from memory, unverified. The project rule is weights yes, ported code no: the
+  network has to be reimplemented clean-room from behaviour before the published weights can be
+  loaded.
+- **Where it plugs in:** `cleanup_reconstruct.RECONSTRUCTION_MODES` and the mode selector (System
+  Settings / chapter / series), shipped 2026-09-25 with `auto`/`telea`/`aot`/`off`. A new mode needs
+  its own generator digest (`generator_sha256_for`).
+- **Next step:** a bounded packet. Reimplement, verify against the 2026-09-20 numbers on the same 23
+  regions, then add it as a mode. Its measured cost was 42 s for 23 regions against AOT's 23 s.
 
 ### `AUDIT-R12` (medium): SFX appear to shrink neighbouring balloons
 

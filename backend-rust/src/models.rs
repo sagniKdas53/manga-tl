@@ -64,6 +64,7 @@ pub struct Series {
     pub tl_provider: Option<String>,
     pub updated_at: DateTime<Utc>,
     pub routing_strategy: Option<String>,
+    pub cleanup_mode: Option<String>,
     pub use_fallback_models: Option<bool>,
     pub created_by: Option<Uuid>,
 }
@@ -92,6 +93,7 @@ pub struct Chapter {
     pub use_context_memory: bool,
     pub use_fallback_models: Option<bool>,
     pub routing_strategy: Option<String>,
+    pub cleanup_mode: Option<String>,
     pub series_id: Uuid,
 }
 

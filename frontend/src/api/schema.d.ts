@@ -1051,6 +1051,8 @@ export interface components {
         ChapterDto: {
             /** Format: double */
             chapterNumber?: number;
+            /** @description Cleanup reconstruction mode: auto, telea, aot or off (null inherits). */
+            cleanupMode?: string;
             coverImageUrl?: string;
             /** Format: date-time */
             createdAt?: string;
@@ -1423,6 +1425,8 @@ export interface components {
             vlmModel?: string;
         };
         SeriesDto: {
+            /** @description Cleanup reconstruction mode: auto, telea, aot or off (null inherits). */
+            cleanupMode?: string;
             coverImageUrl?: string;
             /** Format: date-time */
             createdAt?: string;
@@ -1455,6 +1459,8 @@ export interface components {
         SystemSettingsDto: {
             activeOcrProviders?: string[];
             activeProviders?: string[];
+            /** @description Cleanup reconstruction mode: auto, telea, aot or off (null inherits). */
+            cleanupMode?: string;
             disableLocalLlm?: boolean;
             disableLocalOcr?: boolean;
             localOcrModel?: string;
@@ -1473,8 +1479,16 @@ export interface components {
             qaVlmModel?: string;
             qaVlmModelList?: string[];
             routingStrategy?: string;
-            /** Format: int32 */
-            textBoxPaddingPx?: number;
+            /**
+             * Format: int32
+             * @description Padding never exceeds this many px (0 turns padding off).
+             */
+            textBoxPaddingMaxPx?: number;
+            /**
+             * Format: int32
+             * @description Padding on each edge as a percentage of the box's shorter side (0 turns padding off).
+             */
+            textBoxPaddingPercent?: number;
             /** Format: int32 */
             textBoxSafetyPercent?: number;
             tlLlmModelList?: string[];
@@ -3564,6 +3578,7 @@ export interface operations {
                 qaVlmModel?: string;
                 qaMode?: string;
                 routingStrategy?: string;
+                cleanupMode?: string;
                 useFallbackModels?: boolean;
             };
             header?: never;

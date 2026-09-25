@@ -6,6 +6,7 @@ import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import FormControl from "@mui/material/FormControl";
+import FormHelperText from "@mui/material/FormHelperText";
 import Grid from "@mui/material/Grid";
 import InputLabel from "@mui/material/InputLabel";
 import MenuItem from "@mui/material/MenuItem";
@@ -14,6 +15,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { modelOptionLabel } from "../modelPricing";
 import { safeFetch } from "../utils";
+import { CLEANUP_MODE_OPTIONS } from "../utils/cleanupModes";
 import type { ModelEntry, SystemSettingsDto } from "../types";
 import { useToast } from "./ToastContext";
 
@@ -673,6 +675,48 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   pt: 1,
                 }}
               >
+                Cleanup
+              </Typography>
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <FormControl
+                fullWidth
+                size="small"
+              >
+                <InputLabel>Cleanup Mode</InputLabel>
+                <Select
+                  value={settings.cleanupMode || "auto"}
+                  label="Cleanup Mode"
+                  onChange={(e) => handleChange("cleanupMode", e.target.value)}
+                >
+                  {CLEANUP_MODE_OPTIONS.map((option) => (
+                    <MenuItem
+                      key={option.value}
+                      value={option.value}
+                    >
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>
+                  Applies to pages cleaned from now on; redo OCR to re-clean a
+                  page
+                </FormHelperText>
+              </FormControl>
+            </Grid>
+
+            <Grid size={12}>
+              <Typography
+                variant="overline"
+                sx={{
+                  color: "text.disabled",
+                  display: "block",
+                  borderTop: 1,
+                  borderColor: "divider",
+                  pt: 1,
+                }}
+              >
                 Advanced Routing
               </Typography>
             </Grid>
@@ -713,12 +757,30 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 fullWidth
                 size="small"
                 type="number"
-                label="Text Box Padding (px)"
-                helperText="Trimmed from each edge before text is fitted"
-                value={settings.textBoxPaddingPx ?? 4}
+                label="Text Box Padding (%)"
+                helperText="Of each box's shorter side, per edge; 0 = none"
+                value={settings.textBoxPaddingPercent ?? 4}
                 onChange={(e) =>
                   handleChange(
-                    "textBoxPaddingPx",
+                    "textBoxPaddingPercent",
+                    Math.min(50, Math.max(0, parseInt(e.target.value) || 0)),
+                  )
+                }
+                slotProps={{ htmlInput: { min: 0, max: 50, step: 1 } }}
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="Max Padding (px)"
+                helperText="Padding never exceeds this; 0 = none"
+                value={settings.textBoxPaddingMaxPx ?? 4}
+                onChange={(e) =>
+                  handleChange(
+                    "textBoxPaddingMaxPx",
                     Math.min(64, Math.max(0, parseInt(e.target.value) || 0)),
                   )
                 }
@@ -732,8 +794,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 size="small"
                 type="number"
                 label="Text Safety Margin (%)"
-                helperText="Of what remains after padding; 95 keeps glyphs off the outline"
-                value={settings.textBoxSafetyPercent ?? 95}
+                helperText="Of what remains after padding; 100 = use all of it"
+                value={settings.textBoxSafetyPercent ?? 100}
                 onChange={(e) =>
                   handleChange(
                     "textBoxSafetyPercent",

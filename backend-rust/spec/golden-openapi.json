@@ -24,6 +24,10 @@
             "format": "double",
             "type": "number"
           },
+          "cleanupMode": {
+            "description": "Cleanup reconstruction mode: auto, telea, aot or off (null inherits).",
+            "type": "string"
+          },
           "coverImageUrl": {
             "type": "string"
           },
@@ -981,6 +985,10 @@
       },
       "SeriesDto": {
         "properties": {
+          "cleanupMode": {
+            "description": "Cleanup reconstruction mode: auto, telea, aot or off (null inherits).",
+            "type": "string"
+          },
           "coverImageUrl": {
             "type": "string"
           },
@@ -1073,6 +1081,10 @@
             },
             "type": "array"
           },
+          "cleanupMode": {
+            "description": "Cleanup reconstruction mode: auto, telea, aot or off (null inherits).",
+            "type": "string"
+          },
           "disableLocalLlm": {
             "type": "boolean"
           },
@@ -1133,7 +1145,13 @@
           "routingStrategy": {
             "type": "string"
           },
-          "textBoxPaddingPx": {
+          "textBoxPaddingMaxPx": {
+            "description": "Padding never exceeds this many px (0 turns padding off).",
+            "format": "int32",
+            "type": "integer"
+          },
+          "textBoxPaddingPercent": {
+            "description": "Padding on each edge as a percentage of the box's shorter side (0 turns padding off).",
             "format": "int32",
             "type": "integer"
           },
@@ -4419,6 +4437,14 @@
           {
             "in": "query",
             "name": "routingStrategy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cleanupMode",
             "required": false,
             "schema": {
               "type": "string"

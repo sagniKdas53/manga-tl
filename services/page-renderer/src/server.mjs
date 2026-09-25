@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
-import { PageRenderer, RendererError } from "./renderer.mjs";
+import { PageRenderer, RendererBusyError, RendererError } from "./renderer.mjs";
 
 const configSource = process.env.PAGE_RENDERER_CONFIG || "{}";
 const config = JSON.parse(configSource.startsWith("/") ? readFileSync(configSource, "utf8") : configSource);
@@ -24,8 +24,12 @@ createServer(async (request, response) => {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify({ ...result, png: undefined, pngBase64: result.png.toString("base64") }));
   } catch (error) {
-    const status = error instanceof RendererError ? 400 : 500;
-    response.writeHead(status, { "content-type": "application/json" });
+    // 503 + Retry-After for "busy" so the worker waits and resends; 400 stays "this scene is bad".
+    const busy = error instanceof RendererBusyError;
+    const status = busy ? 503 : error instanceof RendererError ? 400 : 500;
+    const headers = { "content-type": "application/json" };
+    if (busy) headers["retry-after"] = "2";
+    response.writeHead(status, headers);
     response.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
   }
 }).listen(Number(process.env.PORT || 8090));

@@ -933,6 +933,15 @@ pub async fn enqueue_job_with_ledger(
                     .or(series.use_fallback_models)
                     .unwrap_or(settings.use_fallback_models);
                 job.insert("useFallbackModels".into(), json!(resolved_fallback));
+
+                job.insert(
+                    "cleanupMode".into(),
+                    json!(crate::settings::cleanup_mode(&resolve_model(
+                        chapter.cleanup_mode.as_deref(),
+                        series.cleanup_mode.as_deref(),
+                        &settings.cleanup_mode,
+                    ))),
+                );
             }
         }
     }
@@ -942,29 +951,19 @@ pub async fn enqueue_job_with_ledger(
     let input_generation = page_opt.as_ref().map(|p| p.input_generation).unwrap_or(0);
     job.insert("inputGeneration".into(), json!(input_generation));
 
-    // AUDIT-R1/F16: the rectangle text is fitted into. Sent on every job rather than only render
-    // jobs, because layout also reasons about the text box and the two must not diverge again.
-    // Clamped in the same directions as the settings route: a 0% safety margin or a padding wider
-    // than the box fits everything into nothing.
+    // AUDIT-R1/F16: the rectangle text is fitted into. The padding reaches the renderer through
+    // each scene object's `style.padding` (the builder resolves it per box); the safety percent
+    // has no field in the frozen scene contract, so render jobs carry it and the worker hands it
+    // to the renderer with each text object. The percentage/max are sent for the record.
+    let geometry = crate::settings::text_box_geometry(&state.pool).await;
     job.insert(
-        "textBoxPaddingPx".into(),
-        json!(
-            crate::settings::setting_value(&state.pool, "textBoxPaddingPx", "4")
-                .await
-                .parse::<i32>()
-                .unwrap_or(4)
-                .clamp(0, 64)
-        ),
+        "textBoxPaddingPercent".into(),
+        json!(geometry.padding_percent),
     );
+    job.insert("textBoxPaddingMaxPx".into(), json!(geometry.padding_max_px));
     job.insert(
         "textBoxSafetyPercent".into(),
-        json!(
-            crate::settings::setting_value(&state.pool, "textBoxSafetyPercent", "95")
-                .await
-                .parse::<i32>()
-                .unwrap_or(95)
-                .clamp(1, 100)
-        ),
+        json!(geometry.safety_percent),
     );
 
     customize(&mut job);

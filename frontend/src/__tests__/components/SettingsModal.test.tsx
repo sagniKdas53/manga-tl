@@ -158,8 +158,8 @@ describe("SettingsModal", () => {
     });
 
     expect(screen.getByText("System Settings")).toBeInTheDocument();
-    // 10 comboboxes: Global OCR Provider, Global OCR Model, Global TL Provider, Global TL Model, Global QA Provider, QA Mode, Global QA LLM Model, Global QA VLM Model, OpenRouter Routing Strategy, Use Fallback Models
-    expect(screen.getAllByRole("combobox")).toHaveLength(10);
+    // 11 comboboxes: Global OCR Provider, Global OCR Model, Global TL Provider, Global TL Model, Global QA Provider, QA Mode, Global QA LLM Model, Global QA VLM Model, Cleanup Mode, OpenRouter Routing Strategy, Use Fallback Models
+    expect(screen.getAllByRole("combobox")).toHaveLength(11);
   });
 
   it("handles saving the updated settings", { timeout: 30000 }, async () => {

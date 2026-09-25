@@ -21,7 +21,13 @@ export interface SceneTextStyle {
   fill: string;
   stroke: string;
   weight: number;
+  /** Inset in px on every side, resolved per box by the scene builder from System Settings. */
   padding: number;
+  /**
+   * Share (1–100) of the padded box text may use. Not in the frozen scene contract: the render
+   * job carries the System Settings value and the worker attaches it here. Absent means 100.
+   */
+  safetyPercent?: number;
 }
 
 export interface SceneTextObject {
@@ -143,7 +149,7 @@ export function resolvePageScene(
 
     const fitBox = textFitBox(object.transform, {
       paddingPx: object.style.padding,
-      safetyPercent: 100,
+      safetyPercent: object.style.safetyPercent ?? 100,
     });
     const fit = fitTextInBox(
       {

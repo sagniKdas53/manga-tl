@@ -34,9 +34,10 @@ import {
   type RegionIssue,
 } from "../utils/regionIssues";
 import {
-  DEFAULT_TEXT_BOX_INSET,
+  DEFAULT_TEXT_BOX_GEOMETRY,
+  insetForBox,
   textFitBox,
-  type TextBoxInset,
+  type TextBoxGeometry,
 } from "../utils/textFitBox";
 import { usePersistedState } from "../hooks/usePersistedState";
 import ConfirmModal from "./ConfirmModal";
@@ -404,11 +405,11 @@ export const Reader: React.FC<ReaderProps> = ({
   const cacheEpochRef = useRef(0);
   const [cacheEpoch, setCacheEpoch] = useState(0);
 
-  // AUDIT-F16: the fitted rectangle's inset, from global settings rather than a literal. Starts at
-  // the value the pipeline has always used, so the reader is never briefly fitting to a different
-  // box than the export while the request is in flight.
-  const [textBoxInset, setTextBoxInset] = useState<TextBoxInset>(
-    DEFAULT_TEXT_BOX_INSET,
+  // AUDIT-F16: the fitted rectangle's inset, from global settings rather than a literal: padding
+  // as a percentage of each box (capped at a max px) and a safety share. Starts at the default
+  // the export uses, so the reader never briefly fits to a different box while this loads.
+  const [textBoxGeometry, setTextBoxGeometry] = useState<TextBoxGeometry>(
+    DEFAULT_TEXT_BOX_GEOMETRY,
   );
   useEffect(() => {
     let cancelled = false;
@@ -418,13 +419,13 @@ export const Reader: React.FC<ReaderProps> = ({
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled || !data) return;
-        setTextBoxInset({
-          paddingPx: Number(
-            data.textBoxPaddingPx ?? DEFAULT_TEXT_BOX_INSET.paddingPx,
+        const d = DEFAULT_TEXT_BOX_GEOMETRY;
+        setTextBoxGeometry({
+          paddingPercent: Number(
+            data.textBoxPaddingPercent ?? d.paddingPercent,
           ),
-          safetyPercent: Number(
-            data.textBoxSafetyPercent ?? DEFAULT_TEXT_BOX_INSET.safetyPercent,
-          ),
+          paddingMaxPx: Number(data.textBoxPaddingMaxPx ?? d.paddingMaxPx),
+          safetyPercent: Number(data.textBoxSafetyPercent ?? d.safetyPercent),
         });
       })
       .catch(() => {
@@ -811,14 +812,14 @@ export const Reader: React.FC<ReaderProps> = ({
         if (
           element.visible === true &&
           (element.text || "").trim() &&
-          elementFit(element, textBoxInset).overflow
+          elementFit(element, textBoxGeometry).overflow
         ) {
           ids.add(element.id);
         }
       }
     }
     return ids;
-  }, [layers, textBoxInset]);
+  }, [layers, textBoxGeometry]);
   const issues = React.useMemo(
     () =>
       layers.some(
@@ -2704,9 +2705,10 @@ export const Reader: React.FC<ReaderProps> = ({
           }
 
           // AUDIT-R1: one definition of the fitted rectangle, shared with render.py.
+          const rawBox = { x: el.x, y: el.y, width, height };
           const fitBox = textFitBox(
-            { x: el.x, y: el.y, width, height },
-            textBoxInset,
+            rawBox,
+            insetForBox(rawBox, textBoxGeometry),
           );
           const fit = fitTextInBox(
             displayText,
@@ -2876,7 +2878,7 @@ export const Reader: React.FC<ReaderProps> = ({
     imageDims,
     // AUDIT-R1: an export must use the inset in force now, not the one captured when this
     // callback was last built, or a settings change would apply to the reader and not the file.
-    textBoxInset,
+    textBoxGeometry,
     layers,
     dirtyElements,
     saveAllPendingChanges,
@@ -3870,7 +3872,7 @@ export const Reader: React.FC<ReaderProps> = ({
                       fit,
                       fontSize,
                       overflow,
-                    } = elementFit(element, textBoxInset);
+                    } = elementFit(element, textBoxGeometry);
                     // The preview's DOM box must be the rectangle the fitter was given, not a
                     // literal. `svgFitBox.x` is `element.x` plus the configured, clamped padding,
                     // so this is that padding after every guard textFitBox applies.

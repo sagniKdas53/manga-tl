@@ -2,9 +2,67 @@
 
 Start with the current checkpoint below and the [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md). The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
 
-Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **Current R3 status (2026-09-25): implementation complete (Packets 1–3, OQ-07/08); Packet 4 measurement not started; all three gates (reliability, performance, quality) still open; NOT PASSED.** Next: the [Packet 4 handoff](quality-checkpoints/R3-packet4-measurement-handoff-20260925.md), after its six decisions. Read the summary and [current next-session handoff](output-quality-next-session-20260924.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **Current R3 status (2026-09-25): implementation complete (Packets 1–3, OQ-07/08); Packet 4 measurement not started; all three gates (reliability, performance, quality) still open; NOT PASSED.** Next: one user test round on the dev stack (cleanup modes, padding, merge), then the [Packet 4 handoff](quality-checkpoints/R3-packet4-measurement-handoff-20260925.md) after its six decisions. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25). Read the summary and [current next-session handoff](output-quality-next-session-20260924.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
 
-## Status at a glance (2026-09-25 — R3 measurement is next)
+## Status at a glance (2026-09-25, evening — one test round, then Packet 4)
+
+**Where R3 stands.** Implementation complete (Packets 1–3, OQ-07/08); Packet 4 (measurement) not started; **NOT PASSED**. This evening's round added the controls Packet 4 needs to compare methods, and fixed a render failure seen live:
+
+- **Renders no longer fail when the renderer is busy.** The page renderer holds one browser context (UR02). A second render or QA arriving meanwhile was refused with a 400 that read like a bad scene; its three attempts burned out in seconds, leaving a FAILED row until the sweeper re-rendered the page five minutes later (Ch.4 p30; 14 such rows in the dev history). Now "busy" is a 503 + `Retry-After`, and the worker waits inside the job (bounded, `RENDER_BUSY_WAIT_SECONDS`, default 300 s) without spending an attempt.
+- **Cleanup mode selector** — System Settings → *Cleanup*, and a chapter/series override in *Model Overrides*: `auto` (TELEA on flat, AOT-GAN on detailed — the R3 default), `telea`, `aot`, `off` (no erasing; text over the art with its halo, as before R3). A mode applies to pages cleaned after it is set; redo OCR re-cleans a page. Each patch records its mode in its generator digest. **LaMa-mpe is not a mode yet:** its model and the 2026-09-20 prototype are not in the repo, and its network must be reimplemented clean-room before its weights can be loaded (project rule: weights yes, ported code no). That is its own packet.
+- **Text-box padding is now a percentage of each box, capped** — *Text Box Padding (%)*, *Max Padding (px)*, *Text Safety Margin (%)*; 0 turns padding off. **These settings never reached the export before:** the scene builder hardcoded 4 px and the renderer used 100 % safety, while only the editor read the settings. Now the scene builder resolves each box's padding and the render job carries the safety share, so editor and export fit text into the same rectangle. Defaults (4 %, 4 px, 100 %) reproduce the old export: 4 px on any box ≥ 100 px across.
+- **Merge: order matters less now.** The merge still joins pieces in geometric reading order (right for ordinary layouts), and it now also keeps the pieces; a region redo shows the translator `| piece | piece | … |` and says it may reorder them.
+- Schema: `chapters.cleanup_mode`, `series.cleanup_mode` added to `init.sql` (LOCK-3). The running dev database got the same two columns by hand (`ALTER TABLE … ADD COLUMN IF NOT EXISTS`) so its test chapters survive; a fresh stack gets them from `init.sql`.
+
+**Next step, in order:**
+1. **User test round on the dev stack:**
+   - Ch.3 p2: redo OCR, then merge the balloon's pieces and check the order preview and the translation.
+   - Compare cleanup modes on one page. Set the chapter's mode, then redo OCR.
+   - Try the padding knobs; 0 % turns padding off.
+2. **Record the six Packet 4 decisions** in [the handoff](quality-checkpoints/R3-packet4-measurement-handoff-20260925.md#8-decisions-recorded-fill-before-step-2). D5 now has a real choice: measure `auto`, or run the fixtures once per mode.
+3. **Run Packet 4** (Sonnet, per the handoff).
+
+### How the pipeline works now (2026-09-25)
+
+One page, from upload to export. Every arrow into a job is a queued job with its own attempt/lease (R3 Packet 2); a callback that is not the current attempt is refused (409).
+
+```mermaid
+flowchart TD
+    U[Upload page] --> PD[panel-detection]
+    PD --> OCR["ocr<br/>local PaddleOCR or cloud VLM<br/>group fragments; owner veto may split (AUDIT-R21)"]
+    OCR --> LAY["layout<br/>classify regions: replace / exclude (SFX)"]
+    LAY --> CL{"cleanup<br/>mode: auto / telea / aot / off"}
+    CL -->|"per region: CTD glyph mask<br/>then TELEA or AOT patch"| CLOK[patch stored, region complete]
+    CL -->|"CTD found nothing"| CLREV["cleanup_review<br/>source kept, shown in Issues"]
+    CL -->|"mode off / SFX"| CLEX[excluded: no patch]
+    CLOK --> TL
+    CLREV --> TL
+    CLEX --> TL
+    TL["translation<br/>chunks in reading order + series and previous-page context"] --> SNAP["scene snapshot<br/>new page revision: source + patches + text,<br/>padding resolved per box"]
+    SNAP --> R["render<br/>page-renderer (Chromium, 1 context;<br/>busy = wait and resend)"]
+    R --> QA["qa<br/>VLM/LLM verdict per region;<br/>every target must get a verdict"]
+    QA -->|all passed / fixed| FR["final render<br/>(no QA after it)"]
+    QA -->|direct fix| FR
+    QA -->|retry: retranslate| TL
+    QA -->|retry: re-read text| RO[qa-re-ocr] --> TL
+    QA -->|needs a person| MR["manual_review<br/>listed in Reader Issues"]
+    MR --> FR
+    FR --> EX["export = rendered artifact<br/>(PNG, chapter ZIP)"]
+
+    subgraph Reader["Reader / editor actions"]
+      E["edit text, move box,<br/>plain mask, keep/delete region"] --> REV[advance page revision]
+      RR["region redo: translation or OCR<br/>(translation sees the page's other lines)"] --> OV[overlay layer for that region] --> REV
+      MG["merge regions<br/>(dry-run preview of order)"] --> MC["cleanup for the merged box"] --> RT[region-redo-tl] --> OV
+      RO2["redo OCR on the page<br/>(earlier layers kept, hidden)"] --> OCR
+    end
+
+    REV --> DB{"debounced render<br/>after RENDER_DEBOUNCE_SECONDS,<br/>only when no OCR / cleanup / translation /<br/>region redo is queued or running on the page"}
+    DB --> SNAP
+```
+
+Not in the diagram: the editor canvas draws the source image plus text layers and plain masks, **not** the worker's cleanup patches (R7/OQ-03), so it can show Japanese the export has erased; recovery sweeps re-dispatch a job whose lease expired (about five minutes plus the 120 s lease); a render with no manual edits on the page is followed by QA, which is why the debounce waits for in-flight work.
+
+## Status at a glance (2026-09-25, afternoon — R3 measurement is next)
 
 **How close R3 is.** The implementation is finished; none of the three gates has been measured.
 

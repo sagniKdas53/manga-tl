@@ -60,6 +60,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
   const [routingStrategy, setRoutingStrategy] = useState(
     series.routingStrategy || "",
   );
+  const [cleanupMode, setCleanupMode] = useState(series.cleanupMode || "");
   const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
     series.useFallbackModels ?? null,
   );
@@ -75,6 +76,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
     qaVlmModel,
     qaMode,
     routingStrategy,
+    cleanupMode,
     useFallbackModels,
   };
 
@@ -90,6 +92,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
     qaVlmModel: setQaVlmModel,
     qaMode: setQaMode,
     routingStrategy: setRoutingStrategy,
+    cleanupMode: setCleanupMode,
     useFallbackModels: setUseFallbackModels,
   };
 
@@ -136,6 +139,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
           qaVlmModel: qaVlmModel || null,
           qaMode: qaMode || null,
           routingStrategy: routingStrategy || null,
+          cleanupMode: cleanupMode || null,
           useFallbackModels: useFallbackModels,
         }),
       });
@@ -249,6 +253,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
               qaLlmModel: settings?.qaLlmModel,
               qaVlmModel: settings?.qaVlmModel,
               routingStrategy: settings?.routingStrategy,
+              cleanupMode: settings?.cleanupMode,
               useFallbackModels: settings?.useFallbackModels,
             }}
             ocrModelLabel="OCR Model"

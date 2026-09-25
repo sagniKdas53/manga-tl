@@ -23,6 +23,7 @@ export interface Series {
   qaVlmModel?: string;
   qaMode?: string;
   routingStrategy?: string;
+  cleanupMode?: string;
   useFallbackModels?: boolean | null;
   resolvedUseFallbackModels?: boolean;
   createdAt?: string;
@@ -58,6 +59,7 @@ export interface Chapter {
   qaVlmModel?: string;
   qaMode?: string;
   routingStrategy?: string;
+  cleanupMode?: string;
   useFallbackModels?: boolean | null;
   resolvedUseFallbackModels?: boolean;
   useContextMemory?: boolean;
@@ -250,8 +252,12 @@ export interface SystemSettingsDto {
   activeOcrProviders?: string[];
   providerModelsMap?: Record<string, Record<string, ModelEntry[]>>;
 
-  /** AUDIT-R1/F16: pixels trimmed from each edge of an element's box before text is fitted. */
-  textBoxPaddingPx?: number;
-  /** Percent of what remains that text may use; 95 leaves a 5% safety margin. */
+  /** AUDIT-R1/F16: inset on each edge, as a percentage of the box's shorter side (0 = none)… */
+  textBoxPaddingPercent?: number;
+  /** …capped at this many px (0 = none). */
+  textBoxPaddingMaxPx?: number;
+  /** Percent of what remains that text may use (100 = all of it). */
   textBoxSafetyPercent?: number;
+  /** Global cleanup reconstruction mode; see `utils/cleanupModes`. */
+  cleanupMode?: string;
 }

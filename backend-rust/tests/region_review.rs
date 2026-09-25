@@ -515,6 +515,12 @@ async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
         .await
         .unwrap();
     }
+    // The chapter's cleanup-mode override travels on the block's cleanup job.
+    sqlx::query("UPDATE chapters SET cleanup_mode = 'telea' WHERE series_id = $1")
+        .bind(series_id)
+        .execute(&pool)
+        .await
+        .unwrap();
     let before = revision(&pool, page_id).await;
     let token = translator(&pool).await;
 
@@ -620,6 +626,18 @@ async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
         "one translation row, waiting for the block's own translation"
     );
     assert!(revision(&pool, page_id).await > before);
+    let texts: serde_json::Value = sqlx::query_scalar(
+        "SELECT ownership_provenance->'mergedTexts' FROM ocr_regions WHERE id = $1",
+    )
+    .bind(first)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        texts,
+        serde_json::json!(["課外活動", "なければ", "だろう"]),
+        "the pieces are kept, in reading order, for the translator"
+    );
 
     let (cleanup_job, payload): (String, String) =
         sqlx::query_as("SELECT id, payload FROM jobs WHERE image_id = $1 AND type = 'cleanup'")
@@ -629,6 +647,7 @@ async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
             .expect("one cleanup job");
     let payload: serde_json::Value = serde_json::from_str(&payload).unwrap();
     assert_eq!(payload["followUp"]["regionId"], first.to_string());
+    assert_eq!(payload["cleanupMode"], "telea");
     let entries = payload["cleanupRegions"].as_array().unwrap();
     assert_eq!(entries.len(), 1, "only the merged box is cleaned again");
 

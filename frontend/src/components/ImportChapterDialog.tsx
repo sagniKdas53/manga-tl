@@ -55,6 +55,7 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
   const [qaVlmModel, setQaVlmModel] = useState("");
   const [qaMode, setQaMode] = useState("");
   const [routingStrategy, setRoutingStrategy] = useState("");
+  const [cleanupMode, setCleanupMode] = useState("");
   const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
     series.useFallbackModels ?? null,
   );
@@ -69,6 +70,7 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
     qaVlmModel,
     qaMode,
     routingStrategy,
+    cleanupMode,
     useFallbackModels,
   };
 
@@ -84,6 +86,7 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
     qaVlmModel: setQaVlmModel,
     qaMode: setQaMode,
     routingStrategy: setRoutingStrategy,
+    cleanupMode: setCleanupMode,
     useFallbackModels: setUseFallbackModels,
   };
 
@@ -162,6 +165,7 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
     if (qaVlmModel) formData.append("qaVlmModel", qaVlmModel);
     if (qaMode) formData.append("qaMode", qaMode);
     if (routingStrategy) formData.append("routingStrategy", routingStrategy);
+    if (cleanupMode) formData.append("cleanupMode", cleanupMode);
     formData.append("useFallbackModels", String(useFallbackModels));
 
     try {
@@ -255,6 +259,7 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
               qaVlmModel: series.qaVlmModel || settings?.qaVlmModel,
               routingStrategy:
                 series.routingStrategy || settings?.routingStrategy,
+              cleanupMode: series.cleanupMode || settings?.cleanupMode,
               useFallbackModels:
                 series.useFallbackModels ?? settings?.useFallbackModels,
             }}

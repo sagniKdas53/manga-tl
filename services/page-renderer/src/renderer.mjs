@@ -11,6 +11,12 @@ const DATA_IMAGE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 export class RendererError extends Error {}
 
+/**
+ * Every context is rendering another page. Not a fault in the scene: the caller should wait and
+ * send it again. The context limit itself stays hard (UR02 — no silent extra memory).
+ */
+export class RendererBusyError extends Error {}
+
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
@@ -62,6 +68,7 @@ export class PageRenderer {
     }
     this.fontConfigs = fonts;
     this.maxContexts = maxContexts;
+    this.creating = 0;
     this.playwrightVersion = playwrightVersion;
     this.fonts = new Map();
     this.contexts = [];
@@ -177,14 +184,23 @@ export class PageRenderer {
       this.inUse.add(reusable);
       return reusable;
     }
-    if (this.contexts.length >= this.maxContexts) {
-      throw new RendererError("renderer context capacity is exhausted");
+    // Count contexts still being created: the check and the push are separated by an await, and
+    // two renders arriving together at a cold start would otherwise both pass the check and make
+    // two contexts — past the UR02 memory limit this cap exists for.
+    if (this.contexts.length + this.creating >= this.maxContexts) {
+      throw new RendererBusyError("renderer context capacity is exhausted");
     }
-    const context = await this.browser.newContext({
-      deviceScaleFactor: 1,
-      viewport: { width: 1280, height: 720 },
-      colorScheme: "light",
-    });
+    this.creating += 1;
+    let context;
+    try {
+      context = await this.browser.newContext({
+        deviceScaleFactor: 1,
+        viewport: { width: 1280, height: 720 },
+        colorScheme: "light",
+      });
+    } finally {
+      this.creating -= 1;
+    }
     this.contexts.push(context);
     this.inUse.add(context);
     return context;

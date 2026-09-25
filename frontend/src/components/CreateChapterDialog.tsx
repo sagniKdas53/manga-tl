@@ -68,6 +68,9 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
   const [routingStrategy, setRoutingStrategy] = useState(
     editingChapter?.routingStrategy || "",
   );
+  const [cleanupMode, setCleanupMode] = useState(
+    editingChapter?.cleanupMode || "",
+  );
   const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
     editingChapter?.useFallbackModels ?? null,
   );
@@ -101,6 +104,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
       setQaVlmModel(editingChapter.qaVlmModel || "");
       setQaMode(editingChapter.qaMode || "");
       setRoutingStrategy(editingChapter.routingStrategy || "");
+      setCleanupMode(editingChapter.cleanupMode || "");
       setUseFallbackModels(editingChapter.useFallbackModels ?? null);
     } else {
       setNumber(defaultNum);
@@ -115,6 +119,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
       setQaVlmModel("");
       setQaMode("");
       setRoutingStrategy("");
+      setCleanupMode("");
       setUseFallbackModels(null);
     }
   } else if (!open && prevOpen) {
@@ -182,6 +187,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
     qaVlmModel,
     qaMode,
     routingStrategy,
+    cleanupMode,
     useFallbackModels,
   };
 
@@ -197,6 +203,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
     qaVlmModel: setQaVlmModel,
     qaMode: setQaMode,
     routingStrategy: setRoutingStrategy,
+    cleanupMode: setCleanupMode,
     useFallbackModels: setUseFallbackModels,
   };
 
@@ -233,6 +240,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
           qaVlmModel: qaVlmModel || null,
           qaMode: qaMode || null,
           routingStrategy: routingStrategy || null,
+          cleanupMode: cleanupMode || null,
           useFallbackModels: useFallbackModels,
         }),
       });
@@ -315,6 +323,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
             qaVlmModel: selectedSeries?.qaVlmModel || settings?.qaVlmModel,
             routingStrategy:
               selectedSeries?.routingStrategy || settings?.routingStrategy,
+            cleanupMode: selectedSeries?.cleanupMode || settings?.cleanupMode,
             useFallbackModels:
               selectedSeries?.useFallbackModels ?? settings?.useFallbackModels,
           }}

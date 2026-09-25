@@ -14,6 +14,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { modelOptionLabel } from "../modelPricing";
 import type { ModelEntry, SystemSettingsDto } from "../types";
+import { CLEANUP_MODE_OPTIONS } from "../utils/cleanupModes";
 
 const QA_MODES = ["auto", "llm", "vlm", "hybrid", "none"];
 
@@ -32,6 +33,8 @@ export interface ModelOverridesValue {
   qaMode: string;
   routingStrategy: string;
   useFallbackModels: boolean | null;
+  /** Cleanup reconstruction mode (`utils/cleanupModes`); "" inherits. */
+  cleanupMode: string;
 }
 
 /**
@@ -49,6 +52,7 @@ export interface InheritedModelSettings {
   qaVlmModel?: string;
   qaMode?: string;
   routingStrategy?: string;
+  cleanupMode?: string;
   /** Resolved inherited fallback toggle (series override ?? global setting). */
   useFallbackModels?: boolean;
 }
@@ -229,6 +233,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
     qaMode,
     routingStrategy,
     useFallbackModels,
+    cleanupMode,
   } = value;
 
   const providers = settings?.activeProviders || [];
@@ -246,6 +251,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
     qaLlmModel,
     qaVlmModel,
     routingStrategy,
+    cleanupMode,
   ];
   const overriddenCount =
     overrideFields.filter((v) => v !== "").length +
@@ -662,6 +668,44 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
               size="small"
               sx={{ mt: 0.5 }}
               onClick={() => onChange("useFallbackModels", null)}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          )}
+        </Box>
+        <Box sx={fieldBoxSx}>
+          <FormControl
+            fullWidth
+            size="small"
+          >
+            <InputLabel>Cleanup Mode</InputLabel>
+            <Select
+              size="small"
+              value={
+                cleanupMode ||
+                inherited.cleanupMode ||
+                settings?.cleanupMode ||
+                "auto"
+              }
+              label="Cleanup Mode"
+              onChange={(e) => onChange("cleanupMode", e.target.value)}
+            >
+              {CLEANUP_MODE_OPTIONS.map((option) => (
+                <MenuItem
+                  key={option.value}
+                  value={option.value}
+                >
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {cleanupMode !== "" && (
+            <IconButton
+              aria-label="Clear Cleanup Mode override"
+              size="small"
+              sx={{ mt: 0.5 }}
+              onClick={() => onChange("cleanupMode", "")}
             >
               <CloseIcon fontSize="small" />
             </IconButton>

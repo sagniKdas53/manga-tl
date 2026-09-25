@@ -1,7 +1,27 @@
 export const DEFAULT_TEXT_BOX_INSET = {
     paddingPx: 4,
-    safetyPercent: 95,
+    safetyPercent: 100,
 };
+/** Reproduces the pre-settings export: 4 px on any box at least 100 px across, no shrink. */
+export const DEFAULT_TEXT_BOX_GEOMETRY = {
+    paddingPercent: 4,
+    paddingMaxPx: 4,
+    safetyPercent: 100,
+};
+/** The inset for one box under `geometry`. */
+export function insetForBox(box, geometry = DEFAULT_TEXT_BOX_GEOMETRY) {
+    const percent = Number.isFinite(geometry.paddingPercent)
+        ? Math.min(50, Math.max(0, geometry.paddingPercent))
+        : DEFAULT_TEXT_BOX_GEOMETRY.paddingPercent;
+    const cap = Number.isFinite(geometry.paddingMaxPx)
+        ? Math.min(64, Math.max(0, geometry.paddingMaxPx))
+        : DEFAULT_TEXT_BOX_GEOMETRY.paddingMaxPx;
+    const shortSide = Math.max(0, Math.min(box.width, box.height));
+    return {
+        paddingPx: Math.min((shortSide * percent) / 100, cap),
+        safetyPercent: geometry.safetyPercent,
+    };
+}
 const FONT_SIZE_MINIMUM = 6;
 const LINE_HEIGHT_MULTIPLIER = 1.2;
 const SHAPE_WIDTH_ALLOWANCE = 0.95;

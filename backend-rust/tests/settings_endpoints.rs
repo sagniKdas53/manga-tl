@@ -21,7 +21,7 @@ use manga_backend::state::AppState;
 
 const SECRET: &str = "test-secret-long-enough-for-hmac-signing-1234567890";
 const CATALOG_KEY: &str = "system:providers:config";
-const SETTING_KEYS: [&str; 12] = [
+const SETTING_KEYS: [&str; 14] = [
     "ocrProvider",
     "ocrModel",
     "tlProvider",
@@ -32,8 +32,10 @@ const SETTING_KEYS: [&str; 12] = [
     "qaMode",
     "routingStrategy",
     "useFallbackModels",
-    "textBoxPaddingPx",
+    "textBoxPaddingPercent",
+    "textBoxPaddingMaxPx",
     "textBoxSafetyPercent",
+    "cleanupMode",
 ];
 
 fn db_config_from_env() -> Option<DatabaseConfig> {
@@ -337,8 +339,10 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     // Note `put_body` above is already exactly that legacy shape -- it names neither field.
     let mut configured = put_body.clone();
     let obj = configured.as_object_mut().unwrap();
-    obj.insert("textBoxPaddingPx".to_string(), serde_json::json!(12));
+    obj.insert("textBoxPaddingPercent".to_string(), serde_json::json!(0));
+    obj.insert("textBoxPaddingMaxPx".to_string(), serde_json::json!(12));
     obj.insert("textBoxSafetyPercent".to_string(), serde_json::json!(80));
+    obj.insert("cleanupMode".to_string(), serde_json::json!("TELEA"));
     let (status, _, echoed) = send(
         app.clone(),
         "PUT",
@@ -348,8 +352,10 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(echoed["textBoxPaddingPx"], 12);
+    assert_eq!(echoed["textBoxPaddingPercent"], 0, "zero turns padding off");
+    assert_eq!(echoed["textBoxPaddingMaxPx"], 12);
     assert_eq!(echoed["textBoxSafetyPercent"], 80);
+    assert_eq!(echoed["cleanupMode"], "telea", "stored normalised");
 
     let revised_pages: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM pages WHERE chapter_id = $1 AND scene_revision = 1",
@@ -380,10 +386,12 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     // What it did send lands...
     assert_eq!(echoed["ocrModel"], "__e2e-ocr-model-2__");
     // ...and what it has never heard of survives, rather than resetting to 4/95.
-    assert_eq!(echoed["textBoxPaddingPx"], 12);
+    assert_eq!(echoed["textBoxPaddingPercent"], 0);
+    assert_eq!(echoed["textBoxPaddingMaxPx"], 12);
     assert_eq!(echoed["textBoxSafetyPercent"], 80);
+    assert_eq!(echoed["cleanupMode"], "telea");
     let padding: String = sqlx::query_scalar(
-        "SELECT setting_value FROM system_settings WHERE setting_key = 'textBoxPaddingPx'",
+        "SELECT setting_value FROM system_settings WHERE setting_key = 'textBoxPaddingMaxPx'",
     )
     .fetch_one(&pool)
     .await

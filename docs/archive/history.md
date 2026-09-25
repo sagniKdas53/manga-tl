@@ -3089,3 +3089,23 @@ Moved from `docs/issues.md` with their closing evidence. Checked against the tre
   that belongs). Details, the 42-fragment table and the gate runbook in
   [R6.md](quality-checkpoints/R6.md). Stays open until the live gate runs.
 - **Closed 2026-09-19 — live gate passed** ([R6 § Gate result](quality-checkpoints/R6.md#gate-result--2026-09-19)): every multi-column balloon Torii sets as one box is one region on `sample7`/`sample197`/`sample641`, zero `incomplete-validated-container`. A different veto still splits some balloons (line continuity on OCR-split columns); that is filed separately as `AUDIT-R21`.
+
+#### `AUDIT-B28` (medium): A busy renderer failed renders instead of making them wait
+
+- **Seen:** Queue Manager, Tests › Ch.4 page 30: a RENDER FAILED, attempt 3/3, "page renderer
+  rejected the scene (400): renderer context capacity is exhausted". It was QA's final re-render,
+  and it burned three attempts in 7 s (04:31:33–04:31:40 UTC). The sweeper re-rendered the page
+  five minutes later, so the page was fine, but the FAILED row stayed. The dev history held 14 of
+  these.
+- **Cause:** `page-renderer` holds one browser context (UR02, by design). A second render or QA
+  pass arriving meanwhile got `RendererError` → HTTP 400, the same answer as a malformed scene, and
+  the worker's attempts had no backoff.
+- **Fixed 2026-09-25:** `RendererBusyError` → 503 + `Retry-After: 2`
+  (`services/page-renderer/src/{renderer,server}.mjs`). The worker's `_post_render`
+  (`page_scene_renderer.py`) waits and resends inside the job, with doubling backoff to 10 s and
+  jitter, up to `RENDER_BUSY_WAIT_SECONDS` (300). It spends no attempt; the heartbeat keeps the lease.
+  A 400 is still final. The new renderer test also exposed a race: `acquireContext` checked the cap,
+  awaited `newContext()`, then recorded the context, so two renders arriving together at a cold
+  start both made a context (past UR02's one-context memory limit). Contexts being created now count
+  against the cap. Tests: renderer `a second concurrent render is told the renderer is busy`;
+  worker `test_a_busy_renderer_is_waited_for_not_failed`, `…past_the_deadline…`, `test_a_bad_scene_is_not_retried`.

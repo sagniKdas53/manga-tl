@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { PageRenderer, RendererError } from "../src/renderer.mjs";
+import { PageRenderer, RendererBusyError, RendererError } from "../src/renderer.mjs";
 
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 const IMAGE =
@@ -123,6 +123,23 @@ test("resolves a scene font ID to its registered browser family", async () => {
     const result = await instance.render(input);
     assert.equal(result.width, 160);
     assert.equal(result.height, 90);
+  } finally {
+    await instance.stop();
+  }
+});
+
+test("a second concurrent render is told the renderer is busy, not that its scene is bad", async () => {
+  const instance = await renderer();
+  try {
+    const first = instance.render(request());
+    await assert.rejects(
+      instance.render(request()),
+      (error) => error instanceof RendererBusyError && !(error instanceof RendererError),
+    );
+    await first;
+    // Once the context is free the same scene renders.
+    const again = await instance.render(request());
+    assert.equal(again.width, 160);
   } finally {
     await instance.stop();
   }

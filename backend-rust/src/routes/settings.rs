@@ -53,17 +53,25 @@ pub struct SystemSettingsDto {
     /// now means "leave it alone"; `update_settings` skips a `None`.
     ///
     /// `build_dto` always fills both, so the GET response still always carries a number.
+    /// Padding as a percentage of each box's shorter side (0 = none)…
     #[serde(default)]
-    pub textBoxPaddingPx: Option<i32>,
-    /// Percent of what remains after the padding that text may use; 95 leaves a 5% safety
-    /// margin so glyphs do not touch the balloon outline.
+    pub textBoxPaddingPercent: Option<i32>,
+    /// …never more than this many px (0 = none).
+    #[serde(default)]
+    pub textBoxPaddingMaxPx: Option<i32>,
+    /// Percent of what remains after the padding that text may use.
     #[serde(default)]
     pub textBoxSafetyPercent: Option<i32>,
+    /// Global cleanup reconstruction mode; chapters and series may override it. `None` on a PUT
+    /// leaves it as it is, for the same stale-bundle reason as the geometry fields.
+    #[serde(default)]
+    pub cleanupMode: Option<String>,
 }
 
 async fn build_dto(state: &AppState) -> SystemSettingsDto {
     let defaults = PipelineDefaults::from_env();
     let global = load_global_settings(&state.pool, &defaults).await;
+    let geometry = crate::settings::text_box_geometry(&state.pool).await;
     let disable_local_ocr = std::env::var("DISABLE_LOCAL_OCR")
         .map(|v| v == "true")
         .unwrap_or(false);
@@ -114,36 +122,31 @@ async fn build_dto(state: &AppState) -> SystemSettingsDto {
         activeProviders: active_providers,
         activeOcrProviders: active_ocr_providers,
         providerModelsMap: state.providers.get_provider_models_map(),
-        textBoxPaddingPx: Some(clamped_setting(&state.pool, "textBoxPaddingPx", 4, 0, 64).await),
-        textBoxSafetyPercent: Some(
-            clamped_setting(&state.pool, "textBoxSafetyPercent", 95, 1, 100).await,
-        ),
+        textBoxPaddingPercent: Some(geometry.padding_percent),
+        textBoxPaddingMaxPx: Some(geometry.padding_max_px),
+        textBoxSafetyPercent: Some(geometry.safety_percent),
+        cleanupMode: Some(global.cleanup_mode.clone()),
     }
-}
-
-/// An integer setting, defaulted and clamped.
-///
-/// The clamps are not decoration: a safety percent of 0 fits every element into a zero-width box
-/// and a padding wider than the box does the same, so a typo in the settings form would silently
-/// stop the whole library typesetting.
-async fn clamped_setting(pool: &sqlx::PgPool, key: &str, default: i32, low: i32, high: i32) -> i32 {
-    setting_value(pool, key, &default.to_string())
-        .await
-        .parse::<i32>()
-        .unwrap_or(default)
-        .clamp(low, high)
 }
 
 async fn save_geometry_settings_and_invalidate(
     state: &AppState,
-    padding: Option<i32>,
+    padding_percent: Option<i32>,
+    padding_max_px: Option<i32>,
     safety: Option<i32>,
 ) -> Result<(), sqlx::Error> {
     let mut tx = state.pool.begin().await?;
     let mut changed = false;
 
     for (key, value) in [
-        ("textBoxPaddingPx", padding.map(|v| v.clamp(0, 64))),
+        (
+            "textBoxPaddingPercent",
+            padding_percent.map(|v| v.clamp(0, 50)),
+        ),
+        (
+            "textBoxPaddingMaxPx",
+            padding_max_px.map(|v| v.clamp(0, 64)),
+        ),
         ("textBoxSafetyPercent", safety.map(|v| v.clamp(1, 100))),
     ] {
         let Some(value) = value else {
@@ -210,9 +213,21 @@ pub async fn update_settings(
     )
     .await;
 
+    // A cleanup mode applies to cleanup jobs dispatched from now on; pages already cleaned keep
+    // their patches until they are processed again (redo OCR), so nothing is invalidated here.
+    if let Some(mode) = dto.cleanupMode.as_deref() {
+        save_setting(
+            &state.pool,
+            "cleanupMode",
+            &crate::settings::cleanup_mode(mode),
+        )
+        .await;
+    }
+
     if let Err(err) = save_geometry_settings_and_invalidate(
         &state,
-        dto.textBoxPaddingPx,
+        dto.textBoxPaddingPercent,
+        dto.textBoxPaddingMaxPx,
         dto.textBoxSafetyPercent,
     )
     .await

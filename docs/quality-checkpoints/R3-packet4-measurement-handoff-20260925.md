@@ -23,7 +23,7 @@ user's words). If a row is blank, stop and ask. **Silence is not approval.**
 | D2 | **Latency ceilings** (ordinary page; stress page) | Without numbers the performance gate cannot pass, only be described | Ordinary page (≤ 20 regions): first translated artifact ≤ 5 min, completion ≤ 10 min. Stress (`sample61`, 63 regions): completion ≤ 20 min. No single provider request > 60 s (the project's standing bar: a request over a minute is a failure, however good the answer) |
 | D3 | **Timing host** | Laptop timings are contention noise while anything else runs | Quality runs on the laptop; the timed run on chrome-box (quiet box), same tree and images |
 | D4 | **Model pins** for the run | The harness pins translation = DeepSeek V4 Pro and QA VLM = Gemini 3.1 Flash Lite. The deployment QA default is now GLM 5.3 Flash, and Flash Lite returned empty on one explicit page | Translation DeepSeek V4 Pro (unchanged); QA VLM GLM 5.3 Flash. Change `PIPELINE_SETTINGS` in `scripts/playwright/capture_quality_baseline.cjs` only if the user says so |
-| D5 | **Reconstruction method** measured | Live cleanup is CTD mask + TELEA/AOT-GAN. LaMa-mpe measured +1.2 dB over AOT (2026-09-20) but was never adopted. Measuring AOT and then switching repeats this packet | Measure what is live (AOT). Record LaMa-mpe as a follow-up, not a switch |
+| D5 | **Reconstruction method** measured | Cleanup mode is now selectable (System Settings or per chapter/series: `auto` = TELEA on flat + AOT-GAN on detailed, `telea`, `aot`, `off`). LaMa-mpe measured +1.2 dB over AOT (2026-09-20) but is not available: it needs a clean-room reimplementation first | Measure `auto` (the default). Optionally a second pass of the six fixtures in `aot` to see what forcing AOT costs and buys. Each pass is its own run directory and chapter; record the mode in the README identity |
 | D6 | **Control denominator** | Tracker says 24; the harness lists 25 (`sample641`, added 2026-09-19) | 25; report 24 + `sample641` separately |
 
 ## 1. Rules
@@ -64,7 +64,8 @@ DEV_PROJECT_NAME=manga-quality-$RUN docker compose -f docker-compose.dev.yml log
 Record in the run README: the parent and worker commit hashes (`git rev-parse HEAD`,
 `git -C worker rev-parse HEAD`), the image IDs (`docker compose … images`), the host's CPU/RAM and
 worker CPU limit (`WORKER_CPUS`), and the `.env` values of `MAX_HEAVY_SLOTS`, `MAX_LIGHT_SLOTS`,
-`CLOUD_CONCURRENCY` and `RENDER_DEBOUNCE_SECONDS`. **Not** the secrets.
+`CLOUD_CONCURRENCY`, `RENDER_DEBOUNCE_SECONDS` and `RENDER_BUSY_WAIT_SECONDS`, and from System Settings the
+cleanup mode and the text-box padding %, max px and safety %. **Not** the secrets.
 
 The first registration on a fresh database is the admin. Register it through the harness's
 `--register` and save the account in `logs/$RUN-account.env`, as R6 did.
@@ -211,9 +212,10 @@ R3 handoff's table and leave the verdict to the coordinator.
 
 Harmless noise you will see (do not fix it):
 - ONNX Runtime `VerifyOutputSizes` warnings, one per CTD call.
-- `renderer context capacity is exhausted` on a render when two renders overlap. The render
-  service holds one context by design (UR02), and the debounced sweeper retries after its
-  five-minute cooldown. Record the count.
+- `[Render] Renderer was busy; waited N time(s)` when two renders overlap. The render service holds
+  one context by design (UR02), and the worker now waits for it inside the job. Record the count.
+  A FAILED render with `renderer context capacity is exhausted` would mean the wait ran out (300 s),
+  which is a stop condition, not noise.
 - Region redos and debounced renders logging "waiting" while other stages run on the page.
 
 ## 8. Decisions recorded (fill before step 2)
