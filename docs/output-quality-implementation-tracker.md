@@ -37,37 +37,48 @@ Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequ
    - **Recommendation:** R7 first in the typesetting phase, so typesetting is judged on a canvas that matches the export.
 2. **Can cleanup be faster (GPU)?** Measured on the laptop with the pipeline's own model files and real fixture crops.
    - **GPU: no usable one.** Chrome-box has only Intel HD 5500 graphics. The laptop's GeForce 940MX (Maxwell, compute 5.0) loads ONNX Runtime's CUDA provider, but the prebuilt kernels exclude this generation: `cudaErrorNoKernelImageForDevice`, and cuDNN 9.26 fails at the first Conv.
-   - **Where the time goes.** CTD is 95 % of cleanup: 2,060 of 2,161 s over the run's 163 regions. Inpainting (TELEA/AOT) is about 5 %. Inside CTD, stock ONNX Runtime spends **81 % in its 6 `ConvTranspose` nodes**; its CPU kernel for them is slow.
-   - **OpenVINO fixes it without a GPU.** Intel's OpenVINO execution provider for ONNX Runtime (`onnxruntime-openvino`, Apache-2.0) runs the same CTD graph on the same CPU with **identical masks (IoU 1.000 on 5 crops)**:
+   - **Where the time goes.** CTD is 95 % of cleanup: 2,060 of 2,161 s over the run's 163 regions. Inpainting (TELEA/AOT) is about 5 %. Inside CTD, stock ONNX Runtime's profile shows 81 % in the graph's six `ConvTranspose` nodes.
+   - **The cause is denormal floats, not the hardware** (corrected 2026-09-27; measured in fresh processes).
+     - Those layers underflow into subnormal numbers, which x86 CPUs process very slowly.
+     - ONNX Runtime's `session.set_denormal_as_zero` flag removes almost all of it, with identical output.
+     - Intel's OpenVINO execution provider (`onnxruntime-openvino`, MIT) adds about 1.5× on CTD and 1.3× on AOT, with identical masks, AOT fills within one grey level, and the same YOLO balloons.
+     - A new crop shape costs OpenVINO no recompile.
 
-     | Crop | Stock ORT | OpenVINO, first call |
-     | --- | --- | --- |
-     | 580×700 | 32.4 s | 0.6 s |
-     | 900×640 | 51.4 s | 0.7 s |
-     | 1024×1024 | ~80 s | 1.6 s |
+     | CTD crop | Stock ORT 1.30 | + denormals flushed | + OpenVINO |
+     | --- | --- | --- | --- |
+     | 580×700, laptop | 34.6 s | 0.76 s | 0.42 s |
+     | 580×700, chrome-box | 31.9 s | 0.80 s | 0.47 s |
+     | 1024×1024, laptop | ~80 s | 1.9 s | 1.16 s |
+     | 1024×1024, chrome-box | — | 2.2 s | 1.25 s |
 
-     A new crop shape costs no recompile (first call 0.2–1.6 s).
-   - **Smaller measured options:**
-     - denormals-as-zero: 2× on CTD, identical output;
-     - 4 intra-op threads: about 1.5×;
-     - merging overlapping crops: 1.0–2.1× (sample61 2.1×).
-   - **Downscaling the crop is rejected:** mask IoU 0.57–0.90 at 0.75×/0.5×.
-   - **Estimate, not measured on the stack:** CTD at about 2 µs/px instead of about 70 would take the run's cleanup from about 36 minutes to about 3: about 1 minute of CTD (29.5 MP fed) plus the 1.8 minutes of inpainting, which OpenVINO may also shorten (not measured).
-   - **Next step:** its own packet.
-     - Swap the worker to `onnxruntime-openvino` (latest 1.24.1; the worker pins `onnxruntime==1.30.0`).
-     - Check YOLO, AOT and PaddleOCR still work, and measure on chrome-box (Broadwell, AVX2) before claiming the speedup.
-     - Nothing changes the masks, so quality evidence carries over.
+   - **Correction:** an earlier note here said flushing denormals gave only 2×. That test ran an unflagged session in the same process first, which left the flagged one at half speed. Measure each setting in its own process.
+   - **Smaller measured options, now moot:** 4 intra-op threads (about 1.5× on stock); merging overlapping crops (1.0–2.1×).
+   - **Rejected:** downscaling the crop (mask IoU 0.57–0.90 at 0.75×/0.5×).
+   - **Estimate for the Packet 4 pages:** cleanup would drop from about 36 minutes to about 2–3.
+     - CTD at about 1.5 µs/px on the 29.5 MP fed: under a minute.
+     - Inpainting: about 1.4–1.8 minutes, which now dominates.
+     - Not yet measured end to end on the stack.
 3. **Could an image-generation model do cleanup on crops?**
    - Possible (OpenRouter lists Gemini 3.1 Flash Image, Gemini 3 Pro Image, GPT-5 Image), but not recommended as the cleanup path:
      - These models refuse or filter sexual content, and explicit pages must stay supported.
      - Each call takes about 5–30 s and costs roughly cents per generated image, against about $0.005 per page for translation today.
      - They redraw the whole crop (resampling, colour shift), so only the masked pixels could be kept.
-     - With OpenVINO, local CTD is about 1 s per region anyway.
+     - With denormals flushed (and OpenVINO), local CTD is about 1 s per region anyway.
    - Where it could earn a place: an opt-in "re-inpaint with AI" for a hard region such as text over art (`AUDIT-R24`), from R7's editor, on pages the provider accepts. Parked as an idea, not planned.
 
 **Next, in order (user approved 2026-09-26: "Sounds good to me"):**
-1. **OpenVINO packet:** cleanup speed, no quality change. Being done now.
-2. **R7:** the editor shows the cleaned page. A handoff is being written for a separate session.
+1. **Cleanup speed packet: DONE 2026-09-27** (worker `5d49b50`).
+   - `services/onnx_session.py` builds every YOLO/CTD/AOT session with denormals flushed.
+   - On x86-64 it uses OpenVINO (`onnxruntime-openvino` 1.24.1 replaces `onnxruntime` 1.30 there; arm64 unchanged).
+   - `ONNX_EXECUTION_PROVIDER=cpu` switches back, passed through both compose files. A failed OpenVINO session falls back to CPU.
+   - **In the image:** masks identical, AOT within one grey level, YOLO the same balloons, 620 worker tests green.
+   - **Live canary on the dev stack (sample177):**
+     - cleanup of 6 regions took **4.2 s**, against 98 s in Packet 4, with the same per-region mask shares;
+     - the whole page completed in about 2 minutes, most of it translation;
+     - QA ran on Gemini 3.1 Flash Lite in 4.6–6.9 s;
+     - 10 jobs, all COMPLETED.
+   - **Not measured yet:** a full stress page (sample61) on chrome-box with the new image.
+2. **R7:** the editor shows the cleaned page. Handoff: [R7-inpainting-layer-handoff-20260927.md](quality-checkpoints/R7-inpainting-layer-handoff-20260927.md), for a separate session. It has three decisions (R7-D1 to R7-D3) to ask the user first.
 3. **Typesetting:** `AUDIT-R21` grouping, `AUDIT-R23` rotation, then the rest of M7.
 
 **Future potential improvement:** image-generation models as an opt-in cleanup for hard regions, filed as [`AUDIT-R26`](issues.md#audit-r26-feature-image-generation-models-as-an-opt-in-re-inpaint-for-hard-regions). Not scheduled.

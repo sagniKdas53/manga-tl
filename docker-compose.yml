@@ -319,6 +319,9 @@ services:
       - OCR_MERGE_THRESHOLD=${OCR_MERGE_THRESHOLD:-0.35}
       - OCR_WAIST_GATE=${OCR_WAIST_GATE:-1.0}
       - OCR_ORIENTATION=${OCR_ORIENTATION:-vote}
+      # Local ONNX models (YOLO, CTD, AOT): "auto" runs them on OpenVINO where the image has it,
+      # "cpu" forces the stock provider. Same masks either way; see worker services/onnx_session.py.
+      - ONNX_EXECUTION_PROVIDER=${ONNX_EXECUTION_PROVIDER:-auto}
       # API Keys are loaded via DOCKER_SECRETS_JSON
       - DOCKER_SECRETS_JSON=/run/secrets/api_keys
       - PROVIDERS_CONFIG=/app/config/providers.json
