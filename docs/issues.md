@@ -1,6 +1,9 @@
 # Issues & Technical Debt
 
-> **Standing: 123 filed, 92 closed, 31 open.** 2026-09-26: `AUDIT-W15` filed (a model that rejects
+> **Standing: 127 filed, 92 closed, 35 open.** 2026-09-26 (R3 closed): `AUDIT-R24` (art smeared inside a patch),
+> `AUDIT-R25` (text left inside a region, invisible to the residual-ink metric), `AUDIT-W16` (GLM QA
+> judge; default switched to Gemini 3.1 Flash Lite) and `AUDIT-T6` (harness captures before redo cycles end)
+> filed from Packet 4. Earlier the same day: `AUDIT-W15` filed (a model that rejects
 > the JSON schema pays a 400 on every call), `AUDIT-R23` filed (OCR throws away the
 > text angle it detects; typesetting phase); the `AUDIT-F29` merge passed the user's live test;
 > `AUDIT-R21` gains a knob (OCR grouping threshold, global and per series/chapter).
@@ -273,6 +276,8 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-B22`](#audit-b22-medium-page-ordering-is-validated-before-the-chapter-is-locked) | Medium | Backend | Reorder and move validate outside their transaction, so concurrent page changes can invalidate the result | Ready |
 | [`AUDIT-B24`](archive/history.md#audit-b24-medium-a-re-uploaded-image-is-deduplicated-onto-a-processed-one-and-gets-a-render-job-it-cannot-run) | Medium | Backend | Uploading bytes the backend already has attaches the page to the processed image, skips OCR and queues a bare `render` with no scene, which fails 3× | **Fixed 2026-09-25** — cloned page goes to the debounced render |
 | [`AUDIT-W15`](#audit-w15-low-a-model-that-rejects-the-json-schema-pays-a-400-on-every-call) | Low | Worker | The json_schema → json_object downgrade lives on the per-call client, so OpenAI models (GPT-6 Luna) pay a rejected request and a retry on every call | Filed 2026-09-26; after Packet 4 |
+| [`AUDIT-W16`](#audit-w16-medium-glm-53-flash-as-the-qa-judge-half-the-calls-fail-some-take-four-minutes) | Medium | Worker/Config | The D4 QA VLM returned nothing on half the QA jobs and took up to 244 s a call; Gemini Flash Lite answered every fallback in 5–20 s | **Default switched to Gemini 2026-09-26**; per-call cap open |
+| [`AUDIT-T6`](#audit-t6-low-the-harness-reports-complete-before-qa-triggered-redo-cycles-finish) | Low | Testing | Harness captures after the first QA pass, missing later redo cycles; the runbook uploaded one source twice | Filed 2026-09-26 |
 | [`AUDIT-B27`](#audit-b27-medium-changing-the-text-box-inset-settings-re-renders--and-re-qas--every-page) | Medium | Backend | A text-box inset settings change dirties every page; each re-render queues paid QA | Filed 2026-09-25; decision needed |
 | [`AUDIT-B23`](#audit-b23-medium-the-dispatcher-429-cooldown-never-escalates-under-sustained-saturation) | Medium | Backend | `consecutive_429s` is cleared on every healthy `/capabilities` probe, so the exponential cooldown never advances past its 10s base | Ready |
 | [`AUDIT-W3`](#audit-w3-medium-cooldowns-and-lock-waits-burn-a-job-slot) | Medium | Worker | Cooldowns and lock waits block a concurrency slot doing nothing | Deprioritized; needs concurrency test harness |
@@ -294,6 +299,8 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R21`](#audit-r21-medium-the-line-continuity-veto-splits-a-balloon-whose-column-ocr-broke-in-two) | Medium | Worker | The line-continuity veto splits a balloon when OCR broke one column in two; page-4 line gaps miss the 0.35 budget | Grouping phase (user decision 2026-09-25); manual merge is the workaround |
 | [`AUDIT-R22`](#audit-r22-feature-lama-mpe-as-a-cleanup-mode) | Feature | Worker | LaMa-mpe beat AOT by 1.2 dB but its model/code are gone; needs a clean-room network before it can be a cleanup mode | Filed 2026-09-25 |
 | [`AUDIT-R23`](#audit-r23-medium-ocr-throws-away-the-text-angle-it-detects) | Medium | Worker/Backend | Tilted lettering (signs, slanted captions) is typeset level: OCR has the angle in its quads and writes `rotation: 0` | Filed 2026-09-26; typesetting phase |
+| [`AUDIT-R24`](#audit-r24-medium-cleanup-smears-the-art-when-text-crosses-a-figure) | Medium | Worker | Text lettered over a figure: the patch rebuilds the arm as blocky shapes (sample83); no metric sees damage inside a patch | Filed 2026-09-26 (R3 close); Torii is worse here |
+| [`AUDIT-R25`](#audit-r25-medium-source-text-survives-inside-a-detected-region-and-the-gate-scores-it-0) | Medium | Worker/Testing | Japanese lines survive inside detected regions (sample61, sample222); residual ink only looks under the patch alpha, so it reads 0 % | Filed 2026-09-26 (R3 close) |
 | [`AUDIT-R17`](#audit-r17-unranked-shaperectangular-is-not-ignored) | Unranked | Render | Reported as an ignored API parameter; the branch exists and the contract holds end to end | **Closed on assessment 2026-09-05** |
 
 ### Cosmetic & long tail
@@ -1014,6 +1021,23 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   2. Make the schema strict-compatible: `additionalProperties: false`, and every field required or
      nullable. This changes what every model is asked for.
 
+### `AUDIT-W16` (medium): GLM 5.3 Flash as the QA judge: half the calls fail, some take four minutes
+
+- **Seen in R3 Packet 4 (2026-09-26, chrome-box).**
+  - `z-ai/glm-5.3-flash` logged `no usable reply` on 6 of about 12 QA jobs.
+  - Single calls took 170–244 s, the only provider calls in the run over the 60 s bar.
+  - Every time, the fallback `google/gemini-3.1-flash-lite` answered, 9 calls in 5–20 s.
+  - So several pages' verdicts came from Gemini, not from the model D4 named.
+- **Decision (user, 2026-09-26):** Gemini 3.1 Flash Lite is the QA-VLM judge from now on.
+  - Set in `config/providers.json` (`defaults.qaVLM`, openrouter `defaultQAVLMModel`) and in the local `.env` / `secrets/runtime/models.env`.
+  - Fallback chain: `QA_VLM_FALLBACK_MODELS=mistralai/mistral-small-3.2-24b-instruct,z-ai/glm-5.3-flash`.
+  - Mistral is second because it accepted all five explicit pages in the 2026-09-24 replay (10–51 s), where Gemini once returned nothing.
+  - GLM is last.
+- **Still open:** no per-call time limit on a QA VLM request. A slow model can hold a QA job for minutes before the chain moves on. A cap under 60 s would make the fallback start sooner.
+- **To apply elsewhere:**
+  - Rerun `scripts/dev_setup.py init` (or edit the env files) and recreate the backend and worker.
+  - A `qaVlmModel` saved in System Settings, or pinned on a series or chapter, still wins over the default.
+
 ### `AUDIT-B23` (medium): The dispatcher 429 cooldown never escalates under sustained saturation
 
 - **Locations:** `backend-rust/src/jobs/dispatcher.rs` — `run_cycle` capabilities probe (the
@@ -1246,6 +1270,47 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   4. Cleanup is unaffected (it works from the glyph mask).
 - **Next step:** typesetting phase, after R3 closes. Measure against the 339 Torii boxes (angle
   error, and whether the oriented box still fits the text).
+
+### `AUDIT-R24` (medium): Cleanup smears the art when text crosses a figure
+
+- **Seen in R3 Packet 4 (2026-09-26), sample83.**
+  - The right-hand dialogue column (red, white-stroked) is lettered across the girl's raised fist and forearm.
+  - Cleanup (`auto`) kept the region: residual ink 0.008 %, nothing changed outside the patch.
+  - Inside the patch, the fist and forearm are rebuilt as blocky cyan and skin-coloured shapes.
+  - The English covers most of it; the edges show.
+- **Torii is worse on the same spot:** its `inpainted.png` is one soft blur over the whole column. So this is not a regression against the machine baseline. It still fails the fixture checklist's "central art protected".
+- **Why no number caught it:**
+  - Outside-support invariance only looks outside the patch.
+  - Residual ink measures leftover *text* under the patch.
+  - Nothing scores damage to the art inside the patch. Only a visual review sees it.
+- **Next step:**
+  - R7's per-patch editing (hide or delete one patch) gives the user a way out.
+  - A real fix is a better reconstruction for text over detailed art (forced `aot` on such regions, or `AUDIT-R22`).
+  - Measure sample83 in `aot` before choosing.
+
+### `AUDIT-R25` (medium): Source text survives inside a detected region, and the gate scores it 0 %
+
+- **Seen in R3 Packet 4 (2026-09-26).**
+  - **sample61:** several Japanese lines stay visible on the translated page, between English lines. With the cleanup bounds drawn on `cleanup-only.png`, the lines sit inside detected regions, so this is a cleanup miss, not an OCR miss.
+  - **sample222:** fragments of the tilted pink banner's lettering survive, with white smears where strokes were half removed. The rotated banner is also `AUDIT-R23`.
+- **Why the numbers said clean.** `_residual_ink_pct` re-runs CTD only on pixels under the patch's own alpha. Glyphs the first CTD pass never masked are outside that footprint, so they score 0 %. This holds for both the runtime check and `scripts/quality/cleanup_composite.py`. On sample61, 62 of 63 regions scored 0.0 % with text visibly left.
+- **Open question (not yet split):**
+  - Either CTD missed those glyphs,
+  - or the region's OCR lines did not include them and the mask is limited to OCR'd lines.
+- **Next step:**
+  - Compute residual ink over the whole region box, not the patch alpha, so the metric can see misses.
+  - Then check the sample61 lines against the region's OCR text to decide which of the two it is.
+
+### `AUDIT-T6` (low): The harness reports "complete" before QA-triggered redo cycles finish
+
+- **Seen in R3 Packet 4 (2026-09-26), sample61.**
+  - The harness captured `project.zip`, `editor.png` and `export.png` at 11:18:11 UTC, after the first translation → render → QA cycle.
+  - QA then started two more redo cycles, which ran until 11:25:14.
+  - The run caught it by polling `jobs` for the page, and re-captured with `scripts/playwright/capture_existing_page.cjs`.
+- **Same run, runbook side:** the handoff listed `sample177` in both the canary and the six-fixture batch. The second upload was deduplicated onto the first image (`AUDIT-B24` behaviour), so it ran only render and QA, with no cleanup patches. It measures nothing about cleanup.
+- **Next step:**
+  - The harness should treat a page as settled only when no job for it is pending or running, and `last_rendered_at` is after the last QA.
+  - Future runbooks list each source once.
 
 ### `AUDIT-R12` (medium): SFX appear to shrink neighbouring balloons
 

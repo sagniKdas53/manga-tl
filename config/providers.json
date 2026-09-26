@@ -4,7 +4,7 @@
     "provider": "openrouter",
     "tl": "deepseek/deepseek-v4-pro",
     "qaLLM": "deepseek/deepseek-v4-pro",
-    "qaVLM": "z-ai/glm-5.3-flash",
+    "qaVLM": "google/gemini-3.1-flash-lite",
     "ocr": "qwen/qwen3.7-plus",
     "qaMode": "auto",
     "useFallbackModels": true,
@@ -994,7 +994,7 @@
       },
       "defaultTLModel": "deepseek/deepseek-v4-pro",
       "defaultQALLMModel": "deepseek/deepseek-v4-pro",
-      "defaultQAVLMModel": "z-ai/glm-5.3-flash",
+      "defaultQAVLMModel": "google/gemini-3.1-flash-lite",
       "defaultOCRModel": "qwen/qwen3.7-flash"
     },
     "nvidia": {

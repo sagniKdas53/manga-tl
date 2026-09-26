@@ -2,7 +2,75 @@
 
 Start with the current checkpoint below and the [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md). The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
 
-Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **Current R3 status (2026-09-25): implementation complete (Packets 1–3, OQ-07/08); Packet 4 measurement not started; all three gates (reliability, performance, quality) still open; NOT PASSED.** Next: one user test round on the dev stack (cleanup modes, padding, merge), then the [Packet 4 handoff](quality-checkpoints/R3-packet4-measurement-handoff-20260925.md) after its six decisions. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25). Read the summary and [current next-session handoff](output-quality-next-session-20260924.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. Next: the typesetting phase, starting with R7 (see the 2026-09-26 night section). [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25). Read the summary and [current next-session handoff](output-quality-next-session-20260924.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+
+## Status at a glance (2026-09-26, night — R3 closed)
+
+**The user accepted Packet 4's results and closed R3** ("These results are acceptable, Let's close R3"). The run: [`r3p4-20260926-six`](quality-runs/r3p4-20260926-six/README.md), plus [`-canary`](quality-runs/r3p4-20260926-canary/) and [`-sample61`](quality-runs/r3p4-20260926-sample61/reference-compare.md).
+- **Where and what:** chrome-box, parent `1195db8` / worker `ffc97be`, cleanup `auto`.
+- **Models:** Luna for translation, falling back to DeepSeek V4 Flash.
+- **Spend:** $0.148 of the $1.00 cap.
+
+**How each gate closed:**
+
+| Gate | Evidence | Closed as |
+| --- | --- | --- |
+| Reliability | 10 page instances, every job on attempt 1/3. No FAILED, 409 or stale-recovery line in 18,892 worker log lines. Every stage finished under the 10-minute stale threshold. | Accepted for normal running. **Carried forward:** the disturbance cases (worker killed mid-stage, edit/cancel/delete during cleanup) were not run. One labelled run on `sample177` closes them. |
+| Performance | Cleanup is 2–2.5× faster than R3.md: sample222 ~13 min → 6m08s, sample93 16m50s → 6m48s, sample61 17m18s → 8m17s. Translation fell from ~14 min to ~1 min per pass on sample61. Stress page: 19m39s against a 20-minute limit. Ordinary pages: sample93 (11 regions) took 7m50s to first result and 11m31s to finish; sample222 took 6m56s to first result; the rest were within 5 and 10 minutes. | Recorded, no pass line (D2 = record only). **Carried forward:** a real ceiling, and cleanup speed (CTD is 95 % of cleanup time; see the exploration below). |
+| Quality | Nothing changed outside any patch on any page; leftover-ink median 0–0.37 %; zero refusals. By eye: sample83's forearm smeared inside its patch ([`AUDIT-R24`](issues.md#audit-r24-medium-cleanup-smears-the-art-when-text-crosses-a-figure), Torii is worse there); Japanese lines left inside regions on sample61 and sample222 ([`AUDIT-R25`](issues.md#audit-r25-medium-source-text-survives-inside-a-detected-region-and-the-gate-scores-it-0), which the leftover-ink metric cannot see). | Accepted with those two defects filed. Overlapping English (sample222, sample99) and the tilted banner are M7 and [`AUDIT-R23`](issues.md#audit-r23-medium-ocr-throws-away-the-text-angle-it-detects). |
+
+**Decisions made at close:**
+- **QA vision judge = Gemini 3.1 Flash Lite from now on** ([`AUDIT-W16`](issues.md#audit-w16-medium-glm-53-flash-as-the-qa-judge-half-the-calls-fail-some-take-four-minutes)).
+  - Why: GLM 5.3 Flash returned nothing on about half the QA jobs and took 170–244 s per call. Gemini answered every fallback call in 5–20 s.
+  - Fallbacks: Mistral Small 3.2, then GLM.
+  - Applies to the dev stack on the next `docker compose up` (env files changed).
+  - A `qaVlmModel` saved in System Settings or pinned on a series/chapter still wins.
+- **Harness gaps filed** ([`AUDIT-T6`](issues.md#audit-t6-low-the-harness-reports-complete-before-qa-triggered-redo-cycles-finish)): the harness captures before QA redo cycles end, and the runbook uploaded `sample177` twice. The run caught and corrected both.
+- **Measurement tool kept:** `scripts/quality/cleanup_composite.py` (+ test), written in the run. It composites the patches onto the source and reports outside-support pixels and leftover ink per region.
+
+**Explored before the typesetting phase (2026-09-26, user's three questions):**
+
+1. **When does the reader match the rendered output?**
+   - In **R7**. Today `Reader.tsx` draws the source image plus the old text elements. It never fetches the page scene or the cleanup patches; only the render job sees those.
+   - R7 puts each patch on an Inpainting layer in the editor. Its gate is the equality check: content-only editor and render views agree at identical source, revision, fonts and assets.
+   - Text fitting parity is the M7 part of the same gate.
+   - **Recommendation:** R7 first in the typesetting phase, so typesetting is judged on a canvas that matches the export.
+2. **Can cleanup be faster (GPU)?** Measured on the laptop with the pipeline's own model files and real fixture crops.
+   - **GPU: no usable one.** Chrome-box has only Intel HD 5500 graphics. The laptop's GeForce 940MX (Maxwell, compute 5.0) loads ONNX Runtime's CUDA provider, but the prebuilt kernels exclude this generation: `cudaErrorNoKernelImageForDevice`, and cuDNN 9.26 fails at the first Conv.
+   - **Where the time goes.** CTD is 95 % of cleanup: 2,060 of 2,161 s over the run's 163 regions. Inpainting (TELEA/AOT) is about 5 %. Inside CTD, stock ONNX Runtime spends **81 % in its 6 `ConvTranspose` nodes**; its CPU kernel for them is slow.
+   - **OpenVINO fixes it without a GPU.** Intel's OpenVINO execution provider for ONNX Runtime (`onnxruntime-openvino`, Apache-2.0) runs the same CTD graph on the same CPU with **identical masks (IoU 1.000 on 5 crops)**:
+
+     | Crop | Stock ORT | OpenVINO, first call |
+     | --- | --- | --- |
+     | 580×700 | 32.4 s | 0.6 s |
+     | 900×640 | 51.4 s | 0.7 s |
+     | 1024×1024 | ~80 s | 1.6 s |
+
+     A new crop shape costs no recompile (first call 0.2–1.6 s).
+   - **Smaller measured options:**
+     - denormals-as-zero: 2× on CTD, identical output;
+     - 4 intra-op threads: about 1.5×;
+     - merging overlapping crops: 1.0–2.1× (sample61 2.1×).
+   - **Downscaling the crop is rejected:** mask IoU 0.57–0.90 at 0.75×/0.5×.
+   - **Estimate, not measured on the stack:** CTD at about 2 µs/px instead of about 70 would take the run's cleanup from about 36 minutes to about 3: about 1 minute of CTD (29.5 MP fed) plus the 1.8 minutes of inpainting, which OpenVINO may also shorten (not measured).
+   - **Next step:** its own packet.
+     - Swap the worker to `onnxruntime-openvino` (latest 1.24.1; the worker pins `onnxruntime==1.30.0`).
+     - Check YOLO, AOT and PaddleOCR still work, and measure on chrome-box (Broadwell, AVX2) before claiming the speedup.
+     - Nothing changes the masks, so quality evidence carries over.
+3. **Could an image-generation model do cleanup on crops?**
+   - Possible (OpenRouter lists Gemini 3.1 Flash Image, Gemini 3 Pro Image, GPT-5 Image), but not recommended as the cleanup path:
+     - These models refuse or filter sexual content, and explicit pages must stay supported.
+     - Each call takes about 5–30 s and costs roughly cents per generated image, against about $0.005 per page for translation today.
+     - They redraw the whole crop (resampling, colour shift), so only the masked pixels could be kept.
+     - With OpenVINO, local CTD is about 1 s per region anyway.
+   - Where it could earn a place: an opt-in "re-inpaint with AI" for a hard region such as text over art (`AUDIT-R24`), from R7's editor, on pages the provider accepts. Parked as an idea, not planned.
+
+**Next, in order:**
+1. The OpenVINO packet (cleanup speed, no quality change).
+2. R7 (editor shows the cleaned page).
+3. Typesetting: `AUDIT-R21` grouping, `AUDIT-R23` rotation, then the rest of M7.
+
+The user sets the order.
 
 ## Status at a glance (2026-09-26 — test round passed; R3 closes in a new chat)
 
