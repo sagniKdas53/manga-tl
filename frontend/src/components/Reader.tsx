@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useMemo,
-} from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type {
   User,
@@ -30,11 +24,20 @@ import {
   ensureFontsLoaded,
 } from "../utils/fitText";
 import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
-import { hasDetectedBubble, paintLayerMask } from "../utils/maskPaint";
+import { paintLayerMask } from "../utils/maskPaint";
+import { elementFit } from "../utils/elementFit";
+import type { MergePreview } from "./ReaderIssues";
 import {
-  DEFAULT_TEXT_BOX_INSET,
+  regionIssues,
+  translationElementByRegion,
+  type IssueAction,
+  type RegionIssue,
+} from "../utils/regionIssues";
+import {
+  DEFAULT_TEXT_BOX_GEOMETRY,
+  insetForBox,
   textFitBox,
-  type TextBoxInset,
+  type TextBoxGeometry,
 } from "../utils/textFitBox";
 import { usePersistedState } from "../hooks/usePersistedState";
 import ConfirmModal from "./ConfirmModal";
@@ -314,12 +317,6 @@ export const Reader: React.FC<ReaderProps> = ({
   // Reader States
   const [panels, setPanels] = useState<Panel[]>([]);
   const [ocrRegions, setOcrRegions] = useState<OcrRegion[]>([]);
-  // Erasure needs to know which regions have no balloon, so their text box can be
-  // erased alongside their mask; see `paintLayerMask`.
-  const regionsById = useMemo(
-    () => new Map(ocrRegions.map((r) => [r.id, r])),
-    [ocrRegions],
-  );
   const [imageDims, setImageDims] = useState({ w: 800, h: 1200 });
   // True once the server has told us the original size, which makes the displayed image's
   // naturalWidth irrelevant. Kept in a ref because handleImgLoad reads it outside React's flow.
@@ -408,11 +405,11 @@ export const Reader: React.FC<ReaderProps> = ({
   const cacheEpochRef = useRef(0);
   const [cacheEpoch, setCacheEpoch] = useState(0);
 
-  // AUDIT-F16: the fitted rectangle's inset, from global settings rather than a literal. Starts at
-  // the value the pipeline has always used, so the reader is never briefly fitting to a different
-  // box than the export while the request is in flight.
-  const [textBoxInset, setTextBoxInset] = useState<TextBoxInset>(
-    DEFAULT_TEXT_BOX_INSET,
+  // AUDIT-F16: the fitted rectangle's inset, from global settings rather than a literal: padding
+  // as a percentage of each box (capped at a max px) and a safety share. Starts at the default
+  // the export uses, so the reader never briefly fits to a different box while this loads.
+  const [textBoxGeometry, setTextBoxGeometry] = useState<TextBoxGeometry>(
+    DEFAULT_TEXT_BOX_GEOMETRY,
   );
   useEffect(() => {
     let cancelled = false;
@@ -422,13 +419,14 @@ export const Reader: React.FC<ReaderProps> = ({
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled || !data) return;
-        setTextBoxInset({
-          paddingPx: Number(
-            data.textBoxPaddingPx ?? DEFAULT_TEXT_BOX_INSET.paddingPx,
+        const d = DEFAULT_TEXT_BOX_GEOMETRY;
+        setTextBoxGeometry({
+          paddingPercent: Number(
+            data.textBoxPaddingPercent ?? d.paddingPercent,
           ),
-          safetyPercent: Number(
-            data.textBoxSafetyPercent ?? DEFAULT_TEXT_BOX_INSET.safetyPercent,
-          ),
+          paddingMinPx: Number(data.textBoxPaddingMinPx ?? d.paddingMinPx),
+          paddingMaxPx: Number(data.textBoxPaddingMaxPx ?? d.paddingMaxPx),
+          safetyPercent: Number(data.textBoxSafetyPercent ?? d.safetyPercent),
         });
       })
       .catch(() => {
@@ -708,6 +706,18 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // Image ref for export
   const imgRef = useRef<HTMLImageElement>(null);
+  // The page's on-screen width before zoom, so canvas markers can be sized in screen pixels: a
+  // badge drawn in image pixels shrinks to a speck on a 2500px scan.
+  const [displayWidth, setDisplayWidth] = useState(0);
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => setDisplayWidth(img.clientWidth));
+    observer.observe(img);
+    return () => observer.disconnect();
+  }, [pageImageSrc]);
+  /** Image pixels per screen pixel, so overlay badges keep one on-screen size at any zoom. */
+  const screenPx = displayWidth > 0 ? imageDims.w / (displayWidth * zoom) : 1;
 
   // Popover States
   const [activeRegion, setActiveRegion] = useState<OcrRegion | null>(null);
@@ -786,6 +796,158 @@ export const Reader: React.FC<ReaderProps> = ({
   }, [filteredConversations, filteredOcrRegions, groupByConversation]);
 
   // Unified list of renderable items (conversations or standalone regions)
+  // Everything on the page a person still has to look at, in reading order: uncertain cleanup,
+  // QA flags, failed or missing translations, and text that does not fit its box. Rejected and
+  // SFX regions are settled and never counted. Only while a translation layer is shown: a page
+  // mid-pipeline, or one whose translation the user has hidden, would otherwise list every region
+  // as "not translated".
+  const issueElements = React.useMemo(
+    () => translationElementByRegion(layers),
+    [layers],
+  );
+  const overflowingElementIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const { layer, elements } of layers) {
+      if (layer.type !== "translation" || layer.visible !== true) continue;
+      for (const element of elements) {
+        if (
+          element.visible === true &&
+          (element.text || "").trim() &&
+          elementFit(element, textBoxGeometry).overflow
+        ) {
+          ids.add(element.id);
+        }
+      }
+    }
+    return ids;
+  }, [layers, textBoxGeometry]);
+  const issues = React.useMemo(
+    () =>
+      layers.some(
+        (l) => l.layer.type === "translation" && l.layer.visible === true,
+      )
+        ? regionIssues(ocrRegions, issueElements, overflowingElementIds)
+        : [],
+    [layers, ocrRegions, issueElements, overflowingElementIds],
+  );
+
+  const selectRegionForReview = useCallback(
+    (r: OcrRegion) => {
+      setSelectedItem({
+        id: `region-${r.id}`,
+        isConversation: false,
+        regions: [r],
+        bboxX: r.bboxX,
+        bboxY: r.bboxY,
+        bboxW: r.bboxW,
+        bboxH: r.bboxH,
+        approved: r.approved === true,
+        sceneType: "speech",
+        originalRegion: r,
+      });
+      setActiveRegion(r);
+      setShowRightSidebar(true);
+    },
+    [setShowRightSidebar],
+  );
+
+  const selectedRegionId =
+    typeof selectedItem?.id === "string" &&
+    selectedItem.id.startsWith("region-")
+      ? selectedItem.id.slice("region-".length)
+      : null;
+
+  /** Step through the issues from the one open in the inspector (or from the start). */
+  const handleStepIssue = useCallback(
+    (delta: -1 | 1) => {
+      if (issues.length === 0) return;
+      const current = issues.findIndex((i) => i.region.id === selectedRegionId);
+      const next =
+        current < 0
+          ? delta > 0
+            ? 0
+            : issues.length - 1
+          : (current + delta + issues.length) % issues.length;
+      selectRegionForReview(issues[next].region);
+    },
+    [issues, selectedRegionId, selectRegionForReview],
+  );
+  const handleReviewNext = useCallback(
+    () => handleStepIssue(1),
+    [handleStepIssue],
+  );
+  const handleSelectIssue = useCallback(
+    (issue: RegionIssue) => selectRegionForReview(issue.region),
+    [selectRegionForReview],
+  );
+
+  // Merge mode: pick the fragments that form one text block, on the page or in the sidebar list.
+  const [mergeMode, setMergeMode] = useState(false);
+  const [mergeSelection, setMergeSelection] = useState<string[]>([]);
+  const [isMerging, setIsMerging] = useState(false);
+  const handleToggleMergeMode = useCallback(() => {
+    setMergeMode((on) => !on);
+    setMergeSelection([]);
+    setSelectedItem(null);
+    setShowRightSidebar(true);
+  }, [setShowRightSidebar]);
+  const handleToggleMergeRegion = useCallback((regionId: string) => {
+    setMergeSelection((prev) =>
+      prev.includes(regionId)
+        ? prev.filter((id) => id !== regionId)
+        : [...prev, regionId],
+    );
+  }, []);
+  // The order a merge will read the picked pieces in comes from the backend's dry run, the same
+  // code that merges, so what is shown is what will happen. Asked again whenever the pick changes.
+  const [fetchedPreview, setFetchedPreview] = useState<MergePreview | null>(
+    null,
+  );
+  const mergePageId = selectedPage?.id;
+  const wantsPreview = mergeMode && !!mergePageId && mergeSelection.length >= 2;
+  useEffect(() => {
+    if (!wantsPreview) return;
+    let stale = false;
+    const timer = window.setTimeout(() => {
+      void safeFetch(`/api/pages/${mergePageId}/regions/merge`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ regionIds: mergeSelection, dryRun: true }),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((body: { order?: string[]; text?: string } | null) => {
+          if (stale) return;
+          setFetchedPreview(
+            body?.order ? { order: body.order, text: body.text ?? "" } : null,
+          );
+        })
+        .catch(() => {
+          if (!stale) setFetchedPreview(null);
+        });
+    }, 200);
+    return () => {
+      stale = true;
+      window.clearTimeout(timer);
+    };
+  }, [wantsPreview, mergePageId, mergeSelection, user.token]);
+  // Only a preview of exactly the current pick counts; an older answer is not this pick's order.
+  const mergePreview =
+    wantsPreview &&
+    fetchedPreview &&
+    fetchedPreview.order.length === mergeSelection.length &&
+    fetchedPreview.order.every((id) => mergeSelection.includes(id))
+      ? fetchedPreview
+      : null;
+  // Picked piece → its place in the reading order (1-based), for the numbers on the page.
+  const mergePosition = React.useMemo(() => {
+    const positions = new Map<string, number>();
+    mergePreview?.order.forEach((id, i) => positions.set(id, i + 1));
+    return positions;
+  }, [mergePreview]);
+
   const renderItems = React.useMemo(() => {
     if (!groupByConversation || filteredConversations.length === 0) {
       return filteredOcrRegions.map((r) => ({
@@ -2406,132 +2568,46 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // --- EXPORT HANDLERS ---
   const handleExportPng = useCallback(() => {
-    if (!selectedPage || !imgRef.current) return;
+    if (!selectedPage) return;
 
+    // Tracker R1 (2026-09-17): the exported PNG is the page's current immutable render artifact —
+    // the same pixels the browser renderer drew for QA — not a Canvas re-drawing of the layers.
+    // Until then this function was a third typography implementation; see
+    // docs/output-quality-architecture-decisions.md §1a. A page whose current revision has no
+    // finished render is reported as such rather than exported from something else.
     const doExport = async () => {
-      // Never `imgRef.current`: that element shows the lossy reading variant, so exporting from
-      // it would silently bake a re-encode into the output. Export always starts from /file.
-      const img = await loadOriginalImage(selectedPage.url, user.token);
-      const W = imageDims.w;
-      const H = imageDims.h;
-
-      const canvas = document.createElement("canvas");
-      canvas.width = W;
-      canvas.height = H;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      // Canvas fillText never triggers a web font load itself -- without this, an export run
-      // before the page's own DOM text has already loaded "Comic Neue" silently falls back to
-      // sans-serif (see ensureFontsLoaded).
-      await ensureFontsLoaded(sortedLayers.flatMap((l) => l.elements));
-
-      // Draw the base page image
-      ctx.drawImage(img, 0, 0, W, H);
-
-      // Draw visible layer elements
-      sortedLayers.forEach((lData) => {
-        if (!lData.layer.visible || !isExportableLayer(lData.layer)) return;
-        // Masks for the whole layer first, then text. Painting mask-then-text per element
-        // let a later element's mask paint over an earlier element's already-drawn
-        // translation -- measured on 39 % of exported pages, and on the worst of them a
-        // bubble's text was covered completely. The masks go onto their own transparent
-        // canvas because paintLayerMask composites with `destination-over`, which would
-        // otherwise put them behind the page artwork drawn above.
-        const layerMaskCanvas = document.createElement("canvas");
-        layerMaskCanvas.width = W;
-        layerMaskCanvas.height = H;
-        const layerMaskCtx = layerMaskCanvas.getContext("2d");
-        if (layerMaskCtx) {
-          paintLayerMask(layerMaskCtx, lData.elements, regionsById);
-          ctx.drawImage(layerMaskCanvas, 0, 0);
-        }
-
-        lData.elements.forEach((el) => {
-          if (!el.visible) return;
-          const width = el.maxWidth || 100;
-          const height = el.maxHeight || 100;
-
-          // AUDIT-R5: the angle applies to the glyphs whether or not the element has a mask
-          // polygon. The old `if (!el.maskPolygon)` guard skipped rotation in exactly the case
-          // where the user had rotated something — the rotation handle only exists in reshape
-          // mode, which requires a polygon — so the plate turned and the text stayed level.
-          ctx.save();
-          if (el.rotation) {
-            const cx = el.x + width / 2;
-            const cy = el.y + height / 2;
-            ctx.translate(cx, cy);
-            ctx.rotate((el.rotation * Math.PI) / 180);
-            ctx.translate(-cx, -cy);
-          }
-
-          // Draw text
-          let displayText = el.text || "";
-          if (el.boxShape === "elliptical") {
-            displayText = displayText.toUpperCase();
-          }
-
-          // AUDIT-R1: one definition of the fitted rectangle, shared with render.py.
-          const fitBox = textFitBox(
-            { x: el.x, y: el.y, width, height },
-            textBoxInset,
-          );
-          const fit = fitTextInBox(
-            displayText,
-            fitBox.width,
-            fitBox.height,
-            el.font || "Comic Neue",
-            el.size || 16,
-            el.boxShape === "elliptical" ? "elliptical" : "rectangular",
-            fitBox.x,
-            fitBox.y,
-            el.maskPolygon,
-            el.fontWeight || "bold",
-            el.fontStyle || "normal",
-          );
-          const fSize = fit.fontSize;
-          ctx.font = `${el.fontWeight || "bold"} ${el.fontStyle === "italic" ? "italic " : ""}${fSize}px "${el.font || "Comic Neue"}", sans-serif`;
-          ctx.fillStyle = el.textColor || "#000000";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          const lineH = fSize * 1.2;
-          const startY =
-            el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
-          fit.lines.forEach((line, i) => {
-            const lineCenterX =
-              fit.lineCenters && fit.lineCenters.at(i) !== undefined
-                ? (fit.lineCenters.at(i) ?? el.x + width / 2)
-                : el.x + width / 2;
-            ctx.fillText(
-              line,
-              clampLineCenter(
-                lineCenterX,
-                ctx.measureText(line).width,
-                el.x,
-                width,
-              ),
-              startY + i * lineH,
-            );
-          });
-
-          ctx.restore();
-        });
+      const res = await safeFetch(`/api/pages/${selectedPage.id}/rendered`, {
+        // Bypass artifacts cached by older servers at this stable current-render URL.
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${user.token}` },
       });
-
-      // Trigger download
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `page-${selectedPage.pageNumber}-export.png`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }, "image/png");
+      if (res.status === 409) {
+        const body = (await res.json().catch(() => ({}))) as {
+          status?: string;
+          revision?: number;
+        };
+        showToast(
+          body.status === "failed"
+            ? `The render for revision ${body.revision ?? "?"} failed; fix the page and it will re-render.`
+            : "This page's render is still pending; try again in a few seconds.",
+          "error",
+        );
+        return;
+      }
+      if (!res.ok) {
+        throw new Error(
+          `Rendered artifact request failed with status ${res.status}`,
+        );
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `page-${selectedPage.pageNumber}-export.png`;
+      a.click();
+      URL.revokeObjectURL(url);
     };
 
-    // doExport is async now that it fetches the original, and the call sites below are not
-    // awaited — without this a failed fetch would surface as an unhandled rejection.
     const runExport = () => {
       doExport().catch((err) => {
         console.error("Export failed:", err);
@@ -2565,40 +2641,7 @@ export const Reader: React.FC<ReaderProps> = ({
     } else {
       runExport();
     }
-  }, [
-    selectedPage,
-    user,
-    imageDims,
-    // AUDIT-R1: an export must use the inset in force now, not the one captured when this
-    // callback was last built, or a settings change would apply to the reader and not the file.
-    textBoxInset,
-    regionsById,
-    sortedLayers,
-    dirtyElements,
-    saveAllPendingChanges,
-  ]);
-
-  const handleExportRenderedPng = useCallback(async () => {
-    if (!selectedPage || !user?.token) return;
-    try {
-      const res = await safeFetch(`/api/pages/${selectedPage.id}/rendered`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-      if (!res.ok) throw new Error("Failed to export rendered PNG");
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `page-${selectedPage.pageNumber}-rendered.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("Export rendered PNG failed:", err);
-      // Optional: showError("Failed to export rendered PNG");
-    }
-  }, [selectedPage, user]);
+  }, [selectedPage, user, dirtyElements, saveAllPendingChanges, showToast]);
 
   const handleExportZip = useCallback(async () => {
     if (!selectedPage || !imgRef.current) return;
@@ -2640,7 +2683,7 @@ export const Reader: React.FC<ReaderProps> = ({
         maskCanvas.height = H;
         const maskCtx = maskCanvas.getContext("2d")!;
 
-        paintLayerMask(maskCtx, lData.elements, regionsById);
+        paintLayerMask(maskCtx, lData.elements);
 
         const maskBlob = await new Promise<Blob>((res) =>
           maskCanvas.toBlob((b) => res(b!), "image/png"),
@@ -2663,9 +2706,10 @@ export const Reader: React.FC<ReaderProps> = ({
           }
 
           // AUDIT-R1: one definition of the fitted rectangle, shared with render.py.
+          const rawBox = { x: el.x, y: el.y, width, height };
           const fitBox = textFitBox(
-            { x: el.x, y: el.y, width, height },
-            textBoxInset,
+            rawBox,
+            insetForBox(rawBox, textBoxGeometry),
           );
           const fit = fitTextInBox(
             displayText,
@@ -2734,6 +2778,7 @@ export const Reader: React.FC<ReaderProps> = ({
       });
 
       const projectData = {
+        schemaVersion: 1,
         pageNumber: selectedPage.pageNumber,
         imageId: selectedPage.imageId,
         dimensions: { width: W, height: H },
@@ -2834,8 +2879,7 @@ export const Reader: React.FC<ReaderProps> = ({
     imageDims,
     // AUDIT-R1: an export must use the inset in force now, not the one captured when this
     // callback was last built, or a settings change would apply to the reader and not the file.
-    textBoxInset,
-    regionsById,
+    textBoxGeometry,
     layers,
     dirtyElements,
     saveAllPendingChanges,
@@ -3064,6 +3108,8 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // --- BUBBLE/CONVERSATION UPDATES ---
 
+  const [isReviewingRegion, setIsReviewingRegion] = useState(false);
+
   const handleRedoRegion = async (
     r: OcrRegion,
     forceType?: "ocr" | "translation",
@@ -3140,6 +3186,179 @@ export const Reader: React.FC<ReaderProps> = ({
       if (type === "ocr") setIsRedoingRegionOcr(false);
       else setIsRedoingRegionTl(false);
       showInfo("Redo Failed", "Failed to start redo job.", "error");
+    }
+  };
+
+  /** POST one of the review route's resolutions for a region. */
+  const postRegionReview = async (
+    r: OcrRegion,
+    action: "reject" | "accept" | "mask" | "delete",
+  ) => {
+    const res = await safeFetch(`/api/ocr-regions/${r.id}/review`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${user.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ action }),
+    });
+    if (!res.ok) throw new Error(`Review request failed (${res.status})`);
+  };
+
+  const REVIEW_ACTION_FAILED: Record<string, string> = {
+    reject: "Could Not Keep the Original",
+    accept: "Could Not Keep the Translation",
+    mask: "Could Not Add the Mask",
+    delete: "Could Not Delete",
+    fit: "Could Not Shrink the Text",
+  };
+
+  /** A quick resolution from the issues view. */
+  const handleRegionAction = async (
+    r: OcrRegion,
+    action: IssueAction,
+    element?: LayerElement,
+  ) => {
+    if (action === "redo-translation" || action === "redo-ocr") {
+      await handleRedoRegion(r, action === "redo-ocr" ? "ocr" : "translation");
+      return;
+    }
+    // The card opens its own editor for these.
+    if (action === "edit" || action === "edit-source") return;
+    setIsReviewingRegion(true);
+    try {
+      if (action === "fit") {
+        if (!element) return;
+        await saveElementChanges(
+          { ...element, autoSize: true },
+          false,
+          user.token,
+          showToast,
+          showError,
+        );
+      } else {
+        await postRegionReview(r, action);
+      }
+      // Settled: move on to the next issue rather than leaving an empty inspector.
+      const remaining = issues.filter((i) => i.region.id !== r.id);
+      if (action !== "fit" && remaining.length > 0) {
+        const after =
+          remaining.find(
+            (i) =>
+              (i.region.bubbleReadingOrder ?? 0) > (r.bubbleReadingOrder ?? 0),
+          ) ?? remaining[0];
+        selectRegionForReview(after.region);
+      } else if (action !== "fit") {
+        setSelectedItem(null);
+        setActiveRegion(null);
+      }
+      refreshAfterOverlayChange();
+    } catch (err) {
+      console.error("Review action failed:", err);
+      showInfo(
+        REVIEW_ACTION_FAILED[action] ?? "Could Not Update the Region",
+        "The region was left as it was. Please try again.",
+        "error",
+      );
+    } finally {
+      setIsReviewingRegion(false);
+    }
+  };
+
+  /** "Type translation": write the text into the region's row and clear its flag. */
+  const handleSaveIssueTranslation = async (
+    issue: RegionIssue,
+    text: string,
+  ) => {
+    if (!issue.element) {
+      showInfo(
+        "No Translation Row",
+        "This region has no translation row to write into yet. Redo its translation first.",
+        "error",
+      );
+      return;
+    }
+    setIsReviewingRegion(true);
+    try {
+      await saveElementChanges(
+        { ...issue.element, text, visible: true },
+        false,
+        user.token,
+        showToast,
+        showError,
+      );
+      await postRegionReview(issue.region, "accept");
+      refreshAfterOverlayChange();
+    } catch (err) {
+      console.error("Saving the typed translation failed:", err);
+      showInfo(
+        "Could Not Save the Translation",
+        "Your text was not saved. Please try again.",
+        "error",
+      );
+    } finally {
+      setIsReviewingRegion(false);
+    }
+  };
+
+  /** "Type source text": correct what OCR read, then translate the region again from it. */
+  const handleSaveSourceText = async (issue: RegionIssue, text: string) => {
+    setIsReviewingRegion(true);
+    try {
+      const res = await safeFetch(`/api/ocr-regions/${issue.region.id}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok)
+        throw new Error(`Saving the source text failed (${res.status})`);
+    } catch (err) {
+      console.error("Saving the source text failed:", err);
+      showInfo(
+        "Could Not Save the Source Text",
+        "The region was left as it was. Please try again.",
+        "error",
+      );
+      return;
+    } finally {
+      setIsReviewingRegion(false);
+    }
+    await handleRedoRegion({ ...issue.region, text }, "translation");
+  };
+
+  /** Merge the picked fragments into one block; it is cleaned and translated again as a whole. */
+  const handleConfirmMerge = async () => {
+    if (!selectedPage || mergeSelection.length < 2) return;
+    setIsMerging(true);
+    try {
+      const res = await safeFetch(
+        `/api/pages/${selectedPage.id}/regions/merge`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${user.token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ regionIds: mergeSelection }),
+        },
+      );
+      if (!res.ok) throw new Error(`Merge failed (${res.status})`);
+      setMergeMode(false);
+      setMergeSelection([]);
+      showToast("Merged — cleaning and translating the new block", "success");
+      refreshAfterOverlayChange();
+    } catch (err) {
+      console.error("Merge failed:", err);
+      showInfo(
+        "Could Not Merge",
+        "The regions were left as they were. Please try again.",
+        "error",
+      );
+    } finally {
+      setIsMerging(false);
     }
   };
 
@@ -3310,6 +3529,8 @@ export const Reader: React.FC<ReaderProps> = ({
         onToggleRightSidebar={() => setShowRightSidebar((prev) => !prev)}
         leftSidebarOpen={showLeftSidebar}
         rightSidebarOpen={showRightSidebar}
+        reviewCount={issues.length}
+        onReviewClick={handleReviewNext}
       />
 
       {/* Main Workspace split */}
@@ -3493,16 +3714,20 @@ export const Reader: React.FC<ReaderProps> = ({
                     const isSelected = selectedItem?.id === item.id;
                     const isApproved = item.approved;
                     const qaStatus = item.regions.find(
-                      (r) =>
-                        r.qaStatus === "failed" ||
-                        r.qaStatus === "manual_review",
+                      (r) => r.qaStatus === "failed",
                     )
                       ? "failed"
-                      : item.regions.find((r) => r.qaStatus === "direct_fix")
-                        ? "direct_fix"
-                        : item.regions.find((r) => r.qaStatus === "passed")
-                          ? "passed"
-                          : null;
+                      : item.regions.find(
+                            (r) =>
+                              r.qaStatus === "cleanup_review" ||
+                              r.qaStatus === "manual_review",
+                          )
+                        ? "review"
+                        : item.regions.find((r) => r.qaStatus === "direct_fix")
+                          ? "direct_fix"
+                          : item.regions.find((r) => r.qaStatus === "passed")
+                            ? "passed"
+                            : null;
                     return (
                       <g
                         key={item.id}
@@ -3543,23 +3768,26 @@ export const Reader: React.FC<ReaderProps> = ({
                                 : "var(--primary)"
                               : qaStatus === "failed"
                                 ? "#ef4444"
-                                : qaStatus === "direct_fix"
-                                  ? "#f59e0b"
-                                  : isApproved
-                                    ? item.isConversation
-                                      ? "var(--conversation)"
-                                      : "var(--primary)"
-                                    : item.isConversation
-                                      ? "var(--conversation)"
-                                      : "var(--success)",
+                                : qaStatus === "review"
+                                  ? "var(--warning)"
+                                  : qaStatus === "direct_fix"
+                                    ? "#f59e0b"
+                                    : isApproved
+                                      ? item.isConversation
+                                        ? "var(--conversation)"
+                                        : "var(--primary)"
+                                      : item.isConversation
+                                        ? "var(--conversation)"
+                                        : "var(--success)",
                             strokeWidth:
                               isSelected || isApproved
                                 ? 2.5
-                                : qaStatus === "failed"
+                                : qaStatus === "failed" || qaStatus === "review"
                                   ? 2.5
                                   : 1.5,
                             strokeDasharray:
-                              !isSelected && qaStatus === "failed"
+                              !isSelected &&
+                              (qaStatus === "failed" || qaStatus === "review")
                                 ? "4 2"
                                 : undefined,
                           }}
@@ -3578,15 +3806,17 @@ export const Reader: React.FC<ReaderProps> = ({
                                   : "var(--primary)"
                                 : qaStatus === "failed"
                                   ? "#ef4444"
-                                  : qaStatus === "direct_fix"
-                                    ? "#f59e0b"
-                                    : isApproved
-                                      ? item.isConversation
-                                        ? "var(--conversation)"
-                                        : "var(--primary)"
-                                      : item.isConversation
-                                        ? "var(--conversation)"
-                                        : "var(--success)"
+                                  : qaStatus === "review"
+                                    ? "var(--warning)"
+                                    : qaStatus === "direct_fix"
+                                      ? "#f59e0b"
+                                      : isApproved
+                                        ? item.isConversation
+                                          ? "var(--conversation)"
+                                          : "var(--primary)"
+                                        : item.isConversation
+                                          ? "var(--conversation)"
+                                          : "var(--success)"
                             }
                           />
                           <text
@@ -3636,52 +3866,19 @@ export const Reader: React.FC<ReaderProps> = ({
                       ? relatedRegion.qaStatus
                       : null;
 
-                    // Run text fitting
-                    let fontSize: number;
-                    let overflow: boolean;
-
-                    // AUDIT-R1: the live reader used the *raw* box here — no inset at all —
-                    // while the frontend's own exports insetted by 4px and render.py insetted by
-                    // 4px and then took 95%. Three rectangles, one of them on the screen the
-                    // typesetting was being judged on. Same rectangle as the export now.
-                    const svgFitBox = textFitBox(
-                      {
-                        x: element.x,
-                        y: element.y,
-                        width: element.maxWidth || 100,
-                        height: element.maxHeight || 100,
-                      },
-                      textBoxInset,
-                    );
+                    // Run text fitting. AUDIT-R1: the fit box is the element's box minus the
+                    // same inset every export uses; `elementFit` is shared with the issues list.
+                    const {
+                      box: svgFitBox,
+                      fit,
+                      fontSize,
+                      overflow,
+                    } = elementFit(element, textBoxGeometry);
                     // The preview's DOM box must be the rectangle the fitter was given, not a
                     // literal. `svgFitBox.x` is `element.x` plus the configured, clamped padding,
                     // so this is that padding after every guard textFitBox applies.
                     const previewPadding = svgFitBox.x - element.x;
-                    const fit = fitTextInBox(
-                      element.text || "",
-                      svgFitBox.width,
-                      svgFitBox.height,
-                      element.font || "Comic Neue",
-                      element.size || 16,
-                      element.boxShape === "elliptical"
-                        ? "elliptical"
-                        : "rectangular",
-                      svgFitBox.x,
-                      svgFitBox.y,
-                      element.maskPolygon,
-                      element.fontWeight || "bold",
-                      element.fontStyle || "normal",
-                    );
-
-                    if (element.autoSize) {
-                      fontSize = fit.fontSize;
-                      overflow = fit.overflow;
-                    } else {
-                      fontSize = element.size || 16;
-                      const totalHeight = fit.lines.length * fontSize * 1.2;
-                      overflow = totalHeight > (element.maxHeight || 100);
-                    }
-                    const textToRender = fit.lines.join("\\n");
+                    const textToRender = fit.lines.join("\n");
 
                     const width = element.maxWidth || 100;
                     const height = element.maxHeight || 100;
@@ -3734,23 +3931,10 @@ export const Reader: React.FC<ReaderProps> = ({
                                         }
                                         stroke="none"
                                       />
-                                      {/* No balloon: the mask covers the source column, the box
-                                          is where the English goes, and the difference was
-                                          landing on artwork. Same rule as paintLayerMask. */}
-                                      {relatedRegion &&
-                                        !hasDetectedBubble(relatedRegion) && (
-                                          <rect
-                                            x={element.x}
-                                            y={element.y}
-                                            width={width}
-                                            height={height}
-                                            fill={
-                                              element.backgroundColor ||
-                                              "#ffffff"
-                                            }
-                                            stroke="none"
-                                          />
-                                        )}
+                                      {/* Tracker R2: the polygon is the whole plate. The box
+                                          fill that used to follow it for free-standing text was
+                                          the flat slab on the artwork. Same rule as
+                                          paintLayerMask. */}
                                     </>
                                   );
                                 }
@@ -3759,7 +3943,8 @@ export const Reader: React.FC<ReaderProps> = ({
                               }
                               return null;
                             })()
-                          ) : element.boxShape === "elliptical" ? (
+                          ) : element.regionId ? null : element.boxShape === // R2: pipeline free text without a polygon gets no plate
+                            "elliptical" ? (
                             <ellipse
                               cx={cx}
                               cy={cy}
@@ -4069,6 +4254,151 @@ export const Reader: React.FC<ReaderProps> = ({
                     );
                   });
                 })}
+
+                {/* Issues stay findable with the OCR boxes off: an amber dashed outline and the
+                    region's number, sized in screen pixels. Clicking opens it in the inspector. */}
+                {!mergeMode &&
+                  !(showOcr && !cleanScanlationView) &&
+                  issues.map(({ region: r }) => {
+                    const isSelected = selectedItem?.id === `region-${r.id}`;
+                    const badge = 11 * screenPx;
+                    return (
+                      <g
+                        key={`issue-${r.id}`}
+                        onClick={() => selectRegionForReview(r)}
+                        style={{
+                          cursor: "pointer",
+                          pointerEvents:
+                            interactionMode !== "none" ? "none" : "auto",
+                        }}
+                      >
+                        <title>Needs a look: click to inspect</title>
+                        <rect
+                          x={r.bboxX}
+                          y={r.bboxY}
+                          width={r.bboxW}
+                          height={r.bboxH}
+                          rx={4 * screenPx}
+                          style={{
+                            fill: isSelected
+                              ? "color-mix(in srgb, var(--warning) 18%, transparent)"
+                              : "color-mix(in srgb, var(--warning) 6%, transparent)",
+                            stroke: "var(--warning)",
+                            strokeWidth: isSelected ? 3 : 2,
+                            strokeDasharray: isSelected ? undefined : "6 4",
+                            vectorEffect: "non-scaling-stroke",
+                          }}
+                        />
+                        <circle
+                          cx={r.bboxX}
+                          cy={r.bboxY}
+                          r={badge}
+                          fill="var(--warning)"
+                          stroke="#ffffff"
+                          strokeWidth={1.5}
+                          style={{ vectorEffect: "non-scaling-stroke" }}
+                        />
+                        <text
+                          x={r.bboxX}
+                          y={r.bboxY}
+                          style={{
+                            textAnchor: "middle",
+                            dominantBaseline: "central",
+                            fontSize: `${12 * screenPx}px`,
+                            fontWeight: 700,
+                            fill: "#1f1400",
+                            pointerEvents: "none",
+                          }}
+                        >
+                          {r.bubbleReadingOrder || "!"}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                {/* Merge mode: the path the picked pieces will be read along. */}
+                {mergeMode && mergePreview && mergePreview.order.length > 1 && (
+                  <polyline
+                    points={mergePreview.order
+                      .map((id) => ocrRegions.find((r) => r.id === id))
+                      .filter((r): r is OcrRegion => !!r)
+                      .map(
+                        (r) =>
+                          `${r.bboxX + r.bboxW / 2},${r.bboxY + r.bboxH / 2}`,
+                      )
+                      .join(" ")}
+                    style={{
+                      fill: "none",
+                      stroke: "var(--primary)",
+                      strokeWidth: 2,
+                      strokeDasharray: "2 3",
+                      strokeLinejoin: "round",
+                      vectorEffect: "non-scaling-stroke",
+                      pointerEvents: "none",
+                    }}
+                  />
+                )}
+                {/* Merge mode: every region is a target; picked ones fill in and are numbered in
+                    the order the merge will read them. */}
+                {mergeMode &&
+                  ocrRegions.map((r) => {
+                    const picked = mergeSelection.includes(r.id);
+                    const position = mergePosition.get(r.id);
+                    return (
+                      <g
+                        key={`merge-${r.id}`}
+                        onClick={() => handleToggleMergeRegion(r.id)}
+                        style={{ cursor: "pointer", pointerEvents: "auto" }}
+                      >
+                        <title>
+                          {picked
+                            ? "Remove from the block"
+                            : "Add to the block"}
+                        </title>
+                        <rect
+                          x={r.bboxX}
+                          y={r.bboxY}
+                          width={r.bboxW}
+                          height={r.bboxH}
+                          rx={4 * screenPx}
+                          style={{
+                            fill: picked
+                              ? "color-mix(in srgb, var(--primary) 28%, transparent)"
+                              : "color-mix(in srgb, var(--primary) 6%, transparent)",
+                            stroke: "var(--primary)",
+                            strokeWidth: picked ? 3 : 1.5,
+                            strokeDasharray: picked ? undefined : "5 4",
+                            vectorEffect: "non-scaling-stroke",
+                          }}
+                        />
+                        <circle
+                          cx={r.bboxX}
+                          cy={r.bboxY}
+                          r={11 * screenPx}
+                          fill={picked ? "var(--primary)" : "#ffffff"}
+                          stroke="var(--primary)"
+                          strokeWidth={1.5}
+                          style={{ vectorEffect: "non-scaling-stroke" }}
+                        />
+                        <text
+                          x={r.bboxX}
+                          y={r.bboxY}
+                          style={{
+                            textAnchor: "middle",
+                            dominantBaseline: "central",
+                            fontSize: `${12 * screenPx}px`,
+                            fontWeight: 700,
+                            fill: picked ? "#ffffff" : "var(--primary)",
+                            pointerEvents: "none",
+                          }}
+                        >
+                          {picked
+                            ? (position ?? "…")
+                            : r.bubbleReadingOrder || "?"}
+                        </text>
+                      </g>
+                    );
+                  })}
               </svg>
             </div>
           </div>
@@ -4098,7 +4428,6 @@ export const Reader: React.FC<ReaderProps> = ({
             handleRedoPageTranslation={handleRedoPageTranslation}
             isRedoingPageTranslation={isRedoingPageTranslation}
             handleExportPng={handleExportPng}
-            handleExportRenderedPng={handleExportRenderedPng}
             handleExportZip={handleExportZip}
             interactionMode={interactionMode}
             setInteractionMode={setInteractionMode}
@@ -4113,6 +4442,20 @@ export const Reader: React.FC<ReaderProps> = ({
             ocrRegions={ocrRegions}
             isRedoingRegionOcr={isRedoingRegionOcr}
             handleRedoRegion={handleRedoRegion}
+            issues={issues}
+            onSelectIssue={handleSelectIssue}
+            onStepIssue={handleStepIssue}
+            handleRegionAction={handleRegionAction}
+            handleSaveIssueTranslation={handleSaveIssueTranslation}
+            handleSaveSourceText={handleSaveSourceText}
+            isReviewingRegion={isReviewingRegion}
+            mergeMode={mergeMode}
+            mergeSelection={mergeSelection}
+            mergePreview={mergePreview}
+            onToggleMergeMode={handleToggleMergeMode}
+            onToggleMergeRegion={handleToggleMergeRegion}
+            onConfirmMerge={handleConfirmMerge}
+            isMerging={isMerging}
             isRedoingRegionTl={isRedoingRegionTl}
           />
         )}

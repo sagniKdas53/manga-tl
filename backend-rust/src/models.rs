@@ -64,6 +64,8 @@ pub struct Series {
     pub tl_provider: Option<String>,
     pub updated_at: DateTime<Utc>,
     pub routing_strategy: Option<String>,
+    pub cleanup_mode: Option<String>,
+    pub ocr_merge_threshold: Option<f64>,
     pub use_fallback_models: Option<bool>,
     pub created_by: Option<Uuid>,
 }
@@ -92,6 +94,8 @@ pub struct Chapter {
     pub use_context_memory: bool,
     pub use_fallback_models: Option<bool>,
     pub routing_strategy: Option<String>,
+    pub cleanup_mode: Option<String>,
+    pub ocr_merge_threshold: Option<f64>,
     pub series_id: Uuid,
 }
 
@@ -106,6 +110,8 @@ pub struct Page {
     pub image_id: Uuid,
     pub last_edited_at: Option<DateTime<Utc>>,
     pub last_rendered_at: Option<DateTime<Utc>>,
+    pub scene_revision: i32,
+    pub input_generation: i32,
 }
 
 // ---------------------------------------------------------------- images
@@ -205,6 +211,7 @@ pub struct OcrRegion {
     #[serde(with = "mask_polygon_wire", default)]
     pub mask_polygon: Option<serde_json::Value>,
     pub ocr_score: Option<f64>,
+    pub ownership_provenance: Option<serde_json::Value>,
     pub panel_reading_order: Option<i32>,
     pub qa_feedback: Option<String>,
     pub qa_score: Option<f64>,
@@ -221,6 +228,18 @@ pub struct OcrRegion {
     pub translation_score: Option<f64>,
     pub page_id: Uuid,
     pub panel_id: Option<Uuid>,
+    // R3 glyph-mask cleanup: worker-computed, worker-uploaded assets. A NULL
+    // cleanup_patch_asset_id means `build_pipeline_scene` falls through to
+    // `legacy_patch_and_mask`'s flat fill, same as before R3 landed.
+    pub cleanup_mask_asset_id: Option<String>,
+    pub cleanup_mask_sha256: Option<String>,
+    pub cleanup_mask_byte_length: Option<i64>,
+    pub cleanup_patch_asset_id: Option<String>,
+    pub cleanup_patch_sha256: Option<String>,
+    pub cleanup_patch_byte_length: Option<i64>,
+    pub cleanup_bounds: Option<serde_json::Value>,
+    pub cleanup_generator_sha256: Option<String>,
+    pub cleanup_diagnostics: Option<serde_json::Value>,
 }
 
 // ---------------------------------------------------------------- layers
@@ -317,11 +336,96 @@ pub struct Job {
     pub payload: Option<String>,
     pub started_at: Option<DateTime<Utc>>,
     pub status: String,
+    pub input_generation: i32,
+    pub lease_token: Option<String>,
+    pub lease_expires_at: Option<DateTime<Utc>>,
+    pub heartbeat_at: Option<DateTime<Utc>>,
+    pub progress_at: Option<DateTime<Utc>>,
+    pub progress_count: i32,
     pub trace_id: Option<String>,
     #[sqlx(rename = "type")]
     #[serde(rename = "type")]
     pub job_type: String,
     pub updated_at: Option<DateTime<Utc>>,
+}
+
+/// Immutable `page-scene/v1` snapshot. The API path that binds the external page UUID
+/// is intentionally deferred to B05; this row never accepts a legacy scene version.
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct PageSceneSnapshot {
+    pub page_id: Uuid,
+    pub revision: i32,
+    pub contract_version: String,
+    pub source_sha256: String,
+    pub logical_scene_sha256: String,
+    pub scene_json: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewPageSceneSnapshot {
+    pub page_id: Uuid,
+    pub revision: i32,
+    pub contract_version: String,
+    pub source_sha256: String,
+    pub logical_scene_sha256: String,
+    pub scene_json: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct PageSceneOwner {
+    pub page_id: Uuid,
+    pub revision: i32,
+    pub owner_id: String,
+    pub policy_kind: String,
+    pub policy_action: String,
+    pub policy_override: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewPageSceneOwner {
+    pub owner_id: String,
+    pub policy_kind: String,
+    pub policy_action: String,
+    pub policy_override: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct PageSceneAsset {
+    pub page_id: Uuid,
+    pub revision: i32,
+    pub asset_id: String,
+    pub asset_kind: String,
+    pub asset_sha256: String,
+    pub byte_length: i64,
+    pub mime_type: String,
+    pub storage_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewPageSceneAsset {
+    pub asset_id: String,
+    pub asset_kind: String,
+    pub asset_sha256: String,
+    pub byte_length: i64,
+    pub mime_type: String,
+    pub storage_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct PageRenderJob {
+    pub job_id: String,
+    pub page_id: Uuid,
+    pub page_revision: i32,
+    pub logical_scene_sha256: String,
+    pub rendered_png_sha256: Option<String>,
+    pub rendered_png_storage_path: Option<String>,
+    pub renderer_build_sha256: Option<String>,
+    pub browser_build_sha256: Option<String>,
+    pub status: String,
+    pub diagnostics_json: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

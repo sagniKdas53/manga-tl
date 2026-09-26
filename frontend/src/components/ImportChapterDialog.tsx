@@ -55,6 +55,10 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
   const [qaVlmModel, setQaVlmModel] = useState("");
   const [qaMode, setQaMode] = useState("");
   const [routingStrategy, setRoutingStrategy] = useState("");
+  const [cleanupMode, setCleanupMode] = useState("");
+  const [ocrMergeThreshold, setOcrMergeThreshold] = useState<number | null>(
+    null,
+  );
   const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
     series.useFallbackModels ?? null,
   );
@@ -69,6 +73,8 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
     qaVlmModel,
     qaMode,
     routingStrategy,
+    cleanupMode,
+    ocrMergeThreshold,
     useFallbackModels,
   };
 
@@ -84,6 +90,8 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
     qaVlmModel: setQaVlmModel,
     qaMode: setQaMode,
     routingStrategy: setRoutingStrategy,
+    cleanupMode: setCleanupMode,
+    ocrMergeThreshold: setOcrMergeThreshold,
     useFallbackModels: setUseFallbackModels,
   };
 
@@ -162,6 +170,9 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
     if (qaVlmModel) formData.append("qaVlmModel", qaVlmModel);
     if (qaMode) formData.append("qaMode", qaMode);
     if (routingStrategy) formData.append("routingStrategy", routingStrategy);
+    if (cleanupMode) formData.append("cleanupMode", cleanupMode);
+    if (ocrMergeThreshold !== null)
+      formData.append("ocrMergeThreshold", String(ocrMergeThreshold));
     formData.append("useFallbackModels", String(useFallbackModels));
 
     try {
@@ -239,6 +250,7 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
           />
 
           <ModelOverridesAccordion
+            token={user.token}
             expanded={overridesOpen}
             onToggle={() => setOverridesOpen(!overridesOpen)}
             value={overridesValue}
@@ -255,6 +267,9 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
               qaVlmModel: series.qaVlmModel || settings?.qaVlmModel,
               routingStrategy:
                 series.routingStrategy || settings?.routingStrategy,
+              cleanupMode: series.cleanupMode || settings?.cleanupMode,
+              ocrMergeThreshold:
+                series.ocrMergeThreshold ?? settings?.ocrMergeThreshold,
               useFallbackModels:
                 series.useFallbackModels ?? settings?.useFallbackModels,
             }}

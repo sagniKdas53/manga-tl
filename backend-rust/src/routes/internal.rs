@@ -47,6 +47,50 @@ fn internal_error_text(message: impl std::fmt::Display) -> Response {
         .into_response()
 }
 
+/// The four headers that identify which job attempt is speaking.
+///
+/// The authority is deliberately header-bound rather than read out of the callback JSON. Each
+/// stage's body has its own shape and its own history; a body field would also be the thing a
+/// superseded attempt happily re-sends verbatim. Headers are set once, by `process_job_rq`, from
+/// the payload the backend dispatched, and `backend_headers()` attaches them to every request the
+/// attempt makes — so an attempt cannot lend its authority to a newer one, or keep it after the
+/// backend has moved on.
+///
+/// A missing or mismatched header is 409, not 400: to the worker it means "you are not the
+/// current attempt", which is terminal for its retry wrapper.
+fn callback_identity(
+    headers: &HeaderMap,
+    expected_job_id: Option<&str>,
+) -> Result<coordinator::CallbackIdentity, (StatusCode, String)> {
+    let read = |name: &str| {
+        headers
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+    };
+    let conflict = |message: String| (StatusCode::CONFLICT, message);
+    let job_id = read("X-Job-Id").ok_or_else(|| conflict("Missing X-Job-Id".into()))?;
+    if expected_job_id.is_some_and(|expected| expected != job_id) {
+        return Err(conflict(
+            "X-Job-Id does not match the jobId in the callback body".into(),
+        ));
+    }
+    let parse = |name: &str| {
+        read(name)
+            .and_then(|v| v.parse::<i32>().ok())
+            .ok_or_else(|| conflict(format!("Missing or invalid {name}")))
+    };
+    Ok(coordinator::CallbackIdentity {
+        job_id: job_id.to_owned(),
+        attempt: parse("X-Job-Attempt")?,
+        input_generation: parse("X-Input-Generation")?,
+        lease_token: read("X-Lease-Token")
+            .ok_or_else(|| conflict("Missing X-Lease-Token".into()))?
+            .to_owned(),
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Job status + fetch
 // ---------------------------------------------------------------------------
@@ -61,6 +105,10 @@ pub async fn update_job_status(
     if let Some(denied) = guard(&state, &headers) {
         return denied;
     }
+    let identity = match callback_identity(&headers, Some(&job_id)) {
+        Ok(identity) => identity,
+        Err(rejection) => return rejection.into_response(),
+    };
     let Ok(Json(payload)) = body else {
         return crate::error::unreadable_body("/api/internal/jobs/{jobId}/status");
     };
@@ -80,18 +128,75 @@ pub async fn update_job_status(
         }
     }
 
-    let Some(job): Option<Job> = sqlx::query_as("SELECT * FROM jobs WHERE id = $1")
+    let Some(job): Option<Job> = sqlx::query_as(
+        "SELECT * FROM jobs WHERE id = $1 AND attempt = $2 AND input_generation = $3 AND lease_token = $4 FOR UPDATE",
+    )
         .bind(&job_id)
+        .bind(identity.attempt)
+        .bind(identity.input_generation)
+        .bind(&identity.lease_token)
         .fetch_optional(&state.pool)
         .await
         .ok()
         .flatten()
     else {
-        return StatusCode::NOT_FOUND.into_response();
+        return (StatusCode::CONFLICT, "Stale or unknown job attempt").into_response();
     };
 
+    // R3 transition contract. The row the identity headers matched is the *current* attempt; this
+    // table is what that attempt is still allowed to do to it. Anything else is 409 — the worker
+    // treats a non-408/429 4xx as terminal, so a superseded attempt stops instead of writing.
+    //
+    //   PENDING    -> PROCESSING   the start compare-and-swap. Redis may redeliver the same
+    //                              payload; only the first delivery wins this transition.
+    //   PROCESSING -> PROCESSING   heartbeat only, and only inside JOB_MAX_RUNTIME_SECS of the
+    //                              stamped start. A heartbeat thread must not be able to keep a
+    //                              hung inference alive forever (handoff, "Liveness bounds").
+    //   PROCESSING -> PENDING      the worker's own bounded retry; `attempt` must advance by one
+    //                              and the row is re-armed with a fresh lease below.
+    //   PROCESSING -> FAILED       attempts exhausted, or a callback the backend rejected.
+    //   PROCESSING -> COMPLETED    the ordinary end of a stage.
+    //   COMPLETED  -> COMPLETED    idempotent: `claim_callback*` already completed the row inside
+    //                              the result transaction, and the worker's own COMPLETED PATCH
+    //                              arrives afterwards. Accepting it keeps that PATCH from looking
+    //                              like a rejection to the worker.
+    //   FAILED     -> PENDING      re-arm after a rejected/failed delivery, same attempt rule.
+    //
+    // COMPLETED -> PENDING is deliberately absent: a finished stage is not re-armable by a worker.
+    let heartbeat = payload
+        .get("heartbeat")
+        .is_some_and(|value| value == "true");
+    let requested_status = payload.get("status").map(String::as_str);
+    let allowed = match (requested_status, heartbeat, job.status.as_str()) {
+        (Some("PROCESSING"), false, "PENDING") => true,
+        (Some("PROCESSING"), true, "PROCESSING") => job.started_at.is_some_and(|started| {
+            started
+                > chrono::Utc::now() - chrono::Duration::seconds(coordinator::JOB_MAX_RUNTIME_SECS)
+        }),
+        (Some("PENDING"), false, "PROCESSING" | "FAILED") => true,
+        (Some("FAILED"), false, "PROCESSING") => true,
+        (Some("COMPLETED"), false, "PROCESSING" | "COMPLETED") => true,
+        _ => false,
+    };
+    if !allowed {
+        return (
+            StatusCode::CONFLICT,
+            format!(
+                "Illegal or expired transition {} -> {} for job {job_id}",
+                job.status,
+                requested_status.unwrap_or("(none)")
+            ),
+        )
+            .into_response();
+    }
+
     let mut new_status = job.status.clone();
-    let started_at_clears = payload
+    // A retry re-arms the row for a NEW attempt, so everything the abandoned attempt left behind
+    // goes with it: its start timestamp (which must not charge the retry), its lease, and its
+    // callback claim. Leaving `callback_applied_at` stamped would make the retry's own result
+    // look like a duplicate delivery and drop it silently — which is how a cleanup that failed
+    // once could never succeed on its second attempt.
+    let re_arming = payload
         .get("status")
         .map(|s| s == "PENDING")
         .unwrap_or(false);
@@ -100,16 +205,45 @@ pub async fn update_job_status(
     }
 
     // Attempt updates also rewrite the stored payload so retries carry the right number.
-    let attempt_update = payload
-        .get("attempt")
-        .and_then(|a| a.parse::<i32>().ok())
-        .zip(job.payload.clone())
-        .map(|(attempt, old_payload)| {
-            (
-                attempt,
-                coordinator::update_payload_attempt(&old_payload, attempt),
-            )
-        });
+    let requested_attempt = payload.get("attempt").and_then(|a| a.parse::<i32>().ok());
+    if new_status == "PENDING" && requested_attempt != Some(identity.attempt + 1) {
+        return (StatusCode::CONFLICT, "Retry must advance attempt by one").into_response();
+    }
+    let new_lease = if new_status == "PENDING" {
+        Some(Uuid::new_v4().to_string())
+    } else {
+        None
+    };
+    let attempt_update =
+        requested_attempt
+            .zip(job.payload.clone())
+            .map(|(attempt, old_payload)| {
+                (
+                    attempt,
+                    new_lease
+                        .as_deref()
+                        .map(|token| {
+                            coordinator::update_payload_attempt_and_lease(
+                                &old_payload,
+                                attempt,
+                                token,
+                            )
+                        })
+                        .unwrap_or_else(|| {
+                            coordinator::update_payload_attempt(&old_payload, attempt)
+                        }),
+                )
+            });
+
+    // Liveness and progress are read separately. `heartbeat_at` only says the worker answered;
+    // `progress_count`/`progress_at` move when the job reports a unit of work done — one cleanup
+    // region, one OCR stage. An inference that hangs keeps heartbeating and stops progressing,
+    // and only the second of those can tell them apart. Nothing acts on it automatically yet;
+    // it is the operator-visible reading behind the runtime cap.
+    let reported_progress = payload
+        .get("progress")
+        .and_then(|value| value.parse::<i32>().ok())
+        .unwrap_or(0);
 
     let result = sqlx::query(
         "UPDATE jobs SET \
@@ -117,18 +251,57 @@ pub async fn update_job_status(
            error = COALESCE($3, error), \
            attempt = COALESCE($4, attempt), \
            payload = COALESCE($5, payload), \
-           started_at = CASE WHEN $6 THEN NULL ELSE started_at END, \
+           started_at = CASE WHEN $6 THEN NULL WHEN $7 = 'PROCESSING' AND started_at IS NULL THEN now() ELSE started_at END, \
+           lease_token = COALESCE($8, lease_token), \
+           callback_applied_at = CASE WHEN $6 THEN NULL ELSE callback_applied_at END, \
+           heartbeat_at = CASE WHEN $9 THEN now() ELSE heartbeat_at END, \
+           progress_count = CASE WHEN $14 > progress_count THEN $14 ELSE progress_count END, \
+           progress_at = CASE WHEN $14 > progress_count THEN now() ELSE progress_at END, \
+           lease_expires_at = CASE WHEN $9 OR $7 = 'PROCESSING' \
+                                    THEN now() + make_interval(secs => $13) \
+                                    ELSE lease_expires_at END, \
            updated_at = now() \
-         WHERE id = $1",
+         WHERE id = $1 AND attempt = $10 AND input_generation = $11 AND lease_token = $12",
     )
     .bind(&job_id)
     .bind(payload.get("status").map(String::as_str))
     .bind(payload.get("error").map(String::as_str))
     .bind(attempt_update.as_ref().map(|(attempt, _)| *attempt))
     .bind(attempt_update.as_ref().map(|(_, payload)| payload))
-    .bind(started_at_clears)
+    .bind(re_arming)
+    .bind(new_status.as_str())
+    .bind(new_lease.as_deref())
+    .bind(heartbeat)
+    .bind(identity.attempt)
+    .bind(identity.input_generation)
+    .bind(&identity.lease_token)
+    .bind(coordinator::JOB_LEASE_SECS as f64)
+    .bind(reported_progress)
     .execute(&state.pool)
     .await;
+
+    if result.is_ok() && job.job_type == "render" {
+        let ledger_status = match new_status.as_str() {
+            "PENDING" => Some("queued"),
+            "PROCESSING" => Some("running"),
+            "FAILED" => Some("failed"),
+            // Completion means the worker delivered bytes; only the callback may attest the
+            // immutable artifact and advance the page pointer.
+            "COMPLETED" | "PAUSED" => None,
+            _ => None,
+        };
+        if let Some(ledger_status) = ledger_status
+            && let Err(err) = sqlx::query(
+                "UPDATE page_render_jobs SET status = $2 WHERE job_id = $1 AND status <> 'succeeded'",
+            )
+            .bind(&job_id)
+            .bind(ledger_status)
+            .execute(&state.pool)
+            .await
+        {
+            tracing::error!("Could not mirror render job {job_id} status to immutable ledger: {err}");
+        }
+    }
 
     match result {
         Ok(_) => {
@@ -549,10 +722,21 @@ pub async fn panel_callback(
     if let Some(denied) = guard(&state, &headers) {
         return denied;
     }
-    match coordinator::handle_panel_callback(&state, &dto).await {
+    let identity = match callback_identity(&headers, job_id_of(&dto)) {
+        Ok(v) => v,
+        Err(rejection) => return rejection.into_response(),
+    };
+    match coordinator::CALLBACK_IDENTITY
+        .scope(
+            identity.clone(),
+            coordinator::handle_panel_callback(&state, &dto),
+        )
+        .await
+    {
         Ok(()) => StatusCode::OK.into_response(),
         Err(err) => {
             tracing::error!("Error processing panel callback: {err}");
+            coordinator::mark_claimed_callback_failed(&state, &identity.job_id, &err).await;
             internal_error_text(err)
         }
     }
@@ -570,10 +754,21 @@ pub async fn ocr_callback(
     if let Some(denied) = guard(&state, &headers) {
         return denied;
     }
-    match coordinator::handle_ocr_callback(&state, &dto).await {
+    let identity = match callback_identity(&headers, job_id_of(&dto)) {
+        Ok(v) => v,
+        Err(rejection) => return rejection.into_response(),
+    };
+    match coordinator::CALLBACK_IDENTITY
+        .scope(
+            identity.clone(),
+            coordinator::handle_ocr_callback(&state, &dto),
+        )
+        .await
+    {
         Ok(()) => StatusCode::OK.into_response(),
         Err(err) => {
             tracing::error!("Error processing OCR callback: {err}");
+            coordinator::mark_claimed_callback_failed(&state, &identity.job_id, &err).await;
             internal_error_text(err)
         }
     }
@@ -591,6 +786,10 @@ pub async fn layout_callback(
     if let Some(denied) = guard(&state, &headers) {
         return denied;
     }
+    let identity = match callback_identity(&headers, job_id_of(&payload)) {
+        Ok(v) => v,
+        Err(rejection) => return rejection.into_response(),
+    };
     let Some(image_id) = payload
         .get("imageId")
         .and_then(|v| v.as_str())
@@ -611,14 +810,18 @@ pub async fn layout_callback(
         "regionTypes": region_types,
         "conversations": conversations,
     });
-    match coordinator::handle_layout_callback(
-        &state,
-        job_id_of(&payload),
-        image_id,
-        page_id_of(&payload),
-        &combined,
-    )
-    .await
+    match coordinator::CALLBACK_IDENTITY
+        .scope(
+            identity,
+            coordinator::handle_layout_callback(
+                &state,
+                job_id_of(&payload),
+                image_id,
+                page_id_of(&payload),
+                &combined,
+            ),
+        )
+        .await
     {
         Ok(()) => StatusCode::OK.into_response(),
         Err(err) => {
@@ -640,6 +843,10 @@ pub async fn translation_callback(
     if let Some(denied) = guard(&state, &headers) {
         return denied;
     }
+    let identity = match callback_identity(&headers, job_id_of(&payload)) {
+        Ok(v) => v,
+        Err(rejection) => return rejection.into_response(),
+    };
     let Some(image_id) = payload
         .get("imageId")
         .and_then(|v| v.as_str())
@@ -670,21 +877,406 @@ pub async fn translation_callback(
     }
 
     let cost = payload.get("cost").cloned();
-    match coordinator::handle_translation_callback(
-        &state,
-        job_id_of(&payload),
-        image_id,
-        &translations,
-        cost.as_ref(),
-    )
-    .await
+    match coordinator::CALLBACK_IDENTITY
+        .scope(
+            identity.clone(),
+            coordinator::handle_translation_callback(
+                &state,
+                job_id_of(&payload),
+                image_id,
+                &translations,
+                cost.as_ref(),
+            ),
+        )
+        .await
     {
         Ok(()) => StatusCode::OK.into_response(),
         Err(err) => {
             tracing::error!("Error processing translation callback: {err}");
+            coordinator::mark_claimed_callback_failed(&state, &identity.job_id, &err).await;
             internal_error_text(err)
         }
     }
+}
+
+/// POST /api/internal/jobs/callback/cleanup — per-region cleanup outcomes for one page.
+///
+/// Translation is dispatched from inside this callback's own transaction, so the decision "every
+/// required region was dealt with" and the decision "the next stage exists" cannot disagree. The
+/// accounting is against the region list the *backend* dispatched, not the list the worker chose
+/// to report: a response that silently omits regions, repeats one, or names a region from another
+/// page is a failed cleanup, not a short pass. (That is the same mistake the QA stage made when it
+/// logged a pass on 38 verdicts for 63 regions; it is not repeated here.)
+pub async fn cleanup_callback(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Result<Json<Value>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    let Ok(Json(payload)) = body else {
+        return crate::error::unreadable_body("/api/internal/jobs/callback/cleanup");
+    };
+    if let Some(denied) = guard(&state, &headers) {
+        return denied;
+    }
+    let identity = match callback_identity(&headers, job_id_of(&payload)) {
+        Ok(identity) => identity,
+        Err(rejection) => return rejection.into_response(),
+    };
+    let Some(image_id) = payload
+        .get("imageId")
+        .and_then(Value::as_str)
+        .and_then(|id| Uuid::parse_str(id).ok())
+    else {
+        return internal_error_text("imageId missing or unparsable");
+    };
+
+    let result = coordinator::CALLBACK_IDENTITY
+        .scope(identity, apply_cleanup_callback(&state, image_id, &payload))
+        .await;
+    match result {
+        Ok(()) => StatusCode::OK.into_response(),
+        Err(CleanupCallbackError::Superseded) => (
+            StatusCode::CONFLICT,
+            "This cleanup attempt has been superseded; its result was not applied",
+        )
+            .into_response(),
+        Err(CleanupCallbackError::Failed(err)) => {
+            tracing::error!("Error processing cleanup callback: {err}");
+            internal_error_text(err)
+        }
+    }
+}
+
+/// Why a cleanup callback was not applied. The distinction reaches the worker as the status code,
+/// because the two want opposite things from it: a superseded attempt must stop, while a failure
+/// to apply a current attempt's result is worth another delivery.
+enum CleanupCallbackError {
+    Superseded,
+    Failed(String),
+}
+
+impl From<String> for CleanupCallbackError {
+    fn from(message: String) -> Self {
+        CleanupCallbackError::Failed(message)
+    }
+}
+
+impl From<&str> for CleanupCallbackError {
+    fn from(message: &str) -> Self {
+        CleanupCallbackError::Failed(message.to_string())
+    }
+}
+
+/// Every region the cleanup job was dispatched with, as `regionId -> inputDigest`.
+fn dispatched_cleanup_regions(parent: &Job) -> HashMap<Uuid, String> {
+    parent
+        .payload
+        .as_deref()
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .and_then(|value| {
+            value
+                .get("cleanupRegions")
+                .and_then(Value::as_array)
+                .cloned()
+        })
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|entry| {
+            let id = entry
+                .get("regionId")
+                .and_then(Value::as_str)
+                .and_then(|id| Uuid::parse_str(id).ok())?;
+            let digest = entry.get("inputDigest").and_then(Value::as_str)?.to_owned();
+            Some((id, digest))
+        })
+        .collect()
+}
+
+/// The region a cleanup job was queued for on its own, when its callback should translate just
+/// that region: `{"followUp": {"type": "region-redo-tl", "regionId": ...}}` in the job payload.
+fn region_redo_follow_up(parent: &Job) -> Option<Uuid> {
+    let payload: Value = serde_json::from_str(parent.payload.as_deref()?).ok()?;
+    let follow_up = payload.get("followUp")?;
+    if follow_up.get("type").and_then(Value::as_str) != Some("region-redo-tl") {
+        return None;
+    }
+    follow_up
+        .get("regionId")
+        .and_then(Value::as_str)
+        .and_then(|id| Uuid::parse_str(id).ok())
+}
+
+async fn apply_cleanup_callback(
+    state: &AppState,
+    image_id: Uuid,
+    payload: &Value,
+) -> Result<(), CleanupCallbackError> {
+    let job_id = job_id_of(payload).ok_or("cleanup callback missing jobId")?;
+    let page = coordinator::resolve_page_for_callback(&state.pool, image_id, page_id_of(payload))
+        .await
+        .ok_or("cleanup callback page no longer exists")?;
+
+    let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+    let parent: Job = sqlx::query_as("SELECT * FROM jobs WHERE id = $1 FOR UPDATE")
+        .bind(job_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    match coordinator::claim_callback_tx(&mut tx, Some(job_id), image_id, "cleanup")
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        coordinator::ClaimOutcome::Claimed => {}
+        // A re-sent delivery of the attempt that already landed: the patches are on the page and
+        // translation was dispatched. Acknowledging it is correct.
+        coordinator::ClaimOutcome::AlreadyApplied => {
+            tx.rollback().await.map_err(|e| e.to_string())?;
+            return Ok(());
+        }
+        // A superseded attempt. Nothing of its work is usable, and telling it "OK" would send it
+        // on to report COMPLETED for a stage it no longer owns.
+        coordinator::ClaimOutcome::NotCurrent => {
+            tx.rollback().await.map_err(|e| e.to_string())?;
+            return Err(CleanupCallbackError::Superseded);
+        }
+    }
+
+    let mut expected = dispatched_cleanup_regions(&parent);
+    let mut problems: Vec<String> = Vec::new();
+
+    // The digest the worker echoes binds its whole run to the exact list it was handed. A
+    // mismatch means it worked from something else, whatever its per-region statuses say.
+    let dispatched_digest = parent
+        .payload
+        .as_deref()
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .and_then(|value| {
+            value
+                .get("cleanupInputDigest")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        });
+    if dispatched_digest.is_some()
+        && dispatched_digest.as_deref() != payload.get("cleanupInputDigest").and_then(Value::as_str)
+    {
+        problems.push("cleanupInputDigest does not match the dispatched region list".into());
+    }
+
+    for outcome in string_array(payload, "regions") {
+        let Some(region_id) = outcome
+            .get("regionId")
+            .and_then(Value::as_str)
+            .and_then(|id| Uuid::parse_str(id).ok())
+        else {
+            problems.push("a cleanup outcome carried no usable regionId".into());
+            continue;
+        };
+        // `remove` is what makes a repeat detectable: the second copy finds nothing left.
+        let Some(dispatched_digest) = expected.remove(&region_id) else {
+            problems.push(format!(
+                "region {region_id} was reported but was not dispatched (or was reported twice)"
+            ));
+            continue;
+        };
+        if outcome.get("inputDigest").and_then(Value::as_str) != Some(dispatched_digest.as_str()) {
+            problems.push(format!(
+                "region {region_id} reported a different inputDigest"
+            ));
+            continue;
+        }
+        match outcome.get("status").and_then(Value::as_str).unwrap_or("") {
+            // A policy exclusion is a complete outcome, not a missing one.  It can also be the
+            // resolution of a prior cleanup review, so clear that marker and any old patch.
+            "excluded" => {
+                sqlx::query(
+                    "UPDATE ocr_regions SET cleanup_mask_asset_id = NULL, cleanup_mask_sha256 = NULL, \
+                       cleanup_mask_byte_length = NULL, cleanup_patch_asset_id = NULL, \
+                       cleanup_patch_sha256 = NULL, cleanup_patch_byte_length = NULL, \
+                       cleanup_bounds = NULL, cleanup_generator_sha256 = NULL, \
+                       cleanup_diagnostics = $2, qa_status = CASE WHEN qa_status = 'cleanup_review' THEN NULL ELSE qa_status END, \
+                       qa_feedback = CASE WHEN qa_status = 'cleanup_review' THEN NULL ELSE qa_feedback END \
+                     WHERE id = $1 AND page_id = $3",
+                )
+                .bind(region_id)
+                .bind(outcome.get("diagnostics").cloned())
+                .bind(page.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+            }
+            status @ ("complete" | "degraded") => {
+                let changed = sqlx::query(
+                    "UPDATE ocr_regions SET cleanup_mask_asset_id = $2, cleanup_mask_sha256 = $3, \
+                       cleanup_mask_byte_length = $4, cleanup_patch_asset_id = $5, \
+                       cleanup_patch_sha256 = $6, cleanup_patch_byte_length = $7, \
+                       cleanup_bounds = $8, cleanup_generator_sha256 = $9, \
+                       cleanup_diagnostics = $10, \
+                       qa_status = CASE WHEN qa_status = 'cleanup_review' THEN NULL ELSE qa_status END, \
+                       qa_feedback = CASE WHEN qa_status = 'cleanup_review' THEN NULL ELSE qa_feedback END \
+                     WHERE id = $1 AND page_id = $11",
+                )
+                .bind(region_id)
+                .bind(outcome.get("cleanupMaskAssetId").and_then(Value::as_str))
+                .bind(outcome.get("cleanupMaskSha256").and_then(Value::as_str))
+                .bind(outcome.get("cleanupMaskByteLength").and_then(Value::as_i64))
+                .bind(outcome.get("cleanupPatchAssetId").and_then(Value::as_str))
+                .bind(outcome.get("cleanupPatchSha256").and_then(Value::as_str))
+                .bind(
+                    outcome
+                        .get("cleanupPatchByteLength")
+                        .and_then(Value::as_i64),
+                )
+                .bind(outcome.get("cleanupBounds").cloned())
+                .bind(
+                    outcome
+                        .get("cleanupGeneratorSha256")
+                        .and_then(Value::as_str),
+                )
+                .bind(outcome.get("diagnostics").cloned())
+                .bind(page.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+                if changed.rows_affected() != 1 {
+                    problems.push(format!(
+                        "region {region_id} reported {status} but no longer belongs to page {}",
+                        page.id
+                    ));
+                }
+            }
+            // `uncertain` is a deterministic content finding, not an infrastructure failure:
+            // retain the source pixels, make the review state visible, and continue the other
+            // regions through translation.  It is deliberately distinct from QA's
+            // `manual_review`, which remains the result of a QA verdict.
+            "uncertain" => {
+                let changed = sqlx::query(
+                    "UPDATE ocr_regions SET cleanup_mask_asset_id = NULL, cleanup_mask_sha256 = NULL, \
+                       cleanup_mask_byte_length = NULL, cleanup_patch_asset_id = NULL, \
+                       cleanup_patch_sha256 = NULL, cleanup_patch_byte_length = NULL, \
+                       cleanup_bounds = NULL, cleanup_generator_sha256 = NULL, \
+                       cleanup_diagnostics = $2, qa_status = 'cleanup_review', \
+                       qa_feedback = $4 \
+                     WHERE id = $1 AND page_id = $3",
+                )
+                .bind(region_id)
+                .bind(outcome.get("diagnostics").cloned())
+                .bind(page.id)
+                .bind(format!(
+                    "Cleanup review required: source pixels preserved. {}",
+                    outcome.get("diagnostics").and_then(Value::as_array)
+                        .map(|items| items.iter().filter_map(Value::as_str).collect::<Vec<_>>().join("; "))
+                        .unwrap_or_default()
+                ))
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+                if changed.rows_affected() != 1 {
+                    problems.push(format!(
+                        "region {region_id} reported uncertain cleanup but no longer belongs to page {}",
+                        page.id
+                    ));
+                }
+            }
+            "failed" => {
+                let changed = sqlx::query(
+                    "UPDATE ocr_regions SET cleanup_diagnostics = $2 \
+                     WHERE id = $1 AND page_id = $3",
+                )
+                .bind(region_id)
+                .bind(outcome.get("diagnostics").cloned())
+                .bind(page.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+                if changed.rows_affected() != 1 {
+                    problems.push(format!(
+                        "region {region_id} failed cleanup but no longer belongs to page {}",
+                        page.id
+                    ));
+                } else {
+                    problems.push(format!("region {region_id} failed cleanup"));
+                }
+            }
+            other => problems.push(format!(
+                "region {region_id} reported unknown status {other:?}"
+            )),
+        }
+    }
+    for missing in expected.keys() {
+        problems.push(format!(
+            "region {missing} was dispatched but never reported"
+        ));
+    }
+
+    // A cleanup queued for one merged region (see `merge_ocr_regions`) carries on into that
+    // region's translation, not the page's: the rest of the page is already translated and paid for.
+    let region_follow_up = region_redo_follow_up(&parent);
+
+    // A failed cleanup withholds translation rather than translating a page whose Japanese is
+    // still on it. The job is FAILED explicitly so it shows up as one, and the worker's bounded
+    // retry (or a manual page redo) is what tries again.
+    let dispatch = if problems.is_empty() && region_follow_up.is_some() {
+        // The new patch changes what the page draws even before its translation lands.
+        crate::page_freshness::advance_page_revision(&mut tx, page.id)
+            .await
+            .map_err(|e| e.to_string())?;
+        None
+    } else if problems.is_empty() {
+        Some(
+            coordinator::persist_next_job_tx(
+                &mut tx,
+                &parent,
+                "translation",
+                image_id,
+                &page,
+                |_| {},
+            )
+            .await
+            .map_err(|e| e.to_string())?,
+        )
+    } else {
+        tracing::error!(
+            "Cleanup for page {} is incomplete; withholding translation: {}",
+            page.id,
+            problems.join("; ")
+        );
+        sqlx::query(
+            "UPDATE jobs SET status = 'FAILED', error = $2, updated_at = now() WHERE id = $1",
+        )
+        .bind(job_id)
+        .bind(format!(
+            "Cleanup incomplete ({} problem(s)); translation withheld. First: {}",
+            problems.len(),
+            problems[0]
+        ))
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+        None
+    };
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    if problems.is_empty()
+        && let Some(region_id) = region_follow_up
+        && let Err(err) = coordinator::trigger_redo(state, region_id, "translation").await
+    {
+        tracing::error!(
+            "Region {region_id} was cleaned after a merge but its translation could not be queued: {err}"
+        );
+    }
+
+    // Redis publication happens only after the row is durable. A crash in between leaves a PENDING
+    // row that startup recovery and `requeue_orphaned_pending_jobs` republish.
+    if let Some((next_id, next_payload)) = dispatch {
+        coordinator::push_persisted_job_if_queue_running(
+            state,
+            &next_id,
+            "translation",
+            &next_payload,
+        )
+        .await;
+    }
+    Ok(())
 }
 
 /// POST /api/internal/jobs/callback/qa-re-ocr
@@ -699,6 +1291,10 @@ pub async fn qa_re_ocr_callback(
     if let Some(denied) = guard(&state, &headers) {
         return denied;
     }
+    let identity = match callback_identity(&headers, job_id_of(&payload)) {
+        Ok(identity) => identity,
+        Err(rejection) => return rejection.into_response(),
+    };
     let Some(image_id) = payload
         .get("imageId")
         .and_then(|v| v.as_str())
@@ -711,19 +1307,24 @@ pub async fn qa_re_ocr_callback(
         .cloned()
         .collect::<Vec<Value>>();
 
-    match coordinator::handle_qa_re_ocr_callback(
-        &state,
-        job_id_of(&payload),
-        image_id,
-        page_id_of(&payload),
-        &results,
-        payload.get("cost"),
-    )
-    .await
+    match coordinator::CALLBACK_IDENTITY
+        .scope(
+            identity.clone(),
+            coordinator::handle_qa_re_ocr_callback(
+                &state,
+                job_id_of(&payload),
+                image_id,
+                page_id_of(&payload),
+                &results,
+                payload.get("cost"),
+            ),
+        )
+        .await
     {
         Ok(()) => StatusCode::OK.into_response(),
         Err(err) => {
             tracing::error!("Error processing QA Re-OCR callback: {err}");
+            coordinator::mark_claimed_callback_failed(&state, &identity.job_id, &err).await;
             internal_error_text(err)
         }
     }
@@ -742,6 +1343,34 @@ pub async fn qa_hybrid_prepare(
     if let Some(denied) = guard(&state, &headers) {
         return denied;
     }
+    // Prepare edits layers and advances the page revision, so only the current attempt of this
+    // image's QA job may call it: a superseded attempt must not rewrite a newer run's page.
+    let identity = match callback_identity(&headers, None) {
+        Ok(identity) => identity,
+        Err(rejection) => return rejection.into_response(),
+    };
+    let current: Result<Option<i32>, sqlx::Error> = sqlx::query_scalar(
+        "SELECT 1 FROM jobs WHERE id = $1 AND type = 'qa' AND image_id = $2 \
+           AND status = 'PROCESSING' AND attempt = $3 AND lease_token = $4 \
+           AND callback_applied_at IS NULL",
+    )
+    .bind(&identity.job_id)
+    .bind(image_id)
+    .bind(identity.attempt)
+    .bind(&identity.lease_token)
+    .fetch_optional(&state.pool)
+    .await;
+    match current {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return (
+                StatusCode::CONFLICT,
+                "Hybrid QA prepare is not from the current QA attempt",
+            )
+                .into_response();
+        }
+        Err(err) => return internal_error_text(err.to_string()),
+    }
     let qa_results = string_array(&payload, "qaResults")
         .into_iter()
         .cloned()
@@ -749,7 +1378,8 @@ pub async fn qa_hybrid_prepare(
 
     match coordinator::prepare_hybrid_qa(&state, image_id, page_id_of(&payload), &qa_results).await
     {
-        Ok(()) => StatusCode::OK.into_response(),
+        Ok(Some(render_payload)) => Json(render_payload).into_response(),
+        Ok(None) => StatusCode::NO_CONTENT.into_response(),
         Err(err) => {
             tracing::error!("Error preparing hybrid QA: {err}");
             internal_error_text(err)
@@ -769,6 +1399,10 @@ pub async fn qa_callback(
     if let Some(denied) = guard(&state, &headers) {
         return denied;
     }
+    let identity = match callback_identity(&headers, job_id_of(&payload)) {
+        Ok(identity) => identity,
+        Err(rejection) => return rejection.into_response(),
+    };
     let Some(image_id) = payload
         .get("imageId")
         .and_then(|v| v.as_str())
@@ -785,15 +1419,20 @@ pub async fn qa_callback(
         .collect::<Vec<Value>>();
     let cost = payload.get("cost").cloned();
 
-    match coordinator::handle_qa_callback(
-        &state,
-        job_id_of(&payload),
-        image_id,
-        page_id_of(&payload),
-        &qa_results,
-        cost.as_ref(),
-    )
-    .await
+    match coordinator::CALLBACK_IDENTITY
+        .scope(
+            identity.clone(),
+            coordinator::handle_qa_callback(
+                &state,
+                job_id_of(&payload),
+                image_id,
+                page_id_of(&payload),
+                &qa_results,
+                cost.as_ref(),
+                &payload,
+            ),
+        )
+        .await
     {
         Ok("COMPLETED") => {
             emit_qa_notification(
@@ -822,6 +1461,32 @@ pub async fn qa_callback(
             .await;
             StatusCode::OK.into_response()
         }
+        Ok("QA_INCOMPLETE") => {
+            emit_qa_notification(
+                &state,
+                image_id,
+                "WARNING",
+                "QA Incomplete — Review Needed",
+                "QA did not return a complete, valid verdict for every translated region. No verdict \
+                 was applied and the page is not marked as passed; retry the failed QA job from the queue \
+                 or review the page by hand.",
+                &ctx,
+            )
+            .await;
+            StatusCode::OK.into_response()
+        }
+        Ok("COMPLETED_WITH_FAILURES") => {
+            emit_qa_notification(
+                &state,
+                image_id,
+                "WARNING",
+                "Processing Finished With QA Failures",
+                "QA still rejected some regions after the retry limit. Review the flagged regions.",
+                &ctx,
+            )
+            .await;
+            StatusCode::OK.into_response()
+        }
         Ok("MANUAL_REVIEW") => {
             emit_qa_notification(
                 &state,
@@ -837,6 +1502,7 @@ pub async fn qa_callback(
         Ok(_) => StatusCode::OK.into_response(),
         Err(err) => {
             tracing::error!("Error processing QA callback: {err}");
+            coordinator::mark_claimed_callback_failed(&state, &identity.job_id, &err).await;
             emit_qa_notification(
                 &state,
                 image_id,
@@ -948,6 +1614,19 @@ pub async fn region_callback(
     if let Some(denied) = guard(&state, &headers) {
         return denied;
     }
+    // Identity is required only when the body names a job. A region result with no `jobId` is a
+    // shape the worker still produces (`handlers/redo.py` sets the field only when it has one),
+    // and it is the same shape that already skips the claim below — there is nothing for the
+    // identity to fence. A body that DOES name a job must prove it is the current attempt.
+    let identity = match callback_identity(&headers, job_id_of(&payload)) {
+        Ok(identity) => Some(identity),
+        Err(rejection) => {
+            if job_id_of(&payload).is_some() {
+                return rejection.into_response();
+            }
+            None
+        }
+    };
 
     let obj = payload.as_object();
     let Some(fields) = obj else {
@@ -988,18 +1667,32 @@ pub async fn region_callback(
         .get("jobId")
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty());
-    if let (Some(image_id), Some(job_id)) = (image_id, claim_job_id) {
+    if let (Some(image_id), Some(job_id), Some(identity)) = (image_id, claim_job_id, identity) {
         let job_type = if translated {
             "region-redo-tl"
         } else {
             "region-redo-ocr"
         };
-        match coordinator::claim_callback_tx(&mut tx, Some(job_id), image_id, job_type).await {
-            Ok(true) => {}
-            Ok(false) => {
+        match coordinator::CALLBACK_IDENTITY
+            .scope(
+                identity,
+                coordinator::claim_callback_tx(&mut tx, Some(job_id), image_id, job_type),
+            )
+            .await
+        {
+            Ok(coordinator::ClaimOutcome::Claimed) => {}
+            Ok(coordinator::ClaimOutcome::AlreadyApplied) => {
                 // Already applied; the first delivery did the work. Nothing written, nothing to undo.
                 let _ = tx.rollback().await;
                 return StatusCode::OK.into_response();
+            }
+            Ok(coordinator::ClaimOutcome::NotCurrent) => {
+                let _ = tx.rollback().await;
+                return (
+                    StatusCode::CONFLICT,
+                    "This attempt has been superseded; its result was not applied",
+                )
+                    .into_response();
             }
             Err(err) => {
                 tracing::error!("Region {region_id} callback could not claim its job: {err}");
@@ -1055,7 +1748,7 @@ pub async fn region_callback(
     // Ok(None) means there was nothing to supersede, which is fine. An Err means the history layer
     // genuinely failed to write, and acknowledging that would leave the canonical text changed with
     // no record of what it replaced and no retry able to repair it.
-    if let Err(err) = coordinator::create_region_redo_overlay(
+    match coordinator::create_region_redo_overlay(
         &mut tx,
         region_id,
         new_text,
@@ -1064,9 +1757,30 @@ pub async fn region_callback(
     )
     .await
     {
-        tracing::error!("Region {region_id} redo overlay could not be written: {err}");
-        let _ = tx.rollback().await;
-        return internal_error_text(err);
+        // A new overlay changes what the page draws, so the page advances with it; otherwise the
+        // render and export kept showing the reading this redo replaced.
+        Ok(Some(_)) => {
+            let advanced = async {
+                let page_id: Uuid =
+                    sqlx::query_scalar("SELECT page_id FROM ocr_regions WHERE id = $1")
+                        .bind(region_id)
+                        .fetch_one(&mut *tx)
+                        .await?;
+                crate::page_freshness::advance_page_revision(&mut tx, page_id).await
+            }
+            .await;
+            if let Err(err) = advanced {
+                tracing::error!("Region {region_id} redo could not advance its page: {err}");
+                let _ = tx.rollback().await;
+                return internal_error_text(err);
+            }
+        }
+        Ok(None) => {}
+        Err(err) => {
+            tracing::error!("Region {region_id} redo overlay could not be written: {err}");
+            let _ = tx.rollback().await;
+            return internal_error_text(err);
+        }
     }
 
     // The callback claim and its paid-model spend are one delivery. If the cost insert fails,
@@ -1141,6 +1855,10 @@ pub fn router() -> Router<AppState> {
         .route("/jobs/callback/panel", axum::routing::post(panel_callback))
         .route("/jobs/callback/ocr", axum::routing::post(ocr_callback))
         .route(
+            "/jobs/callback/cleanup",
+            axum::routing::post(cleanup_callback),
+        )
+        .route(
             "/jobs/callback/layout",
             axum::routing::post(layout_callback),
         )
@@ -1166,42 +1884,97 @@ pub fn router() -> Router<AppState> {
 async fn render_callback_route(
     State(state): State<AppState>,
     headers: HeaderMap,
-    body: Result<Json<HashMap<String, String>>, axum::extract::rejection::JsonRejection>,
+    body: Result<Json<Value>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
+    // Was `HashMap<String, String>`; the browser-render callback (tracker R1) also carries the
+    // integer page revision and the renderer's layout diagnostics array.
     let Ok(Json(payload)) = body else {
         return crate::error::unreadable_body("/api/internal/jobs/callback/render");
     };
     if let Some(denied) = guard(&state, &headers) {
         return denied;
     }
-    let Some(image_id) = payload.get("imageId").and_then(|s| Uuid::parse_str(s).ok()) else {
+    let identity = match callback_identity(&headers, job_id_of(&payload)) {
+        Ok(identity) => identity,
+        Err(rejection) => return rejection.into_response(),
+    };
+    let Some(image_id) = payload
+        .get("imageId")
+        .and_then(Value::as_str)
+        .and_then(|s| Uuid::parse_str(s).ok())
+    else {
         return internal_error_text("imageId missing or unparsable");
     };
-    let page_id = payload.get("pageId").and_then(|s| Uuid::parse_str(s).ok());
+    let page_id = payload
+        .get("pageId")
+        .and_then(Value::as_str)
+        .and_then(|s| Uuid::parse_str(s).ok());
+    let diagnostics = payload
+        .get("diagnostics")
+        .filter(|d| d.is_array())
+        .cloned()
+        .unwrap_or_else(|| json!([]));
+    // Resolved layout per text object (font px, line breaks); tracker R2 (c).
+    let layout = payload
+        .get("layout")
+        .filter(|l| l.is_array())
+        .cloned()
+        .unwrap_or_else(|| json!([]));
 
-    match coordinator::handle_render_callback(
-        &state,
-        payload.get("jobId").map(String::as_str),
-        image_id,
-        page_id,
+    let expected: Option<(i32, String)> = match sqlx::query_as(
+        "SELECT page_revision, logical_scene_sha256 FROM page_render_jobs WHERE job_id=$1",
     )
+    .bind(&identity.job_id)
+    .fetch_optional(&state.pool)
     .await
     {
-        Ok(completes_pipeline) => {
-            let _ = sqlx::query("UPDATE images SET last_rendered_at = now() WHERE id = $1")
-                .bind(image_id)
-                .execute(&state.pool)
-                .await;
-            // AUDIT-F26. Derive the grid's thumbnail from the render we were just told about.
-            // Eagerly, and always overwriting: the endpoint can generate this lazily too, but only
-            // doing it there would leave a re-rendered page serving the *previous* translation's
-            // thumbnail, since the object would already exist and the miss path would not run.
-            crate::routes::page::generate_rendered_thumbnail(&state.storage, image_id).await;
-            // AUDIT-B12 follow-up: the QA callback used to say "Page Processing Complete" while
-            // its own re-render was still queued, so the user could export a PNG that did not yet
-            // carry the QA corrections the notification was announcing. When QA defers to a final
-            // render, that render makes the claim — here, once the artifact actually matches.
-            if completes_pipeline {
+        Ok(row) => row,
+        Err(err) => return internal_error_text(err.to_string()),
+    };
+    let Some((revision, digest)) = expected else {
+        return (
+            StatusCode::CONFLICT,
+            "Render job has no immutable scene ledger",
+        )
+            .into_response();
+    };
+    if payload.get("pageRevision").and_then(Value::as_i64) != Some(i64::from(revision))
+        || payload.get("logicalSceneSha256").and_then(Value::as_str) != Some(digest.as_str())
+        || payload.get("renderedPngSha256") != payload.get("artifact").and_then(|a| a.get("sha256"))
+    {
+        return (
+            StatusCode::CONFLICT,
+            "Render callback identity does not match its queued scene",
+        )
+            .into_response();
+    }
+
+    match coordinator::CALLBACK_IDENTITY
+        .scope(
+            identity,
+            coordinator::handle_render_callback(
+                &state,
+                payload.get("jobId").and_then(Value::as_str),
+                image_id,
+                page_id,
+                diagnostics,
+                layout,
+                payload.get("artifact").cloned().unwrap_or(Value::Null),
+            ),
+        )
+        .await
+    {
+        Ok(outcome) => {
+            // A callback for an old revision may be valid for its own job, but it must not
+            // refresh image-level freshness, regenerate a mutable-path thumbnail, or announce
+            // completion for the page's newer scene.
+            if outcome.artifact_current {
+                let _ = sqlx::query("UPDATE images SET last_rendered_at = now() WHERE id = $1")
+                    .bind(image_id)
+                    .execute(&state.pool)
+                    .await;
+            }
+            if outcome.completes_pipeline {
                 let ctx = resolve_notification_context(&state, image_id, page_id).await;
                 emit_qa_notification(
                     &state,

@@ -1,0 +1,6 @@
+{
+  "base_fixture": "resolved-valid.json",
+  "cases": [
+    {"name": "wrong-logical-scene-digest", "operations": [{"op": "replace", "path": "/resolved_layout/logical_scene_sha256", "value": "5555555555555555555555555555555555555555555555555555555555555555"}]}
+  ]
+}

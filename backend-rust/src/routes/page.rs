@@ -38,8 +38,10 @@ use crate::clone::recalculate_chapter_cover;
 use crate::error;
 use crate::minio::MinioService;
 use crate::models::{
-    Chapter, Conversation, ConversationRegion, Image, Layer, LayerElement, OcrRegion, Page, Panel,
+    Chapter, Conversation, ConversationRegion, Image, Layer, LayerElement, OcrRegion, Page,
+    PageSceneSnapshot, Panel,
 };
+use crate::page_scene::{CurrentRenderArtifact, current_render_artifact};
 use crate::state::AppState;
 
 // ---------------------------------------------------------------------------
@@ -64,19 +66,15 @@ pub struct PageDto {
     pub filename: String,
     pub url: String,
     pub thumbnailUrl: String,
-    /// AUDIT-F26. When the pipeline last produced a rendered page, or null if it never has.
-    ///
-    /// This DTO previously carried nothing a pipeline run could change. `thumbnailUrl` is a fixed
-    /// path to the *original*'s thumbnail, and every other field is set at upload. Re-fetching
-    /// `/pages` after a translation finished therefore returned byte-identical JSON — React saw
-    /// identical props and an identical image `src`, so the grid could not update no matter how
-    /// often it asked. That is what made the AUDIT-F19 refresh a no-op.
+    /// Null unless the immutable artifact matches this page's current scene revision/digest.
     pub lastRenderedAt: Option<chrono::DateTime<chrono::Utc>>,
-    /// A thumbnail of the *rendered* page, or null when nothing has been rendered yet.
-    ///
-    /// Carries `last_rendered_at` as a cache key because `stream_cached_image` marks these
-    /// `immutable` for a year: without the key a re-render would keep serving the previous
-    /// translation out of the browser cache.
+    /// `ready`, `pending`, or `failed` for the page's current immutable scene revision.
+    pub renderStatus: String,
+    /// Current page revision, including when its artifact is pending or failed.
+    pub renderRevision: i32,
+    /// Immutable revision URL when the current artifact is ready; otherwise null.
+    pub renderedUrl: Option<String>,
+    /// No mutable image-level thumbnail is exposed as current.
     pub renderedThumbnailUrl: Option<String>,
 }
 
@@ -131,20 +129,6 @@ fn thumbnail_url(state: &AppState, image_id: Uuid) -> String {
     format!(
         "{}/api/images/{image_id}/thumbnail",
         state.config.context_path
-    )
-}
-
-/// AUDIT-F26. `?v=` is the whole point: these responses are `immutable, max-age=1y`, so a page
-/// that gets re-rendered after an edit needs a different URL or the browser never re-asks.
-fn rendered_thumbnail_url(
-    state: &AppState,
-    image_id: Uuid,
-    last_rendered_at: chrono::DateTime<chrono::Utc>,
-) -> String {
-    format!(
-        "{}/api/images/{image_id}/thumbnail/rendered?v={}",
-        state.config.context_path,
-        last_rendered_at.timestamp_millis()
     )
 }
 
@@ -700,12 +684,32 @@ pub async fn list_pages(
         chapter_id: Uuid,
         image_id: Uuid,
         filename: String,
-        // AUDIT-F26. The one column here that a pipeline run changes.
+        scene_revision: i32,
+        logical_scene_sha256: Option<String>,
         last_rendered_at: Option<chrono::DateTime<chrono::Utc>>,
+        artifact_ready: bool,
+        latest_render_status: Option<String>,
     }
     let sql = format!(
-        "SELECT p.id, p.page_number, p.chapter_id, p.image_id, p.last_rendered_at, i.filename \
-         FROM pages p JOIN images i ON i.id = p.image_id \
+        "SELECT p.id, p.page_number, p.chapter_id, p.image_id, p.scene_revision, \
+                p.last_rendered_at, i.filename, snapshot.logical_scene_sha256, \
+                (render.job_id IS NOT NULL) AS artifact_ready, latest.status AS latest_render_status \
+         FROM pages p \
+         JOIN images i ON i.id = p.image_id \
+         LEFT JOIN page_scene_snapshots snapshot \
+           ON snapshot.page_id = p.id AND snapshot.revision = p.scene_revision \
+         LEFT JOIN page_render_jobs render \
+           ON render.job_id = p.current_render_job_id \
+          AND render.page_revision = p.scene_revision \
+          AND render.logical_scene_sha256 = snapshot.logical_scene_sha256 \
+          AND render.status = 'succeeded' \
+          AND render.rendered_png_storage_path IS NOT NULL \
+         LEFT JOIN LATERAL ( \
+           SELECT status FROM page_render_jobs \
+           WHERE page_id = p.id AND page_revision = p.scene_revision \
+             AND logical_scene_sha256 = snapshot.logical_scene_sha256 \
+           ORDER BY created_at DESC LIMIT 1 \
+         ) latest ON TRUE \
          WHERE p.chapter_id = $1 ORDER BY p.page_number {direction} LIMIT {size} OFFSET {}",
         p.offset(size)
     );
@@ -720,18 +724,40 @@ pub async fn list_pages(
 
     let content: Vec<PageDto> = rows
         .into_iter()
-        .map(|r| PageDto {
-            id: r.id,
-            pageNumber: r.page_number,
-            imageId: r.image_id,
-            chapterId: r.chapter_id,
-            filename: r.filename,
-            url: image_url(&state, r.image_id),
-            thumbnailUrl: thumbnail_url(&state, r.image_id),
-            lastRenderedAt: r.last_rendered_at,
-            renderedThumbnailUrl: r
-                .last_rendered_at
-                .map(|at| rendered_thumbnail_url(&state, r.image_id, at)),
+        .map(|r| {
+            let render_status = if r.artifact_ready {
+                "ready"
+            } else if r.latest_render_status.as_deref() == Some("failed") {
+                "failed"
+            } else {
+                "pending"
+            };
+            let rendered_url = (render_status == "ready")
+                .then(|| {
+                    r.logical_scene_sha256.as_deref().map(|digest| {
+                        format!(
+                            "{}/api/pages/{}/rendered?revision={}&sceneSha256={digest}",
+                            state.config.context_path, r.id, r.scene_revision
+                        )
+                    })
+                })
+                .flatten();
+            PageDto {
+                id: r.id,
+                pageNumber: r.page_number,
+                imageId: r.image_id,
+                chapterId: r.chapter_id,
+                filename: r.filename,
+                url: image_url(&state, r.image_id),
+                thumbnailUrl: thumbnail_url(&state, r.image_id),
+                lastRenderedAt: (render_status == "ready")
+                    .then_some(r.last_rendered_at)
+                    .flatten(),
+                renderStatus: render_status.to_string(),
+                renderRevision: r.scene_revision,
+                renderedUrl: rendered_url,
+                renderedThumbnailUrl: None,
+            }
         })
         .collect();
 
@@ -848,6 +874,190 @@ pub async fn get_page(State(state): State<AppState>, Path(page_id): Path<Uuid>) 
     }
 }
 
+/// GET /api/pages/{pageId}/scene — reads the immutable logical scene at the page's current revision.
+pub async fn get_page_scene(State(state): State<AppState>, Path(page_id): Path<Uuid>) -> Response {
+    match sqlx::query_as::<_, PageSceneSnapshot>(
+        "SELECT snapshot.* \
+         FROM page_scene_snapshots snapshot \
+         JOIN pages page ON page.id = snapshot.page_id \
+         WHERE snapshot.page_id = $1 AND snapshot.revision = page.scene_revision",
+    )
+    .bind(page_id)
+    .fetch_optional(&state.pool)
+    .await
+    {
+        Ok(Some(snapshot)) => Json(snapshot.scene_json).into_response(),
+        Ok(None) => error::not_found(
+            &format!("Page scene not found: {page_id}"),
+            "/api/pages/{pageId}/scene",
+        ),
+        Err(err) => {
+            tracing::error!("Could not read page scene for {page_id}: {err}");
+            error::internal_error("/api/pages/{pageId}/scene")
+        }
+    }
+}
+
+/// PUT /api/pages/{pageId}/scene — stores one new-format logical scene atomically.
+///
+/// Snapshot revision advancement belongs to C02. This endpoint only accepts the current revision,
+/// makes retries with the same logical digest idempotent, and refuses to overwrite an immutable
+/// snapshot with different content.
+pub async fn put_page_scene(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(page_id): Path<Uuid>,
+    body: Result<Json<serde_json::Value>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    const INSTANCE: &str = "/api/pages/{pageId}/scene";
+    if user.role.eq_ignore_ascii_case("viewer") {
+        return error::access_denied(INSTANCE);
+    }
+    let Json(document) = match body {
+        Ok(json) => json,
+        Err(_) => return error::unreadable_body(INSTANCE),
+    };
+    let validated = match crate::page_scene::validate_page_scene(document) {
+        Ok(scene) if scene.scene_kind == "logical" => scene,
+        Ok(_) => return error::bad_request("API writes require a logical scene", INSTANCE),
+        Err(err) => return error::bad_request(&err.to_string(), INSTANCE),
+    };
+
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(err) => {
+            tracing::error!("Could not open page-scene transaction for {page_id}: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    };
+    let page_source = sqlx::query_as::<_, (i32, Option<String>)>(
+        "SELECT p.scene_revision, i.hash \
+         FROM pages p \
+         JOIN images i ON i.id = p.image_id \
+         WHERE p.id = $1 \
+         FOR UPDATE",
+    )
+    .bind(page_id)
+    .fetch_optional(&mut *tx)
+    .await;
+    let (current_revision, source_sha256) = match page_source {
+        Ok(Some(page_source)) => page_source,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(err) => {
+            tracing::error!("Could not lock page {page_id} for page-scene write: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    };
+    if validated.source_page_id != page_id.to_string() {
+        return error::bad_request("scene page_id does not match the route page ID", INSTANCE);
+    }
+    if validated.revision != current_revision && validated.revision != current_revision + 1 {
+        return error::bad_request(
+            "scene revision is neither the current retry nor the next page revision",
+            INSTANCE,
+        );
+    }
+    if source_sha256.as_deref() != Some(validated.source_sha256.as_str()) {
+        return error::bad_request("scene source hash does not match the page source", INSTANCE);
+    }
+
+    let existing = sqlx::query_as::<_, PageSceneSnapshot>(
+        "SELECT * FROM page_scene_snapshots WHERE page_id = $1 AND revision = $2",
+    )
+    .bind(page_id)
+    .bind(validated.revision)
+    .fetch_optional(&mut *tx)
+    .await;
+    match existing {
+        Ok(Some(snapshot)) if snapshot.logical_scene_sha256 == validated.logical_scene_sha256 => {
+            return Json(snapshot.scene_json).into_response();
+        }
+        Ok(Some(_)) => {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({"message": "A different immutable scene already exists for this page revision"})),
+            )
+                .into_response();
+        }
+        Ok(None) => {}
+        Err(err) => {
+            tracing::error!("Could not inspect page-scene snapshot for {page_id}: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    }
+    if validated.revision != current_revision + 1 {
+        return error::bad_request("new scene writes require the next page revision", INSTANCE);
+    }
+
+    let snapshot = validated.snapshot_for_page(page_id);
+    let insert_snapshot = sqlx::query(
+        "INSERT INTO page_scene_snapshots \
+         (page_id, revision, contract_version, source_sha256, logical_scene_sha256, scene_json) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(snapshot.page_id)
+    .bind(snapshot.revision)
+    .bind(&snapshot.contract_version)
+    .bind(&snapshot.source_sha256)
+    .bind(&snapshot.logical_scene_sha256)
+    .bind(&snapshot.scene_json)
+    .execute(&mut *tx)
+    .await;
+    if let Err(err) = insert_snapshot {
+        tracing::error!("Could not insert page-scene snapshot for {page_id}: {err}");
+        return error::internal_error(INSTANCE);
+    }
+    for owner in &validated.owners {
+        if let Err(err) = sqlx::query(
+            "INSERT INTO page_scene_owners \
+             (page_id, revision, owner_id, policy_kind, policy_action, policy_override) \
+             VALUES ($1, $2, $3, $4, $5, $6)",
+        )
+        .bind(page_id)
+        .bind(validated.revision)
+        .bind(&owner.owner_id)
+        .bind(&owner.policy_kind)
+        .bind(&owner.policy_action)
+        .bind(&owner.policy_override)
+        .execute(&mut *tx)
+        .await
+        {
+            tracing::error!("Could not insert page-scene owner for {page_id}: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    }
+    for asset in &validated.assets {
+        if let Err(err) = sqlx::query(
+            "INSERT INTO page_scene_assets \
+             (page_id, revision, asset_id, asset_kind, asset_sha256, byte_length, mime_type, storage_path) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        )
+        .bind(page_id)
+        .bind(validated.revision)
+        .bind(&asset.asset_id)
+        .bind(&asset.asset_kind)
+        .bind(&asset.asset_sha256)
+        .bind(asset.byte_length)
+        .bind(&asset.mime_type)
+        .bind(&asset.storage_path)
+        .execute(&mut *tx)
+        .await
+        {
+            tracing::error!("Could not insert page-scene asset for {page_id}: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    }
+    if let Err(err) = crate::page_freshness::advance_page_revision(&mut tx, page_id).await {
+        tracing::error!("Could not advance page revision for page-scene write {page_id}: {err}");
+        return error::internal_error(INSTANCE);
+    }
+    if let Err(err) = tx.commit().await {
+        tracing::error!("Could not commit page-scene snapshot for {page_id}: {err}");
+        return error::internal_error(INSTANCE);
+    }
+    Json(snapshot.scene_json).into_response()
+}
+
 /// GET /api/images/{imageId} — page payload when a Page references it; bare otherwise.
 pub async fn get_image(State(state): State<AppState>, Path(image_id): Path<Uuid>) -> Response {
     let first_page: Option<Page> =
@@ -921,44 +1131,59 @@ async fn stream_cached_image(storage: &MinioService, path: &str, etag_suffix: &s
     }
 }
 
-/// GET /api/pages/{pageId}/rendered — rendered/{imageId}.png falling back to rendered/{pageId}.png.
-pub async fn get_page_rendered(
-    State(state): State<AppState>,
-    Path(page_id): Path<Uuid>,
-) -> Response {
-    let Some(page) = find_page(&state.pool, page_id).await else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
-    let primary = format!("rendered/{}.png", page.image_id);
-    let fallback = format!("rendered/{page_id}.png");
-    let path = if state.storage.exists(&primary).await {
-        primary
-    } else if state.storage.exists(&fallback).await {
-        fallback
-    } else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
-
-    match state.storage.download(&path).await {
-        Ok(stream) => {
-            let bytes = stream.collect().await.expect("body collect").to_vec();
-            (
-                StatusCode::OK,
-                [(header::CONTENT_TYPE, "image/png")],
-                Body::from(bytes),
-            )
-                .into_response()
-        }
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    }
-}
-
-/// GET /api/images/{imageId}/file — the stored original.
+/// GET /api/images/{imageId}/file — original upload.
 pub async fn get_image_file(State(state): State<AppState>, Path(image_id): Path<Uuid>) -> Response {
     match find_image(&state.pool, image_id).await {
         Some(image) => stream_cached_image(&state.storage, &image.storage_path, "orig").await,
         None => StatusCode::NOT_FOUND.into_response(),
     }
+}
+
+/// GET /api/pages/{pageId}/rendered — only the immutable artifact for the current scene.
+pub async fn get_page_rendered(
+    State(state): State<AppState>,
+    Path(page_id): Path<Uuid>,
+) -> Response {
+    if find_page(&state.pool, page_id).await.is_none() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let mut response = match current_render_artifact(&state.pool, page_id).await {
+        Ok(CurrentRenderArtifact::Ready(artifact)) => {
+            let path = artifact
+                .rendered_png_storage_path
+                .expect("ready artifact always has a storage path");
+            stream_cached_image(
+                &state.storage,
+                &path,
+                &format!(
+                    "render-{}-{}",
+                    artifact.page_revision, artifact.logical_scene_sha256
+                ),
+            )
+            .await
+        }
+        Ok(CurrentRenderArtifact::Pending { revision }) => (
+            StatusCode::CONFLICT,
+            Json(json!({ "status": "pending", "revision": revision })),
+        )
+            .into_response(),
+        Ok(CurrentRenderArtifact::Failed { revision }) => (
+            StatusCode::CONFLICT,
+            Json(json!({ "status": "failed", "revision": revision })),
+        )
+            .into_response(),
+        Err(err) => {
+            tracing::error!("Could not resolve current render for page {page_id}: {err}");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    };
+    // This URL resolves a mutable current pointer, even when the selected object is immutable.
+    // Caching it can keep an earlier QA pass exportable after newer revisions or render failure.
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("private, no-store"),
+    );
+    response
 }
 
 /// GET /api/images/{imageId}/reader — WebP variant or the original fallback.
@@ -993,61 +1218,81 @@ pub async fn get_image_thumbnail(
     }
 }
 
-/// The object holding a thumbnail of the rendered page, as opposed to the original.
-pub fn rendered_thumbnail_path(image_id: Uuid) -> String {
-    format!("thumbnails/rendered/{image_id}.webp")
+/// The object holding a thumbnail of one rendered artifact, keyed by that artifact's PNG digest so
+/// a newer render can never be answered with an older render's thumbnail.
+pub fn rendered_thumbnail_path(rendered_png_sha256: &str) -> String {
+    format!("thumbnails/rendered/{rendered_png_sha256}.webp")
 }
 
-/// AUDIT-F26. Derives the rendered page's thumbnail and stores it, replacing any previous one.
-///
-/// Called from the render callback so the object always matches the newest render — a re-render
-/// after an edit overwrites it rather than leaving the old translation behind.
-pub async fn generate_rendered_thumbnail(storage: &MinioService, image_id: Uuid) -> bool {
-    let Some(bytes) = storage
-        .download_bytes(&format!("rendered/{image_id}.png"))
-        .await
-    else {
+/// AUDIT-F26. Derives the thumbnail of one immutable rendered artifact and stores it.
+pub async fn generate_rendered_thumbnail(
+    storage: &MinioService,
+    rendered_png_path: &str,
+    rendered_png_sha256: &str,
+) -> bool {
+    let Some(bytes) = storage.download_bytes(rendered_png_path).await else {
         return false;
     };
     let Ok(output) = crate::thumbnails::generate_thumbnail(&bytes) else {
-        tracing::warn!("rendered thumbnail generation failed for image {image_id}");
+        tracing::warn!("rendered thumbnail generation failed for {rendered_png_path}");
         return false;
     };
     if let Err(err) = storage
         .upload_bytes(
-            &rendered_thumbnail_path(image_id),
+            &rendered_thumbnail_path(rendered_png_sha256),
             output.webp_bytes,
             "image/webp",
         )
         .await
     {
-        tracing::error!("rendered thumbnail upload failed for image {image_id}: {err}");
+        tracing::error!("rendered thumbnail upload failed for {rendered_png_path}: {err}");
         return false;
     }
     true
 }
 
-/// GET /api/images/{imageId}/thumbnail/rendered — a thumbnail of the pipeline's output.
+/// GET /api/images/{imageId}/thumbnail/rendered — thumbnail of the image's current render.
 ///
 /// AUDIT-F26. The page grid cannot show the rendered PNGs directly: they average ~1.7 MB, so a
-/// single screen of twenty would be ~34 MB. It needs a thumbnail of the render, which is what this
-/// serves — the same 512px WebP treatment the original gets.
-///
-/// Generates on a miss rather than 404ing. Every page rendered before this endpoint existed has a
-/// `last_rendered_at` and a `rendered/` object but no thumbnail, and that backlog would otherwise
-/// need a migration; here the first request for each page fills it in and every later request is
-/// served from storage.
+/// single screen of twenty would be ~34 MB. Generated on a miss from the current immutable
+/// artifact only; a page with no current render answers 404 rather than an older render.
 pub async fn get_image_rendered_thumbnail(
     State(state): State<AppState>,
     Path(image_id): Path<Uuid>,
 ) -> Response {
-    let path = rendered_thumbnail_path(image_id);
+    let page_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT id FROM pages WHERE image_id = $1 ORDER BY page_number LIMIT 1")
+            .bind(image_id)
+            .fetch_optional(&state.pool)
+            .await
+            .unwrap_or(None);
+    let Some(page_id) = page_id else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let Ok(CurrentRenderArtifact::Ready(artifact)) =
+        current_render_artifact(&state.pool, page_id).await
+    else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let (Some(png_path), Some(png_sha)) = (
+        artifact.rendered_png_storage_path.as_deref(),
+        artifact.rendered_png_sha256.as_deref(),
+    ) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let path = rendered_thumbnail_path(png_sha);
     if !state.storage.exists(&path).await
-        && !generate_rendered_thumbnail(&state.storage, image_id).await
+        && !generate_rendered_thumbnail(&state.storage, png_path, png_sha).await
     {
         return StatusCode::NOT_FOUND.into_response();
     }
-    stream_cached_image(&state.storage, &path, "rthumb").await
+    let mut response = stream_cached_image(&state.storage, &path, "rthumb").await;
+    // The URL names the image, not the render; the object behind it changes with each render.
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("private, no-store"),
+    );
+    response
 }
 
 // ---------------------------------------------------------------------------
@@ -1419,6 +1664,563 @@ pub async fn update_ocr_region(
     Json(updated).into_response()
 }
 
+/// POST /api/ocr-regions/{id}/review — `{"action": "reject" | "accept" | "mask" | "delete"}`,
+/// ADMIN/TRANSLATOR.
+///
+/// The Reader's quick resolutions for a region that needs a look:
+/// - `reject` keeps the original: the region is marked `rejected` and its translations hidden, so
+///   it drops out of the page and of later QA.
+/// - `accept` keeps the translation: the flag is cleared and the translation shown.
+/// - `mask` covers the region with a plain plate of its background colour — the fallback when
+///   inpainting left lettering behind. The plate becomes the region's cleanup (so the render and
+///   export use it) and the translation elements get the same polygon (so the Reader draws it).
+/// - `delete` removes the region and every element that draws it.
+///
+/// Every action refreshes the page's QA summary and advances its revision in the same transaction,
+/// so the next render/export reflects the choice.
+pub async fn review_ocr_region(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    body: Result<Json<serde_json::Value>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    let instance = "/api/ocr-regions/{id}/review";
+    if !user.role.eq_ignore_ascii_case("admin") && !user.role.eq_ignore_ascii_case("translator") {
+        return error::access_denied(instance);
+    }
+    let Ok(Json(payload)) = body else {
+        return error::unreadable_body(instance);
+    };
+    let action = payload.get("action").and_then(|v| v.as_str()).unwrap_or("");
+    if !matches!(action, "reject" | "accept" | "mask" | "delete") {
+        return (
+            StatusCode::BAD_REQUEST,
+            "action must be \"reject\", \"accept\", \"mask\" or \"delete\"",
+        )
+            .into_response();
+    }
+    let Some(region) = sqlx::query_as::<_, OcrRegion>("SELECT * FROM ocr_regions WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.pool)
+        .await
+        .unwrap_or(None)
+    else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+
+    // The plate is uploaded before the transaction: storage cannot roll back, and a content-addressed
+    // object nothing points at is harmless.
+    let plate = if action == "mask" {
+        match plain_mask_for(&state, &region).await {
+            Ok(plate) => Some(plate),
+            Err(err) => return (StatusCode::UNPROCESSABLE_ENTITY, err).into_response(),
+        }
+    } else {
+        None
+    };
+
+    let result: Result<(), String> = async {
+        let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+        match action {
+            "reject" => {
+                sqlx::query(
+                    "UPDATE ocr_regions SET qa_status = 'rejected', qa_feedback = 'Rejected in review.' WHERE id = $1",
+                )
+                .bind(id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+                sqlx::query(
+                    "UPDATE layer_elements e SET visible = FALSE FROM layers l \
+                     WHERE e.layer_id = l.id AND l.type ILIKE 'translation' AND e.region_id = $1",
+                )
+                .bind(id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+            }
+            "accept" => {
+                sqlx::query(
+                    "UPDATE ocr_regions SET qa_status = 'passed', qa_feedback = 'Accepted in review.', \
+                     translation_failed = FALSE WHERE id = $1",
+                )
+                .bind(id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+                show_translations(&mut tx, id).await?;
+            }
+            "mask" => {
+                let (plate, polygon, colour) = plate.as_ref().expect("built above for mask");
+                sqlx::query(
+                    "UPDATE ocr_regions SET cleanup_mask_asset_id = $2, cleanup_mask_sha256 = $3, \
+                       cleanup_mask_byte_length = $4, cleanup_patch_asset_id = $5, \
+                       cleanup_patch_sha256 = $6, cleanup_patch_byte_length = $7, \
+                       cleanup_bounds = $8, cleanup_generator_sha256 = $9, \
+                       cleanup_diagnostics = $10, \
+                       qa_status = CASE WHEN qa_status IN ('cleanup_review', 'manual_review', 'failed') \
+                                        THEN 'fixed' ELSE qa_status END, \
+                       qa_feedback = CASE WHEN qa_status IN ('cleanup_review', 'manual_review', 'failed') \
+                                          THEN 'Covered with a plain mask in review.' ELSE qa_feedback END \
+                     WHERE id = $1",
+                )
+                .bind(id)
+                .bind(&plate.mask_asset_id)
+                .bind(&plate.mask_sha256)
+                .bind(plate.mask_byte_length)
+                .bind(&plate.patch_asset_id)
+                .bind(&plate.patch_sha256)
+                .bind(plate.patch_byte_length)
+                .bind(&plate.bounds)
+                .bind(&plate.generator_sha256)
+                .bind(serde_json::json!([format!("plain mask {colour} applied in review")]))
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+                // `word_wrap` is the Reader's per-element "draw my plate" switch. Shown layers only:
+                // hidden ones are history and keep what they had.
+                sqlx::query(
+                    "UPDATE layer_elements e SET mask_polygon = $2, background_color = $3, word_wrap = TRUE \
+                     FROM layers l WHERE e.layer_id = l.id AND l.type NOT ILIKE 'ocr' AND l.visible \
+                       AND e.region_id = $1",
+                )
+                .bind(id)
+                .bind(polygon)
+                .bind(colour)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+                show_translations(&mut tx, id).await?;
+            }
+            _ => {
+                sqlx::query("DELETE FROM layer_elements WHERE region_id = $1")
+                    .bind(id)
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                sqlx::query("DELETE FROM ocr_regions WHERE id = $1")
+                    .bind(id)
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+        crate::jobs::coordinator::refresh_review_summary(&mut tx, region.page_id).await?;
+        crate::page_freshness::advance_page_revision(&mut tx, region.page_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        tx.commit().await.map_err(|e| e.to_string())
+    }
+    .await;
+    match result {
+        Ok(()) => {
+            Json(serde_json::json!({ "regionId": id, "pageId": region.page_id, "action": action }))
+                .into_response()
+        }
+        Err(err) => {
+            tracing::error!("Review action {action} on region {id} failed: {err}");
+            (StatusCode::INTERNAL_SERVER_ERROR, err).into_response()
+        }
+    }
+}
+
+/// POST /api/pages/{pageId}/regions/merge — `{"regionIds": [...], "dryRun"?: bool}` (two or more),
+/// ADMIN/TRANSLATOR.
+///
+/// The Reader's "these fragments are one text block". The region with the lowest Reader number
+/// survives with the union box and the fragments' text joined in reading order; the others are
+/// deleted. The survivor's current elements take the union box, its translation is cleared (it
+/// translated one fragment), and one cleanup job is queued for the new box whose callback carries
+/// on into this region's translation only — the rest of the page is left as it is.
+///
+/// Hidden translation layers are history and keep what they drew: an absorbed fragment's element
+/// there is detached from its deleted region rather than deleted, and the survivor's is untouched.
+///
+/// `dryRun` writes nothing and answers with the order the fragments will be read in and the text
+/// that makes, so the Reader can show the order before anyone commits to it (the person merging
+/// usually can't read the source language, and the order is geometric, not the Reader numbers).
+pub async fn merge_ocr_regions(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(page_id): Path<Uuid>,
+    body: Result<Json<serde_json::Value>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    let instance = "/api/pages/{pageId}/regions/merge";
+    if !user.role.eq_ignore_ascii_case("admin") && !user.role.eq_ignore_ascii_case("translator") {
+        return error::access_denied(instance);
+    }
+    let Ok(Json(payload)) = body else {
+        return error::unreadable_body(instance);
+    };
+    let dry_run = payload
+        .get("dryRun")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let mut ids: Vec<Uuid> = payload
+        .get("regionIds")
+        .and_then(|v| v.as_array())
+        .map(|ids| {
+            ids.iter()
+                .filter_map(|id| id.as_str().and_then(|id| Uuid::parse_str(id).ok()))
+                .collect()
+        })
+        .unwrap_or_default();
+    ids.sort();
+    ids.dedup();
+    if ids.len() < 2 {
+        return (
+            StatusCode::BAD_REQUEST,
+            "regionIds must name at least two regions",
+        )
+            .into_response();
+    }
+    let regions: Vec<OcrRegion> =
+        match sqlx::query_as("SELECT * FROM ocr_regions WHERE page_id = $1 AND id = ANY($2)")
+            .bind(page_id)
+            .bind(&ids)
+            .fetch_all(&state.pool)
+            .await
+        {
+            Ok(regions) => regions,
+            Err(err) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+            }
+        };
+    if regions.len() != ids.len() {
+        return (
+            StatusCode::NOT_FOUND,
+            "every region must exist on this page",
+        )
+            .into_response();
+    }
+
+    use crate::region_merge::{Fragment, joined_text, reading_order, union_box};
+    let fragments: Vec<Fragment> = regions
+        .iter()
+        .map(|r| Fragment {
+            x: r.bbox_x,
+            y: r.bbox_y,
+            w: r.bbox_w,
+            h: r.bbox_h,
+            text: r.text.clone().unwrap_or_default(),
+        })
+        .collect();
+    let order = reading_order(&fragments);
+    // The survivor keeps the lowest Reader number, so the merged block takes the first fragment's
+    // place in the list rather than whichever region happened to read first geometrically.
+    let survivor = regions
+        .iter()
+        .min_by_key(|r| {
+            (
+                r.bubble_reading_order.unwrap_or(i32::MAX),
+                r.bbox_y,
+                r.bbox_x,
+            )
+        })
+        .expect("at least two regions");
+    let absorbed: Vec<Uuid> = regions
+        .iter()
+        .map(|r| r.id)
+        .filter(|id| *id != survivor.id)
+        .collect();
+    let text = joined_text(&fragments, &order, &survivor.detected_language);
+    if dry_run {
+        let ordered: Vec<String> = order.iter().map(|&i| regions[i].id.to_string()).collect();
+        return Json(serde_json::json!({
+            "pageId": page_id,
+            "regionId": survivor.id,
+            "order": ordered,
+            "text": text,
+            "dryRun": true,
+        }))
+        .into_response();
+    }
+    let (x, y, w, h) = union_box(
+        regions
+            .iter()
+            .map(|r| (r.bbox_x, r.bbox_y, r.bbox_w, r.bbox_h)),
+    )
+    .expect("non-empty");
+    let polygon = serde_json::json!([[x, y], [x + w, y], [x + w, y + h], [x, y + h]]);
+    let bubble = union_box(
+        regions
+            .iter()
+            .filter_map(|r| Some((r.bubble_x?, r.bubble_y?, r.bubble_w?, r.bubble_h?))),
+    );
+    let safe = union_box(regions.iter().filter_map(|r| {
+        Some((
+            r.safe_text_x?,
+            r.safe_text_y?,
+            r.safe_text_w?,
+            r.safe_text_h?,
+        ))
+    }));
+    // A block merged again keeps every fragment it was ever made from.
+    let mut merged_from: Vec<String> = regions
+        .iter()
+        .flat_map(|r| {
+            let earlier = r
+                .ownership_provenance
+                .as_ref()
+                .and_then(|p| p.get("mergedFrom"))
+                .and_then(|m| m.as_array())
+                .map(|m| {
+                    m.iter()
+                        .filter_map(|id| id.as_str().map(str::to_string))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            earlier.into_iter().chain(std::iter::once(r.id.to_string()))
+        })
+        .collect();
+    merged_from.sort();
+    merged_from.dedup();
+    // The pieces as read, for the translator: OCR splits and geometric order can both be wrong,
+    // and a model shown the pieces can put them back in the order that makes sense.
+    let merged_texts: Vec<String> = order
+        .iter()
+        .map(|&i| fragments[i].text.trim().to_string())
+        .filter(|text| !text.is_empty())
+        .collect();
+
+    let result: Result<OcrRegion, String> = async {
+        let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+        for table in ["conversation_regions", "translation_regions"] {
+            sqlx::query(AssertSqlSafe(format!("DELETE FROM {table} WHERE region_id = ANY($1)")))
+                .bind(&absorbed)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        sqlx::query(
+            "UPDATE layer_elements e SET region_id = NULL FROM layers l \
+             WHERE e.layer_id = l.id AND e.region_id = ANY($1) AND l.type NOT ILIKE 'ocr' \
+               AND l.visible IS NOT TRUE",
+        )
+        .bind(&absorbed)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+        sqlx::query("DELETE FROM layer_elements WHERE region_id = ANY($1)")
+            .bind(&absorbed)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+        sqlx::query("DELETE FROM ocr_regions WHERE id = ANY($1)")
+            .bind(&absorbed)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+        let merged: OcrRegion = sqlx::query_as(
+            "UPDATE ocr_regions SET text = $2, bbox_x = $3, bbox_y = $4, bbox_w = $5, bbox_h = $6, \
+               mask_polygon = $7, bubble_x = $8, bubble_y = $9, bubble_w = $10, bubble_h = $11, \
+               safe_text_x = $12, safe_text_y = $13, safe_text_w = $14, safe_text_h = $15, \
+               qa_status = NULL, qa_feedback = NULL, qa_score = NULL, \
+               translated_text = NULL, translation_failed = NULL, \
+               cleanup_mask_asset_id = NULL, cleanup_mask_sha256 = NULL, cleanup_mask_byte_length = NULL, \
+               cleanup_patch_asset_id = NULL, cleanup_patch_sha256 = NULL, cleanup_patch_byte_length = NULL, \
+               cleanup_bounds = NULL, cleanup_generator_sha256 = NULL, \
+               cleanup_diagnostics = '[\"merged in review; cleanup pending\"]'::jsonb, \
+               ownership_provenance = COALESCE(ownership_provenance, '{}'::jsonb) || jsonb_build_object('mergedFrom', $16::jsonb, 'mergedTexts', $17::jsonb) \
+             WHERE id = $1 RETURNING *",
+        )
+        .bind(survivor.id)
+        .bind(&text)
+        .bind(x)
+        .bind(y)
+        .bind(w)
+        .bind(h)
+        .bind(&polygon)
+        .bind(bubble.map(|b| b.0))
+        .bind(bubble.map(|b| b.1))
+        .bind(bubble.map(|b| b.2))
+        .bind(bubble.map(|b| b.3))
+        .bind(safe.map(|b| b.0))
+        .bind(safe.map(|b| b.1))
+        .bind(safe.map(|b| b.2))
+        .bind(safe.map(|b| b.3))
+        .bind(serde_json::json!(merged_from))
+        .bind(serde_json::json!(merged_texts))
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+        // Every current element that draws the survivor takes the block's box; the OCR ones show
+        // the joined text, the translations wait (hidden, empty) for the block's own translation.
+        sqlx::query(
+            "UPDATE layer_elements e SET x = $2, y = $3, max_width = $4, max_height = $5, mask_polygon = $6, \
+               text = CASE WHEN l.type ILIKE 'ocr' THEN $7 ELSE NULL END, \
+               visible = CASE WHEN l.type ILIKE 'ocr' THEN e.visible ELSE FALSE END \
+             FROM layers l WHERE e.layer_id = l.id AND e.region_id = $1 \
+               AND (l.type ILIKE 'ocr' OR l.visible IS TRUE)",
+        )
+        .bind(survivor.id)
+        .bind(f64::from(x))
+        .bind(f64::from(y))
+        .bind(w)
+        .bind(h)
+        .bind(&polygon)
+        .bind(&text)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+        crate::jobs::coordinator::refresh_review_summary(&mut tx, page_id).await?;
+        crate::page_freshness::advance_page_revision(&mut tx, page_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        tx.commit().await.map_err(|e| e.to_string())?;
+        Ok(merged)
+    }
+    .await;
+    let merged = match result {
+        Ok(merged) => merged,
+        Err(err) => {
+            tracing::error!("Merging regions on page {page_id} failed: {err}");
+            return (StatusCode::INTERNAL_SERVER_ERROR, err).into_response();
+        }
+    };
+
+    let queued = queue_region_cleanup(&state, page_id, &merged).await;
+    if let Err(err) = &queued {
+        tracing::error!(
+            "Regions on page {page_id} were merged into {} but its cleanup could not be queued: {err}",
+            merged.id
+        );
+    }
+    if let Ok(Some(image_id)) =
+        sqlx::query_scalar::<_, Uuid>("SELECT image_id FROM pages WHERE id = $1")
+            .bind(page_id)
+            .fetch_optional(&state.pool)
+            .await
+    {
+        state.sse.map_image_to_user(image_id, user.id).await;
+    }
+    Json(serde_json::json!({
+        "regionId": merged.id,
+        "pageId": page_id,
+        "merged": ids.len(),
+        "text": text,
+        "queued": queued.is_ok(),
+    }))
+    .into_response()
+}
+
+/// Queue cleanup for one region, carrying on into its translation when it lands.
+async fn queue_region_cleanup(
+    state: &AppState,
+    page_id: Uuid,
+    region: &OcrRegion,
+) -> Result<(), String> {
+    let (image_id, storage_path, hash, input_generation): (Uuid, String, Option<String>, i32) =
+        sqlx::query_as(
+            "SELECT i.id, i.storage_path, i.hash, p.input_generation FROM pages p \
+             JOIN images i ON i.id = p.image_id WHERE p.id = $1",
+        )
+        .bind(page_id)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    let image_url = state
+        .storage
+        .presigned_get_url(&storage_path)
+        .await
+        .map_err(|err| format!("could not presign source for cleanup: {err}"))?;
+    let entries = vec![crate::jobs::coordinator::cleanup_region_entry(
+        input_generation,
+        region,
+    )];
+    let digest = hex::encode(Sha256::digest(
+        serde_json::to_string(&entries)
+            .unwrap_or_default()
+            .as_bytes(),
+    ));
+    let region_id = region.id.to_string();
+    crate::jobs::coordinator::enqueue_job_directly(
+        state,
+        "cleanup",
+        image_id,
+        Some(page_id),
+        None,
+        "high",
+        move |job| {
+            job.insert("imageUrl".into(), json!(image_url));
+            job.insert("sourceSha256".into(), json!(hash.unwrap_or_default()));
+            job.insert("cleanupRegions".into(), serde_json::Value::Array(entries));
+            job.insert("cleanupInputDigest".into(), json!(digest));
+            job.insert(
+                "followUp".into(),
+                json!({ "type": "region-redo-tl", "regionId": region_id }),
+            );
+        },
+    )
+    .await;
+    Ok(())
+}
+
+/// Shows the region's translation elements that have text, on shown layers only (hidden layers are
+/// history); an empty one stays hidden, since showing it would only paint a plate with nothing on it.
+async fn show_translations(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    region_id: Uuid,
+) -> Result<(), String> {
+    sqlx::query(
+        "UPDATE layer_elements e SET visible = TRUE FROM layers l \
+         WHERE e.layer_id = l.id AND l.type ILIKE 'translation' AND l.visible AND e.region_id = $1 \
+           AND COALESCE(TRIM(e.text), '') <> ''",
+    )
+    .bind(region_id)
+    .execute(&mut **tx)
+    .await
+    .map(|_| ())
+    .map_err(|e| e.to_string())
+}
+
+/// The plate for `mask`: the region's box padded a little so anti-aliased glyph edges are covered,
+/// clamped to the page, in the region's sampled background colour.
+async fn plain_mask_for(
+    state: &AppState,
+    region: &OcrRegion,
+) -> Result<
+    (
+        crate::page_scene_builder::PlainPlate,
+        serde_json::Value,
+        String,
+    ),
+    String,
+> {
+    let (page_w, page_h): (Option<i32>, Option<i32>) = sqlx::query_as(
+        "SELECT i.width, i.height FROM pages p JOIN images i ON i.id = p.image_id WHERE p.id = $1",
+    )
+    .bind(region.page_id)
+    .fetch_one(&state.pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    let (page_w, page_h) = match (page_w, page_h) {
+        (Some(w), Some(h)) if w > 0 && h > 0 => (w, h),
+        _ => return Err("the page image has no recorded size".into()),
+    };
+    let pad = (region.bbox_w.min(region.bbox_h) / 6).max(3);
+    let x0 = (region.bbox_x - pad).max(0);
+    let y0 = (region.bbox_y - pad).max(0);
+    let x1 = (region.bbox_x + region.bbox_w + pad).min(page_w);
+    let y1 = (region.bbox_y + region.bbox_h + pad).min(page_h);
+    let polygon = serde_json::json!([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
+    let colour = region
+        .background_color
+        .clone()
+        .filter(|c| c.trim_start_matches('#').len() == 6)
+        .unwrap_or_else(|| "#ffffff".into());
+    let plate = crate::page_scene_builder::plain_plate_cleanup(
+        state,
+        region.page_id,
+        &polygon,
+        Some(&colour),
+        page_w,
+        page_h,
+    )
+    .await?;
+    Ok((plate, polygon, colour))
+}
+
 // ---------------------------------------------------------------------------
 // Redo triggers (Phase 3)
 // ---------------------------------------------------------------------------
@@ -1514,6 +2316,10 @@ pub fn router() -> Router<AppState> {
         )
         .route("/pages/{pageId}", get(get_page).delete(delete_page))
         .route(
+            "/pages/{pageId}/scene",
+            get(get_page_scene).put(put_page_scene),
+        )
+        .route(
             "/pages/{pageId}/number",
             axum::routing::patch(update_page_number),
         )
@@ -1525,10 +2331,18 @@ pub fn router() -> Router<AppState> {
         )
         .route("/ocr-regions/{id}", axum::routing::patch(update_ocr_region))
         .route(
+            "/ocr-regions/{id}/review",
+            axum::routing::post(review_ocr_region),
+        )
+        .route(
             "/ocr-regions/{id}/redo",
             axum::routing::post(redo_ocr_region),
         )
         .route("/images/{imageId}/redo", axum::routing::post(redo_image))
+        .route(
+            "/pages/{pageId}/regions/merge",
+            axum::routing::post(merge_ocr_regions),
+        )
         .route(
             "/chapters/{chapterId}/import-project",
             axum::routing::post(import_project),
@@ -1573,6 +2387,9 @@ pub async fn upload_zip_archive(
                 return zip_error("error: project.json found but no image found in zip".into());
             };
 
+            if let Err(message) = validate_project_schema(&project_bytes) {
+                return zip_error(format!("error: {message}"));
+            }
             let processed = match validate_and_process_image_bytes(
                 Some(&original_name),
                 original_bytes.clone(),
@@ -1593,10 +2410,11 @@ pub async fn upload_zip_archive(
                     .await
                     .unwrap_or(None);
 
+            let mut replacement_image_id = None;
             let page = match existing_page {
                 Some(existing_page) => {
                     // Clear elements (+history) and layers, then maybe swap the image.
-                    clear_page_layers(&state.pool, existing_page.id).await;
+                    // Replacement of editable layers is committed atomically with its revision below.
                     let old_image: Option<Image> =
                         sqlx::query_as("SELECT * FROM images WHERE id = $1")
                             .bind(existing_page.image_id)
@@ -1644,15 +2462,7 @@ pub async fn upload_zip_archive(
                                 created.id
                             }
                         };
-                        sqlx::query("UPDATE pages SET image_id=$2 WHERE id=$1")
-                            .bind(existing_page.id)
-                            .bind(new_image_id)
-                            .execute(&state.pool)
-                            .await
-                            .expect("page image swap");
-                        if existing_page.page_number == 1 {
-                            recalculate_chapter_cover(&state.pool, chapter_id).await;
-                        }
+                        replacement_image_id = Some(new_image_id);
                     }
                     page_at_slot(&state.pool, chapter_id, existing_page.page_number)
                         .await
@@ -1702,11 +2512,19 @@ pub async fn upload_zip_archive(
                 },
             };
 
-            let restored = restore_project_layers(state, page.id, &project_bytes, false).await;
-            if restored.is_err() {
+            if restore_project_page(state, page.id, &project_bytes, false, replacement_image_id)
+                .await
+                .is_err()
+            {
                 return StatusCode::INTERNAL_SERVER_ERROR.into_response();
             }
 
+            let page = page_at_slot(&state.pool, chapter_id, page.page_number)
+                .await
+                .unwrap_or(page);
+            if replacement_image_id.is_some() && page.page_number == 1 {
+                recalculate_chapter_cover(&state.pool, chapter_id).await;
+            }
             Json(UploadResponse {
                 pageId: Some(page.id),
                 imageId: Some(page.image_id),
@@ -1827,27 +2645,31 @@ fn zip_error(status: String) -> Response {
 }
 
 /// Removes a page's layer elements (+edit history) and layers before a project restore.
-async fn clear_page_layers(pool: &sqlx::PgPool, page_id: Uuid) {
+///
+/// This uses the caller's transaction so a failed restore leaves the previous editable page
+/// intact instead of committing a half-cleared replacement.
+async fn clear_page_layers(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    page_id: Uuid,
+) -> Result<(), sqlx::Error> {
     sqlx::query(
         "DELETE FROM layer_edit_history WHERE layer_element_id IN (\
              SELECT le.id FROM layer_elements le JOIN layers l ON l.id = le.layer_id WHERE l.page_id = $1)",
     )
     .bind(page_id)
-    .execute(pool)
-    .await
-    .ok();
+    .execute(&mut **tx)
+    .await?;
     sqlx::query(
         "DELETE FROM layer_elements WHERE layer_id IN (SELECT id FROM layers WHERE page_id = $1)",
     )
     .bind(page_id)
-    .execute(pool)
-    .await
-    .ok();
+    .execute(&mut **tx)
+    .await?;
     sqlx::query("DELETE FROM layers WHERE page_id = $1")
         .bind(page_id)
-        .execute(pool)
-        .await
-        .ok();
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
 }
 
 pub async fn insert_image_public(
@@ -1860,11 +2682,26 @@ pub async fn insert_image_public(
     insert_image(pool, filename, storage_path, hash, created_by).await
 }
 
+const PROJECT_SCHEMA_VERSION: u64 = 1;
+
+fn validate_project_schema(project_json: &[u8]) -> Result<(), &'static str> {
+    let root: serde_json::Value =
+        serde_json::from_slice(project_json).map_err(|_| "project.json is not valid JSON")?;
+    match root
+        .get("schemaVersion")
+        .and_then(serde_json::Value::as_u64)
+    {
+        Some(PROJECT_SCHEMA_VERSION) => Ok(()),
+        Some(_) => Err("project.json schemaVersion is unsupported"),
+        None => Err("project.json schemaVersion is required"),
+    }
+}
+
 /// Restores `layers`/`elements` from a project.json; returns counts on success.
 /// `track_manual_edits` stamps the image's last_edited_at when manual edits exist
 /// (the chapters/{id}/import-project behaviour).
 async fn restore_project_layers(
-    state: &AppState,
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     page_id: Uuid,
     project_json: &[u8],
     track_manual_edits: bool,
@@ -1916,7 +2753,7 @@ async fn restore_project_layers(
         .bind(z_order)
         .bind(&metadata_json)
         .bind(page_id)
-        .execute(&state.pool)
+        .execute(&mut **tx)
         .await
         .map_err(|_| ())?;
         imported_layers += 1;
@@ -2039,7 +2876,7 @@ async fn restore_project_layers(
             .bind(is_manually_edited)
             .bind(layer_id)
             .bind(region_id)
-            .execute(&state.pool)
+            .execute(&mut **tx)
             .await
             .map_err(|_| ())?;
             imported_elements += 1;
@@ -2049,19 +2886,52 @@ async fn restore_project_layers(
     if has_manual_edits && track_manual_edits {
         let image_id: Option<Uuid> = sqlx::query_scalar("SELECT image_id FROM pages WHERE id = $1")
             .bind(page_id)
-            .fetch_optional(&state.pool)
+            .fetch_optional(&mut **tx)
             .await
             .ok()
             .flatten();
         if let Some(image_id) = image_id {
             let _ = sqlx::query("UPDATE images SET last_edited_at = now() WHERE id = $1")
                 .bind(image_id)
-                .execute(&state.pool)
+                .execute(&mut **tx)
                 .await;
         }
     }
 
     Ok((imported_layers, imported_elements))
+}
+
+async fn restore_project_page(
+    state: &AppState,
+    page_id: Uuid,
+    project_json: &[u8],
+    track_manual_edits: bool,
+    replacement_image_id: Option<Uuid>,
+) -> Result<(usize, usize), ()> {
+    let mut tx = state.pool.begin().await.map_err(|_| ())?;
+    clear_page_layers(&mut tx, page_id).await.map_err(|_| ())?;
+    if let Some(image_id) = replacement_image_id {
+        sqlx::query("UPDATE pages SET image_id = $2 WHERE id = $1")
+            .bind(page_id)
+            .bind(image_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| ())?;
+    }
+    let counts = restore_project_layers(&mut tx, page_id, project_json, track_manual_edits).await?;
+    if replacement_image_id.is_some() {
+        // New source pixels: every cleanup patch and OCR box on this page was computed from the
+        // old ones, so the generation fence has to move with them (R3 phase-separation design,
+        // "Invalidation and deletion").
+        crate::page_freshness::advance_page_input_generation(&mut tx, page_id)
+            .await
+            .map_err(|_| ())?;
+    }
+    crate::page_freshness::advance_page_revision(&mut tx, page_id)
+        .await
+        .map_err(|_| ())?;
+    tx.commit().await.map_err(|_| ())?;
+    Ok(counts)
 }
 
 /// POST /api/chapters/{chapterId}/import-project — restore a page-level project export
@@ -2147,6 +3017,9 @@ pub async fn import_project(
             .into_response();
     };
 
+    if let Err(message) = validate_project_schema(&project_bytes) {
+        return error::bad_request(message, INSTANCE);
+    }
     let page_count: i32 =
         sqlx::query_scalar("SELECT COUNT(*)::int FROM pages WHERE chapter_id = $1")
             .bind(chapter_id)
@@ -2155,11 +3028,11 @@ pub async fn import_project(
             .unwrap_or(0);
     let page_number = page_count + 1;
 
-    // Slot occupied? Replace its contents; otherwise create a fresh page at that slot.
+    let mut replacement_image_id = None;
     let existing_page = page_at_slot(&state.pool, chapter_id, page_number).await;
     let page = match &existing_page {
         Some(existing_page) => {
-            clear_page_layers(&state.pool, existing_page.id).await;
+            // Replacement of editable layers is committed atomically with its revision below.
             if let Some((original_name, original_bytes)) = original {
                 let file_hash = hex::encode(sha2::Sha256::digest(&original_bytes));
                 let old_hash_matches = sqlx::query_scalar::<_, Option<String>>(
@@ -2215,15 +3088,7 @@ pub async fn import_project(
                             created.id
                         }
                     };
-                    sqlx::query("UPDATE pages SET image_id=$2 WHERE id=$1")
-                        .bind(existing_page.id)
-                        .bind(new_image_id)
-                        .execute(&state.pool)
-                        .await
-                        .expect("image swap");
-                    if existing_page.page_number == 1 {
-                        recalculate_chapter_cover(&state.pool, chapter_id).await;
-                    }
+                    replacement_image_id = Some(new_image_id);
                 }
             }
             page_at_slot(&state.pool, chapter_id, existing_page.page_number)
@@ -2277,21 +3142,20 @@ pub async fn import_project(
         }
     };
 
-    match restore_project_layers(&state, page.id, &project_bytes, true).await {
+    match restore_project_page(&state, page.id, &project_bytes, true, replacement_image_id).await {
         Ok((layers_count, elements_count)) => {
             tracing::info!(
                 "Successfully imported project ZIP to chapter {chapter_id}: {layers_count} layers and {elements_count} elements imported."
             );
+            if replacement_image_id.is_some() && page.page_number == 1 {
+                recalculate_chapter_cover(&state.pool, chapter_id).await;
+            }
             Json(json!({
                 "status": "success",
                 "pageId": page.id.to_string(),
             }))
             .into_response()
         }
-        Err(()) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "message": "failed to restore project layers" })),
-        )
-            .into_response(),
+        Err(_) => error::internal_error(INSTANCE),
     }
 }

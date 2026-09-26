@@ -1,20 +1,31 @@
 import React, { useEffect, useRef, useState } from "react";
 import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import FormControl from "@mui/material/FormControl";
+import FormHelperText from "@mui/material/FormHelperText";
 import Grid from "@mui/material/Grid";
 import InputLabel from "@mui/material/InputLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { modelOptionLabel } from "../modelPricing";
 import { safeFetch } from "../utils";
-import type { ModelEntry, SystemSettingsDto } from "../types";
+import { CLEANUP_MODE_OPTIONS } from "../utils/cleanupModes";
+import {
+  CUSTOM_MODEL_VALUE,
+  saveCustomModels,
+  type ModelCapability,
+} from "../utils/customModels";
+import type { CustomModel, SystemSettingsDto } from "../types";
+import CustomModelDialog, {
+  type CustomModelRequest,
+} from "./CustomModelDialog";
+import { renderModelOptions } from "./modelOptions";
 import { useToast } from "./ToastContext";
 
 export interface SettingsModalProps {
@@ -55,40 +66,6 @@ const isCapabilityMissing = (
   return !legacyList || legacyList.length === 0;
 };
 
-const renderModelOptions = (
-  providerMap: SystemSettingsDto["providerModelsMap"],
-  provider: string,
-  capability: "ocr" | "tl" | "qaLLM" | "qaVLM",
-  legacyList: string[] | undefined,
-) => {
-  let models: ModelEntry[] = [];
-  if (providerMap) {
-    models = providerMap[provider]?.[capability] || [];
-  } else if (legacyList) {
-    models = legacyList.map((m) => ({ id: m, name: m }));
-  }
-
-  if (models.length === 0) {
-    return (
-      <MenuItem
-        value="N/A"
-        disabled
-      >
-        N/A (Capability Missing)
-      </MenuItem>
-    );
-  }
-
-  return models.map((m) => (
-    <MenuItem
-      key={m.id}
-      value={m.id}
-    >
-      {modelOptionLabel(m)}
-    </MenuItem>
-  ));
-};
-
 /**
  * SettingsModal component allows users to configure global system defaults.
  *
@@ -111,6 +88,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [customRequest, setCustomRequest] = useState<CustomModelRequest | null>(
+    null,
+  );
   const { showToast } = useToast();
 
   const providers = settings?.activeProviders || [];
@@ -237,6 +217,65 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     value: SystemSettingsDto[keyof SystemSettingsDto],
   ) => {
     setSettings((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
+  /** A model Select's change: a model, or "Custom model ID…", which asks for one first. */
+  const pickModel = (
+    field: "ocrModel" | "tlModel" | "qaLlmModel" | "qaVlmModel",
+    provider: string,
+    task: ModelCapability,
+    picked: string,
+  ) => {
+    if (picked === CUSTOM_MODEL_VALUE) {
+      setCustomRequest({
+        provider,
+        task,
+        apply: (id) => handleChange(field, id),
+      });
+    } else {
+      handleChange(field, picked);
+    }
+  };
+
+  /** Custom IDs are saved on their own endpoint at once; the model lists follow locally. */
+  const applyCustomModels = (models: CustomModel[]) => {
+    setSettings((prev) => {
+      if (!prev) return prev;
+      const map = { ...(prev.providerModelsMap ?? {}) };
+      for (const [provider, tasks] of Object.entries(map)) {
+        const next = { ...tasks };
+        for (const [task, list] of Object.entries(next)) {
+          next[task] = list.filter((m) => !m.custom);
+        }
+        map[provider] = next;
+      }
+      for (const m of models) {
+        const tasks = map[m.provider];
+        if (!tasks) continue;
+        const list = tasks[m.task] ?? [];
+        if (!list.some((entry) => entry.id === m.id)) {
+          tasks[m.task] = [...list, { id: m.id, name: m.id, custom: true }];
+        }
+      }
+      return { ...prev, customModels: models, providerModelsMap: map };
+    });
+  };
+
+  const removeCustomModel = async (model: CustomModel) => {
+    try {
+      const remaining = (settings?.customModels ?? []).filter(
+        (m) =>
+          !(
+            m.provider === model.provider &&
+            m.task === model.task &&
+            m.id === model.id
+          ),
+      );
+      applyCustomModels(await saveCustomModels(remaining, token));
+    } catch (err) {
+      console.error(err);
+      showToast("Could not remove the custom model", "error");
+    }
   };
 
   // -------------------------------------------------------------------------------------
@@ -417,7 +456,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             : settings.ocrModel || settings.localOcrModel || ""
                       }
                       label={label}
-                      onChange={(e) => handleChange("ocrModel", e.target.value)}
+                      onChange={(e) =>
+                        pickModel(
+                          "ocrModel",
+                          settings.ocrProvider,
+                          "ocr",
+                          e.target.value,
+                        )
+                      }
                     >
                       {localUnpublished ? (
                         <MenuItem value={settings.localOcrModel || "local"}>
@@ -429,12 +475,34 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                           settings.ocrProvider,
                           "ocr",
                           settings.ocrVlmModelList,
+                          settings.ocrModel,
                         )
                       )}
                     </Select>
                   </FormControl>
                 );
               })()}
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="OCR Grouping Threshold"
+                helperText="Join OCR fragments closer than this many characters; higher joins more. Applies on redo OCR"
+                value={settings.ocrMergeThreshold ?? 0.35}
+                onChange={(e) => {
+                  const parsed = parseFloat(e.target.value);
+                  if (Number.isFinite(parsed)) {
+                    handleChange(
+                      "ocrMergeThreshold",
+                      Math.min(3, Math.max(0.05, parsed)),
+                    );
+                  }
+                }}
+                slotProps={{ htmlInput: { min: 0.05, max: 3, step: 0.05 } }}
+              />
             </Grid>
 
             <Grid size={12}>
@@ -503,13 +571,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       : settings.tlModel || ""
                   }
                   label="Global Translation LLM Model"
-                  onChange={(e) => handleChange("tlModel", e.target.value)}
+                  onChange={(e) =>
+                    pickModel(
+                      "tlModel",
+                      settings.tlProvider,
+                      "tl",
+                      e.target.value,
+                    )
+                  }
                 >
                   {renderModelOptions(
                     settings.providerModelsMap,
                     settings.tlProvider,
                     "tl",
                     settings.tlLlmModelList,
+                    settings.tlModel,
                   )}
                 </Select>
               </FormControl>
@@ -617,13 +693,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       : settings.qaLlmModel || ""
                   }
                   label="Global QA LLM Model"
-                  onChange={(e) => handleChange("qaLlmModel", e.target.value)}
+                  onChange={(e) =>
+                    pickModel(
+                      "qaLlmModel",
+                      settings.qaProvider,
+                      "qaLLM",
+                      e.target.value,
+                    )
+                  }
                 >
                   {renderModelOptions(
                     settings.providerModelsMap,
                     settings.qaProvider,
                     "qaLLM",
                     settings.qaLlmModelList,
+                    settings.qaLlmModel,
                   )}
                 </Select>
               </FormControl>
@@ -650,13 +734,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       : settings.qaVlmModel || ""
                   }
                   label="Global QA VLM Model"
-                  onChange={(e) => handleChange("qaVlmModel", e.target.value)}
+                  onChange={(e) =>
+                    pickModel(
+                      "qaVlmModel",
+                      settings.qaProvider,
+                      "qaVLM",
+                      e.target.value,
+                    )
+                  }
                 >
                   {renderModelOptions(
                     settings.providerModelsMap,
                     settings.qaProvider,
                     "qaVLM",
                     settings.qaVlmModelList,
+                    settings.qaVlmModel,
                   )}
                 </Select>
               </FormControl>
@@ -673,7 +765,124 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   pt: 1,
                 }}
               >
-                Advanced Routing
+                Cleanup &amp; Text Fit
+              </Typography>
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <FormControl
+                fullWidth
+                size="small"
+              >
+                <InputLabel>Cleanup Mode</InputLabel>
+                <Select
+                  value={settings.cleanupMode || "auto"}
+                  label="Cleanup Mode"
+                  onChange={(e) => handleChange("cleanupMode", e.target.value)}
+                >
+                  {CLEANUP_MODE_OPTIONS.map((option) => (
+                    <MenuItem
+                      key={option.value}
+                      value={option.value}
+                    >
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>
+                  Applies to pages cleaned from now on; redo OCR to re-clean a
+                  page
+                </FormHelperText>
+              </FormControl>
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="Text Safety Margin (%)"
+                helperText="Share of the padded box text may use; 100 = all of it"
+                value={settings.textBoxSafetyPercent ?? 100}
+                onChange={(e) =>
+                  handleChange(
+                    "textBoxSafetyPercent",
+                    Math.min(100, Math.max(1, parseInt(e.target.value) || 1)),
+                  )
+                }
+                slotProps={{ htmlInput: { min: 1, max: 100, step: 1 } }}
+              />
+            </Grid>
+
+            {/* AUDIT-F16: the space around text inside its box, per edge. One rule in three
+                parts -- a share of the box, lifted to a floor, stopped at a cap -- so the three
+                fields sit on one row. */}
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="Text Box Padding (%)"
+                helperText="Of each box's shorter side; 0 = none"
+                value={settings.textBoxPaddingPercent ?? 4}
+                onChange={(e) =>
+                  handleChange(
+                    "textBoxPaddingPercent",
+                    Math.min(50, Math.max(0, parseInt(e.target.value) || 0)),
+                  )
+                }
+                slotProps={{ htmlInput: { min: 0, max: 50, step: 1 } }}
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="Min Padding (px)"
+                helperText="Floor for small boxes; 0 = none"
+                value={settings.textBoxPaddingMinPx ?? 0}
+                onChange={(e) =>
+                  handleChange(
+                    "textBoxPaddingMinPx",
+                    Math.min(64, Math.max(0, parseInt(e.target.value) || 0)),
+                  )
+                }
+                slotProps={{ htmlInput: { min: 0, max: 64, step: 1 } }}
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="Max Padding (px)"
+                helperText="Cap for large boxes; 0 = no padding"
+                value={settings.textBoxPaddingMaxPx ?? 4}
+                onChange={(e) =>
+                  handleChange(
+                    "textBoxPaddingMaxPx",
+                    Math.min(64, Math.max(0, parseInt(e.target.value) || 0)),
+                  )
+                }
+                slotProps={{ htmlInput: { min: 0, max: 64, step: 1 } }}
+              />
+            </Grid>
+
+            <Grid size={12}>
+              <Typography
+                variant="overline"
+                sx={{
+                  color: "text.disabled",
+                  display: "block",
+                  borderTop: 1,
+                  borderColor: "divider",
+                  pt: 1,
+                }}
+              >
+                Advanced Routing (OpenRouter)
               </Typography>
             </Grid>
 
@@ -705,45 +914,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               </FormControl>
             </Grid>
 
-            {/* AUDIT-F16: the space around text inside its box. It used to be a literal in
-                render.py with no way to reach it, and three different literals in the frontend --
-                including the live reader, which used none at all. */}
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                size="small"
-                type="number"
-                label="Text Box Padding (px)"
-                helperText="Trimmed from each edge before text is fitted"
-                value={settings.textBoxPaddingPx ?? 4}
-                onChange={(e) =>
-                  handleChange(
-                    "textBoxPaddingPx",
-                    Math.min(64, Math.max(0, parseInt(e.target.value) || 0)),
-                  )
-                }
-                slotProps={{ htmlInput: { min: 0, max: 64, step: 1 } }}
-              />
-            </Grid>
-
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                size="small"
-                type="number"
-                label="Text Safety Margin (%)"
-                helperText="Of what remains after padding; 95 keeps glyphs off the outline"
-                value={settings.textBoxSafetyPercent ?? 95}
-                onChange={(e) =>
-                  handleChange(
-                    "textBoxSafetyPercent",
-                    Math.min(100, Math.max(1, parseInt(e.target.value) || 1)),
-                  )
-                }
-                slotProps={{ htmlInput: { min: 1, max: 100, step: 1 } }}
-              />
-            </Grid>
-
             <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl
                 fullWidth
@@ -764,9 +934,43 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 </Select>
               </FormControl>
             </Grid>
+
+            <Grid size={12}>
+              <Typography
+                variant="caption"
+                sx={{ color: "text.secondary", display: "block", mb: 0.5 }}
+              >
+                Custom model IDs — add one with “Custom model ID…” in any model
+                list
+              </Typography>
+              {(settings.customModels ?? []).length === 0 ? (
+                <Typography
+                  variant="caption"
+                  sx={{ color: "text.disabled" }}
+                >
+                  None
+                </Typography>
+              ) : (
+                (settings.customModels ?? []).map((m) => (
+                  <Chip
+                    key={`${m.provider}/${m.task}/${m.id}`}
+                    size="small"
+                    label={`${m.id} · ${m.provider} ${m.task}`}
+                    onDelete={() => void removeCustomModel(m)}
+                    sx={{ mr: 0.5, mb: 0.5 }}
+                  />
+                ))
+              )}
+            </Grid>
           </Grid>
         )}
       </DialogContent>
+      <CustomModelDialog
+        request={customRequest}
+        onClose={() => setCustomRequest(null)}
+        token={token}
+        onRegistered={applyCustomModels}
+      />
       <DialogActions>
         <Button
           onClick={onClose}

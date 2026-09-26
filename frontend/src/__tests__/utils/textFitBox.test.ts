@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_TEXT_BOX_INSET, textFitBox } from "../../utils/textFitBox";
+import {
+  DEFAULT_TEXT_BOX_GEOMETRY,
+  DEFAULT_TEXT_BOX_INSET,
+  insetForBox,
+  textFitBox,
+} from "../../utils/textFitBox";
 
 /**
  * AUDIT-R1 / AUDIT-F16.
@@ -10,13 +15,14 @@ import { DEFAULT_TEXT_BOX_INSET, textFitBox } from "../../utils/textFitBox";
  * apart — which is exactly what happened when each side owned its own literal.
  */
 describe("textFitBox", () => {
-  it("reproduces the inset the pipeline has always used", () => {
-    // The old worker literals: `ex + 4`, `int((ew - 8) * 0.95)`.
+  it("defaults to the renderer's inset: 4px, no safety shrink", () => {
+    // The page renderer has always fitted text with `style.padding` 4 and safety 100; the editor
+    // used 95% on its own. The default now matches the export.
     expect(textFitBox({ x: 100, y: 200, width: 300, height: 120 })).toEqual({
       x: 104,
       y: 204,
-      width: Math.floor((300 - 8) * 0.95),
-      height: Math.floor((120 - 8) * 0.95),
+      width: 300 - 8,
+      height: 120 - 8,
     });
   });
 
@@ -71,7 +77,73 @@ describe("textFitBox", () => {
     expect(over.width).toBe(292);
   });
 
-  it("defaults to 4px and 95%", () => {
-    expect(DEFAULT_TEXT_BOX_INSET).toEqual({ paddingPx: 4, safetyPercent: 95 });
+  it("defaults to the renderer's historical 4px and no safety shrink", () => {
+    expect(DEFAULT_TEXT_BOX_INSET).toEqual({
+      paddingPx: 4,
+      safetyPercent: 100,
+    });
+  });
+});
+
+describe("insetForBox (System Settings padding %, max px, safety %)", () => {
+  const geometry = {
+    paddingPercent: 6,
+    paddingMinPx: 0,
+    paddingMaxPx: 12,
+    safetyPercent: 95,
+  };
+
+  it("scales padding with the box's shorter side", () => {
+    expect(
+      insetForBox({ width: 40, height: 300 }, geometry).paddingPx,
+    ).toBeCloseTo(2.4);
+  });
+
+  it("never pads past the cap", () => {
+    expect(insetForBox({ width: 300, height: 400 }, geometry)).toEqual({
+      paddingPx: 12,
+      safetyPercent: 95,
+    });
+  });
+
+  it("turns padding off at 0% or a 0px cap", () => {
+    expect(
+      insetForBox(
+        { width: 300, height: 300 },
+        { ...geometry, paddingPercent: 0 },
+      ).paddingPx,
+    ).toBe(0);
+    expect(
+      insetForBox({ width: 300, height: 300 }, { ...geometry, paddingMaxPx: 0 })
+        .paddingPx,
+    ).toBe(0);
+  });
+
+  it("lifts small boxes to the min px, but a quarter of the box and the max still win", () => {
+    const g = {
+      ...geometry,
+      paddingPercent: 4,
+      paddingMinPx: 6,
+      paddingMaxPx: 10,
+    };
+    expect(insetForBox({ width: 50, height: 300 }, g).paddingPx).toBe(6);
+    expect(insetForBox({ width: 200, height: 300 }, g).paddingPx).toBe(8);
+    expect(insetForBox({ width: 1000, height: 1000 }, g).paddingPx).toBe(10);
+    expect(insetForBox({ width: 16, height: 40 }, g).paddingPx).toBe(4);
+    expect(
+      insetForBox(
+        { width: 50, height: 50 },
+        { ...g, paddingMinPx: 12, paddingMaxPx: 5 },
+      ).paddingPx,
+    ).toBe(5);
+  });
+
+  it("matches the backend default: 4px on a box 100px or more across", () => {
+    expect(
+      insetForBox({ width: 120, height: 180 }, DEFAULT_TEXT_BOX_GEOMETRY),
+    ).toEqual({
+      paddingPx: 4,
+      safetyPercent: 100,
+    });
   });
 });

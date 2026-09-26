@@ -407,7 +407,7 @@ async fn image_archive_upload_and_project_restore() {
     assert_eq!(page_count, 2);
 
     // --- Case A: page-level project restore onto the next slot ---
-    let project = r#"{"layers":[{"type":"translation","targetLanguage":"en","visible":true,"zOrder":3,"elements":[{"text":"Restored text","font":"Comic Neue","size":18,"x":10,"y":12,"maxWidth":120,"maxHeight":40,"visible":true}]}]}"#;
+    let project = r#"{"schemaVersion":1,"layers":[{"type":"translation","targetLanguage":"en","visible":true,"zOrder":3,"elements":[{"text":"Restored text","font":"Comic Neue","size":18,"x":10,"y":12,"maxWidth":120,"maxHeight":40,"visible":true}]}]}"#;
     let project_zip = {
         let cursor = std::io::Cursor::new(Vec::new());
         let mut writer = zip::ZipWriter::new(cursor);
@@ -450,6 +450,78 @@ async fn image_archive_upload_and_project_restore() {
     .await
     .unwrap();
     assert_eq!(element_text.0.as_deref(), Some("Restored text"));
+
+    // Restore a different original into the occupied slot through the upload route. The image
+    // swap, layer replacement and revision increment must commit as one page replacement.
+    let image_before: uuid::Uuid = sqlx::query_scalar("SELECT image_id FROM pages WHERE id = $1")
+        .bind(uuid::Uuid::parse_str(restored_page_id).unwrap())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let replacement_zip = zip_of(
+        vec![("original.png".into(), png_bytes([240, 40, 40]))],
+        Some(project),
+    );
+    let body = multipart(
+        &[
+            ("chapterId", chapter_id.clone()),
+            ("pageNumber", "3".to_owned()),
+        ],
+        Some(("file", "replacement.zip", &replacement_zip)),
+    );
+    let (status, _, replacement_body) = send(
+        &app,
+        "POST",
+        "/tlhub/api/images",
+        &token,
+        Some("multipart/form-data; boundary=__import_boundary__"),
+        body,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&replacement_body)
+    );
+    let replacement: serde_json::Value = serde_json::from_slice(&replacement_body).unwrap();
+    assert_eq!(replacement["status"], "imported");
+    let page_revision: i32 = sqlx::query_scalar("SELECT scene_revision FROM pages WHERE id = $1")
+        .bind(uuid::Uuid::parse_str(restored_page_id).unwrap())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(page_revision, 2);
+    let image_after: uuid::Uuid = sqlx::query_scalar("SELECT image_id FROM pages WHERE id = $1")
+        .bind(uuid::Uuid::parse_str(restored_page_id).unwrap())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_ne!(image_after, image_before);
+    let replacement_element_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM layer_elements le JOIN layers l ON l.id = le.layer_id WHERE l.page_id = $1",
+    )
+    .bind(uuid::Uuid::parse_str(restored_page_id).unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(replacement_element_count, 1);
+
+    let unsupported = zip_of(
+        vec![("original.png".into(), png_bytes([40, 40, 240]))],
+        Some(r#"{"schemaVersion":2,"layers":[]}"#),
+    );
+    let body = multipart(&[], Some(("file", "unsupported.zip", &unsupported)));
+    let (status, _, _) = send(
+        &app,
+        "POST",
+        &format!("/tlhub/api/chapters/{chapter_id}/import-project"),
+        &token,
+        Some("multipart/form-data; boundary=__import_boundary__"),
+        body,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 
     cleanup(&pool).await;
 }

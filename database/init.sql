@@ -59,6 +59,8 @@ CREATE TABLE public.chapters (
     use_context_memory boolean DEFAULT true NOT NULL,
     use_fallback_models boolean,
     routing_strategy character varying(255),
+    cleanup_mode character varying(255),
+    ocr_merge_threshold double precision,
     series_id uuid NOT NULL
 );
 
@@ -179,6 +181,17 @@ CREATE TABLE public.jobs (
     payload text,
     started_at timestamp(6) with time zone,
     status character varying(255) NOT NULL,
+    -- R3 stage-attempt authority. Payload mirrors these fields for worker transport;
+    -- the database values, not Redis delivery, decide whether work is current.
+    input_generation integer DEFAULT 0 NOT NULL,
+    lease_token character varying(255),
+    lease_expires_at timestamp(6) with time zone,
+    heartbeat_at timestamp(6) with time zone,
+    -- Liveness and progress are separate readings on purpose: heartbeat_at only says the worker
+    -- process is answering, progress_at/progress_count say the job advanced a unit of work.
+    -- A hung inference keeps the first moving and stops the second.
+    progress_at timestamp(6) with time zone,
+    progress_count integer DEFAULT 0 NOT NULL,
     trace_id character varying(255),
     type character varying(255) NOT NULL,
     updated_at timestamp(6) with time zone
@@ -276,6 +289,7 @@ CREATE TABLE public.ocr_regions (
     detected_language character varying(255) NOT NULL,
     detection_confidence double precision,
     mask_polygon jsonb,
+    ownership_provenance jsonb,
     ocr_score double precision,
     panel_reading_order integer,
     qa_feedback text,
@@ -292,7 +306,20 @@ CREATE TABLE public.ocr_regions (
     translation_failed boolean,
     translation_score double precision,
     page_id uuid NOT NULL,
-    panel_id uuid
+    panel_id uuid,
+    -- R3 glyph-mask cleanup: worker-computed, worker-uploaded cleanup assets (CTD glyph mask +
+    -- TELEA/AOT reconstruction), referenced by page_scene_builder.rs's build_pipeline_scene
+    -- instead of legacy_patch_and_mask's flat fill when present. All nullable and additive:
+    -- a NULL cleanup_patch_asset_id falls through to the existing flat-fill/no-plate behaviour.
+    cleanup_mask_asset_id character varying(255),
+    cleanup_mask_sha256 character(64),
+    cleanup_mask_byte_length bigint,
+    cleanup_patch_asset_id character varying(255),
+    cleanup_patch_sha256 character(64),
+    cleanup_patch_byte_length bigint,
+    cleanup_bounds jsonb,
+    cleanup_generator_sha256 character(64),
+    cleanup_diagnostics jsonb
 );
 
 
@@ -308,11 +335,83 @@ CREATE TABLE public.pages (
     chapter_id uuid NOT NULL,
     image_id uuid NOT NULL,
     last_edited_at timestamp(6) with time zone,
-    last_rendered_at timestamp(6) with time zone
+    last_rendered_at timestamp(6) with time zone,
+    scene_revision integer DEFAULT 0 NOT NULL,
+    -- Source/geometry generation for OCR/cleanup. This intentionally does not advance for
+    -- ordinary scene/layout edits, which only affect scene_revision.
+    input_generation integer DEFAULT 0 NOT NULL,
+    current_render_job_id character varying(255)
 );
 
 
 ALTER TABLE public.pages OWNER TO tladmin;
+
+--
+-- Name: page_scene_snapshots; Type: TABLE; Schema: public; Owner: tladmin
+--
+
+CREATE TABLE public.page_scene_snapshots (
+    page_id uuid NOT NULL,
+    revision integer NOT NULL CHECK (revision >= 0),
+    contract_version character varying(32) NOT NULL CHECK (contract_version = 'page-scene/v1'),
+    source_sha256 character(64) NOT NULL CHECK (source_sha256 ~ '^[a-f0-9]{64}$'),
+    logical_scene_sha256 character(64) NOT NULL CHECK (logical_scene_sha256 ~ '^[a-f0-9]{64}$'),
+    scene_json jsonb NOT NULL,
+    created_at timestamp(6) with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT page_scene_snapshots_pkey PRIMARY KEY (page_id, revision),
+    CONSTRAINT page_scene_snapshots_page_id_logical_scene_sha256_key UNIQUE (page_id, logical_scene_sha256)
+);
+
+ALTER TABLE public.page_scene_snapshots OWNER TO tladmin;
+
+CREATE TABLE public.page_scene_owners (
+    page_id uuid NOT NULL,
+    revision integer NOT NULL,
+    owner_id character varying(256) NOT NULL,
+    policy_kind character varying(32) NOT NULL,
+    policy_action character varying(16) NOT NULL CHECK (policy_action IN ('preserve', 'explain', 'replace', 'review')),
+    policy_override character varying(16) CHECK (policy_override IN ('preserve', 'explain', 'replace', 'review')),
+    CONSTRAINT page_scene_owners_pkey PRIMARY KEY (page_id, revision, owner_id),
+    CONSTRAINT page_scene_owners_snapshot_fkey FOREIGN KEY (page_id, revision) REFERENCES public.page_scene_snapshots(page_id, revision) ON DELETE CASCADE
+);
+
+ALTER TABLE public.page_scene_owners OWNER TO tladmin;
+
+CREATE TABLE public.page_scene_assets (
+    page_id uuid NOT NULL,
+    revision integer NOT NULL,
+    asset_id character varying(256) NOT NULL,
+    asset_kind character varying(32) NOT NULL,
+    asset_sha256 character(64) NOT NULL CHECK (asset_sha256 ~ '^[a-f0-9]{64}$'),
+    byte_length bigint NOT NULL CHECK (byte_length >= 0),
+    mime_type character varying(128) NOT NULL,
+    storage_path text,
+    CONSTRAINT page_scene_assets_pkey PRIMARY KEY (page_id, revision, asset_id),
+    CONSTRAINT page_scene_assets_snapshot_fkey FOREIGN KEY (page_id, revision) REFERENCES public.page_scene_snapshots(page_id, revision) ON DELETE CASCADE
+);
+
+ALTER TABLE public.page_scene_assets OWNER TO tladmin;
+
+CREATE TABLE public.page_render_jobs (
+    job_id character varying(255) NOT NULL,
+    page_id uuid NOT NULL,
+    page_revision integer NOT NULL CHECK (page_revision >= 0),
+    logical_scene_sha256 character(64) NOT NULL CHECK (logical_scene_sha256 ~ '^[a-f0-9]{64}$'),
+    rendered_png_sha256 character(64) CHECK (rendered_png_sha256 ~ '^[a-f0-9]{64}$'),
+    rendered_png_storage_path text,
+    renderer_build_sha256 character(64),
+    browser_build_sha256 character(64),
+    status character varying(16) NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed')),
+    diagnostics_json jsonb DEFAULT '[]'::jsonb NOT NULL,
+    layout_json jsonb DEFAULT '[]'::jsonb NOT NULL,
+    created_at timestamp(6) with time zone DEFAULT now() NOT NULL,
+    completed_at timestamp(6) with time zone,
+    CONSTRAINT page_render_jobs_pkey PRIMARY KEY (job_id),
+    CONSTRAINT page_render_jobs_snapshot_fkey FOREIGN KEY (page_id, page_revision) REFERENCES public.page_scene_snapshots(page_id, revision) ON DELETE RESTRICT
+);
+
+ALTER TABLE ONLY public.pages
+    ADD CONSTRAINT pages_current_render_job_fkey FOREIGN KEY (current_render_job_id) REFERENCES public.page_render_jobs(job_id) ON DELETE SET NULL;
 
 --
 -- Name: panels; Type: TABLE; Schema: public; Owner: tladmin
@@ -391,6 +490,8 @@ CREATE TABLE public.series (
     tl_provider character varying(255),
     updated_at timestamp(6) with time zone NOT NULL,
     routing_strategy character varying(255),
+    cleanup_mode character varying(255),
+    ocr_merge_threshold double precision,
     use_fallback_models boolean,
     created_by uuid
 );
@@ -719,6 +820,14 @@ CREATE INDEX idx_job_costs_created ON public.job_costs USING btree (created_at);
 
 
 --
+-- Name: page_render_jobs_input_idx; Type: INDEX; Schema: public; Owner: tladmin
+--
+
+-- page_scene.rs and jobs/recovery.rs look a render job up by its input triple.
+CREATE INDEX page_render_jobs_input_idx ON public.page_render_jobs USING btree (page_id, page_revision, logical_scene_sha256);
+
+
+--
 -- Name: layer_elements fk7qyvypb91ygmpsr7fdb7uqblm; Type: FK CONSTRAINT; Schema: public; Owner: tladmin
 --
 
@@ -857,6 +966,20 @@ ALTER TABLE ONLY public.job_costs
 ALTER TABLE ONLY public.translation_regions
     ADD CONSTRAINT translation_regions_translation_id_fkey FOREIGN KEY (translation_id) REFERENCES public.translations(id) ON DELETE CASCADE;
 
+
+--
+-- Name: page_scene_snapshots page_scene_snapshots_page_fkey; Type: FK CONSTRAINT; Schema: public; Owner: tladmin
+--
+
+ALTER TABLE ONLY public.page_scene_snapshots
+    ADD CONSTRAINT page_scene_snapshots_page_fkey FOREIGN KEY (page_id) REFERENCES public.pages(id) ON DELETE CASCADE;
+
+--
+-- Name: page_render_jobs page_render_jobs_job_fkey; Type: FK CONSTRAINT; Schema: public; Owner: tladmin
+--
+
+ALTER TABLE ONLY public.page_render_jobs
+    ADD CONSTRAINT page_render_jobs_job_fkey FOREIGN KEY (job_id) REFERENCES public.jobs(id) ON DELETE CASCADE;
 
 --
 -- PostgreSQL database dump complete

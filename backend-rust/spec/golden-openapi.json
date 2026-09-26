@@ -24,6 +24,10 @@
             "format": "double",
             "type": "number"
           },
+          "cleanupMode": {
+            "description": "Cleanup reconstruction mode: auto, telea, aot or off (null inherits).",
+            "type": "string"
+          },
           "coverImageUrl": {
             "type": "string"
           },
@@ -94,6 +98,100 @@
           },
           "useFallbackModels": {
             "type": "boolean"
+          },
+          "ocrMergeThreshold": {
+            "description": "OCR grouping threshold: join fragments closer than this many characters, 0.05-3 (null inherits).",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "CleanupCallbackDto": {
+        "properties": {
+          "cleanupInputDigest": {
+            "description": "Echo of the digest of the dispatched region list.",
+            "type": "string"
+          },
+          "imageId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "jobId": {
+            "type": "string"
+          },
+          "pageId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "regions": {
+            "description": "One outcome per dispatched region. A missing, repeated or foreign region fails the whole cleanup and withholds translation.",
+            "items": {
+              "$ref": "#/components/schemas/CleanupRegionResultDto"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CleanupRegionResultDto": {
+        "properties": {
+          "cleanupBounds": {
+            "nullable": true,
+            "type": "object"
+          },
+          "cleanupGeneratorSha256": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cleanupMaskAssetId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cleanupMaskByteLength": {
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
+          "cleanupMaskSha256": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cleanupPatchAssetId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cleanupPatchByteLength": {
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
+          "cleanupPatchSha256": {
+            "nullable": true,
+            "type": "string"
+          },
+          "diagnostics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "inputDigest": {
+            "description": "Echo of the digest this region was dispatched with.",
+            "type": "string"
+          },
+          "regionId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "complete",
+              "degraded",
+              "excluded",
+              "failed"
+            ],
+            "type": "string"
           }
         },
         "type": "object"
@@ -514,6 +612,112 @@
         },
         "type": "object"
       },
+      "PageSceneDocument": {
+        "additionalProperties": false,
+        "description": "New-format-only page-scene/v1 document. The server accepts only logical scenes on writes and validates the full authoritative contract.",
+        "properties": {
+          "assets": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "cleanup_artifacts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "contract_version": {
+            "enum": [
+              "page-scene/v1"
+            ],
+            "type": "string"
+          },
+          "fragments": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "objects": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "owners": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "page": {
+            "additionalProperties": false,
+            "properties": {
+              "page_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "revision": {
+                "format": "int32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "source": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            },
+            "required": [
+              "page_id",
+              "revision",
+              "source"
+            ],
+            "type": "object"
+          },
+          "policies": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "provenance": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "resolved_layout": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "scene_kind": {
+            "enum": [
+              "logical",
+              "resolved"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "contract_version",
+          "scene_kind",
+          "page",
+          "provenance",
+          "fragments",
+          "owners",
+          "policies",
+          "assets",
+          "cleanup_artifacts",
+          "objects"
+        ],
+        "type": "object"
+      },
       "PageDto": {
         "properties": {
           "chapterId": {
@@ -540,7 +744,23 @@
             "format": "int32",
             "type": "integer"
           },
+          "renderRevision": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "renderStatus": {
+            "enum": [
+              "ready",
+              "pending",
+              "failed"
+            ],
+            "type": "string"
+          },
           "renderedThumbnailUrl": {
+            "nullable": true,
+            "type": "string"
+          },
+          "renderedUrl": {
             "nullable": true,
             "type": "string"
           },
@@ -770,6 +990,10 @@
       },
       "SeriesDto": {
         "properties": {
+          "cleanupMode": {
+            "description": "Cleanup reconstruction mode: auto, telea, aot or off (null inherits).",
+            "type": "string"
+          },
           "coverImageUrl": {
             "type": "string"
           },
@@ -832,6 +1056,11 @@
           },
           "useFallbackModels": {
             "type": "boolean"
+          },
+          "ocrMergeThreshold": {
+            "description": "OCR grouping threshold: join fragments closer than this many characters, 0.05-3 (null inherits).",
+            "format": "double",
+            "type": "number"
           }
         },
         "type": "object"
@@ -861,6 +1090,10 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "cleanupMode": {
+            "description": "Cleanup reconstruction mode: auto, telea, aot or off (null inherits).",
+            "type": "string"
           },
           "disableLocalLlm": {
             "type": "boolean"
@@ -922,7 +1155,13 @@
           "routingStrategy": {
             "type": "string"
           },
-          "textBoxPaddingPx": {
+          "textBoxPaddingMaxPx": {
+            "description": "Padding never exceeds this many px (0 turns padding off).",
+            "format": "int32",
+            "type": "integer"
+          },
+          "textBoxPaddingPercent": {
+            "description": "Padding on each edge as a percentage of the box's shorter side (0 turns padding off).",
             "format": "int32",
             "type": "integer"
           },
@@ -944,6 +1183,23 @@
           },
           "useFallbackModels": {
             "type": "boolean"
+          },
+          "ocrMergeThreshold": {
+            "description": "Global OCR grouping threshold, in characters of white space (0.05-3; default 0.35).",
+            "format": "double",
+            "type": "number"
+          },
+          "textBoxPaddingMinPx": {
+            "description": "Padding is never less than this many px (0 = no floor; at most a quarter of the box).",
+            "format": "int32",
+            "type": "integer"
+          },
+          "customModels": {
+            "description": "Model IDs typed in rather than picked from the catalog. Read-only on PUT /api/settings; replaced via PUT /api/settings/custom-models.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomModel"
+            }
           }
         },
         "type": "object"
@@ -963,6 +1219,26 @@
           }
         },
         "type": "object"
+      },
+      "CustomModel": {
+        "type": "object",
+        "required": [
+          "provider",
+          "task",
+          "id"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "task": {
+            "type": "string",
+            "description": "Catalog task key: ocr, tl, qaLLM or qaVLM."
+          },
+          "id": {
+            "type": "string"
+          }
+        }
       }
     }
   },
@@ -1764,6 +2040,86 @@
         ]
       }
     },
+    "/api/internal/jobs/callback/cleanup": {
+      "post": {
+        "operationId": "cleanupCallback",
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleanupCallbackDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
+          }
+        },
+        "tags": [
+          "internal-job-controller"
+        ]
+      }
+    },
     "/api/internal/jobs/callback/layout": {
       "post": {
         "operationId": "layoutCallback",
@@ -1790,10 +2146,60 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [
           "internal-job-controller"
+        ],
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ]
       }
     },
@@ -1820,10 +2226,60 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [
           "internal-job-controller"
+        ],
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ]
       }
     },
@@ -1850,10 +2306,60 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [
           "internal-job-controller"
+        ],
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ]
       }
     },
@@ -1883,10 +2389,60 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [
           "internal-job-controller"
+        ],
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ]
       }
     },
@@ -1916,10 +2472,60 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [
           "internal-job-controller"
+        ],
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ]
       }
     },
@@ -1949,10 +2555,60 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [
           "internal-job-controller"
+        ],
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ]
       }
     },
@@ -1982,10 +2638,60 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [
           "internal-job-controller"
+        ],
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ]
       }
     },
@@ -2030,6 +2736,44 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -2055,6 +2799,16 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
           }
         },
         "tags": [
@@ -2666,6 +3420,168 @@
         ]
       }
     },
+    "/api/ocr-regions/{id}/review": {
+      "post": {
+        "description": "Quick resolution for a region that needs a look. `reject` keeps the original (marks it rejected, hides its translations); `accept` keeps the translation (clears the flag, shows it); `mask` covers the region with a plain plate of its background colour, stored as its cleanup; `delete` removes the region and its elements. All refresh the page QA summary and advance its revision.",
+        "operationId": "reviewOcrRegion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "reject",
+                      "accept",
+                      "mask",
+                      "delete"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "properties": {
+                    "action": {
+                      "type": "string"
+                    },
+                    "pageId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "regionId": {
+                      "format": "uuid",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "Unknown action"
+          },
+          "404": {
+            "description": "Region not found"
+          },
+          "422": {
+            "description": "The plain mask could not be built (no page size, or the box lies off the page)"
+          }
+        },
+        "tags": [
+          "Page Controller"
+        ]
+      }
+    },
+    "/api/pages/{pageId}/scene": {
+      "get": {
+        "operationId": "getPageScene",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pageId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageSceneDocument"
+                }
+              }
+            },
+            "description": "Current immutable page scene"
+          },
+          "404": {
+            "description": "Page scene not found"
+          }
+        },
+        "summary": "Read a page scene",
+        "tags": [
+          "Page Controller"
+        ]
+      },
+      "put": {
+        "operationId": "putPageScene",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pageId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PageSceneDocument"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageSceneDocument"
+                }
+              }
+            },
+            "description": "Page scene saved"
+          },
+          "400": {
+            "description": "Invalid scene"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "A different scene already exists for this revision"
+          }
+        },
+        "summary": "Save a page scene",
+        "tags": [
+          "Page Controller"
+        ]
+      }
+    },
     "/api/pages/{pageId}": {
       "delete": {
         "description": "Deletes a page and its associated layers",
@@ -2858,6 +3774,21 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "revision",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sceneSha256",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2870,6 +3801,128 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "revision": {
+                      "format": "int32",
+                      "type": "integer"
+                    },
+                    "status": {
+                      "enum": [
+                        "pending",
+                        "failed"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "revision"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Current render is pending or failed"
+          }
+        },
+        "tags": [
+          "Page Controller"
+        ]
+      }
+    },
+    "/api/pages/{pageId}/regions/merge": {
+      "post": {
+        "description": "Merge two or more OCR regions on the page into one text block. The region with the lowest reading number survives with the union box and the text joined in geometric reading order; the others are deleted (their elements on hidden history layers are detached, not deleted). One cleanup job is queued for the merged box and carries on into that region's translation only. With dryRun nothing is written and the response gives the reading order and joined text.",
+        "operationId": "mergeOcrRegions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pageId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "dryRun": {
+                    "description": "Preview only: return the reading order and joined text, change nothing.",
+                    "type": "boolean"
+                  },
+                  "regionIds": {
+                    "items": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "minItems": 2,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "regionIds"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "properties": {
+                    "dryRun": {
+                      "type": "boolean"
+                    },
+                    "merged": {
+                      "type": "integer"
+                    },
+                    "order": {
+                      "description": "Dry run: the region ids in the order they are read.",
+                      "items": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "pageId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "queued": {
+                      "type": "boolean"
+                    },
+                    "regionId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "Fewer than two regions named"
+          },
+          "404": {
+            "description": "A region is not on this page"
           }
         },
         "tags": [
@@ -3438,10 +4491,27 @@
           },
           {
             "in": "query",
+            "name": "cleanupMode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
             "name": "useFallbackModels",
             "required": false,
             "schema": {
               "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ocrMergeThreshold",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double"
             }
           }
         ],
@@ -3549,6 +4619,43 @@
         "tags": [
           "settings-controller"
         ]
+      }
+    },
+    "/api/settings/custom-models": {
+      "put": {
+        "tags": [
+          "settings-controller"
+        ],
+        "operationId": "putCustomModels",
+        "summary": "Replace the custom model IDs",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CustomModel"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CustomModel"
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   },

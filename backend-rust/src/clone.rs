@@ -367,14 +367,19 @@ pub async fn handle_duplicate_image_cloning(
 
     if tl_matches {
         clone_translation_data(&state.pool, source_page.id, new_page_id, &region_map).await;
-        crate::jobs::coordinator::trigger_page_redo(
-            state,
-            new_page_id,
-            "render",
-            Some(target_chapter.id),
-        )
-        .await
-        .ok();
+        // AUDIT-B24: a render needs the page's scene snapshot, and a bare `render` job (the pre-R1
+        // shape) was refused by the worker three times. Marking the page edited hands it to the
+        // debounced render, which snapshots what was just cloned and renders that — the same
+        // path an editor edit takes.
+        let dirtied = async {
+            let mut tx = state.pool.begin().await?;
+            crate::page_freshness::advance_page_revision(&mut tx, new_page_id).await?;
+            tx.commit().await
+        }
+        .await;
+        if let Err(err) = dirtied {
+            tracing::error!("Cloned page {new_page_id} could not be marked for rendering: {err}");
+        }
     } else {
         crate::jobs::coordinator::trigger_page_redo(
             state,

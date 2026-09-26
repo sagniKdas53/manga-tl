@@ -30,6 +30,18 @@ import { ColorPicker } from "./ColorPicker";
 import SidebarSection from "./SidebarSection";
 import type { SystemStyleObject, Theme } from "@mui/system";
 import type { Layer, LayerElement, OcrRegion } from "../types";
+import { inReadingOrder, regionRowStatus } from "../utils/regionReview";
+import {
+  translationElementByRegion,
+  type IssueAction,
+  type RegionIssue,
+} from "../utils/regionIssues";
+import {
+  IssueCard,
+  IssueList,
+  MergePanel,
+  type MergePreview,
+} from "./ReaderIssues";
 
 // --- AUDIT-F2: static sx literals hoisted to module scope --------------------
 //
@@ -230,12 +242,6 @@ const exportButtonWithMarginSx = {
   "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
 } as const;
 
-const exportButtonSx = {
-  color: "var(--primary)",
-  borderColor: "var(--primary)",
-  "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
-} as const;
-
 const inspectorHeaderRowSx = {
   display: "flex",
   justifyContent: "space-between",
@@ -381,6 +387,57 @@ const MetaBadge: React.FC<{
   </Box>
 );
 
+/** A settled region (rejected in review or by QA): why, and the one thing left to do with it. */
+const RejectedRegionNote: React.FC<{
+  region: OcrRegion;
+  busy: boolean;
+  onDelete: (region: OcrRegion) => void;
+}> = ({ region, busy, onDelete }) => (
+  <Box
+    role="note"
+    sx={{
+      display: "flex",
+      flexDirection: "column",
+      gap: 0.75,
+      p: 1.25,
+      borderRadius: "8px",
+      border: "1px solid var(--border-color)",
+      backgroundColor: "var(--bg-input, rgba(0,0,0,0.04))",
+    }}
+  >
+    <Typography
+      component="span"
+      sx={{ fontSize: "13px", fontWeight: 700, color: "var(--text-muted)" }}
+    >
+      Rejected — the original is kept
+    </Typography>
+    {region.qaFeedback && (
+      <Typography
+        component="p"
+        sx={{
+          fontSize: "12px",
+          lineHeight: 1.45,
+          m: 0,
+          color: "var(--text-main)",
+        }}
+      >
+        {region.qaFeedback}
+      </Typography>
+    )}
+    <Box>
+      <Button
+        variant="text"
+        size="small"
+        disabled={busy}
+        onClick={() => onDelete(region)}
+        sx={{ color: "var(--error)", textTransform: "none", px: 0 }}
+      >
+        Delete region
+      </Button>
+    </Box>
+  </Box>
+);
+
 // Assuming types are defined here or imported
 // You may need to adjust types based on actual project structure
 export interface LayerData {
@@ -412,7 +469,6 @@ export interface ReaderRightSidebarProps {
   handleRedoPageTranslation: () => void;
   isRedoingPageTranslation: boolean;
   handleExportPng: () => void;
-  handleExportRenderedPng: () => void;
   handleExportZip: () => void;
   interactionMode: string;
   setInteractionMode: React.Dispatch<
@@ -430,6 +486,26 @@ export interface ReaderRightSidebarProps {
   isRedoingRegionOcr: boolean;
   handleRedoRegion: (region: OcrRegion, type: "ocr" | "translation") => void;
   isRedoingRegionTl: boolean;
+  /** Regions needing a person, in reading order. */
+  issues: RegionIssue[];
+  onSelectIssue: (issue: RegionIssue) => void;
+  onStepIssue: (delta: -1 | 1) => void;
+  handleRegionAction: (
+    region: OcrRegion,
+    action: IssueAction,
+    element?: LayerElement,
+  ) => void;
+  handleSaveIssueTranslation: (issue: RegionIssue, text: string) => void;
+  handleSaveSourceText: (issue: RegionIssue, text: string) => void;
+  isReviewingRegion: boolean;
+  mergeMode: boolean;
+  mergeSelection: string[];
+  /** The backend's dry run for the current selection: reading order and joined text. */
+  mergePreview: MergePreview | null;
+  onToggleMergeMode: () => void;
+  onToggleMergeRegion: (regionId: string) => void;
+  onConfirmMerge: () => void;
+  isMerging: boolean;
 }
 
 const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
@@ -467,7 +543,6 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     handleRedoPageTranslation,
     isRedoingPageTranslation,
     handleExportPng,
-    handleExportRenderedPng,
     handleExportZip,
     interactionMode,
     setInteractionMode,
@@ -482,7 +557,32 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     isRedoingRegionOcr,
     handleRedoRegion,
     isRedoingRegionTl,
+    issues,
+    onSelectIssue,
+    onStepIssue,
+    handleRegionAction,
+    handleSaveIssueTranslation,
+    handleSaveSourceText,
+    isReviewingRegion,
+    mergeMode,
+    mergeSelection,
+    mergePreview,
+    onToggleMergeMode,
+    onToggleMergeRegion,
+    onConfirmMerge,
+    isMerging,
   } = props;
+
+  // The element drawing each region, for tools offered on any region (not only issues).
+  const drawnElementByRegion = React.useMemo(
+    () => translationElementByRegion(props.layers),
+    [props.layers],
+  );
+
+  const regionById = React.useMemo(
+    () => new Map(ocrRegions.map((r) => [r.id, r])),
+    [ocrRegions],
+  );
 
   return (
     <Grid className="reader-right-sidebar-nhentai">
@@ -497,6 +597,25 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               Select an OCR region or a text layer to inspect and edit details.
             </Typography>
           </Box>
+
+          {mergeMode && (
+            <MergePanel
+              regions={ocrRegions}
+              selected={mergeSelection}
+              busy={isMerging}
+              preview={mergePreview}
+              onToggle={onToggleMergeRegion}
+              onMerge={onConfirmMerge}
+              onCancel={onToggleMergeMode}
+            />
+          )}
+          {!mergeMode && (
+            <IssueList
+              issues={issues}
+              selectedRegionId={null}
+              onSelect={onSelectIssue}
+            />
+          )}
 
           {/* Translation Layers Section */}
           <SidebarSection
@@ -720,78 +839,126 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     </Box>
                     {isExpanded && (
                       <Box sx={elementListSx}>
-                        {lData.elements.map((element) => {
-                          // AUDIT-F25. This was `!== false`, which made a null-visible element
-                          // read as visible here while the canvas, the hidden-count above and the
-                          // worker's renderer all treated it as hidden. The row then offered
-                          // "Hide element" for something already invisible, wrote `false`, and the
-                          // first click changed nothing on screen. `=== true` is the same rule the
-                          // other three readers use.
-                          const elementVisible = element.visible === true;
-                          const isSelectedElement =
-                            selectedItem?.id === element.id &&
-                            selectedItem?.isLayerElement;
-                          const label =
-                            (element.text || "").trim() || "(no text)";
-                          return (
-                            <Box
-                              key={element.id}
-                              onClick={() => {
-                                setActiveLayerId(lData.layer.id);
-                                setSelectedItem({
-                                  ...element,
-                                  isLayerElement: true,
-                                });
-                              }}
-                              sx={[
-                                elementRowSx,
-                                {
-                                  opacity: elementVisible ? 1 : 0.55,
-                                  backgroundColor: isSelectedElement
-                                    ? "var(--primary-glow)"
-                                    : "transparent",
-                                },
-                              ]}
-                            >
-                              <Typography
-                                component="span"
-                                sx={elementLabelSx}
-                                title={label}
+                        {inReadingOrder(lData.elements, regionById).map(
+                          (element) => {
+                            // AUDIT-F25. This was `!== false`, which made a null-visible element
+                            // read as visible here while the canvas, the hidden-count above and the
+                            // worker's renderer all treated it as hidden. The row then offered
+                            // "Hide element" for something already invisible, wrote `false`, and the
+                            // first click changed nothing on screen. `=== true` is the same rule the
+                            // other three readers use.
+                            const elementVisible = element.visible === true;
+                            const isSelectedElement =
+                              selectedItem?.id === element.id &&
+                              selectedItem?.isLayerElement;
+                            const region = element.regionId
+                              ? regionById.get(element.regionId)
+                              : undefined;
+                            const rowStatus = regionRowStatus(region, element);
+                            const label =
+                              (element.text || "").trim() ||
+                              (region?.text || "").trim() ||
+                              "(no text)";
+                            return (
+                              <Box
+                                key={element.id}
+                                onClick={() => {
+                                  setActiveLayerId(lData.layer.id);
+                                  setSelectedItem({
+                                    ...element,
+                                    isLayerElement: true,
+                                  });
+                                }}
+                                sx={[
+                                  elementRowSx,
+                                  {
+                                    opacity: elementVisible ? 1 : 0.55,
+                                    backgroundColor: isSelectedElement
+                                      ? "var(--primary-glow)"
+                                      : "transparent",
+                                  },
+                                ]}
                               >
-                                {label}
-                              </Typography>
-                              <Tooltip
-                                title={
-                                  elementVisible
-                                    ? "Hide element"
-                                    : "Show element"
-                                }
-                              >
-                                <IconButton
-                                  size="small"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleSetElementVisibility(
-                                      element,
-                                      !elementVisible,
-                                    );
-                                  }}
-                                  sx={{
-                                    color: elementVisible
-                                      ? "var(--primary)"
-                                      : "var(--text-dim, var(--text-muted))",
-                                  }}
+                                {region?.bubbleReadingOrder ? (
+                                  <Box
+                                    component="span"
+                                    sx={{
+                                      flex: "0 0 auto",
+                                      minWidth: "22px",
+                                      fontSize: "11px",
+                                      fontWeight: 700,
+                                      color: "var(--text-muted)",
+                                      fontVariantNumeric: "tabular-nums",
+                                    }}
+                                  >
+                                    #{region.bubbleReadingOrder}
+                                  </Box>
+                                ) : null}
+                                <Typography
+                                  component="span"
+                                  sx={elementLabelSx}
+                                  title={label}
                                 >
-                                  {elementVisible ? (
-                                    <VisibilityIcon fontSize="small" />
-                                  ) : (
-                                    <VisibilityOffIcon fontSize="small" />
-                                  )}
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
-                          );
-                        })}
+                                  {label}
+                                </Typography>
+                                {rowStatus && (
+                                  <Box
+                                    component="span"
+                                    title={region?.qaFeedback || undefined}
+                                    sx={{
+                                      flex: "0 0 auto",
+                                      px: 0.75,
+                                      borderRadius: "999px",
+                                      fontSize: "10px",
+                                      fontWeight: 700,
+                                      lineHeight: "16px",
+                                      color:
+                                        rowStatus.tone === "warning"
+                                          ? "var(--warning)"
+                                          : "var(--text-muted)",
+                                      border: `1px solid ${
+                                        rowStatus.tone === "warning"
+                                          ? "var(--warning)"
+                                          : "var(--border-color)"
+                                      }`,
+                                    }}
+                                  >
+                                    {rowStatus.label}
+                                  </Box>
+                                )}
+                                <Tooltip
+                                  title={
+                                    elementVisible
+                                      ? "Hide element"
+                                      : "Show element"
+                                  }
+                                >
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSetElementVisibility(
+                                        element,
+                                        !elementVisible,
+                                      );
+                                    }}
+                                    sx={{
+                                      color: elementVisible
+                                        ? "var(--primary)"
+                                        : "var(--text-dim, var(--text-muted))",
+                                    }}
+                                  >
+                                    {elementVisible ? (
+                                      <VisibilityIcon fontSize="small" />
+                                    ) : (
+                                      <VisibilityOffIcon fontSize="small" />
+                                    )}
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                            );
+                          },
+                        )}
                       </Box>
                     )}
                   </React.Fragment>
@@ -843,6 +1010,21 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               title="Sample color from screen to apply to selected element's background"
             >
               Color Dropper
+            </Button>
+            <Button
+              variant={mergeMode ? "contained" : "outlined"}
+              size="small"
+              fullWidth
+              sx={
+                mergeMode
+                  ? { mt: 1, boxShadow: "none" }
+                  : [colorDropperButtonSx, { mt: 1 }]
+              }
+              onClick={onToggleMergeMode}
+              disabled={ocrRegions.length < 2}
+              title="Join fragments that belong to one text block, then clean and translate them as one"
+            >
+              {mergeMode ? "Cancel merge" : "Merge regions"}
             </Button>
           </SidebarSection>
 
@@ -916,16 +1098,6 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               sx={exportButtonWithMarginSx}
             >
               Export Project (ZIP)
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FileDownloadIcon />}
-              onClick={handleExportRenderedPng}
-              fullWidth
-              sx={exportButtonSx}
-            >
-              Export Rendered PNG
             </Button>
           </SidebarSection>
         </>
@@ -1689,6 +1861,56 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             {selectedItem.bboxW}x{selectedItem.bboxH})
           </Grid>
 
+          {(selectedItem.regions as OcrRegion[]).map((r) => {
+            const index = issues.findIndex((i) => i.region.id === r.id);
+            if (index >= 0) {
+              return (
+                <IssueCard
+                  key={`issue-${r.id}`}
+                  issue={issues[index]}
+                  position={index + 1}
+                  total={issues.length}
+                  busy={isReviewingRegion}
+                  onAction={(issue, action) =>
+                    handleRegionAction(issue.region, action, issue.element)
+                  }
+                  onSaveTranslation={handleSaveIssueTranslation}
+                  onSaveSourceText={handleSaveSourceText}
+                  onStep={onStepIssue}
+                />
+              );
+            }
+            if (r.qaStatus === "rejected" || r.qaStatus === "reject_sfx") {
+              return (
+                <RejectedRegionNote
+                  key={`rejected-${r.id}`}
+                  region={r}
+                  busy={isReviewingRegion}
+                  onDelete={(region) => handleRegionAction(region, "delete")}
+                />
+              );
+            }
+            // Inpainting can leave lettering behind on a region nothing flagged; the plain mask
+            // is offered wherever there is a translation for the plate to sit under.
+            const drawn = drawnElementByRegion.get(r.id);
+            if (drawn?.visible === true && (drawn.text || "").trim()) {
+              return (
+                <Button
+                  key={`mask-${r.id}`}
+                  variant="outlined"
+                  size="small"
+                  disabled={isReviewingRegion}
+                  onClick={() => handleRegionAction(r, "mask", drawn)}
+                  title="Cover the original lettering with a plate of the bubble colour, in the editor and the export"
+                  sx={{ textTransform: "none", alignSelf: "flex-start" }}
+                >
+                  Cover with plain mask
+                </Button>
+              );
+            }
+            return null;
+          })}
+
           <Grid
             style={{
               overflowY: "auto",
@@ -1718,7 +1940,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     textTransform: "uppercase",
                   }}
                 >
-                  Region #{idx + 1} Original
+                  Region #{reg.bubbleReadingOrder ?? idx + 1} Original
                 </Grid>
                 <Grid
                   className="ocr-text-preview"
@@ -1738,7 +1960,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                         textTransform: "uppercase",
                       }}
                     >
-                      Region #{idx + 1} Translation
+                      Region #{reg.bubbleReadingOrder ?? idx + 1} Translation
                     </Grid>
                     <Grid
                       className="ocr-text-preview"

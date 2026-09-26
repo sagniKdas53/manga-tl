@@ -295,8 +295,29 @@ pub async fn register(
     .await
     .expect("user insert (unique email pre-checked)");
 
-    let token = state.jwt.generate_token(&user.email).unwrap_or_default();
+    let Some(token) = signed_token(&state, &user.email) else {
+        return signing_failed();
+    };
     Json(auth_response_with_token(&user, token)).into_response()
+}
+
+/// AUDIT-B19: a token that could not be signed is an error, never an empty token in a 200 — the
+/// client would store `""` and meet a 401 on its next call with nothing to say why.
+fn signed_token(state: &AppState, email: &str) -> Option<String> {
+    match state.jwt.generate_token(email) {
+        Ok(token) => Some(token),
+        Err(err) => {
+            tracing::error!("Could not sign a session token: {err}");
+            None
+        }
+    }
+}
+
+fn signing_failed() -> Response {
+    plain_text(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Could not create a session token",
+    )
 }
 
 /// POST /login
@@ -323,7 +344,9 @@ pub async fn login(
         return plain_text(StatusCode::UNAUTHORIZED, "Invalid credentials");
     }
 
-    let token = state.jwt.generate_token(&user.email).unwrap_or_default();
+    let Some(token) = signed_token(&state, &user.email) else {
+        return signing_failed();
+    };
     Json(auth_response_with_token(&user, token)).into_response()
 }
 
@@ -343,7 +366,9 @@ pub async fn refresh(
     let Some(found) = found else {
         return not_authenticated();
     };
-    let token = state.jwt.generate_token(&found.email).unwrap_or_default();
+    let Some(token) = signed_token(&state, &found.email) else {
+        return signing_failed();
+    };
     Json(AuthResponse {
         token: Some(token),
         ..AuthResponse::from(found)

@@ -117,7 +117,7 @@ services:
       retries: 5
 
   minio:
-    image: minio/minio
+    image: purevert/minio:backup
     container_name: manga-minio
     command: server /data --console-address ":9001"
     environment:
@@ -185,6 +185,7 @@ services:
       - INTERNAL_API_TOKEN_FILE=/run/secrets/internal_api_token
       - WORKER_URLS=${WORKER_URLS:-http://worker:8000}
       - WORKER_POLL_MS=${WORKER_POLL_MS:-2000}
+      - RENDER_DEBOUNCE_SECONDS=${RENDER_DEBOUNCE_SECONDS:-30}
       - WORKER_API_SECRET_FILE=/run/secrets/worker_api_secret
       - USE_REMOTE_ML=${USE_REMOTE_ML:-false}
       - REMOTE_ML_URL=${REMOTE_ML_URL:-http://worker:8000}
@@ -267,6 +268,33 @@ services:
       retries: 3
       start_period: 40s
 
+  page-renderer:
+    build:
+      context: .
+      dockerfile: services/page-renderer/Dockerfile
+    container_name: manga-page-renderer
+    platform: linux/amd64
+    environment:
+      - PORT=8090
+      - PAGE_RENDERER_CONFIG=/app/fonts.json
+    networks:
+      - manga-net
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "node", "-e", "fetch('http://localhost:8090/health').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "${PAGE_RENDERER_CPUS:-1.0}"
+          memory: ${PAGE_RENDERER_MEMORY:-2g}
+        reservations:
+          cpus: "0.25"
+          memory: 512m
+
   worker:
     image: ghcr.io/sagnikdas53/manga-tl-worker:latest
     build:
@@ -282,6 +310,7 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_SECRET_KEY_FILE=/run/secrets/minio_password
       - BACKEND_CALLBACK_URL=${BACKEND_CALLBACK_URL:-http://backend:8080}${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
+      - PAGE_RENDERER_URL=${PAGE_RENDERER_URL:-http://page-renderer:8090}
       - INTERNAL_API_TOKEN_FILE=/run/secrets/internal_api_token
       # Fragment grouping. The default was 1.0 here against a code default of 0.50, so the
       # deployment ran at double the tested value; both are now 0.35, measured over 40 corpus
@@ -290,9 +319,16 @@ services:
       - OCR_MERGE_THRESHOLD=${OCR_MERGE_THRESHOLD:-0.35}
       - OCR_WAIST_GATE=${OCR_WAIST_GATE:-1.0}
       - OCR_ORIENTATION=${OCR_ORIENTATION:-vote}
+      # Local ONNX models (YOLO, CTD, AOT): "auto" runs them on OpenVINO where the image has it,
+      # "cpu" forces the stock provider. Same masks either way; see worker services/onnx_session.py.
+      - ONNX_EXECUTION_PROVIDER=${ONNX_EXECUTION_PROVIDER:-auto}
       # API Keys are loaded via DOCKER_SECRETS_JSON
       - DOCKER_SECRETS_JSON=/run/secrets/api_keys
       - PROVIDERS_CONFIG=/app/config/providers.json
+      # The worker refreshes prices and free-model lists from OpenRouter/NVIDIA on this timer and
+      # publishes the result to Redis; nothing is committed. 0 turns it off. To check the refreshed
+      # catalog in by hand: scripts/dump_provider_catalog.py.
+      - CATALOG_REFRESH_INTERVAL_HOURS=${CATALOG_REFRESH_INTERVAL_HOURS:-24}
       - OCR_MODEL_PROVIDER=${OCR_MODEL_PROVIDER:-openrouter}
       - OCR_VLM_MODEL=${OCR_VLM_MODEL:-}
       - OCR_VLM_MODEL_LIST=${OCR_VLM_MODEL_LIST:-}
@@ -304,6 +340,7 @@ services:
       - QA_VLM_MODEL=${QA_VLM_MODEL:-}
       - QA_LLM_MODEL_LIST=${QA_LLM_MODEL_LIST:-}
       - QA_VLM_MODEL_LIST=${QA_VLM_MODEL_LIST:-}
+      - QA_VLM_FALLBACK_MODELS=${QA_VLM_FALLBACK_MODELS:-}
       # AUDIT-W2: unset, i.e. unlimited. Every provider in config/providers.json carries its own
       # `rateLimits`; this is only the fallback for one that does not, and it used to default to
       # 10 RPM, so such a provider silently inherited one call every 6 seconds.
@@ -326,6 +363,9 @@ services:
       - CONCURRENT_JOBS=${CONCURRENT_JOBS:-5}
       - MAX_HEAVY_SLOTS=${MAX_HEAVY_SLOTS:-}
       - MAX_LIGHT_SLOTS=${MAX_LIGHT_SLOTS:-}
+      # Reinstated 2026-09-21: how many of one page's translation chunks run concurrently
+      # against the cloud provider (see .env.example and worker/config.py).
+      - CLOUD_CONCURRENCY=${CLOUD_CONCURRENCY:-2}
       - REUSE_IDLE_SLOTS=${REUSE_IDLE_SLOTS:-true}
       - WORKER_API_SECRET_FILE=/run/secrets/worker_api_secret
       - HF_HUB_DISABLE_SYMLINKS_WARNING=1
@@ -370,6 +410,11 @@ services:
         condition: service_healthy
       backend:
         condition: service_healthy
+      # Deliberately not `page-renderer`. OCR, translation and QA do not need Chromium, so a
+      # renderer that is down must not keep the whole pipeline from starting; a render job
+      # against an unreachable renderer fails on its own with the reason in the job table
+      # (worker/src/worker/page_scene_renderer.py). Decided with the user 2026-09-17, see
+      # docs/output-quality-architecture-decisions.md §1a.
     secrets:
       - minio_password
       - internal_api_token
@@ -635,7 +680,7 @@ services:
   watchtower:
     image: containrrr/watchtower:1.7.1
     container_name: manga-watchtower
-    profiles: ["watchtower"]
+    profiles: [ "watchtower" ]
     command: --label-enable --cleanup --interval 21600
     environment:
       # Belt and braces with --label-enable: without it Watchtower would consider every

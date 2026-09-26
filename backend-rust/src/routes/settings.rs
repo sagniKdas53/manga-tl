@@ -53,17 +53,36 @@ pub struct SystemSettingsDto {
     /// now means "leave it alone"; `update_settings` skips a `None`.
     ///
     /// `build_dto` always fills both, so the GET response still always carries a number.
+    /// Padding as a percentage of each box's shorter side (0 = none)…
     #[serde(default)]
-    pub textBoxPaddingPx: Option<i32>,
-    /// Percent of what remains after the padding that text may use; 95 leaves a 5% safety
-    /// margin so glyphs do not touch the balloon outline.
+    pub textBoxPaddingPercent: Option<i32>,
+    /// …never less than this many px (0 = no floor; at most a quarter of the box)…
+    #[serde(default)]
+    pub textBoxPaddingMinPx: Option<i32>,
+    /// …never more than this many px (0 = none).
+    #[serde(default)]
+    pub textBoxPaddingMaxPx: Option<i32>,
+    /// Percent of what remains after the padding that text may use.
     #[serde(default)]
     pub textBoxSafetyPercent: Option<i32>,
+    /// Global cleanup reconstruction mode; chapters and series may override it. `None` on a PUT
+    /// leaves it as it is, for the same stale-bundle reason as the geometry fields.
+    #[serde(default)]
+    pub cleanupMode: Option<String>,
+    /// Global OCR grouping threshold, in characters of white space; chapters and series may
+    /// override it. `None` on a PUT leaves it as it is.
+    #[serde(default)]
+    pub ocrMergeThreshold: Option<f64>,
+    /// Model IDs typed in rather than picked from the catalog. Read-only here: a PUT of the whole
+    /// settings object ignores it, and `PUT /api/settings/custom-models` replaces the list.
+    #[serde(default)]
+    pub customModels: Option<Vec<crate::providers::CustomModel>>,
 }
 
 async fn build_dto(state: &AppState) -> SystemSettingsDto {
     let defaults = PipelineDefaults::from_env();
     let global = load_global_settings(&state.pool, &defaults).await;
+    let geometry = crate::settings::text_box_geometry(&state.pool).await;
     let disable_local_ocr = std::env::var("DISABLE_LOCAL_OCR")
         .map(|v| v == "true")
         .unwrap_or(false);
@@ -114,24 +133,71 @@ async fn build_dto(state: &AppState) -> SystemSettingsDto {
         activeProviders: active_providers,
         activeOcrProviders: active_ocr_providers,
         providerModelsMap: state.providers.get_provider_models_map(),
-        textBoxPaddingPx: Some(clamped_setting(&state.pool, "textBoxPaddingPx", 4, 0, 64).await),
-        textBoxSafetyPercent: Some(
-            clamped_setting(&state.pool, "textBoxSafetyPercent", 95, 1, 100).await,
-        ),
+        textBoxPaddingPercent: Some(geometry.padding_percent),
+        textBoxPaddingMinPx: Some(geometry.padding_min_px),
+        textBoxPaddingMaxPx: Some(geometry.padding_max_px),
+        textBoxSafetyPercent: Some(geometry.safety_percent),
+        cleanupMode: Some(global.cleanup_mode.clone()),
+        ocrMergeThreshold: Some(global.ocr_merge_threshold),
+        customModels: Some(state.providers.custom_models()),
     }
 }
 
-/// An integer setting, defaulted and clamped.
-///
-/// The clamps are not decoration: a safety percent of 0 fits every element into a zero-width box
-/// and a padding wider than the box does the same, so a typo in the settings form would silently
-/// stop the whole library typesetting.
-async fn clamped_setting(pool: &sqlx::PgPool, key: &str, default: i32, low: i32, high: i32) -> i32 {
-    setting_value(pool, key, &default.to_string())
-        .await
-        .parse::<i32>()
-        .unwrap_or(default)
-        .clamp(low, high)
+async fn save_geometry_settings_and_invalidate(
+    state: &AppState,
+    padding_percent: Option<i32>,
+    padding_min_px: Option<i32>,
+    padding_max_px: Option<i32>,
+    safety: Option<i32>,
+) -> Result<(), sqlx::Error> {
+    let mut tx = state.pool.begin().await?;
+    let mut changed = false;
+
+    for (key, value) in [
+        (
+            "textBoxPaddingPercent",
+            padding_percent.map(|v| v.clamp(0, 50)),
+        ),
+        (
+            "textBoxPaddingMinPx",
+            padding_min_px.map(|v| v.clamp(0, 64)),
+        ),
+        (
+            "textBoxPaddingMaxPx",
+            padding_max_px.map(|v| v.clamp(0, 64)),
+        ),
+        ("textBoxSafetyPercent", safety.map(|v| v.clamp(1, 100))),
+    ] {
+        let Some(value) = value else {
+            continue;
+        };
+        let value = value.to_string();
+        let current: Option<String> = sqlx::query_scalar(
+            "SELECT setting_value FROM system_settings WHERE setting_key = $1 FOR UPDATE",
+        )
+        .bind(key)
+        .fetch_optional(&mut *tx)
+        .await?;
+        if current.as_deref() == Some(value.as_str()) {
+            continue;
+        }
+        sqlx::query(
+            "INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ($1, $2, now()) \
+             ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = now()",
+        )
+        .bind(key)
+        .bind(value)
+        .execute(&mut *tx)
+        .await?;
+        changed = true;
+    }
+
+    if changed {
+        sqlx::query("UPDATE pages SET last_edited_at = now(), scene_revision = scene_revision + 1")
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await
 }
 
 /// GET /api/settings
@@ -166,22 +232,38 @@ pub async fn update_settings(
     )
     .await;
 
-    // Absent means "not mine to change", not "reset to the default" — see the DTO fields.
-    if let Some(padding) = dto.textBoxPaddingPx {
+    // A cleanup mode applies to cleanup jobs dispatched from now on; pages already cleaned keep
+    // their patches until they are processed again (redo OCR), so nothing is invalidated here.
+    if let Some(mode) = dto.cleanupMode.as_deref() {
         save_setting(
             &state.pool,
-            "textBoxPaddingPx",
-            &padding.clamp(0, 64).to_string(),
+            "cleanupMode",
+            &crate::settings::cleanup_mode(mode),
         )
         .await;
     }
-    if let Some(safety) = dto.textBoxSafetyPercent {
+    // Like the cleanup mode, a grouping threshold applies to OCR run from now on (redo OCR to
+    // regroup a page), so it invalidates nothing.
+    if let Some(threshold) = dto.ocrMergeThreshold {
         save_setting(
             &state.pool,
-            "textBoxSafetyPercent",
-            &safety.clamp(1, 100).to_string(),
+            "ocrMergeThreshold",
+            &crate::settings::ocr_merge_threshold(threshold).to_string(),
         )
         .await;
+    }
+
+    if let Err(err) = save_geometry_settings_and_invalidate(
+        &state,
+        dto.textBoxPaddingPercent,
+        dto.textBoxPaddingMinPx,
+        dto.textBoxPaddingMaxPx,
+        dto.textBoxSafetyPercent,
+    )
+    .await
+    {
+        tracing::error!("Could not persist geometry settings and invalidate pages: {err}");
+        return crate::error::internal_error("/api/settings");
     }
 
     Json(build_dto(&state).await).into_response()
@@ -294,8 +376,30 @@ pub async fn validate_settings(State(state): State<AppState>, _user: AuthUser) -
 }
 
 /// Sub-router mounted under `/api/settings`.
+/// PUT /api/settings/custom-models — replaces the owner's custom model IDs and returns them
+/// normalized. They are valid at once for the pipeline's catalog checks (a chapter override naming
+/// one is no longer swapped for the global model) and appear in `providerModelsMap`, flagged
+/// `custom`. Nothing is invalidated: a model applies to the next job that resolves it.
+pub async fn put_custom_models(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    body: Result<Json<Vec<crate::providers::CustomModel>>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    let Ok(Json(models)) = body else {
+        return crate::error::unreadable_body("/api/settings/custom-models");
+    };
+    let models = crate::providers::normalize_custom_models(&models);
+    let Ok(json) = serde_json::to_string(&models) else {
+        return crate::error::internal_error("/api/settings/custom-models");
+    };
+    save_setting(&state.pool, "customModels", &json).await;
+    state.providers.set_custom_models(models);
+    Json(state.providers.custom_models()).into_response()
+}
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(get_settings).put(update_settings))
         .route("/validate", get(validate_settings))
+        .route("/custom-models", axum::routing::put(put_custom_models))
 }

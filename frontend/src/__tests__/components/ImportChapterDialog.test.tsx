@@ -266,7 +266,9 @@ describe("ImportChapterDialog", () => {
     );
     fireEvent.click(screen.getByRole("option", { name: /^vlm-ocr-1 · / }));
 
-    fireEvent.mouseDown(selects[2]);
+    // 2 is Cleanup Mode: it sits beside the OCR grouping threshold (a number field, not a
+    // select), ahead of the translation pair.
+    fireEvent.mouseDown(selects[3]);
     await waitFor(() =>
       expect(screen.getByRole("listbox")).toBeInTheDocument(),
     );

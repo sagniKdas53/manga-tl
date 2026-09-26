@@ -6,6 +6,7 @@
 //! Requires REAL Postgres + Valkey + the throwaway MinIO on :19000.
 
 use axum::Router;
+use std::io::Read;
 use uuid::Uuid;
 
 use manga_backend::config::{DatabaseConfig, MinioConfig};
@@ -152,6 +153,63 @@ async fn seed_chapter_with_page(pool: &sqlx::PgPool, storage: &MinioService) -> 
         .await
         .expect("page");
 
+    let logical_scene_sha256 = "b".repeat(64);
+    let rendered_png_sha256 = "c".repeat(64);
+    let rendered_path =
+        format!("rendered/revisions/{page_id}/0/{logical_scene_sha256}/{rendered_png_sha256}.png");
+    let rendered = image::RgbaImage::from_fn(2, 2, |_, _| image::Rgba([10, 200, 90, 255]));
+    let mut rendered_cursor = std::io::Cursor::new(Vec::new());
+    rendered
+        .write_to(&mut rendered_cursor, image::ImageFormat::Png)
+        .expect("encode immutable render");
+    let rendered_bytes = rendered_cursor.into_inner();
+    storage
+        .upload_bytes(&rendered_path, rendered_bytes, "image/png")
+        .await
+        .expect("upload immutable render");
+    let render_job_id = format!("__export-render-{}", Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, image_id, created_at, updated_at) \
+         VALUES ($1, 'render', 'COMPLETED', $2, now(), now())",
+    )
+    .bind(&render_job_id)
+    .bind(image_id)
+    .execute(pool)
+    .await
+    .expect("render job");
+    sqlx::query(
+        "INSERT INTO page_scene_snapshots \
+         (page_id, revision, contract_version, source_sha256, logical_scene_sha256, scene_json) \
+         VALUES ($1, 0, 'page-scene/v1', repeat('a', 64), $2, '{}'::jsonb)",
+    )
+    .bind(page_id)
+    .bind(&logical_scene_sha256)
+    .execute(pool)
+    .await
+    .expect("scene snapshot");
+    sqlx::query(
+        "INSERT INTO page_render_jobs \
+         (job_id, page_id, page_revision, logical_scene_sha256, rendered_png_sha256, \
+          rendered_png_storage_path, status, diagnostics_json, completed_at) \
+         VALUES ($1, $2, 0, $3, $4, $5, 'succeeded', '[]'::jsonb, now())",
+    )
+    .bind(&render_job_id)
+    .bind(page_id)
+    .bind(&logical_scene_sha256)
+    .bind(&rendered_png_sha256)
+    .bind(&rendered_path)
+    .execute(pool)
+    .await
+    .expect("render ledger");
+    sqlx::query(
+        "UPDATE pages SET current_render_job_id = $1, last_rendered_at = now() WHERE id = $2",
+    )
+    .bind(&render_job_id)
+    .bind(page_id)
+    .execute(pool)
+    .await
+    .expect("current render pointer");
+
     // A translation layer carrying model/cost/qa metadata like the pipeline leaves it.
     let layer_id = Uuid::new_v4();
     sqlx::query(
@@ -192,6 +250,23 @@ async fn cleanup_series(pool: &sqlx::PgPool, series_id: Uuid) {
     let _ = sqlx::query(
         "DELETE FROM job_costs WHERE image_id IN (SELECT image_id FROM pages WHERE chapter_id IN (SELECT id FROM chapters WHERE series_id=$1))",
     ).bind(series_id).execute(pool).await;
+    let _ = sqlx::query(
+        "UPDATE pages SET current_render_job_id = NULL \
+         WHERE chapter_id IN (SELECT id FROM chapters WHERE series_id = $1)",
+    )
+    .bind(series_id)
+    .execute(pool)
+    .await;
+    let _ = sqlx::query(
+        "DELETE FROM page_render_jobs WHERE page_id IN ( \
+             SELECT id FROM pages WHERE chapter_id IN ( \
+                 SELECT id FROM chapters WHERE series_id = $1 \
+             ) \
+         )",
+    )
+    .bind(series_id)
+    .execute(pool)
+    .await;
     let _ = sqlx::query(
         "DELETE FROM jobs WHERE image_id IN (SELECT image_id FROM pages WHERE chapter_id IN (SELECT id FROM chapters WHERE series_id=$1))",
     ).bind(series_id).execute(pool).await;
@@ -281,6 +356,30 @@ async fn export_zip_metadata_cache_hit_and_notifications() {
     assert_eq!(
         layers[0]["metadataJson"]["qa"]["status"], "manual_review",
         "qa verdict travels inside metadataJson"
+    );
+
+    let mut page_entry = archive.by_name("001.png").expect("rendered page entry");
+    let mut archived_page = Vec::new();
+    page_entry
+        .read_to_end(&mut archived_page)
+        .expect("read rendered page entry");
+    drop(page_entry);
+    let artifact_path: String = sqlx::query_scalar(
+        "SELECT rendered_png_storage_path FROM page_render_jobs \
+         WHERE page_id IN (SELECT id FROM pages WHERE chapter_id = $1)",
+    )
+    .bind(chapter_id)
+    .fetch_one(&pool)
+    .await
+    .expect("artifact path");
+    let artifact_bytes = state
+        .storage
+        .download_bytes(&artifact_path)
+        .await
+        .expect("artifact bytes");
+    assert_eq!(
+        archived_page, artifact_bytes,
+        "exports package the current immutable render, never the original fallback"
     );
 
     // Success notification queued for the offline user.
@@ -373,6 +472,43 @@ async fn export_zip_metadata_cache_hit_and_notifications() {
         .list_keys_under_prefix(&format!("exports/{chapter_id}_"))
         .await;
     assert!(keys_after_clear.is_empty(), "clear removes the cached zip");
+
+    // A newer scene makes the old success ineligible. Export must report the new revision as
+    // pending instead of silently packaging the original or the old immutable artifact.
+    let page_id: Uuid = sqlx::query_scalar("SELECT id FROM pages WHERE chapter_id = $1")
+        .bind(chapter_id)
+        .fetch_one(&pool)
+        .await
+        .expect("export page");
+    sqlx::query("UPDATE pages SET scene_revision = 1 WHERE id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .expect("advance scene revision");
+    sqlx::query(
+        "INSERT INTO page_scene_snapshots \
+         (page_id, revision, contract_version, source_sha256, logical_scene_sha256, scene_json) \
+         VALUES ($1, 1, 'page-scene/v1', repeat('a', 64), repeat('d', 64), '{}'::jsonb)",
+    )
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("pending scene snapshot");
+    let _ = redis.delete(&format!("notifications:user:{user_id}")).await;
+    manga_backend::export::build_and_upload_export(state.clone(), chapter_id, Some(user_id), false)
+        .await;
+    let notes = pending_notifications(&redis, user_id).await;
+    let pending_error = notes
+        .iter()
+        .find(|n| n["type"] == "EXPORT_ERROR")
+        .expect("pending scene export failure");
+    assert!(
+        pending_error["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("has no current rendered artifact"),
+        "a pending revision cannot fall back: {pending_error}"
+    );
 
     let _ = redis.delete(&format!("notifications:user:{user_id}")).await;
     cleanup_series(&pool, series_id).await;

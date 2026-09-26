@@ -1,6 +1,23 @@
 # Issues & Technical Debt
 
-> **Standing: 114 filed, 85 closed, 29 open.** Six review items were added 2026-09-03
+> **Standing: 128 filed, 92 closed, 36 open.** 2026-09-26: `AUDIT-R26` filed (image-generation re-inpaint, future improvement).
+> R3 closed the same day: `AUDIT-R24` (art smeared inside a patch),
+> `AUDIT-R25` (text left inside a region, invisible to the residual-ink metric), `AUDIT-W16` (GLM QA
+> judge; default switched to Gemini 3.1 Flash Lite) and `AUDIT-T6` (harness captures before redo cycles end)
+> filed from Packet 4. Earlier the same day: `AUDIT-W15` filed (a model that rejects
+> the JSON schema pays a 400 on every call), `AUDIT-R23` filed (OCR throws away the
+> text angle it detects; typesetting phase); the `AUDIT-F29` merge passed the user's live test;
+> `AUDIT-R21` gains a knob (OCR grouping threshold, global and per series/chapter).
+>
+> 2026-09-25 triage: `AUDIT-B15`, `B16`, `B19`, `B24`
+> closed (fixed or verified on the current tree), `AUDIT-R20` closed on its 2026-09-19 live gate,
+> `AUDIT-R21` filed (line-continuity veto), `AUDIT-B27` filed (settings change re-QAs every page), `AUDIT-B28` filed and fixed (busy renderer failed renders), `AUDIT-R22` filed (LaMa-mpe mode), `AUDIT-F29` merge half shipped (split still open), `AUDIT-R18`
+> narrowed. Closed entries moved to [archive/history.md](archive/history.md#2026-09-25--issues-closed-in-the-r3-triage).
+>
+> Earlier: `AUDIT-B25`, `AUDIT-F29` and `AUDIT-B26` were filed
+> 2026-09-19 from a user review of the `manga-quality-r6-20260919` stack: a live reproduction of the
+> R5 stale-recovery duplicate-layer race, a request for manual OCR-fragment regrouping, and a request
+> to change what `Export Chapter (ZIP)` bundles. `AUDIT-B18` was closed by decision 2026-09-19 (`LOCK-3`: no migration runner; `init.sql` is the schema). Six review items were added 2026-09-03
 > (`AUDIT-R13`, `AUDIT-R14`, `AUDIT-F25`..`F27`, `AUDIT-T5`). Three renderer items were added 2026-09-05
 > (`AUDIT-R15`..`R17`). Three hardening items are folded in from backlog notes: `AUDIT-B19` (JWT signing error
 > masking), `AUDIT-B20` (systemic DB `unwrap_or_default`), and `AUDIT-F28` (settings catalog retry gate).
@@ -20,6 +37,52 @@
 >   "cleanup". Read that section before changing anything it names.
 
 ---
+
+## Re-verification of the field report, 2026-09-19
+
+The 2026-09-02 report (`new issues-2.pdf`, 33 bullets, 8 images) was checked again against the
+tree at `57a9a92` / worker `aa28db7`. Every bullet already has an ID below; what changed since
+09-02 is that `page-renderer` reached the live path with R1 (2026-09-18), so the render-side fixes
+that were "fixed on a renderer nobody ran" now count. The checks here are code-level (the fix and
+its test are present on the branch); nothing in this section was re-tested through the UI.
+
+**Priority list — open, in the order they should be taken:**
+
+| # | Bullet (report wording) | ID | State today | Why this rank |
+| :--- | :--- | :--- | :--- | :--- |
+| 1 | Canvas changes are never synced to the rendered output | `AUDIT-B15` | **Closed 2026-09-25** (callback-only stamp; lost render re-triggers) | Loses edits permanently; everything else is cosmetic next to it |
+| 2 | Padding control per text box / bubble (image 2) | `AUDIT-F16` follow-up | **Open (narrowed 2026-09-25).** Global padding is now % of each box with a px cap, and reaches the export; there is still no per-element field. No longer gated on `AUDIT-B18` (closed by `LOCK-3`): the column goes into `init.sql`, the stack is recreated | The user's ask is per-bubble; the global dial does not answer it |
+| 3 | 2 light + 1 heavy slot logic dropped; all 3 slots stuck on slow steps (image 4) | `AUDIT-W14` | Needs measurement. The capacity-snapshot bug in `dispatcher.rs` is unambiguous; the tier split is a W10 re-measurement, not a revert | Visible every run; the dispatcher half is a small fix |
+| 4 | Translation re-region redo doesn't make a new layer (image 7) | `AUDIT-B16` | **Closed 2026-09-25** (redo now reaches the render) | Unverified either way since 09-02 |
+| 5 | Queue Manager doesn't update quickly | `AUDIT-F20` (sort) fixed; the *latency* half was never filed | **New, narrow:** the sort rank is fixed; refresh cadence is not tracked anywhere |
+| 6 | Dark mode is ugly / washed out | `AUDIT-F21` marked fixed 09-03; **reopened** by the 09-18 list | `AUDIT-F24` (palette kept twice in `theme.ts` and `index.css`) is the structural cause; branch `fix/dark-mode-stops-glaring` exists, unmerged |
+| 7 | Text under-fills or leaks the balloon (image 3) | `AUDIT-R8`, `AUDIT-R16` | Overlaps R1; measured, needs a decision | Renderer is live now, so this can finally be judged on the six R1 fixtures |
+| 8 | Bubble doesn't reach full size because of SFX (image 6) | `AUDIT-R12` | Needs measurement | Hypothesis only |
+| 9 | Close text blocks overlap / overlapping bubbles erased as one | `AUDIT-R9`, `AUDIT-R10` | Design needed | Layout-time collision check is a design item |
+| 10 | Vertical English text; text at an angle | `AUDIT-R6` (vertical) design needed; `AUDIT-R5` (angle) fixed 09-03 and live since R1 | Vertical mode is a feature; rotation now renders |
+| 11 | Paint-region redo + batch redo | `AUDIT-F23` | Feature | |
+| 12 | Re-run entire chapter (image 5) | `AUDIT-F22` | Feature | |
+| 13 | No texture matching in erasure | `AUDIT-R11` = D1 | Roadmap | Largest single quality lever; not a bug fix |
+| — | SSE → WebSocket | `AUDIT-P10` | Not accepted, with evidence; the concrete complaints were `AUDIT-F17` | |
+
+**Added the same day, from the "overly rounded, padded boxes" screenshots:** `AUDIT-R19` — the
+synthetic plate around free-standing text is padded 18% and rounded 22%, and the editor box is a
+different padding of the same bbox. It belongs with #2 (padding) above and is scheduled after R2.
+
+**Verified fixed in the current tree (fix and test present; not re-tested through the UI):**
+`AUDIT-F14` rotation save (`layers.rs:26`, `Reader.tsx:1821`) · `AUDIT-F15` hidden element reachable
+(`ReaderRightSidebar.tsx:570`) · `AUDIT-F17` SSE refresh for all job types and background pages
+(`Reader.tsx:561`, two tests) · `AUDIT-F18` import chapter number (`ImportChapterDialog.tsx:106`) ·
+`AUDIT-F19`/`F26` thumbnails and cards re-poll (`PageDto.renderedThumbnailUrl`) · `AUDIT-F20` queue
+sort · `AUDIT-B12` QA verdicts reach the render (`coordinator.rs:2214`) · `AUDIT-B13` untranslatable
+page is a warning (`coordinator.rs:1867`; the image-8 string was removed in worker `2839284`) ·
+`AUDIT-B14` delete-then-re-add (PR #136/#137) · `AUDIT-W13` context-injected TL is sequential
+(`dispatcher.rs:148`) · `AUDIT-R5` rotation renders · `AUDIT-R7` polygon simplification
+(`bubble_geometry.py:91`).
+
+**Rejected-bubble mask still blocks the base image** (two bullets) is `AUDIT-B12`'s `reject_sfx`
+path (`coordinator.rs:2660`); it hides the element in the render, and no report since 09-02 says
+otherwise. If it recurs, file it as a B12 regression with the page, not as a new item.
 
 ## Audit of 2026-09-02
 
@@ -129,6 +192,37 @@ clean and only the frontend's own exports disagreed.
 
 Guarded by the OCR-layer assertions in `ReaderExportZip.test.tsx`.
 
+### `LOCK-3` — `database/init.sql` is the whole schema. There is no migration runner
+
+**Decided 2026-09-19 (Sagnik).**
+
+B02 (2026-09-14) added a one-shot `db-migrate` Compose service: a `postgres:15-alpine` container
+that ran `database/migrate.sh` against the live database before the backend started, replaying
+`database/migrations/*.sql` and ledgering each file in a `schema_migrations` table. It was written
+so a column could be added to a database that already existed. Three migrations were carried
+(`20260914_page_scene_v1`, `20260916_ownership_provenance`, `20260919_render_layout`), and every
+one of them was *also* folded into `init.sql` on the same commit — the runner never applied
+anything a fresh volume did not already have.
+
+That is the point: this project does not keep a database alive across a schema change. The
+output-quality plan targets newly processed images and a regenerated corpus (tracker § scope), the
+quality gates each run on a fresh `dev-postgres` volume, and the deployed stacks are rebuilt from
+the tree rather than upgraded in place. A runner that exists to upgrade a live database is
+maintenance for a situation the plan already excludes, and it was one more container, one more
+`depends_on`, and one more thing to explain in every stack log.
+
+**The rule now:** a schema change is an edit to `init.sql` and nothing else. A stack whose volume
+predates the change is thrown away and recreated (`docker compose down -v`), not migrated. The
+parity check that decided the removal: on `postgres:15-alpine`, *pre-removal `init.sql` +
+`migrate.sh`* and *current `init.sql` alone* produce byte-identical `pg_dump --schema-only`
+output except for the `schema_migrations` ledger itself. The one object the runner had that
+`init.sql` lacked, `page_render_jobs_input_idx`, was moved into `init.sql` with the removal.
+
+**What will tempt a revert:** a field report against a long-lived deployment whose data would be
+lost. That is a backup-and-restore question (`db-backup` is still in the production stack), not a
+reason to carry a runner in every stack for the case that has not happened. `AUDIT-B18` is closed
+against this decision; per-element columns (`AUDIT-F16` follow-up) are no longer gated on it.
+
 ---
 
 ## Open Issues Summary
@@ -146,15 +240,15 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R7`](#audit-r7-medium-a-rectangle-arrived-as-a-40-vertex-polygon) | Medium | Worker | The simplification tolerance was a fraction of the *perimeter*, so small shapes got a sub-pixel tolerance and kept every vertex | **Fixed 2026-09-03** |
 | [`AUDIT-F15`](#audit-f15-medium-a-hidden-element-could-not-be-reached-again) | Medium | Frontend | Hiding an element removed the only way to select it | **Fixed 2026-09-03** |
 | [`AUDIT-R1`](#audit-r1-medium-four-answers-to-what-rectangle-does-text-go-in) | Medium | Render | Four different fitted rectangles — the live reader used none at all | **Fixed 2026-09-03** |
-| [`AUDIT-R18`](#audit-r18-high-export-lines-are-centred-in-the-raw-box-not-the-fitted-box) | High | Frontend/Render | PNG and ZIP exports fit text in the shared inset box, then centre it in the raw box | Ready |
+| [`AUDIT-R18`](#audit-r18-high-export-lines-are-centred-in-the-raw-box-not-the-fitted-box) | High | Frontend/Render | PNG and ZIP exports fit text in the shared inset box, then centre it in the raw box | Narrowed 2026-09-25: PNG export serves the artifact; ZIP/editor parity → R7/M7 |
 
 ### Seam 2 — the canvas and the artifact are not connected
 
 | ID | Sev | Component | Summary | State |
 | :--- | :--- | :--- | :--- | :--- |
-| [`AUDIT-B15`](#audit-b15-high-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently) | High | Backend | The 5s re-render sweeper marks a page rendered when it *asks* for the render, so a lost render job strands that edit forever | Ready; confirmed in PR #115–#138 review |
+| [`AUDIT-B15`](archive/history.md#audit-b15-high-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently) | High | Backend | The 5s re-render sweeper marks a page rendered when it *asks* for the render, so a lost render job strands that edit forever | **Closed 2026-09-25** — callback-only stamp; lost render re-triggers (test) |
 | [`AUDIT-B12`](#audit-b12-medium-qas-verdicts-never-reach-the-rendered-output) | Medium | Backend/Render | QA runs *after* the only render, so no `direct_fix` or `reject_sfx` reaches the export | **Fixed 2026-09-02** |
-| [`AUDIT-B16`](#audit-b16-low-region-redo-layer-provenance) | Low | Backend | A region redo's new layer is not always what the reader ends up showing | Needs repro |
+| [`AUDIT-B16`](archive/history.md#audit-b16-low-region-redo-layer-provenance) | Low | Backend | A region redo's new layer is not always what the reader ends up showing | **Closed 2026-09-25** — region redo now advances the page revision |
 | [`AUDIT-R11`](#audit-r11-high-no-texture-aware-erasure-d1) | High | Render | Flat-fill erasure only; complex backgrounds are destroyed | = [D1](render_quality_gap_2026-08-05.md), roadmap item |
 
 ### Seam 3 — the UI does not believe the backend
@@ -174,13 +268,18 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-W13`](#audit-w13-high-context-injected-translation-ran-in-parallel) | High | Worker/Backend | "Previous page dialogue" was read while the previous page was still translating — and `COALESCE` handed back its Japanese | **Fixed 2026-09-02** |
 | [`AUDIT-W14`](#audit-w14-medium-the-slot-policy-lets-slow-network-work-crowd-out-local-work) | Medium | Worker/Backend | Four light slots + a per-cycle capacity snapshot; OCR waits behind LLM calls | Needs measurement |
 | [`AUDIT-B17`](#audit-b17-low-jobspage_id-was-never-written) | Low | Backend | `jobs.page_id` existed, was deserialised, and was never populated by the INSERT | **Fixed 2026-09-03** |
-| [`AUDIT-B18`](#audit-b18-medium-there-is-no-schema-migration-runner) | Medium | Backend | `init.sql` only runs on a fresh volume, so no column can ever be added to a live deployment | Ready |
-| [`AUDIT-B21`](#audit-b21-high-a-retryable-translation-callback-consumes-the-exactly-once-claim) | High | Worker/Backend | A retryable outage posts and claims a callback before retrying, so a later successful result is dropped | Ready |
-| [`AUDIT-B19`](#audit-b19-low-jwt-signing-failure-reported-as-successful-login) | Low | Backend | `unwrap_or_default()` yields empty token answered as 200 OK on signing error | Ready |
+| [`AUDIT-B18`](#audit-b18-medium-there-is-no-schema-migration-runner) | Medium | Backend | `init.sql` only runs on a fresh volume, so no column can ever be added to a live deployment | **Closed by decision 2026-09-19** ([`LOCK-3`](#lock-3--databaseinitsql-is-the-whole-schema-there-is-no-migration-runner)) |
+| [`AUDIT-B21`](#audit-b21-high-a-retryable-translation-callback-consumes-the-exactly-once-claim) | High | Worker/Backend | A retryable outage posts and claims a callback before retrying, so a later successful result is dropped | **Fixed in code 2026-09-22** — not yet verified live |
+| [`AUDIT-B19`](archive/history.md#audit-b19-low-jwt-signing-failure-reported-as-successful-login) | Low | Backend | `unwrap_or_default()` yields empty token answered as 200 OK on signing error | **Fixed 2026-09-25** |
 | [`AUDIT-B20`](#audit-b20-low-database-query-errors-converted-to-empty-results) | Low | Backend | 53 sites convert query errors into empty lists/options disguised as 200 OK | Backlog |
 | [`AUDIT-B13`](#audit-b13-medium-a-page-with-no-translatable-text-fails-the-job) | Medium | Worker/Backend | An untranslatable page raises and burns 3 attempts; it should warn | **Fixed 2026-09-02** |
 | [`AUDIT-B14`](#audit-b14-medium-delete-then-re-add-leaves-a-chapter-inconsistent) | Medium | Backend/Frontend | Page count stale, old slot held, reader hangs on the loading screen | **Fixed 2026-09-04** |
 | [`AUDIT-B22`](#audit-b22-medium-page-ordering-is-validated-before-the-chapter-is-locked) | Medium | Backend | Reorder and move validate outside their transaction, so concurrent page changes can invalidate the result | Ready |
+| [`AUDIT-B24`](archive/history.md#audit-b24-medium-a-re-uploaded-image-is-deduplicated-onto-a-processed-one-and-gets-a-render-job-it-cannot-run) | Medium | Backend | Uploading bytes the backend already has attaches the page to the processed image, skips OCR and queues a bare `render` with no scene, which fails 3× | **Fixed 2026-09-25** — cloned page goes to the debounced render |
+| [`AUDIT-W15`](#audit-w15-low-a-model-that-rejects-the-json-schema-pays-a-400-on-every-call) | Low | Worker | The json_schema → json_object downgrade lives on the per-call client, so OpenAI models (GPT-6 Luna) pay a rejected request and a retry on every call | Filed 2026-09-26; after Packet 4 |
+| [`AUDIT-W16`](#audit-w16-medium-glm-53-flash-as-the-qa-judge-half-the-calls-fail-some-take-four-minutes) | Medium | Worker/Config | The D4 QA VLM returned nothing on half the QA jobs and took up to 244 s a call; Gemini Flash Lite answered every fallback in 5–20 s | **Default switched to Gemini 2026-09-26**; per-call cap open |
+| [`AUDIT-T6`](#audit-t6-low-the-harness-reports-complete-before-qa-triggered-redo-cycles-finish) | Low | Testing | Harness captures after the first QA pass, missing later redo cycles; the runbook uploaded one source twice | Filed 2026-09-26 |
+| [`AUDIT-B27`](#audit-b27-medium-changing-the-text-box-inset-settings-re-renders--and-re-qas--every-page) | Medium | Backend | A text-box inset settings change dirties every page; each re-render queues paid QA | Filed 2026-09-25; decision needed |
 | [`AUDIT-B23`](#audit-b23-medium-the-dispatcher-429-cooldown-never-escalates-under-sustained-saturation) | Medium | Backend | `consecutive_429s` is cleared on every healthy `/capabilities` probe, so the exponential cooldown never advances past its 10s base | Ready |
 | [`AUDIT-W3`](#audit-w3-medium-cooldowns-and-lock-waits-burn-a-job-slot) | Medium | Worker | Cooldowns and lock waits block a concurrency slot doing nothing | Deprioritized; needs concurrency test harness |
 | [`AUDIT-F23`](#audit-f23-medium-no-paint-region-redo-and-no-batch-redo) | Medium | Frontend | Redo is per-region and free-form only; no painted region, no batch | Feature |
@@ -192,10 +291,18 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | :--- | :--- | :--- | :--- | :--- |
 | [`AUDIT-R8`](#audit-r8-medium-text-under-fills-and-over-runs-its-balloon) | Medium | Render | Some balloons are half empty, others leak a line past the mask | Overlaps `AUDIT-R1` |
 | [`AUDIT-R9`](#audit-r9-medium-neighbouring-text-boxes-are-allowed-to-overlap) | Medium | Render | Nothing checks box-vs-box collision at layout time | Design needed |
-| [`AUDIT-R10`](#audit-r10-medium-overlapping-bubbles-are-erased-as-one) | Medium | Worker | Two touching balloons merge into one plate | Design needed |
-| [`AUDIT-R12`](#audit-r12-medium-sfx-appear-to-shrink-neighbouring-balloons) | Medium | Worker | Hypothesis: an SFX overlapping a balloon truncates its mask | Needs measurement |
+| [`AUDIT-R10`](#audit-r10-medium-overlapping-bubbles-are-erased-as-one) | Medium | Worker | Two touching balloons merge into one plate | Hull merge gone; no instance on the R2 six; decided on the 24 controls (R2 runbook) |
+| [`AUDIT-R12`](#audit-r12-medium-sfx-appear-to-shrink-neighbouring-balloons) | Medium | Worker | Hypothesis: an SFX overlapping a balloon truncates its mask | Not reproduced on the R2 six (no SFX overlaps any container); re-labelled as R8/R16 interior utilisation; 24 controls give it one more look |
 | [`AUDIT-R15`](#audit-r15-high-the-typeset-size-depends-on-which-fonts-the-host-happens-to-have) | High | Render/Testing | The same call returns 48, 56 or 75px depending on which font files the host has | Ready |
 | [`AUDIT-R16`](#audit-r16-medium-a-narrow-box-is-capped-by-its-widest-unbreakable-token) | Medium | Render | Portrait balloons: the type is width-bound and the spare height cannot be spent | Measured; needs a decision |
+| [`AUDIT-R19`](#audit-r19-medium-a-free-standing-caption-gets-a-synthetic-rounded-plate-a-third-larger-than-its-text) | Medium | Worker/Frontend | Text with no detected balloon gets a rounded-rectangle plate padded 18% of its short side with 22%-radius corners; the editor box is 10px inside it and reshape only edits the plate | **Fixed in R2 (2026-09-19)**: no plate for free text, `box_shape` from detection; verified on the p5 caption live |
+| [`AUDIT-R20`](archive/history.md#audit-r20-high-a-balloon-is-emitted-as-one-region-per-column) | High | Worker | The live owner veto splits a balloon into one region per column/line when the detector's container does not enclose every column; each piece is translated and typeset alone | **Closed 2026-09-19** — R6 live gate passed; follow-on split filed as `AUDIT-R21` |
+| [`AUDIT-R21`](#audit-r21-medium-the-line-continuity-veto-splits-a-balloon-whose-column-ocr-broke-in-two) | Medium | Worker | The line-continuity veto splits a balloon when OCR broke one column in two; page-4 line gaps miss the 0.35 budget | Grouping phase (user decision 2026-09-25); manual merge is the workaround |
+| [`AUDIT-R22`](#audit-r22-feature-lama-mpe-as-a-cleanup-mode) | Feature | Worker | LaMa-mpe beat AOT by 1.2 dB but its model/code are gone; needs a clean-room network before it can be a cleanup mode | Filed 2026-09-25 |
+| [`AUDIT-R23`](#audit-r23-medium-ocr-throws-away-the-text-angle-it-detects) | Medium | Worker/Backend | Tilted lettering (signs, slanted captions) is typeset level: OCR has the angle in its quads and writes `rotation: 0` | Filed 2026-09-26; typesetting phase |
+| [`AUDIT-R24`](#audit-r24-medium-cleanup-smears-the-art-when-text-crosses-a-figure) | Medium | Worker | Text lettered over a figure: the patch rebuilds the arm as blocky shapes (sample83); no metric sees damage inside a patch | Filed 2026-09-26 (R3 close); Torii is worse here |
+| [`AUDIT-R25`](#audit-r25-medium-source-text-survives-inside-a-detected-region-and-the-gate-scores-it-0) | Medium | Worker/Testing | Japanese lines survive inside detected regions (sample61, sample222); residual ink only looks under the patch alpha, so it reads 0 % | Filed 2026-09-26 (R3 close) |
+| [`AUDIT-R26`](#audit-r26-feature-image-generation-models-as-an-opt-in-re-inpaint-for-hard-regions) | Feature | Worker/Frontend | Send a hard cleanup crop to an image-editing model and use the result as that region's patch | Future improvement (2026-09-26); explicit-content refusals rule it out as the default path |
 | [`AUDIT-R17`](#audit-r17-unranked-shaperectangular-is-not-ignored) | Unranked | Render | Reported as an ignored API parameter; the branch exists and the contract holds end to end | **Closed on assessment 2026-09-05** |
 
 ### Cosmetic & long tail
@@ -327,6 +434,14 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Not done:** *per-element* padding. That needs a column on `layer_elements`, and there is no
   migration runner — `init.sql` only runs on a fresh volume, so a new column would break every
   existing deployment until one exists. Filed as [`AUDIT-B18`](#audit-b18-medium-there-is-no-schema-migration-runner).
+- **2026-09-25: the setting now scales with the box and reaches the export.** It became *Text Box
+  Padding (%)* of each box's shorter side, capped by *Max Padding (px)*, plus *Text Safety Margin
+  (%)*; either padding knob at 0 turns padding off. Until then only the editor read the setting:
+  the scene builder wrote a literal `padding: 4.0` and the renderer fitted at 100 % safety. Now
+  `page_scene_builder::style_for` resolves each box's padding (`settings::TextBoxGeometry`) and the
+  render job carries the safety share to the renderer (outside the frozen scene contract, inside
+  the render-input digest). Defaults 4 % / 4 px / 100 % reproduce the old export. The per-bubble
+  override (priority list #2) is still open.
 
 ### `AUDIT-B18` (medium): There is no schema migration runner
 
@@ -340,6 +455,11 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   took a global setting instead; `AUDIT-B17` was fixable only because the column already existed.
 - **Next Step:** `sqlx::migrate!` is already a dependency-compatible option and `build_postgres_url`
   was written for it. Small, but it must land before anything that needs a column.
+- **Closed by decision 2026-09-19.** B02 shipped a `db-migrate` Compose service on 2026-09-14 and it
+  was removed again on 2026-09-19 — see [`LOCK-3`](#lock-3--databaseinitsql-is-the-whole-schema-there-is-no-migration-runner).
+  The ceiling described above is accepted: a new column goes into `init.sql` and the volume is
+  recreated. `build_postgres_url`'s "migration tooling" comment is now stale and `flyway_schema_history`
+  stays as the Java-era vestige it already was.
 
 ### `AUDIT-R7` (medium): A rectangle arrived as a 40-vertex polygon
 
@@ -457,42 +577,11 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Fix:** calculate each export's `startY` from `fitBox.y` and `fitBox.height`, and test PNG and
   ZIP line positions against the worker's fitted-box geometry. Do not change the fitting helper or
   the configured margin as part of this fix.
+- **Narrowed 2026-09-25.** The page PNG export now serves the rendered artifact (`/api/pages/{pageId}/rendered`), so it no longer lays text out in the browser. The ZIP's per-layer text raster (`Reader.tsx`, the ZIP export loop) and the editor canvas both still centre lines on `el.y + height / 2`, so they agree with each other; whether they agree with page-renderer's layout is the R7/M7 editor–artifact parity question and is judged there, not patched here.
 
 ---
 
 ## 2. Seam 2 — the canvas and the artifact are not connected
-
-### `AUDIT-B15` (high): The debounced re-render is one-shot and can lose an edit permanently
-
-- **Correction, 2026-09-02.** This was first filed as "no edit anywhere enqueues a render job". That
-  is **wrong** — I missed the sweeper. `recovery::process_pending_renders`
-  (`backend-rust/src/jobs/recovery.rs:145-197`) runs every 5s (`jobs/mod.rs:34-40`), finds pages
-  with `last_edited_at` older than 10s whose `last_rendered_at` predates the edit, and enqueues a
-  render redo. `touch_page` is called from all six mutating layer routes. The link exists.
-- **What is actually wrong with it.** The sweeper stamps `last_rendered_at = now()` at *enqueue*
-  time (`recovery.rs:187`), not when the render lands, and it gates that on
-  `trigger_page_redo(...).is_ok()` — which is not a real check, because `trigger_page_redo` returns
-  `Ok(())` unconditionally after calling `enqueue_job_directly`, and `enqueue_job_directly` swallows
-  its own insert failure with a `tracing::error!` and returns `()`.
-
-  So the stamp says "rendered" the moment the job is *asked for*. If that job is then lost — the
-  insert failed, the queue was cleared, the worker was down long enough for the row to exhaust its
-  attempts — the page's `last_rendered_at` is already newer than its `last_edited_at`, the sweeper's
-  own predicate excludes it forever, and that edit never renders again. There is no retry, because
-  the only trigger is the predicate that was just falsified.
-- **Why this is a plausible reading of the report** ("changes to the canvas are not synced to the
-  rendered output like ever"): the failure is sticky. One lost render per page is enough to make the
-  feature look permanently broken for that page, and editing more does not recover it — a *new*
-  edit does re-arm the predicate, so the symptom is intermittent rather than total, which is exactly
-  how it would be described.
-- **Next Step:** stamp `last_rendered_at` from the render callback only — it already does this
-  (`internal.rs:1157-1161` for the image, `coordinator.rs:2077-2082` for the page) — and give the
-  sweeper a separate "render requested at" marker so it debounces without claiming completion.
-  Make `trigger_page_redo` propagate the enqueue failure rather than returning `Ok(())` regardless.
-- **Confirmed in the PR #115–#138 review.** This is not only a plausible explanation: an enqueue
-  insert or Redis push failure is swallowed, and a worker failure after the timestamp update leaves
-  the same permanently false predicate. The remediation must be guarded by failures at each of
-  those points, not only by a successful-render test.
 
 ### `AUDIT-B12` (medium): QA's verdicts never reach the rendered output
 
@@ -538,19 +627,8 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
      nothing.
 - **Note:** human edits have their own path to a re-render (the 5s debounced sweeper), which is why
   this needed a fix of its own. QA is not an editor and never went through it. See
-  [`AUDIT-B15`](#audit-b15-high-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently)
+  [`AUDIT-B15`](archive/history.md#audit-b15-high-the-debounced-re-render-is-one-shot-and-can-lose-an-edit-permanently)
   for the defect in that sweeper.
-
-### `AUDIT-B16` (low): Region-redo layer provenance
-
-- **Locations:** `backend-rust/src/jobs/coordinator.rs:2425-2503` (`create_region_redo_overlay`).
-- **Problem:** The report says a translation region redo "doesn't make a new layer", but the attached
-  screenshot shows a `Translation (region redo)` layer with 1 element sitting above an 11-element
-  `Translation` layer — i.e. the layer *is* created. The likely real complaint is that the redo
-  result does not become what the page shows or exports, which would make it indistinguishable from
-  "no new layer" at the reader.
-- **Next Step:** needs a repro before any code change. Capture the layer list, the element's
-  `visible`/`region_id`, and what `/rendered` returns, on one page where this happens.
 
 ### `AUDIT-R11` (high): No texture-aware erasure (D1)
 
@@ -562,6 +640,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   roadmap, already scoped, already the reason the 6.85%-vs-1.92% flattening gap exists. Filed here
   only so the field report maps cleanly onto the tracker. Do not start it before the seams above are
   closed — a better fill on a page whose edits never render is wasted.
+- **Status 2026-09-25.** Being replaced by R3 (per-region CTD glyph mask + TELEA/AOT reconstruction, its own cleanup stage). The editor still does not draw the cleanup (R7/OQ-03). Closes with R3's quality gate, not before.
 
 ---
 
@@ -816,6 +895,14 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   retryable outage, raise without posting; on a terminal callback, use `claim_callback_tx` in the
   same transaction as every layer/job write so a failed application releases the claim. Test the
   outage-then-success path and a database write failure after claiming.
+- **Fixed in code 2026-09-22 (R3 Packet 2), not yet verified live.** Every re-arm to `PENDING` —
+  the worker's bounded retry, startup recovery and the stale sweep — now clears
+  `callback_applied_at` along with `started_at`/`lease_expires_at`/`heartbeat_at` and issues a
+  fresh lease token, so a retry's own result is no longer read as a duplicate. The claim itself is
+  fenced on `(jobId, attempt, inputGeneration, leaseToken)` from request headers, so the first
+  attempt's callback cannot claim the row the retry owns. Covered by
+  `backend-rust/tests/internal_endpoints.rs` (failed stage → retry at attempt 2 → full result
+  applied) and `tests/stage_recovery.rs`. Closes on live evidence, not on these tests.
 
 ### `AUDIT-B14` (medium): Delete then re-add leaves a chapter inconsistent — **Fixed 2026-09-04**
 
@@ -841,6 +928,118 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   `FOR UPDATE`, validate under that lock, then renumber and recalculate the cover before commit.
   Cover reorder-vs-insert and move-vs-delete with two independent database connections.
 
+### `AUDIT-R19` (medium): A free-standing caption gets a synthetic rounded plate a third larger than its text
+
+- **Report (2026-09-19):** "the text box is a rectangle but the actual region is a larger more
+  complex shape that has extra padding for no reason and can't really be re-shaped easily", with
+  two screenshots of *19th Sept ch.1 p5* and its layers ZIP.
+- **Root cause, three layers deep, all working as written:**
+  1. **The worker invents the plate.** The left caption sits on a wall; there is no balloon, so
+     the OCR handler's erase decision (`worker/src/worker/handlers/ocr.py:399` `cover_fill_for_region`,
+     the R2 "cover fill") hands back a *synthesised* balloon from `cover_balloon_polygon` (`:366`):
+     the OCR bbox grown by `min(w, h) × COVER_FILL_PAD_FRACTION` (`config.py:398`, default
+     **0.18**) on every side, with corners of radius **0.22 × the plate's shorter side**, sampled at
+     six steps per corner and then simplified (`AUDIT-R7`). For this 178×394 bbox that is 32 px of
+     padding and a 53 px corner radius: the polygon in the ZIP spans 37–279 × 48–502 (242×454),
+     14 vertices — exactly what the formula predicts. The plate is a third wider than the text.
+  2. **The backend inflates the box by a different amount.** `text_box_geometry`
+     (`backend-rust/src/jobs/coordinator.rs:1690`) takes the free-text path (no detected bubble)
+     and grows the bbox by `FREE_TEXT_PADDING / 2 = 10` px per side: 69,78 178×394 → 59,68 198×414.
+     So the blue box and the beige plate are two unrelated paddings of the same bbox (10 px vs
+     32 px); nothing ties them together and the inspector shows neither number.
+  3. **The shape is labelled by region type, not by what was found.** The insert at
+     `coordinator.rs:2131` writes `box_shape = "elliptical"` whenever `region_type` is `speech`,
+     which is the classifier's default (`services/layout.py:182`). The Appearance dropdown then
+     reads "Elliptical (Contour-Based)" for a plate that is neither elliptical nor contour-based.
+     The frontend's fallback for `elliptical` with no polygon is a true ellipse
+     (`frontend/src/utils/maskPaint.ts:158`), so switching the shape does not make it a rectangle
+     either — the polygon wins whenever it exists.
+- **Why reshape feels wrong:** reshape mode edits `mask_polygon` — the plate — while the
+  inspector's X/Y/Max Width/Max Height edit the text box. Dragging the box does not move the plate
+  and dragging a vertex does not move the box. There are 14–22 handles on what reads as a
+  rectangle because the corners are arcs.
+- **What is not the cause:** `textBoxPaddingPx` (`AUDIT-F16`) is applied *inside* the text box at
+  fit time; it has no effect on the plate. `AUDIT-R7`'s simplification is working (the 28-point
+  plate is now 14).
+- **Fix, in the order that pays:**
+  1. Make the plate padding **absolute and small** for free text (a few px past the glyph
+     extent), or derive it from the line height, and drop the corner radius to something that
+     reads as a rectangle (`≤ 0.08` of the short side) or to zero when the plate is on a flat
+     background. Keep `COVER_FILL_PAD_FRACTION` for the true cover-fill case (busy background where
+     the plate is a deliberate patch) — that is the case R2 introduced it for, and this caption is
+     not it: the wall is flat, `detect_background_color_poly` would have returned a colour if the
+     mask existed.
+  2. Tie the two paddings: derive the free-text box from the plate (plate inset by a fixed
+     margin), so the inspector's box and the painted plate move together, and reshape/drag act on
+     one geometry.
+  3. Stop deriving `box_shape` from `region_type`; set `rectangular` when the polygon came from
+     `cover_balloon_polygon`, `elliptical` only when a balloon contour was found. Rename the menu
+     item so it says what it is.
+  4. Per-element padding (`AUDIT-F16` follow-up, needs `AUDIT-B18`) then becomes the one dial for
+     "space around free-standing text", and the plate follows it.
+- **Verification:** *19th Sept ch.1 p5* left caption through `docker compose up`: the plate must
+  be within ~4 px of the glyph extent, ≤ 8 vertices, `box_shape = rectangular`, and the export ZIP's
+  `maskPolygon` must match the reader's canvas. Regression check on the six R1 fixtures for the
+  *detected*-balloon case, which this must not touch.
+- **Schedule:** after R2 (erasure), because R2 is what decides when a plate is drawn at all;
+  changing the plate's shape before that would be measured twice.
+- **Resolution (R2, 2026-09-19, [checkpoint](quality-checkpoints/R2.md)):** fix 1 became moot —
+  free-standing text gets **no plate** (`cover_fill_for_region(container_detected=False)` returns
+  the colour for the halo and `polygon = None`; a flat bbox keeps the honest bbox rectangle).
+  Fix 3 done: `box_shape` comes from `has_detected_bubble`. Fix 2: where a patch survives it is the
+  bbox itself and the box is bbox + 10 px, same centre; the per-element dial is still `F16`/`B18`.
+  The editor's own box fill for free text (`maskPaint.ts`, `Reader.tsx`) is removed too. Verified
+  live on the same page: the left caption came back with the same bbox (69,78 178×394), **no
+  polygon, `rectangular`, size 36**; before: 14 vertices spanning 37–279 × 48–502, `elliptical`.
+
+### `AUDIT-B27` (medium): Changing the text-box inset settings re-renders — and re-QAs — every page
+
+- **Location:** `backend-rust/src/routes/settings.rs` (the `changed` branch of the settings save):
+  `UPDATE pages SET last_edited_at = now(), scene_revision = scene_revision + 1` with no `WHERE`.
+- **Problem:** every page in the database becomes dirty, the debounced sweeper renders each one, and
+  the render callback queues a paid QA pass for every page without manual edits
+  (`coordinator.rs`, render callback → `enqueue_job_directly("qa", …)`). One padding tweak on a
+  library of a few hundred pages is a few hundred QA calls. Found 2026-09-25 while checking which
+  writes dirty a page for the new render gate.
+- **Decision needed:** a settings re-render changes layout, not translation, so it probably should
+  not re-run QA (mark those renders like QA's own final pass), and may want to be scoped (per
+  series, or on next open) rather than global. Not changed.
+- **More relevant since 2026-09-25:** the padding and safety settings now change the export, so the
+  re-render is real work rather than an identical redraw; each one is still followed by QA.
+
+### `AUDIT-W15` (low): A model that rejects the JSON schema pays a 400 on every call
+
+- **Seen 2026-09-26** checking GPT-6 Luna (`openai/gpt-6-luna`) for the R3 Packet 4 run. OpenAI's strict mode
+  rejects `TRANSLATION_JSON_SCHEMA` because its objects do not set `additionalProperties: false`.
+  `LLMClient._execute_with_retry` then downgrades to `json_object` and retries, which works: 6.3 s and
+  $0.00024 for a two-line batch, against about 3 s for the call itself.
+- **Why it repeats:** `_degraded_format` lives on the `LLMClient`, which is built per call, so every
+  translation request makes the same rejected attempt first.
+- **Not fixed before Packet 4, on purpose.** `_execute_with_retry` is on every LLM path: OCR VLM, QA
+  and translation (GitNexus impact: CRITICAL, 7 flows). The run counts these lines instead.
+- **Fix options:**
+  1. Remember the downgrade per (provider, model) for the worker's lifetime. Small, and it keeps the
+     schema unchanged.
+  2. Make the schema strict-compatible: `additionalProperties: false`, and every field required or
+     nullable. This changes what every model is asked for.
+
+### `AUDIT-W16` (medium): GLM 5.3 Flash as the QA judge: half the calls fail, some take four minutes
+
+- **Seen in R3 Packet 4 (2026-09-26, chrome-box).**
+  - `z-ai/glm-5.3-flash` logged `no usable reply` on 6 of about 12 QA jobs.
+  - Single calls took 170–244 s, the only provider calls in the run over the 60 s bar.
+  - Every time, the fallback `google/gemini-3.1-flash-lite` answered, 9 calls in 5–20 s.
+  - So several pages' verdicts came from Gemini, not from the model D4 named.
+- **Decision (user, 2026-09-26):** Gemini 3.1 Flash Lite is the QA-VLM judge from now on.
+  - Set in `config/providers.json` (`defaults.qaVLM`, openrouter `defaultQAVLMModel`) and in the local `.env` / `secrets/runtime/models.env`.
+  - Fallback chain: `QA_VLM_FALLBACK_MODELS=mistralai/mistral-small-3.2-24b-instruct,z-ai/glm-5.3-flash`.
+  - Mistral is second because it accepted all five explicit pages in the 2026-09-24 replay (10–51 s), where Gemini once returned nothing.
+  - GLM is last.
+- **Still open:** no per-call time limit on a QA VLM request. A slow model can hold a QA job for minutes before the chain moves on. A cap under 60 s would make the fallback start sooner.
+- **To apply elsewhere:**
+  - Rerun `scripts/dev_setup.py init` (or edit the env files) and recreate the backend and worker.
+  - A `qaVlmModel` saved in System Settings, or pinned on a series or chapter, still wins over the default.
+
 ### `AUDIT-B23` (medium): The dispatcher 429 cooldown never escalates under sustained saturation
 
 - **Locations:** `backend-rust/src/jobs/dispatcher.rs` — `run_cycle` capabilities probe (the
@@ -860,15 +1059,6 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Fix:** reset `consecutive_429s` only when a job submission actually succeeds, not on a
   capabilities probe. The probe may still clear `cooldown_until`; the streak should persist until
   the worker accepts work.
-
-### `AUDIT-B19` (low): JWT signing failure reported as successful login
-
-- **Locations:** `backend-rust/src/routes/auth.rs:298` (register), `:326` (login), `:346` (refresh).
-- **Problem:** `let token = state.jwt.generate_token(&user.email).unwrap_or_default();`
-  `generate_token` returns `Result`. On `Err`, `unwrap_or_default()` yields an empty string `""`, and all
-  three endpoints answer `200 OK` with `token: ""`. An empty token fails subsequent decode, so while not
-  an auth bypass, it produces silent session failure on the client with 401s rather than a legible error.
-- **Fix:** Map `Err` to a 500 error response at all three sites.
 
 ### `AUDIT-B20` (low): Database query errors converted to empty results
 
@@ -924,6 +1114,10 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   different rectangles, so what looks correct in one is wrong in the other. Do not open this as
   separate work until `AUDIT-R1`/`AUDIT-F16` have landed and the remainder has been re-measured on
   the corpus.
+- **M7 acceptance control, 2026-09-20:** `corpus/gaps/pending/ja/sample700` (page 27 of the user's
+  `manga-quality-r6-20260919` review chapter) — 10 of 11 correctly-masked balloons render with the
+  box sized to the *source* balloon, not the translated text, leaving visible dead space around
+  short English lines. Fresh Torii reference fetched.
 
 ### `AUDIT-R9` (medium): Neighbouring text boxes are allowed to overlap
 
@@ -934,6 +1128,80 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   [`LOCK-1`](#lock-1--free-standing-text-keeps-its-columns-height-it-is-never-squared-into-a-box):
   resolving a collision by shrinking a box is fine, resolving it by *moving* a box onto artwork
   is not.
+- **Live reproduction, 2026-09-19 (user's own `manga-quality-r6-20260919` upload, chapter page 12):**
+  five free-standing vertical-source columns 75–83 px apart (`bbox_x` 847/930/1005, ownership
+  correctly `single-fragment-owner` each, `validated_container_count: 0` — no shared balloon, so
+  this is not an ownership/`AUDIT-R20` case), rendered as 137 px-wide English boxes that overlap
+  their neighbour by 44–62 px ("Open your legs." over "Lower your hips more." over "Number 4!").
+  Confirms the fix is neighbour-aware width/placement, not per-element fitting alone.
+- **M7 acceptance controls, 2026-09-20:** the page 12 case above is filed as
+  `corpus/gaps/pending/ja/sample698` (fresh Torii reference fetched). Page 18 of the same chapter —
+  `corpus/gaps/pending/ja/sample699`, also filed — shows the same family at much higher region
+  density (35 regions/page), rendering as garbled overlapping captions; not confirmed whether a
+  second cause (the `AUDIT-B25` duplicate hidden layer found on this same page) contributes visually
+  or whether R9 alone explains it.
+
+### `AUDIT-B25` (medium): A still-running job is stale-recovered and requeued, leaving a duplicate layer behind
+
+- **Locations:** worker `rq_tasks.py`/`recovery.rs` requeue path named in the output-quality
+  tracker's R5 row (2026-09-18, `sample61`'s 27-chunk DeepSeek translation ran as three concurrent
+  attempts after ~10 minutes with no heartbeat); not yet filed here before this entry.
+- **Live reproduction, 2026-09-19 (`manga-quality-r6-20260919`, chapter page 18):** `jobs` row for
+  its first `translation` job shows `attempt=3`, `status=COMPLETED`,
+  `error='Max attempts exhausted after stale recovery'` — a contradictory terminal state (completed
+  *and* carrying an exhaustion error) — queued at 16:00:40, not started until 16:31:25. It produced
+  a hidden `translation` layer (32 elements, `visible=false`). A subsequent `qa-re-ocr` →
+  `translation` cycle produced a second, visible layer with the same 32-element count. The stray
+  hidden layer is not cleaned up; it is retained rows and DB weight, not a rendering symptom, but
+  the underlying stale-recovery-while-still-alive race is the same one R5 already named.
+- **Next step:** give a long-running job type (translation, at minimum) a heartbeat or a per-type
+  stale window instead of the current fixed timeout, and drop a callback for an attempt the
+  recovery sweep has already superseded — matching R5's existing note. File as its own R5 packet;
+  run `impact()` on the recovery/requeue symbols before touching them.
+- **Fixed in code 2026-09-22 (R3 Packet 2), not yet verified live.** Staleness now keys off
+  `jobs.lease_expires_at` (`JOB_LEASE_SECS` 120, renewed by a 30-second worker heartbeat bounded by
+  `JOB_MAX_RUNTIME_SECS` 3600) instead of ten minutes of silence on `updated_at`, so a job that is
+  genuinely working is not re-dispatched however long it takes; rows with no lease keep the old
+  ten-minute rule so an upgrade strands nothing. Re-arming is a compare-and-swap on the attempt and
+  lease the sweep observed, and a superseded attempt's callback is refused with 409 rather than
+  applied. Note the recovery window is the **five-minute sweep plus the lease**, not two minutes.
+  Covered by `backend-rust/tests/stage_recovery.rs`. Closes on live evidence, not on these tests.
+
+### `AUDIT-F29` (feature): No way to manually re-group OCR fragments when automatic clubbing fails
+
+- **Report (2026-09-19, user review of `manga-quality-r6-20260919`):** "sometimes text fragments
+  are not getting clubbed together" and the automatic grouping (owner assignment, `AUDIT-R20`/M5)
+  "is not going to be done automatically most of the time" for some page styles — the user wants a
+  way to manually select several OCR fragments in the editor and merge them into one owner (or
+  split a wrongly-merged one), rather than only being able to override the region *action*
+  (preserve/replace/review, already in D02) with no way to override *ownership*.
+- **Scope:** editor feature, M7 territory — sits next to H05 (mount the shared content scene with a
+  selection frame) and H06 (wire object actions: preserve/explain/replace/review, hide/reject,
+  undo/redo). Needs a backend mutation for `owner_assignment` records (currently worker-computed
+  only, no user-facing override path) plus a frontend multi-select-and-merge/split interaction.
+  Not scoped or estimated yet; the user's own example pages (`manga-quality-r6-20260919`, series
+  "User-Test") are reference material once this is picked up.
+- **Next step:** write a bounded task card under M7 (after H01b/H02) once H01a/F04's ownership
+  contract is finalized; do not build a parallel ownership representation.
+- **Merge shipped 2026-09-25** (`a6011e0`): Reader → Editor Tools → *Merge regions*, `POST /api/pages/{pageId}/regions/merge`. The picked fragments become one region (union box, text joined in geometric reading order), which alone is cleaned and retranslated; hidden history layers keep what they drew. A dry run shows the order (1, 2, 3… on the page, the joined text in the panel) before anything changes, and *Add the other pieces in this balloon* picks the detector container's siblings. **Still open: splitting a wrongly merged region.** Reclassify to *partly done*; close when split exists or is declined.
+- **User test passed 2026-09-26:** Ch.3 p2 redone and its balloon merged. The user's verdict: "the merging is working amazingly now". Automatic grouping stays with the typesetting phase (`AUDIT-R21`).
+
+### `AUDIT-B26` (feature): "Export Chapter (ZIP)" should export page projects, not rendered images
+
+- **Report (2026-09-19, user):** wants `Export Chapter (ZIP)` to export the editable page-project
+  archive (the new-format per-page scene: OCR/translation/cleanup records, not flattened PNGs) for
+  every page in the chapter, so a chapter can be exported and re-imported quickly as a unit for the
+  team's own workflow — today's export is rendered-or-original images only.
+- **Locations:** `backend-rust/src/export.rs:20` `build_and_upload_export` currently packages
+  rendered-or-original page images plus `meta-data.json` (see the module doc comment at
+  `export.rs:1-3`). The per-page editable archive format is `contracts/page-scene-v1.schema.json`
+  (B01) / the "new project archive" row in the tracker's contract table — currently a per-project
+  archive, not wired to the chapter-ZIP export path.
+- **Next step:** either add a chapter-level bundle of per-page new-format archives as a second
+  export mode, or change what `Export Chapter (ZIP)` produces outright (needs a user decision — this
+  changes an existing, already-shipped export's contents, not just adds one). Run `impact()` on
+  `build_and_upload_export` before either path; M8 (I01/I02, new-format archive export/import) is
+  the natural place to land this once it starts.
 
 ### `AUDIT-R10` (medium): Overlapping bubbles are erased as one
 
@@ -943,6 +1211,128 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   page it does not own.
 - **Next Step:** union rather than hull for the mask, keeping the hull only for the text box. The
   renderer already fills a polygon; a multi-polygon is the schema change.
+
+### `AUDIT-R21` (medium): The line-continuity veto splits a balloon whose column OCR broke in two
+
+- **Measured 2026-09-25 on the dev stack's "Tests" series.** The owner veto
+  (`worker/src/worker/services/owner_assignment.py::_line_continuity`) split 8 grouping components
+  back into singletons — 42 regions on 5 pages: 25 for `insufficient-lateral-line-overlap`, 17
+  for `mixed-line-orientation`. 7 of the 8 had every member inside one detected balloon.
+- **Mechanism.** The check sorts members by x and needs each neighbour to overlap the next along
+  the line. When OCR breaks one vertical column in two (Ch.3 p2: ブラ above イダルなんて), the top
+  piece's x-neighbour is the next column (overlap ≈ 28 %), and the whole balloon is vetoed.
+- **Separate miss (Ch.1 p4).** Horizontal profile lines 8–9 px apart against a proximity budget of
+  0.35 × line height ≈ 7 px (`OCR_MERGE_THRESHOLD=0.35`), so a paragraph's lines stay separate.
+- **Decision (user, 2026-09-25):** handled in the upcoming grouping phase, not now. Workaround:
+  Reader *Merge regions* (`AUDIT-F29`). Fix idea: join collinear pieces of one column before the
+  continuity test, opt-in (the grouping frozen-equivalence test), measured on the corpus.
+- **A knob, 2026-09-26.** The proximity budget is now a setting: System Settings → *OCR Grouping
+  Threshold* (default 0.35, range 0.05–3), overridable per series and chapter, sent on every OCR
+  job. It applies on the next OCR, so redo OCR to regroup a page. It moves the Ch.1 p4 case (a
+  paragraph whose lines are 8–9 px apart needs about 0.45). It does not move the continuity veto,
+  which splits after grouping.
+
+### `AUDIT-R22` (feature): LaMa-mpe as a cleanup mode
+
+- **Why:** on the 23-region erasure corpus (2026-09-20) LaMa-mpe scored 24.34 dB / MAE 9.45 against
+  AOT-GAN's 23.11 dB / 10.43, visibly cleaner on dark textured backgrounds.
+- **Why it is not a mode yet:** neither the ONNX export nor the prototype code survived. The
+  prototype lived in a scratch harness, and its ZITS positional-encoding inputs (`rel_pos`, `direct`)
+  were reproduced from memory, unverified. The project rule is weights yes, ported code no: the
+  network has to be reimplemented clean-room from behaviour before the published weights can be
+  loaded.
+- **Where it plugs in:** `cleanup_reconstruct.RECONSTRUCTION_MODES` and the mode selector (System
+  Settings / chapter / series), shipped 2026-09-25 with `auto`/`telea`/`aot`/`off`. A new mode needs
+  its own generator digest (`generator_sha256_for`).
+- **Next step:** a bounded packet. Reimplement, verify against the 2026-09-20 numbers on the same 23
+  regions, then add it as a mode. Its measured cost was 42 s for 23 regions against AOT's 23 s.
+
+### `AUDIT-R23` (medium): OCR throws away the text angle it detects
+
+- **Report (2026-09-26, user):** a sign reading キュアット探偵事務所, tilted about 25°, comes out
+  with level English on a tilted board; Torii rotates the text to the board.
+- **Measured.** Our detector already sees the angle. PP-OCRv6 on the sign returns quads whose top
+  edges run at 23.9° and 26.9° (Torii's box: 25.3°). The OCR handler keeps only the axis-aligned
+  bounding box and writes `"rotation": 0.0` at every call site (`handlers/ocr.py`,
+  `services/merge_regions.py`), so the tilt never reaches the region or its text element.
+- **How often.** Over the 270 Torii corpus bundles (2,880 boxes), Torii rotates 339 boxes by 5° or
+  more (215 by 10°, 107 by 20°), on 121 of 270 pages. Below 5° its angles are detector noise
+  (median 0.3°), so a real feature needs a dead band.
+- **Already in place.** `ocr_regions.rotation` and `layer_elements.rotation` exist; the scene's
+  `quad_for` and the renderer rotate a text object about its centre; the editor saves rotation
+  (`AUDIT-F14`/`R5` fixed).
+- **What it needs.**
+  1. An angle per region: each fragment's quad edge, combined across the region's fragments
+     weighted by length; snap to 0 inside a dead band (about 3–5°); treat about 90° as vertical text,
+     not rotation.
+  2. An oriented box: un-rotate the member quads about their centre and take their extent. The
+     axis-aligned box of a tilted line is too tall, so fitting text into it and then rotating it
+     would overflow the board.
+  3. Merge (`region_merge::union_box`) and region redo must carry the angle rather than reset it.
+  4. Cleanup is unaffected (it works from the glyph mask).
+- **Next step:** typesetting phase, after R3 closes. Measure against the 339 Torii boxes (angle
+  error, and whether the oriented box still fits the text).
+
+### `AUDIT-R24` (medium): Cleanup smears the art when text crosses a figure
+
+- **Seen in R3 Packet 4 (2026-09-26), sample83.**
+  - The right-hand dialogue column (red, white-stroked) is lettered across the girl's raised fist and forearm.
+  - Cleanup (`auto`) kept the region: residual ink 0.008 %, nothing changed outside the patch.
+  - Inside the patch, the fist and forearm are rebuilt as blocky cyan and skin-coloured shapes.
+  - The English covers most of it; the edges show.
+- **Torii is worse on the same spot:** its `inpainted.png` is one soft blur over the whole column. So this is not a regression against the machine baseline. It still fails the fixture checklist's "central art protected".
+- **Why no number caught it:**
+  - Outside-support invariance only looks outside the patch.
+  - Residual ink measures leftover *text* under the patch.
+  - Nothing scores damage to the art inside the patch. Only a visual review sees it.
+- **Next step:**
+  - R7's per-patch editing (hide or delete one patch) gives the user a way out.
+  - A real fix is a better reconstruction for text over detailed art (forced `aot` on such regions, or `AUDIT-R22`).
+  - Measure sample83 in `aot` before choosing.
+
+### `AUDIT-R25` (medium): Source text survives inside a detected region, and the gate scores it 0 %
+
+- **Seen in R3 Packet 4 (2026-09-26).**
+  - **sample61:** several Japanese lines stay visible on the translated page, between English lines. With the cleanup bounds drawn on `cleanup-only.png`, the lines sit inside detected regions, so this is a cleanup miss, not an OCR miss.
+  - **sample222:** fragments of the tilted pink banner's lettering survive, with white smears where strokes were half removed. The rotated banner is also `AUDIT-R23`.
+- **Why the numbers said clean.** `_residual_ink_pct` re-runs CTD only on pixels under the patch's own alpha. Glyphs the first CTD pass never masked are outside that footprint, so they score 0 %. This holds for both the runtime check and `scripts/quality/cleanup_composite.py`. On sample61, 62 of 63 regions scored 0.0 % with text visibly left.
+- **Open question (not yet split):**
+  - Either CTD missed those glyphs,
+  - or the region's OCR lines did not include them and the mask is limited to OCR'd lines.
+- **Next step:**
+  - Compute residual ink over the whole region box, not the patch alpha, so the metric can see misses.
+  - Then check the sample61 lines against the region's OCR text to decide which of the two it is.
+
+### `AUDIT-R26` (feature): Image-generation models as an opt-in re-inpaint for hard regions
+
+- **Idea (user, 2026-09-26):** send cleanup crops to an image-generation / image-editing model and assemble the returned regions, instead of reconstructing locally.
+- **Assessed at R3 close, not measured with paid calls.** OpenRouter lists image-output models:
+  - `google/gemini-3.1-flash-image`, `google/gemini-3.1-flash-lite-image`, `google/gemini-3-pro-image`;
+  - `openai/gpt-5-image`, `openai/gpt-5-image-mini`.
+- **Why it is not the cleanup path:**
+  1. These providers refuse or filter sexual content, and explicit pages must stay supported.
+  2. Each call takes about 5–30 s and costs roughly cents per generated image, against about $0.005 per page for translation today.
+  3. The model redraws the whole crop (resampling, colour shift), so only the pixels under the glyph mask could be kept, and seams need blending.
+  4. With OpenVINO, local CTD costs about 1 s per region, so the speed argument is gone.
+- **Where it could earn a place:** an opt-in "re-inpaint with AI" action from R7's editor, for one hard region such as text lettered over a figure (`AUDIT-R24`), on pages the provider accepts. The user picks the region; the result becomes that region's patch on the Inpainting layer, so it is editable and reversible like any other patch.
+- **Before building:** one small paid probe, with a spend decision first.
+  - About 10 crops from sample83, sample222 and sample99, safe-for-work where possible.
+  - Measure refusal rate, latency, price per crop, and PSNR/SSIM against Torii's `inpainted.png` inside the mask.
+- **Status:** future improvement, not scheduled.
+
+### `AUDIT-T6` (low): The harness reports "complete" before QA-triggered redo cycles finish
+
+- **Seen in R3 Packet 4 (2026-09-26), sample61.**
+  - The harness captured `project.zip`, `editor.png` and `export.png` at 11:18:11 UTC, after the first translation → render → QA cycle.
+  - QA then started two more redo cycles, which ran until 11:25:14.
+  - The run caught it by polling `jobs` for the page, and re-captured with `scripts/playwright/capture_existing_page.cjs`.
+- **Same run, runbook side:** the handoff listed `sample177` in both the canary and the six-fixture batch. The second upload was deduplicated onto the first image (`AUDIT-B24` behaviour), so it ran only render and QA, with no cleanup patches. It measures nothing about cleanup.
+- **Next step:**
+  - The harness should treat a page as settled only when no job for it is pending or running, and `last_rendered_at` is after the last QA.
+  - Future runbooks list each source once.
+- **Two more gaps, seen 2026-09-27 on the OpenVINO canary:**
+  - `--register` sends no role, and the backend refuses a non-first registration without one ("Cannot register as Admin"). Register a `translator` with curl first and pass the credentials.
+  - A translator can't delete the series the harness creates (403), so test data needs an admin to remove it.
 
 ### `AUDIT-R12` (medium): SFX appear to shrink neighbouring balloons
 
@@ -1066,6 +1456,15 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Relationship:** this is the same family as [`AUDIT-R8`](#audit-r8-medium-text-under-fills-and-over-runs-its-balloon)
   (under-filled balloons) and does not overlap [`AUDIT-R6`](#audit-r6-medium-there-is-no-vertical-text-mode);
   setting the English vertically would remove the problem and is a different feature.
+- **Open question, 2026-09-20:** `corpus/gaps/pending/ja/sample697` (page 6 of the user's
+  `manga-quality-r6-20260919` review chapter) is a full paragraph in an 87×594px source column —
+  aspect ~6.8, well past anything measured above — and renders as ~20 overlapping one-to-three-word
+  lines directly over the untouched source (no plate; that half is R3). Whether this is the same
+  "flat across every aspect" case this entry measured for full sentences, just not yet measured at
+  this extreme, or a distinct failure, is unconfirmed — not diagnosed further here. Torii's own
+  reference for the same page (`ref-torii.png`) uses a small uniform size with tight line-height and
+  real cleanup underneath rather than widening or squaring the column; worth a look when this gets
+  designed.
 
 ### `AUDIT-R17` (unranked): `shape="rectangular"` is not ignored
 
@@ -1167,6 +1566,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   responsive rendering or touch drawer behaviour at tablet viewports.
 - **Next Step / Blocker:** jsdom does not calculate CSS layout. Needs a real-browser smoke test via
   Playwright.
+- **Live finding 2026-09-25 (LAN access, `DEV_HTTP_BIND=0.0.0.0`).** At phone and tablet widths both Reader sidebars open side by side and leave the page almost no width. Candidate fix: below a breakpoint the sidebars become overlay drawers, one at a time. The user is testing the UI on their devices first and will say what to change; not started.
 
 ### `AUDIT-D5` (low): No memory limits on auxiliary containers
 
