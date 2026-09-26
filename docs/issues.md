@@ -1,6 +1,7 @@
 # Issues & Technical Debt
 
-> **Standing: 122 filed, 92 closed, 30 open.** 2026-09-26: `AUDIT-R23` filed (OCR throws away the
+> **Standing: 123 filed, 92 closed, 31 open.** 2026-09-26: `AUDIT-W15` filed (a model that rejects
+> the JSON schema pays a 400 on every call), `AUDIT-R23` filed (OCR throws away the
 > text angle it detects; typesetting phase); the `AUDIT-F29` merge passed the user's live test;
 > `AUDIT-R21` gains a knob (OCR grouping threshold, global and per series/chapter).
 >
@@ -271,6 +272,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-B14`](#audit-b14-medium-delete-then-re-add-leaves-a-chapter-inconsistent) | Medium | Backend/Frontend | Page count stale, old slot held, reader hangs on the loading screen | **Fixed 2026-09-04** |
 | [`AUDIT-B22`](#audit-b22-medium-page-ordering-is-validated-before-the-chapter-is-locked) | Medium | Backend | Reorder and move validate outside their transaction, so concurrent page changes can invalidate the result | Ready |
 | [`AUDIT-B24`](archive/history.md#audit-b24-medium-a-re-uploaded-image-is-deduplicated-onto-a-processed-one-and-gets-a-render-job-it-cannot-run) | Medium | Backend | Uploading bytes the backend already has attaches the page to the processed image, skips OCR and queues a bare `render` with no scene, which fails 3× | **Fixed 2026-09-25** — cloned page goes to the debounced render |
+| [`AUDIT-W15`](#audit-w15-low-a-model-that-rejects-the-json-schema-pays-a-400-on-every-call) | Low | Worker | The json_schema → json_object downgrade lives on the per-call client, so OpenAI models (GPT-6 Luna) pay a rejected request and a retry on every call | Filed 2026-09-26; after Packet 4 |
 | [`AUDIT-B27`](#audit-b27-medium-changing-the-text-box-inset-settings-re-renders--and-re-qas--every-page) | Medium | Backend | A text-box inset settings change dirties every page; each re-render queues paid QA | Filed 2026-09-25; decision needed |
 | [`AUDIT-B23`](#audit-b23-medium-the-dispatcher-429-cooldown-never-escalates-under-sustained-saturation) | Medium | Backend | `consecutive_429s` is cleared on every healthy `/capabilities` probe, so the exponential cooldown never advances past its 10s base | Ready |
 | [`AUDIT-W3`](#audit-w3-medium-cooldowns-and-lock-waits-burn-a-job-slot) | Medium | Worker | Cooldowns and lock waits block a concurrency slot doing nothing | Deprioritized; needs concurrency test harness |
@@ -995,6 +997,22 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   series, or on next open) rather than global. Not changed.
 - **More relevant since 2026-09-25:** the padding and safety settings now change the export, so the
   re-render is real work rather than an identical redraw; each one is still followed by QA.
+
+### `AUDIT-W15` (low): A model that rejects the JSON schema pays a 400 on every call
+
+- **Seen 2026-09-26** checking GPT-6 Luna (`openai/gpt-6-luna`) for the R3 Packet 4 run. OpenAI's strict mode
+  rejects `TRANSLATION_JSON_SCHEMA` because its objects do not set `additionalProperties: false`.
+  `LLMClient._execute_with_retry` then downgrades to `json_object` and retries, which works: 6.3 s and
+  $0.00024 for a two-line batch, against about 3 s for the call itself.
+- **Why it repeats:** `_degraded_format` lives on the `LLMClient`, which is built per call, so every
+  translation request makes the same rejected attempt first.
+- **Not fixed before Packet 4, on purpose.** `_execute_with_retry` is on every LLM path: OCR VLM, QA
+  and translation (GitNexus impact: CRITICAL, 7 flows). The run counts these lines instead.
+- **Fix options:**
+  1. Remember the downgrade per (provider, model) for the worker's lifetime. Small, and it keeps the
+     schema unchanged.
+  2. Make the schema strict-compatible: `additionalProperties: false`, and every field required or
+     nullable. This changes what every model is asked for.
 
 ### `AUDIT-B23` (medium): The dispatcher 429 cooldown never escalates under sustained saturation
 

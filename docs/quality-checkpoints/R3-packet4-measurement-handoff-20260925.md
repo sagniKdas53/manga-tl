@@ -7,15 +7,15 @@ decision, stop and write it down (section 7).
 
 Read first, in this order:
 1. This file.
-2. [Tracker status](../output-quality-implementation-tracker.md#status-at-a-glance-2026-09-25--r3-measurement-is-next).
+2. [Tracker status](../output-quality-implementation-tracker.md#status-at-a-glance-2026-09-26--test-round-passed-r3-closes-in-a-new-chat), then the 2026-09-25 sections below it.
 3. [R3 handoff § Packet 4](R3-phase-separation-handoff-20260921.md#packet-4--measurement-and-the-bounded-gate) and its "Three separate acceptance decisions" table.
 4. [R3.md § time](R3.md#time--this-is-the-failed-part) — the historical numbers you will be compared with.
 5. [R6.md § Gate runbook](R6.md#gate-runbook) — the stack and harness commands this runbook reuses.
 
 ## 0. Before you start: decisions the user must record
 
-Do not start step 2 until every row has an answer written into section 8 of this file (date plus the
-user's words). If a row is blank, stop and ask. **Silence is not approval.**
+Do not start step 2 until D1–D5 have an answer written into section 8 of this file (date plus the
+user's words). If one is blank, stop and ask. **Silence is not approval.**
 
 | # | Decision | Why it blocks the run | Proposal (not approved) |
 |---|---|---|---|
@@ -24,7 +24,7 @@ user's words). If a row is blank, stop and ask. **Silence is not approval.**
 | D3 | **Timing host** | Laptop timings are contention noise while anything else runs | Quality runs on the laptop; the timed run on chrome-box (quiet box), same tree and images |
 | D4 | **Model pins** for the run | The harness pins translation = DeepSeek V4 Pro and QA VLM = Gemini 3.1 Flash Lite. The deployment QA default is now GLM 5.3 Flash, and Flash Lite returned empty on one explicit page | Translation DeepSeek V4 Pro (unchanged); QA VLM GLM 5.3 Flash. Change `PIPELINE_SETTINGS` in `scripts/playwright/capture_quality_baseline.cjs` only if the user says so |
 | D5 | **Reconstruction method** measured | Cleanup mode is now selectable (System Settings or per chapter/series: `auto` = TELEA on flat + AOT-GAN on detailed, `telea`, `aot`, `off`). LaMa-mpe measured +1.2 dB over AOT (2026-09-20) but is not available: it needs a clean-room reimplementation first | Measure `auto` (the default). Optionally a second pass of the six fixtures in `aot` to see what forcing AOT costs and buys. Each pass is its own run directory and chapter; record the mode in the README identity |
-| D6 | **Control denominator** | Tracker says 24; the harness lists 25 (`sample641`, added 2026-09-19) | 25; report 24 + `sample641` separately |
+| D6 | **Control denominator** | Tracker says 24; the harness lists 25 (`sample641`, added 2026-09-19). **Blocks only the 25-control sweep, which comes after this packet**, so a blank D6 does not stop steps 2–6 | 25; report 24 + `sample641` separately |
 
 ## 1. Rules
 
@@ -48,7 +48,8 @@ user's words). If a row is blank, stop and ask. **Silence is not approval.**
 
 ## 2. Stack
 
-From the repo root, on the host D3 names. It follows R6's runbook with a new project name:
+From the repo root, on the host D3 names (chrome-box: read §2a first; its steps 6–7 replace the
+volume loop below). It follows R6's runbook with a new project name:
 
 ```bash
 RUN=r3p4-$(date +%Y%m%d)
@@ -65,10 +66,92 @@ Record in the run README: the parent and worker commit hashes (`git rev-parse HE
 `git -C worker rev-parse HEAD`), the image IDs (`docker compose … images`), the host's CPU/RAM and
 worker CPU limit (`WORKER_CPUS`), and the `.env` values of `MAX_HEAVY_SLOTS`, `MAX_LIGHT_SLOTS`,
 `CLOUD_CONCURRENCY`, `RENDER_DEBOUNCE_SECONDS` and `RENDER_BUSY_WAIT_SECONDS`, and from System Settings the
-cleanup mode and the text-box padding %, max px and safety %. **Not** the secrets.
+cleanup mode, the OCR grouping threshold, and the text-box padding %, min px, max px and safety %. On a
+fresh stack these are the defaults (`auto`, 0.35, 4 %, 0 px, 4 px, 100 %); if any differs, stop and ask.
+Leave *Custom model IDs* empty. **Not** the secrets.
+
+**Laptop contention.** If D3 puts any timed run on the laptop, stop the everyday dev stack first
+(`docker compose -p manga-quality-dev -f docker-compose.dev.yml stop`, which keeps its data): two
+workers on two cores make every timing contention noise. Start it again when the run ends.
 
 The first registration on a fresh database is the admin. Register it through the harness's
 `--register` and save the account in `logs/$RUN-account.env`, as R6 did.
+
+## 2a. Chrome-box (D3) and the model chain (D4)
+
+D3 puts this run on **chrome-box** (the quiet box). Chrome-box has no Node, so the stack runs there
+and the harness runs on the laptop through an SSH tunnel. The commands in sections 2, 3 and 5 are
+the same apart from where they run.
+
+**On chrome-box** (`ssh chrome-box`):
+1. **Leave production alone.** `~/Documents/docker-composes/manga-tl` is the live deployment (on
+   `main`, ghcr images, with its own staged edits). Do not pull, build, stop or edit anything there.
+2. **Pause watchtower for the whole run:** `docker stop watchtower`. It restarts labelled containers
+   daily, which would interrupt the run. Start it again at the end with `docker start watchtower`.
+3. **Fresh clone of the branch**, worker submodule only (the corpus stays on the laptop):
+   ```bash
+   git clone --branch feat/output-quality https://github.com/sagniKdas53/manga-tl.git ~/Documents/docker-composes/manga-r3p4
+   cd ~/Documents/docker-composes/manga-r3p4 && git submodule update --init worker
+   ```
+   Check that `git rev-parse HEAD` and `git -C worker rev-parse HEAD` equal the laptop's
+   `github/feat/output-quality` and its worker pointer.
+
+**From the laptop, into that clone:**
+4. **The cleanup and bubble models.** They are bind-mounted, not built into the image. Copy them,
+   then check the hashes on chrome-box:
+   ```bash
+   scp data/bootstrap/{yolo11n_bubble,ctd_seg_dyn,lama_aot}.onnx chrome-box:Documents/docker-composes/manga-r3p4/data/bootstrap/
+   ssh chrome-box 'cd Documents/docker-composes/manga-r3p4 && sha256sum data/bootstrap/*.onnx'
+   # expected:
+   # c9208cb610aa35b8f8dc7ef0890182322992a43399a853093ad5d04a3764af4f  yolo11n_bubble.onnx
+   # a0e08c52bdd493e795ee5572a973f5ea6a4630f068e1c229bf23f41796929de9  ctd_seg_dyn.onnx
+   # c5965aca4e5ffa8269051dca1fc30e379d2bded46e0a55366e299ade47086cfc  lama_aot.onnx
+   ```
+5. **Configuration.** Copy `.env` and `secrets/` (credentials: `scp` only, never into a document), then
+   edit **the clone's** `.env`:
+   - `TL_LLM_MODEL=deepseek/deepseek-v4-flash`. This is the pipeline's one translation fallback (see D4).
+   - `DEV_HTTP_BIND=127.0.0.1`. Reach the stack through the tunnel, not the LAN.
+
+   Then regenerate the runtime env on chrome-box: `python3 scripts/dev_setup.py init --non-interactive`.
+   It keeps the existing credentials. Check that `secrets/runtime/models.env` now has
+   `TL_LLM_MODEL=deepseek/deepseek-v4-flash`.
+6. **Model caches.** The `paddlex`/`huggingface` volumes (section 2) come from the laptop's dev stack
+   over SSH, not from a local stack:
+   ```bash
+   for v in paddlex huggingface; do
+     ssh chrome-box docker volume create manga-quality-${RUN}_dev-$v
+     docker run --rm -v manga-quality-dev_dev-$v:/from:ro alpine tar -C /from -cf - . \
+       | ssh chrome-box docker run --rm -i -v manga-quality-${RUN}_dev-$v:/to alpine tar -C /to -xf -
+   done
+   ```
+7. **Up.** Run the section 2 `docker compose … up` line on chrome-box, in the clone. Send the log
+   stream to a file on chrome-box and copy it back at the end.
+8. **Tunnel**, from the laptop, for the whole run:
+   `ssh -N -L 18090:127.0.0.1:18090 -L 19090:127.0.0.1:19000 chrome-box`. The harness then uses
+   `--base http://localhost:18090/tlhub` unchanged, and MinIO is `localhost:19090` (the laptop's own
+   dev MinIO holds 19000). The database has no host port: query it with
+   `ssh chrome-box docker exec manga-quality-${RUN}-db-1 psql -U tladmin -d manga_library -Atc "…"`.
+   `cleanup_composite.py` must take its database and MinIO access as arguments, so that this works.
+
+**The model chain (D4).** The user asked for GPT-6 Luna, falling back to DeepSeek V4 Flash, then
+GLM 5.3 Flash. The pipeline supports one translation fallback: the pinned model, then the worker's
+global `TL_LLM_MODEL` (set to DeepSeek V4 Flash above), and only when *Use Fallback Models* is on.
+There is no third hop. GLM 5.3 Flash is the QA vision model (its default).
+1. **Register Luna before anything is uploaded.** Right after the admin account exists:
+   `PUT /api/settings/custom-models` with
+   `[{"provider":"openrouter","task":"tl","id":"openai/gpt-6-luna"}]`.
+   The curated catalog does not list it. Without this step, every job would quietly swap the series
+   pin for the global model, and the run would measure DeepSeek V4 Flash while claiming Luna.
+2. **Edit the harness** (`scripts/playwright/capture_quality_baseline.cjs`, working tree only):
+   - `TL_MODEL = "openai/gpt-6-luna"`;
+   - `qaLlmModel: "deepseek/deepseek-v4-flash"` and `qaVlmModel: "z-ai/glm-5.3-flash"`, in both the
+     series and the chapter bodies;
+   - `useFallbackModels: true` in both;
+   - `PIPELINE_SETTINGS` to match, so the capture records what was asked for.
+
+   Revert the edit when the run ends and say so in the README.
+3. **Canary check:** the worker log shows `Provider=openrouter Model=openai/gpt-6-luna` for the
+   page's translation. If it shows another model, stop: the registration did not take.
 
 ## 3. Canary — one page, end to end (≈ US$0.02)
 
@@ -212,6 +295,14 @@ R3 handoff's table and leave the verdict to the coordinator.
 
 Harmless noise you will see (do not fix it):
 - ONNX Runtime `VerifyOutputSizes` warnings, one per CTD call.
+- `400 with json_schema — degrading to json_object`, once per Luna translation request. OpenAI's
+  strict mode rejects our schema, and the client forgets the downgrade between calls
+  (`AUDIT-W15`), so each request costs one extra round trip. Count these lines per page.
+- `Batch: Falling back to 'openrouter' with model 'deepseek/deepseek-v4-flash'` means Luna failed
+  for that chunk. This is not a stop condition, but count it per page: a fallback-translated page is
+  not a Luna page.
+- `[OCR] Grouping threshold 0.35 characters`, once per OCR job. Any other value means a setting
+  was changed: a stop condition.
 - `[Render] Renderer was busy; waited N time(s)` when two renders overlap. The render service holds
   one context by design (UR02), and the worker now waits for it inside the job. Record the count.
   A FAILED render with `renderer context capacity is exhausted` would mean the wait ran out (300 s),
@@ -222,10 +313,10 @@ Harmless noise you will see (do not fix it):
 
 | # | Decision | User's answer | Date |
 |---|---|---|---|
-| D1 | Spend cap | | |
-| D2 | Latency ceilings | | |
-| D3 | Timing host | | |
-| D4 | Model pins | | |
+| D1 | Spend cap | US$1.00 (the proposal) | 2026-09-26 |
+| D2 | Latency ceilings | "Record only": measure and report every time; no pass line, so the performance gate stays open | 2026-09-26 |
+| D3 | Timing host | Chrome-box, whole run: "We can deploy on the chromebox now without any worries as I have fixed the space issues, we just need to pull the new branches and also copy the cleanup models before building the images" (see §2a) | 2026-09-26 |
+| D4 | Model pins | Translation GPT-6 Luna (`openai/gpt-6-luna`), then DeepSeek V4 Flash, then GLM 5.3 Flash: "since these are image quality tests and not translation quality tests, so using flash models should be good enough for speed and cost". The pipeline has one fallback hop, so this runs as Luna → DeepSeek V4 Flash, with QA LLM DeepSeek V4 Flash and QA VLM GLM 5.3 Flash (see §2a) | 2026-09-26 |
 | D5 | Reconstruction method | `auto`, after comparing forced TELEA and forced AOT-GAN chapters on the dev stack: "The current auto mode is actually perfect for what we are doing now" | 2026-09-26 |
 | D6 | Control denominator | | |
 
@@ -248,5 +339,13 @@ Check the column names against `database/init.sql` before trusting these; it is 
 
 ## Prompt to start the Sonnet session
 
-> Read `docs/quality-checkpoints/R3-packet4-measurement-handoff-20260925.md` and follow it exactly. Check that section 8 has an answer for every decision; if not, stop and ask me. Do not change pipeline code, models, thresholds or the tracker; do not commit. Write only `scripts/quality/cleanup_composite.py` (+ its test) and the run README. Stop on any section 7 condition. At the end, give me the README path, the spend, and the list of things not executed.
+> Read `docs/quality-checkpoints/R3-packet4-measurement-handoff-20260925.md` and follow it exactly.
+> - Check that section 8 answers D1–D5; if not, stop and ask me.
+> - The stack runs on chrome-box and the harness on this laptop, as §2a says. Set `RUN` once and use the same value on both hosts.
+> - Never touch the production checkout on chrome-box. Pause watchtower for the run and restart it after.
+> - Do not change pipeline code, models, thresholds or the tracker, and do not commit.
+> - Write only `scripts/quality/cleanup_composite.py` (+ its test) and the run README. The one exception is the §2a harness edit for D4; revert it at the end.
+> - Stop on any section 7 condition.
+>
+> At the end, give me the README path, the spend, the fallback count, and the list of things not executed.
 

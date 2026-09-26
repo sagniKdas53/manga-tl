@@ -33,8 +33,25 @@ Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequ
 - Torii rotates 339 of its 2,880 corpus boxes by at least 5°, on 121 of 270 pages.
 - The renderer already rotates text; what's missing is an angle per region and a box oriented to it.
 
+**Ready for Packet 4 (checked 2026-09-26).**
+- **Decisions:** D1–D5 are recorded in the handoff's §8.
+  - D1: US$1.00.
+  - D2: record only, so the performance gate stays open.
+  - D3: chrome-box.
+  - D4: GPT-6 Luna, falling back to DeepSeek V4 Flash; QA on DeepSeek V4 Flash (LLM) and GLM 5.3 Flash (VLM).
+  - D5: `auto`.
+  - D6 blocks only the later 25-control sweep.
+- **Checked against the tree:**
+  - every script, fixture and model the runbook names exists;
+  - the pinned models are in the catalog, except Luna, which the runbook registers as a custom ID before any upload;
+  - chrome-box is reachable, has 345 GB free for Docker, and ports 18090/19000/19001 are free.
+- **Handoff §2a** covers the chrome-box procedure: a fresh clone beside production, the cleanup models, the fallback model, the tunnel.
+- **Two limits recorded there:**
+  - The pipeline has one translation fallback, so the requested third hop (GLM 5.3 Flash) does not exist.
+  - Each Luna request pays one rejected attempt first (`AUDIT-W15`), which the run counts.
+
 **Next step, in order:**
-1. **New chat: run Packet 4** from [the handoff](quality-checkpoints/R3-packet4-measurement-handoff-20260925.md). D5 is recorded; D1–D4 and D6 are still to be filled before its step 2.
+1. **New chat (Sonnet): run Packet 4** from [the handoff](quality-checkpoints/R3-packet4-measurement-handoff-20260925.md), using its start prompt.
 2. **Close R3** on Packet 4's evidence.
 3. **Typesetting phase:** automatic grouping (`AUDIT-R21`), tilted text (`AUDIT-R23`), then the rest of M7.
 
