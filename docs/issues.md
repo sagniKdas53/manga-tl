@@ -1,6 +1,7 @@
 # Issues & Technical Debt
 
-> **Standing: 127 filed, 92 closed, 35 open.** 2026-09-26 (R3 closed): `AUDIT-R24` (art smeared inside a patch),
+> **Standing: 128 filed, 92 closed, 36 open.** 2026-09-26: `AUDIT-R26` filed (image-generation re-inpaint, future improvement).
+> R3 closed the same day: `AUDIT-R24` (art smeared inside a patch),
 > `AUDIT-R25` (text left inside a region, invisible to the residual-ink metric), `AUDIT-W16` (GLM QA
 > judge; default switched to Gemini 3.1 Flash Lite) and `AUDIT-T6` (harness captures before redo cycles end)
 > filed from Packet 4. Earlier the same day: `AUDIT-W15` filed (a model that rejects
@@ -301,6 +302,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R23`](#audit-r23-medium-ocr-throws-away-the-text-angle-it-detects) | Medium | Worker/Backend | Tilted lettering (signs, slanted captions) is typeset level: OCR has the angle in its quads and writes `rotation: 0` | Filed 2026-09-26; typesetting phase |
 | [`AUDIT-R24`](#audit-r24-medium-cleanup-smears-the-art-when-text-crosses-a-figure) | Medium | Worker | Text lettered over a figure: the patch rebuilds the arm as blocky shapes (sample83); no metric sees damage inside a patch | Filed 2026-09-26 (R3 close); Torii is worse here |
 | [`AUDIT-R25`](#audit-r25-medium-source-text-survives-inside-a-detected-region-and-the-gate-scores-it-0) | Medium | Worker/Testing | Japanese lines survive inside detected regions (sample61, sample222); residual ink only looks under the patch alpha, so it reads 0 % | Filed 2026-09-26 (R3 close) |
+| [`AUDIT-R26`](#audit-r26-feature-image-generation-models-as-an-opt-in-re-inpaint-for-hard-regions) | Feature | Worker/Frontend | Send a hard cleanup crop to an image-editing model and use the result as that region's patch | Future improvement (2026-09-26); explicit-content refusals rule it out as the default path |
 | [`AUDIT-R17`](#audit-r17-unranked-shaperectangular-is-not-ignored) | Unranked | Render | Reported as an ignored API parameter; the branch exists and the contract holds end to end | **Closed on assessment 2026-09-05** |
 
 ### Cosmetic & long tail
@@ -1300,6 +1302,23 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Next step:**
   - Compute residual ink over the whole region box, not the patch alpha, so the metric can see misses.
   - Then check the sample61 lines against the region's OCR text to decide which of the two it is.
+
+### `AUDIT-R26` (feature): Image-generation models as an opt-in re-inpaint for hard regions
+
+- **Idea (user, 2026-09-26):** send cleanup crops to an image-generation / image-editing model and assemble the returned regions, instead of reconstructing locally.
+- **Assessed at R3 close, not measured with paid calls.** OpenRouter lists image-output models:
+  - `google/gemini-3.1-flash-image`, `google/gemini-3.1-flash-lite-image`, `google/gemini-3-pro-image`;
+  - `openai/gpt-5-image`, `openai/gpt-5-image-mini`.
+- **Why it is not the cleanup path:**
+  1. These providers refuse or filter sexual content, and explicit pages must stay supported.
+  2. Each call takes about 5–30 s and costs roughly cents per generated image, against about $0.005 per page for translation today.
+  3. The model redraws the whole crop (resampling, colour shift), so only the pixels under the glyph mask could be kept, and seams need blending.
+  4. With OpenVINO, local CTD costs about 1 s per region, so the speed argument is gone.
+- **Where it could earn a place:** an opt-in "re-inpaint with AI" action from R7's editor, for one hard region such as text lettered over a figure (`AUDIT-R24`), on pages the provider accepts. The user picks the region; the result becomes that region's patch on the Inpainting layer, so it is editable and reversible like any other patch.
+- **Before building:** one small paid probe, with a spend decision first.
+  - About 10 crops from sample83, sample222 and sample99, safe-for-work where possible.
+  - Measure refusal rate, latency, price per crop, and PSNR/SSIM against Torii's `inpainted.png` inside the mask.
+- **Status:** future improvement, not scheduled.
 
 ### `AUDIT-T6` (low): The harness reports "complete" before QA-triggered redo cycles finish
 

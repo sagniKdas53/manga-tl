@@ -65,12 +65,12 @@ Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequ
      - With OpenVINO, local CTD is about 1 s per region anyway.
    - Where it could earn a place: an opt-in "re-inpaint with AI" for a hard region such as text over art (`AUDIT-R24`), from R7's editor, on pages the provider accepts. Parked as an idea, not planned.
 
-**Next, in order:**
-1. The OpenVINO packet (cleanup speed, no quality change).
-2. R7 (editor shows the cleaned page).
-3. Typesetting: `AUDIT-R21` grouping, `AUDIT-R23` rotation, then the rest of M7.
+**Next, in order (user approved 2026-09-26: "Sounds good to me"):**
+1. **OpenVINO packet:** cleanup speed, no quality change. Being done now.
+2. **R7:** the editor shows the cleaned page. A handoff is being written for a separate session.
+3. **Typesetting:** `AUDIT-R21` grouping, `AUDIT-R23` rotation, then the rest of M7.
 
-The user sets the order.
+**Future potential improvement:** image-generation models as an opt-in cleanup for hard regions, filed as [`AUDIT-R26`](issues.md#audit-r26-feature-image-generation-models-as-an-opt-in-re-inpaint-for-hard-regions). Not scheduled.
 
 ## Status at a glance (2026-09-26 — test round passed; R3 closes in a new chat)
 
