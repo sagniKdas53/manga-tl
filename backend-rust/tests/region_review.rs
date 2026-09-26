@@ -516,7 +516,9 @@ async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
         .unwrap();
     }
     // The chapter's cleanup-mode override travels on the block's cleanup job.
-    sqlx::query("UPDATE chapters SET cleanup_mode = 'telea' WHERE series_id = $1")
+    sqlx::query(
+        "UPDATE chapters SET cleanup_mode = 'telea', ocr_merge_threshold = 0.9 WHERE series_id = $1",
+    )
         .bind(series_id)
         .execute(&pool)
         .await
@@ -648,6 +650,10 @@ async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
     let payload: serde_json::Value = serde_json::from_str(&payload).unwrap();
     assert_eq!(payload["followUp"]["regionId"], first.to_string());
     assert_eq!(payload["cleanupMode"], "telea");
+    assert_eq!(
+        payload["ocrMergeThreshold"], 0.9,
+        "the chapter's grouping threshold rides on every pipeline job"
+    );
     let entries = payload["cleanupRegions"].as_array().unwrap();
     assert_eq!(entries.len(), 1, "only the merged box is cleaned again");
 

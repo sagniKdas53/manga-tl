@@ -206,6 +206,7 @@ describe("Dashboard Component", () => {
             qaMode: null,
             routingStrategy: null,
             cleanupMode: null,
+            ocrMergeThreshold: null,
             useFallbackModels: null,
           }),
         });
@@ -275,6 +276,7 @@ describe("Dashboard Component", () => {
           qaMode: null,
           routingStrategy: null,
           cleanupMode: null,
+          ocrMergeThreshold: null,
           useFallbackModels: null,
         }),
       });
@@ -700,6 +702,7 @@ describe("Dashboard Component", () => {
             qaMode: null,
             routingStrategy: null,
             cleanupMode: null,
+            ocrMergeThreshold: null,
             useFallbackModels: null,
           }),
         });

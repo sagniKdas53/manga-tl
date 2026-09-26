@@ -424,6 +424,7 @@ export const Reader: React.FC<ReaderProps> = ({
           paddingPercent: Number(
             data.textBoxPaddingPercent ?? d.paddingPercent,
           ),
+          paddingMinPx: Number(data.textBoxPaddingMinPx ?? d.paddingMinPx),
           paddingMaxPx: Number(data.textBoxPaddingMaxPx ?? d.paddingMaxPx),
           safetyPercent: Number(data.textBoxSafetyPercent ?? d.safetyPercent),
         });

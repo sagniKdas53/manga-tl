@@ -10,13 +10,15 @@ export interface TextBoxInset {
 }
 export declare const DEFAULT_TEXT_BOX_INSET: TextBoxInset;
 /**
- * System Settings' text-box geometry: padding as a percentage of each box's shorter side, capped
- * at a max px (either 0 turns padding off), then the share of the rest text may use. The backend
+ * System Settings' text-box geometry: padding as a percentage of each box's shorter side, raised
+ * to a min px (never more than a quarter of that side) and capped at a max px (0 turns padding
+ * off; the max wins over the min), then the share of the rest text may use. The backend
  * resolves the same rule per box for the renderer (`TextBoxGeometry::padding_px`); the editor
  * resolves it here, so both fit text into the same rectangle.
  */
 export interface TextBoxGeometry {
     paddingPercent: number;
+    paddingMinPx: number;
     paddingMaxPx: number;
     safetyPercent: number;
 }

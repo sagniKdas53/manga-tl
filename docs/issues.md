@@ -1,6 +1,10 @@
 # Issues & Technical Debt
 
-> **Standing: 121 filed, 92 closed, 29 open.** 2026-09-25 triage: `AUDIT-B15`, `B16`, `B19`, `B24`
+> **Standing: 122 filed, 92 closed, 30 open.** 2026-09-26: `AUDIT-R23` filed (OCR throws away the
+> text angle it detects; typesetting phase); the `AUDIT-F29` merge passed the user's live test;
+> `AUDIT-R21` gains a knob (OCR grouping threshold, global and per series/chapter).
+>
+> 2026-09-25 triage: `AUDIT-B15`, `B16`, `B19`, `B24`
 > closed (fixed or verified on the current tree), `AUDIT-R20` closed on its 2026-09-19 live gate,
 > `AUDIT-R21` filed (line-continuity veto), `AUDIT-B27` filed (settings change re-QAs every page), `AUDIT-B28` filed and fixed (busy renderer failed renders), `AUDIT-R22` filed (LaMa-mpe mode), `AUDIT-F29` merge half shipped (split still open), `AUDIT-R18`
 > narrowed. Closed entries moved to [archive/history.md](archive/history.md#2026-09-25--issues-closed-in-the-r3-triage).
@@ -287,6 +291,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R20`](archive/history.md#audit-r20-high-a-balloon-is-emitted-as-one-region-per-column) | High | Worker | The live owner veto splits a balloon into one region per column/line when the detector's container does not enclose every column; each piece is translated and typeset alone | **Closed 2026-09-19** — R6 live gate passed; follow-on split filed as `AUDIT-R21` |
 | [`AUDIT-R21`](#audit-r21-medium-the-line-continuity-veto-splits-a-balloon-whose-column-ocr-broke-in-two) | Medium | Worker | The line-continuity veto splits a balloon when OCR broke one column in two; page-4 line gaps miss the 0.35 budget | Grouping phase (user decision 2026-09-25); manual merge is the workaround |
 | [`AUDIT-R22`](#audit-r22-feature-lama-mpe-as-a-cleanup-mode) | Feature | Worker | LaMa-mpe beat AOT by 1.2 dB but its model/code are gone; needs a clean-room network before it can be a cleanup mode | Filed 2026-09-25 |
+| [`AUDIT-R23`](#audit-r23-medium-ocr-throws-away-the-text-angle-it-detects) | Medium | Worker/Backend | Tilted lettering (signs, slanted captions) is typeset level: OCR has the angle in its quads and writes `rotation: 0` | Filed 2026-09-26; typesetting phase |
 | [`AUDIT-R17`](#audit-r17-unranked-shaperectangular-is-not-ignored) | Unranked | Render | Reported as an ignored API parameter; the branch exists and the contract holds end to end | **Closed on assessment 2026-09-05** |
 
 ### Cosmetic & long tail
@@ -1135,6 +1140,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Next step:** write a bounded task card under M7 (after H01b/H02) once H01a/F04's ownership
   contract is finalized; do not build a parallel ownership representation.
 - **Merge shipped 2026-09-25** (`a6011e0`): Reader → Editor Tools → *Merge regions*, `POST /api/pages/{pageId}/regions/merge`. The picked fragments become one region (union box, text joined in geometric reading order), which alone is cleaned and retranslated; hidden history layers keep what they drew. A dry run shows the order (1, 2, 3… on the page, the joined text in the panel) before anything changes, and *Add the other pieces in this balloon* picks the detector container's siblings. **Still open: splitting a wrongly merged region.** Reclassify to *partly done*; close when split exists or is declined.
+- **User test passed 2026-09-26:** Ch.3 p2 redone and its balloon merged. The user's verdict: "the merging is working amazingly now". Automatic grouping stays with the typesetting phase (`AUDIT-R21`).
 
 ### `AUDIT-B26` (feature): "Export Chapter (ZIP)" should export page projects, not rendered images
 
@@ -1176,6 +1182,11 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Decision (user, 2026-09-25):** handled in the upcoming grouping phase, not now. Workaround:
   Reader *Merge regions* (`AUDIT-F29`). Fix idea: join collinear pieces of one column before the
   continuity test, opt-in (the grouping frozen-equivalence test), measured on the corpus.
+- **A knob, 2026-09-26.** The proximity budget is now a setting: System Settings → *OCR Grouping
+  Threshold* (default 0.35, range 0.05–3), overridable per series and chapter, sent on every OCR
+  job. It applies on the next OCR, so redo OCR to regroup a page. It moves the Ch.1 p4 case (a
+  paragraph whose lines are 8–9 px apart needs about 0.45). It does not move the continuity veto,
+  which splits after grouping.
 
 ### `AUDIT-R22` (feature): LaMa-mpe as a cleanup mode
 
@@ -1191,6 +1202,32 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   its own generator digest (`generator_sha256_for`).
 - **Next step:** a bounded packet. Reimplement, verify against the 2026-09-20 numbers on the same 23
   regions, then add it as a mode. Its measured cost was 42 s for 23 regions against AOT's 23 s.
+
+### `AUDIT-R23` (medium): OCR throws away the text angle it detects
+
+- **Report (2026-09-26, user):** a sign reading キュアット探偵事務所, tilted about 25°, comes out
+  with level English on a tilted board; Torii rotates the text to the board.
+- **Measured.** Our detector already sees the angle. PP-OCRv6 on the sign returns quads whose top
+  edges run at 23.9° and 26.9° (Torii's box: 25.3°). The OCR handler keeps only the axis-aligned
+  bounding box and writes `"rotation": 0.0` at every call site (`handlers/ocr.py`,
+  `services/merge_regions.py`), so the tilt never reaches the region or its text element.
+- **How often.** Over the 270 Torii corpus bundles (2,880 boxes), Torii rotates 339 boxes by 5° or
+  more (215 by 10°, 107 by 20°), on 121 of 270 pages. Below 5° its angles are detector noise
+  (median 0.3°), so a real feature needs a dead band.
+- **Already in place.** `ocr_regions.rotation` and `layer_elements.rotation` exist; the scene's
+  `quad_for` and the renderer rotate a text object about its centre; the editor saves rotation
+  (`AUDIT-F14`/`R5` fixed).
+- **What it needs.**
+  1. An angle per region: each fragment's quad edge, combined across the region's fragments
+     weighted by length; snap to 0 inside a dead band (about 3–5°); treat about 90° as vertical text,
+     not rotation.
+  2. An oriented box: un-rotate the member quads about their centre and take their extent. The
+     axis-aligned box of a tilted line is too tall, so fitting text into it and then rotating it
+     would overflow the board.
+  3. Merge (`region_merge::union_box`) and region redo must carry the angle rather than reset it.
+  4. Cleanup is unaffected (it works from the glyph mask).
+- **Next step:** typesetting phase, after R3 closes. Measure against the 339 Torii boxes (angle
+  error, and whether the oriented box still fits the text).
 
 ### `AUDIT-R12` (medium): SFX appear to shrink neighbouring balloons
 

@@ -4,6 +4,40 @@ Start with the current checkpoint below and the [2026-09-23 evidence report](qua
 
 Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **Current R3 status (2026-09-25): implementation complete (Packets 1–3, OQ-07/08); Packet 4 measurement not started; all three gates (reliability, performance, quality) still open; NOT PASSED.** Next: one user test round on the dev stack (cleanup modes, padding, merge), then the [Packet 4 handoff](quality-checkpoints/R3-packet4-measurement-handoff-20260925.md) after its six decisions. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25). Read the summary and [current next-session handoff](output-quality-next-session-20260924.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
 
+## Status at a glance (2026-09-26 — test round passed; R3 closes in a new chat)
+
+**The 2026-09-25 test round passed.** The user redid OCR on Ch.3 p2 and merged its balloon: "the merging is working amazingly now". They then compared a chapter forced to TELEA with one forced to AOT-GAN. Both behaved as expected; AOT-GAN is slower and more detailed. Their verdict: "The current auto mode is actually perfect for what we are doing now." That settles Packet 4's **D5 = `auto`** (recorded in the handoff §8). Automatic grouping (`AUDIT-R21`) moves to the typesetting phase; the manual merge is the tool until then.
+
+**Fixed before closing R3 (this round):**
+- **OCR grouping threshold is a setting.**
+  - Where: System Settings → *OCR* (third field), and in *Model Overrides* for a series or chapter (third field, beside the OCR pair).
+  - What: the same 0.35-character proximity budget the worker always used (`OCR_MERGE_THRESHOLD`). Now it rides on every OCR job; a higher value joins more.
+  - When it applies: on the next OCR, so redo OCR on a page to regroup it. Saving it invalidates nothing.
+- **Custom model IDs.**
+  - Pick *Custom model ID…* at the bottom of any model list (except local OCR) and type, say, `stealth/space-bunny-alpha`.
+  - The ID is registered for that provider and task (`PUT /api/settings/custom-models`). From then on the backend's catalog checks accept it: before, an override the catalog did not list was quietly replaced by the global model when a job was queued.
+  - Its price shows as unknown. Registered IDs are listed, with delete, under *Advanced Routing*.
+- **System Settings regrouped.**
+  - *Cleanup & Text Fit*: cleanup mode, safety margin, and padding % / min px / max px on one row.
+  - *Advanced Routing (OpenRouter)*: routing strategy, fallback models and the custom IDs.
+- **Min Padding (px).**
+  - The existing px value is a cap (*Max*), not a floor. It stops large balloons getting fat padding.
+  - The new floor lifts small boxes: padding = % of the short side, raised to the min (never past a quarter of the box), stopped at the max.
+  - Default 0, so exports are unchanged.
+  - A separate "Min Margin (px)" was not added: it would be a second inset from the same edge.
+- **Schema:** `series.ocr_merge_threshold`, `chapters.ocr_merge_threshold` added to `init.sql` (LOCK-3). The dev database got them by hand.
+
+**Filed for the typesetting phase: `AUDIT-R23`, tilted text is typeset level.**
+- Our detector already returns the angle: 23.9° and 26.9° on the user's sign, where Torii used 25.3°.
+- OCR keeps only the axis-aligned box and writes `rotation: 0`.
+- Torii rotates 339 of its 2,880 corpus boxes by at least 5°, on 121 of 270 pages.
+- The renderer already rotates text; what's missing is an angle per region and a box oriented to it.
+
+**Next step, in order:**
+1. **New chat: run Packet 4** from [the handoff](quality-checkpoints/R3-packet4-measurement-handoff-20260925.md). D5 is recorded; D1–D4 and D6 are still to be filled before its step 2.
+2. **Close R3** on Packet 4's evidence.
+3. **Typesetting phase:** automatic grouping (`AUDIT-R21`), tilted text (`AUDIT-R23`), then the rest of M7.
+
 ## Status at a glance (2026-09-25, evening — one test round, then Packet 4)
 
 **Where R3 stands.** Implementation complete (Packets 1–3, OQ-07/08); Packet 4 (measurement) not started; **NOT PASSED**. This evening's round added the controls Packet 4 needs to compare methods, and fixed a render failure seen live:
@@ -22,14 +56,14 @@ Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequ
 2. **Record the six Packet 4 decisions** in [the handoff](quality-checkpoints/R3-packet4-measurement-handoff-20260925.md#8-decisions-recorded-fill-before-step-2). D5 now has a real choice: measure `auto`, or run the fixtures once per mode.
 3. **Run Packet 4** (Sonnet, per the handoff).
 
-### How the pipeline works now (2026-09-25)
+### How the pipeline works now (2026-09-25; OCR threshold added 2026-09-26)
 
 One page, from upload to export. Every arrow into a job is a queued job with its own attempt/lease (R3 Packet 2); a callback that is not the current attempt is refused (409).
 
 ```mermaid
 flowchart TD
     U[Upload page] --> PD[panel-detection]
-    PD --> OCR["ocr<br/>local PaddleOCR or cloud VLM<br/>group fragments; owner veto may split (AUDIT-R21)"]
+    PD --> OCR["ocr<br/>local PaddleOCR or cloud VLM<br/>group fragments (grouping threshold:<br/>chapter → series → System Settings);<br/>owner veto may split (AUDIT-R21)"]
     OCR --> LAY["layout<br/>classify regions: replace / exclude (SFX)"]
     LAY --> CL{"cleanup<br/>mode: auto / telea / aot / off"}
     CL -->|"per region: CTD glyph mask<br/>then TELEA or AOT patch"| CLOK[patch stored, region complete]

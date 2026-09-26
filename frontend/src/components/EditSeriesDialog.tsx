@@ -61,6 +61,9 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
     series.routingStrategy || "",
   );
   const [cleanupMode, setCleanupMode] = useState(series.cleanupMode || "");
+  const [ocrMergeThreshold, setOcrMergeThreshold] = useState<number | null>(
+    series.ocrMergeThreshold ?? null,
+  );
   const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
     series.useFallbackModels ?? null,
   );
@@ -77,6 +80,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
     qaMode,
     routingStrategy,
     cleanupMode,
+    ocrMergeThreshold,
     useFallbackModels,
   };
 
@@ -93,6 +97,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
     qaMode: setQaMode,
     routingStrategy: setRoutingStrategy,
     cleanupMode: setCleanupMode,
+    ocrMergeThreshold: setOcrMergeThreshold,
     useFallbackModels: setUseFallbackModels,
   };
 
@@ -140,6 +145,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
           qaMode: qaMode || null,
           routingStrategy: routingStrategy || null,
           cleanupMode: cleanupMode || null,
+          ocrMergeThreshold,
           useFallbackModels: useFallbackModels,
         }),
       });
@@ -238,6 +244,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
           </FormControl>
 
           <ModelOverridesAccordion
+            token={user.token}
             expanded={overridesOpen}
             onToggle={() => setOverridesOpen(!overridesOpen)}
             value={overridesValue}
@@ -254,6 +261,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
               qaVlmModel: settings?.qaVlmModel,
               routingStrategy: settings?.routingStrategy,
               cleanupMode: settings?.cleanupMode,
+              ocrMergeThreshold: settings?.ocrMergeThreshold,
               useFallbackModels: settings?.useFallbackModels,
             }}
             ocrModelLabel="OCR Model"

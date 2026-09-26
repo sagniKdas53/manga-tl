@@ -5,6 +5,7 @@ export const DEFAULT_TEXT_BOX_INSET = {
 /** Reproduces the pre-settings export: 4 px on any box at least 100 px across, no shrink. */
 export const DEFAULT_TEXT_BOX_GEOMETRY = {
     paddingPercent: 4,
+    paddingMinPx: 0,
     paddingMaxPx: 4,
     safetyPercent: 100,
 };
@@ -16,9 +17,13 @@ export function insetForBox(box, geometry = DEFAULT_TEXT_BOX_GEOMETRY) {
     const cap = Number.isFinite(geometry.paddingMaxPx)
         ? Math.min(64, Math.max(0, geometry.paddingMaxPx))
         : DEFAULT_TEXT_BOX_GEOMETRY.paddingMaxPx;
+    const floor = Number.isFinite(geometry.paddingMinPx)
+        ? Math.min(64, Math.max(0, geometry.paddingMinPx))
+        : DEFAULT_TEXT_BOX_GEOMETRY.paddingMinPx;
     const shortSide = Math.max(0, Math.min(box.width, box.height));
+    const scaled = (shortSide * percent) / 100;
     return {
-        paddingPx: Math.min((shortSide * percent) / 100, cap),
+        paddingPx: Math.min(Math.max(scaled, Math.min(floor, shortSide / 4)), cap),
         safetyPercent: geometry.safetyPercent,
     };
 }

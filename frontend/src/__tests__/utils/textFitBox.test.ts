@@ -86,7 +86,12 @@ describe("textFitBox", () => {
 });
 
 describe("insetForBox (System Settings padding %, max px, safety %)", () => {
-  const geometry = { paddingPercent: 6, paddingMaxPx: 12, safetyPercent: 95 };
+  const geometry = {
+    paddingPercent: 6,
+    paddingMinPx: 0,
+    paddingMaxPx: 12,
+    safetyPercent: 95,
+  };
 
   it("scales padding with the box's shorter side", () => {
     expect(
@@ -112,6 +117,25 @@ describe("insetForBox (System Settings padding %, max px, safety %)", () => {
       insetForBox({ width: 300, height: 300 }, { ...geometry, paddingMaxPx: 0 })
         .paddingPx,
     ).toBe(0);
+  });
+
+  it("lifts small boxes to the min px, but a quarter of the box and the max still win", () => {
+    const g = {
+      ...geometry,
+      paddingPercent: 4,
+      paddingMinPx: 6,
+      paddingMaxPx: 10,
+    };
+    expect(insetForBox({ width: 50, height: 300 }, g).paddingPx).toBe(6);
+    expect(insetForBox({ width: 200, height: 300 }, g).paddingPx).toBe(8);
+    expect(insetForBox({ width: 1000, height: 1000 }, g).paddingPx).toBe(10);
+    expect(insetForBox({ width: 16, height: 40 }, g).paddingPx).toBe(4);
+    expect(
+      insetForBox(
+        { width: 50, height: 50 },
+        { ...g, paddingMinPx: 12, paddingMaxPx: 5 },
+      ).paddingPx,
+    ).toBe(5);
   });
 
   it("matches the backend default: 4px on a box 100px or more across", () => {

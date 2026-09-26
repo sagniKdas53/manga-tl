@@ -90,6 +90,8 @@ pub struct GlobalSettings {
     pub use_fallback_models: bool,
     /// How cleanup rebuilds the background under erased lettering: one of [`CLEANUP_MODES`].
     pub cleanup_mode: String,
+    /// OCR grouping threshold in characters; see [`ocr_merge_threshold`].
+    pub ocr_merge_threshold: f64,
     /// ProviderConfigCache.getDefaultModel("local","ocr") once Phase 3 lands; until then
     /// only the PADDLEOCR_REC_MODEL fallback path exists (documented deviation).
     pub local_ocr_model: String,
@@ -111,15 +113,34 @@ pub fn cleanup_mode(value: &str) -> String {
     }
 }
 
+/// OCR fragment grouping: join two fragments when the white space between them is under this many
+/// characters. The worker's own `OCR_MERGE_THRESHOLD` (0.35) is the measured default; the floor is
+/// `fragment_grouping.MIN_THRESHOLD_RATIO`, which the area gate halves down to.
+pub const OCR_MERGE_THRESHOLD_DEFAULT: f64 = 0.35;
+pub const OCR_MERGE_THRESHOLD_RANGE: (f64, f64) = (0.05, 3.0);
+
+/// A grouping threshold as sent to the worker: clamped, or the default when not a number.
+pub fn ocr_merge_threshold(value: f64) -> f64 {
+    if value.is_finite() {
+        value.clamp(OCR_MERGE_THRESHOLD_RANGE.0, OCR_MERGE_THRESHOLD_RANGE.1)
+    } else {
+        OCR_MERGE_THRESHOLD_DEFAULT
+    }
+}
+
 /// Where text sits inside its box: an inset on every side that scales with the box (a percentage
-/// of its shorter side, capped at a max px), then the share of what is left that text may use.
+/// of its shorter side, raised to a min px and capped at a max px), then the share of what is left
+/// that text may use.
 /// One definition for the editor (via the settings route), the scene builder (per-object
 /// `style.padding`) and the renderer (the safety percent rides on each render job).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TextBoxGeometry {
-    /// 0–50. Zero turns padding off.
+    /// 0–50. Zero turns padding off (unless a min px is set).
     pub padding_percent: i32,
-    /// 0–64. Zero turns padding off.
+    /// 0–64. A floor for small boxes; zero means none. Never more than a quarter of the box's
+    /// shorter side, so a tiny box keeps room for text.
+    pub padding_min_px: i32,
+    /// 0–64. Zero turns padding off; it wins over the min.
     pub padding_max_px: i32,
     /// 1–100.
     pub safety_percent: i32,
@@ -130,13 +151,20 @@ impl TextBoxGeometry {
     /// a flat 4 px (every box at least 100 px across gets exactly that) and no safety shrink.
     pub const DEFAULT: TextBoxGeometry = TextBoxGeometry {
         padding_percent: 4,
+        padding_min_px: 0,
         padding_max_px: 4,
         safety_percent: 100,
     };
 
-    pub fn clamped(padding_percent: i32, padding_max_px: i32, safety_percent: i32) -> Self {
+    pub fn clamped(
+        padding_percent: i32,
+        padding_min_px: i32,
+        padding_max_px: i32,
+        safety_percent: i32,
+    ) -> Self {
         TextBoxGeometry {
             padding_percent: padding_percent.clamp(0, 50),
+            padding_min_px: padding_min_px.clamp(0, 64),
             padding_max_px: padding_max_px.clamp(0, 64),
             safety_percent: safety_percent.clamp(1, 100),
         }
@@ -145,7 +173,9 @@ impl TextBoxGeometry {
     /// The inset, in px, for a box of this size.
     pub fn padding_px(&self, width: f64, height: f64) -> f64 {
         let short = width.min(height).max(0.0);
-        (short * f64::from(self.padding_percent) / 100.0).min(f64::from(self.padding_max_px))
+        let scaled = short * f64::from(self.padding_percent) / 100.0;
+        let floor = f64::from(self.padding_min_px).min(short / 4.0);
+        scaled.max(floor).min(f64::from(self.padding_max_px))
     }
 }
 
@@ -161,9 +191,17 @@ pub async fn text_box_geometry(pool: &PgPool) -> TextBoxGeometry {
     let d = TextBoxGeometry::DEFAULT;
     TextBoxGeometry::clamped(
         int_setting(pool, "textBoxPaddingPercent", d.padding_percent).await,
+        int_setting(pool, "textBoxPaddingMinPx", d.padding_min_px).await,
         int_setting(pool, "textBoxPaddingMaxPx", d.padding_max_px).await,
         int_setting(pool, "textBoxSafetyPercent", d.safety_percent).await,
     )
+}
+
+/// The owner's custom model IDs (`customModels`, a JSON list); empty when unset or unreadable.
+pub async fn custom_models(pool: &PgPool) -> Vec<crate::providers::CustomModel> {
+    let raw = setting_value(pool, "customModels", "[]").await;
+    let parsed: Vec<crate::providers::CustomModel> = serde_json::from_str(&raw).unwrap_or_default();
+    crate::providers::normalize_custom_models(&parsed)
 }
 
 pub async fn setting_value(pool: &PgPool, key: &str, default: &str) -> String {
@@ -233,6 +271,13 @@ pub async fn load_global_settings(pool: &PgPool, defaults: &PipelineDefaults) ->
         routing_strategy: setting_value(pool, "routingStrategy", "lowest-cost").await,
         use_fallback_models: setting_value(pool, "useFallbackModels", "true").await == "true",
         cleanup_mode: cleanup_mode(&setting_value(pool, "cleanupMode", "auto").await),
+        ocr_merge_threshold: ocr_merge_threshold(
+            setting_value(pool, "ocrMergeThreshold", "")
+                .await
+                .trim()
+                .parse::<f64>()
+                .unwrap_or(OCR_MERGE_THRESHOLD_DEFAULT),
+        ),
         local_ocr_model: defaults.paddle_rec_model.clone(),
     }
 }
@@ -243,7 +288,7 @@ mod text_box_geometry_tests {
 
     #[test]
     fn padding_scales_with_the_box_and_stops_at_the_cap() {
-        let g = TextBoxGeometry::clamped(6, 12, 95);
+        let g = TextBoxGeometry::clamped(6, 0, 12, 95);
         assert!(
             (g.padding_px(40.0, 300.0) - 2.4).abs() < 1e-9,
             "6% of a 40 px short side"
@@ -254,11 +299,11 @@ mod text_box_geometry_tests {
     #[test]
     fn zero_percent_or_zero_cap_turns_padding_off() {
         assert_eq!(
-            TextBoxGeometry::clamped(0, 12, 95).padding_px(300.0, 300.0),
+            TextBoxGeometry::clamped(0, 0, 12, 95).padding_px(300.0, 300.0),
             0.0
         );
         assert_eq!(
-            TextBoxGeometry::clamped(6, 0, 95).padding_px(300.0, 300.0),
+            TextBoxGeometry::clamped(6, 0, 0, 95).padding_px(300.0, 300.0),
             0.0
         );
     }
@@ -273,14 +318,39 @@ mod text_box_geometry_tests {
     #[test]
     fn out_of_range_values_are_clamped_and_unknown_modes_are_auto() {
         assert_eq!(
-            TextBoxGeometry::clamped(90, 900, 0),
+            TextBoxGeometry::clamped(90, -3, 900, 0),
             TextBoxGeometry {
                 padding_percent: 50,
+                padding_min_px: 0,
                 padding_max_px: 64,
                 safety_percent: 1
             }
         );
         assert_eq!(cleanup_mode(" AOT "), "aot");
         assert_eq!(cleanup_mode("lama"), "auto");
+        assert_eq!(ocr_merge_threshold(0.0), OCR_MERGE_THRESHOLD_RANGE.0);
+        assert_eq!(ocr_merge_threshold(9.0), OCR_MERGE_THRESHOLD_RANGE.1);
+        assert_eq!(ocr_merge_threshold(f64::NAN), OCR_MERGE_THRESHOLD_DEFAULT);
+        assert_eq!(ocr_merge_threshold(0.8), 0.8);
+    }
+
+    #[test]
+    fn a_min_px_lifts_small_boxes_but_the_max_and_a_quarter_of_the_box_still_win() {
+        let g = TextBoxGeometry::clamped(4, 6, 10, 100);
+        assert_eq!(g.padding_px(50.0, 300.0), 6.0, "4% of 50 is 2, lifted to 6");
+        assert_eq!(
+            g.padding_px(200.0, 300.0),
+            8.0,
+            "4% of 200 is 8, already above the min"
+        );
+        assert_eq!(g.padding_px(1000.0, 1000.0), 10.0, "capped");
+        assert_eq!(g.padding_px(16.0, 40.0), 4.0, "a quarter of a 16 px box");
+        let min_over_max = TextBoxGeometry::clamped(4, 12, 5, 100);
+        assert_eq!(min_over_max.padding_px(50.0, 50.0), 5.0, "the max wins");
+        assert_eq!(
+            TextBoxGeometry::DEFAULT.padding_px(50.0, 300.0),
+            2.0,
+            "default min 0 changes nothing"
+        );
     }
 }

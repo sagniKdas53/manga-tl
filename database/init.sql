@@ -60,6 +60,7 @@ CREATE TABLE public.chapters (
     use_fallback_models boolean,
     routing_strategy character varying(255),
     cleanup_mode character varying(255),
+    ocr_merge_threshold double precision,
     series_id uuid NOT NULL
 );
 
@@ -490,6 +491,7 @@ CREATE TABLE public.series (
     updated_at timestamp(6) with time zone NOT NULL,
     routing_strategy character varying(255),
     cleanup_mode character varying(255),
+    ocr_merge_threshold double precision,
     use_fallback_models boolean,
     created_by uuid
 );

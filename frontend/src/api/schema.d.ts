@@ -1040,6 +1040,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/custom-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace the custom model IDs */
+        put: operations["putCustomModels"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1080,6 +1097,11 @@ export interface components {
             updatedAt?: string;
             useContextMemory?: boolean;
             useFallbackModels?: boolean;
+            /**
+             * Format: double
+             * @description OCR grouping threshold: join fragments closer than this many characters, 0.05-3 (null inherits).
+             */
+            ocrMergeThreshold?: number;
         };
         CleanupCallbackDto: {
             /** @description Echo of the digest of the dispatched region list. */
@@ -1450,6 +1472,11 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string;
             useFallbackModels?: boolean;
+            /**
+             * Format: double
+             * @description OCR grouping threshold: join fragments closer than this many characters, 0.05-3 (null inherits).
+             */
+            ocrMergeThreshold?: number;
         };
         SseEmitter: {
             /** Format: int64 */
@@ -1495,6 +1522,18 @@ export interface components {
             tlModel?: string;
             tlProvider?: string;
             useFallbackModels?: boolean;
+            /**
+             * Format: double
+             * @description Global OCR grouping threshold, in characters of white space (0.05-3; default 0.35).
+             */
+            ocrMergeThreshold?: number;
+            /**
+             * Format: int32
+             * @description Padding is never less than this many px (0 = no floor; at most a quarter of the box).
+             */
+            textBoxPaddingMinPx?: number;
+            /** @description Model IDs typed in rather than picked from the catalog. Read-only on PUT /api/settings; replaced via PUT /api/settings/custom-models. */
+            customModels?: components["schemas"]["CustomModel"][];
         };
         UploadResponse: {
             /** Format: uuid */
@@ -1502,6 +1541,12 @@ export interface components {
             /** Format: uuid */
             pageId?: string;
             status?: string;
+        };
+        CustomModel: {
+            provider: string;
+            /** @description Catalog task key: ocr, tl, qaLLM or qaVLM. */
+            task: string;
+            id: string;
         };
     };
     responses: never;
@@ -3580,6 +3625,7 @@ export interface operations {
                 routingStrategy?: string;
                 cleanupMode?: string;
                 useFallbackModels?: boolean;
+                ocrMergeThreshold?: number;
             };
             header?: never;
             path: {
@@ -3669,6 +3715,30 @@ export interface operations {
                     "*/*": {
                         [key: string]: Record<string, never>;
                     };
+                };
+            };
+        };
+    };
+    putCustomModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomModel"][];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CustomModel"][];
                 };
             };
         };

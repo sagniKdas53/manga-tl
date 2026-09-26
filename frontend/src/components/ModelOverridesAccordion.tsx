@@ -9,12 +9,20 @@ import IconButton from "@mui/material/IconButton";
 import InputLabel from "@mui/material/InputLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
+import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { modelOptionLabel } from "../modelPricing";
-import type { ModelEntry, SystemSettingsDto } from "../types";
+import type { SystemSettingsDto } from "../types";
 import { CLEANUP_MODE_OPTIONS } from "../utils/cleanupModes";
+import {
+  CUSTOM_MODEL_VALUE,
+  type ModelCapability,
+} from "../utils/customModels";
+import CustomModelDialog, {
+  type CustomModelRequest,
+} from "./CustomModelDialog";
+import { renderModelOptions } from "./modelOptions";
 
 const QA_MODES = ["auto", "llm", "vlm", "hybrid", "none"];
 
@@ -35,6 +43,8 @@ export interface ModelOverridesValue {
   useFallbackModels: boolean | null;
   /** Cleanup reconstruction mode (`utils/cleanupModes`); "" inherits. */
   cleanupMode: string;
+  /** OCR grouping threshold, in characters of white space; null inherits. */
+  ocrMergeThreshold: number | null;
 }
 
 /**
@@ -53,6 +63,7 @@ export interface InheritedModelSettings {
   qaMode?: string;
   routingStrategy?: string;
   cleanupMode?: string;
+  ocrMergeThreshold?: number | null;
   /** Resolved inherited fallback toggle (series override ?? global setting). */
   useFallbackModels?: boolean;
 }
@@ -76,6 +87,8 @@ interface ModelOverridesAccordionProps {
    * the local override value.
    */
   useResolvedQaModeForDisable?: boolean;
+  /** Needed to register a custom model ID ("Custom model ID…" in any model list). */
+  token?: string;
 }
 
 const isCapabilityMissing = (
@@ -89,40 +102,6 @@ const isCapabilityMissing = (
     return !models || models.length === 0;
   }
   return !legacyList || legacyList.length === 0;
-};
-
-const renderModelOptions = (
-  providerMap: SystemSettingsDto["providerModelsMap"] | undefined,
-  provider: string,
-  capability: "ocr" | "tl" | "qaLLM" | "qaVLM",
-  legacyList: string[] | undefined,
-) => {
-  let models: ModelEntry[] = [];
-  if (providerMap) {
-    models = providerMap[provider]?.[capability] || [];
-  } else if (legacyList) {
-    models = legacyList.map((m) => ({ id: m, name: m }));
-  }
-
-  if (models.length === 0) {
-    return (
-      <MenuItem
-        value="N/A"
-        disabled
-      >
-        N/A (Capability Missing)
-      </MenuItem>
-    );
-  }
-
-  return models.map((m) => (
-    <MenuItem
-      key={m.id}
-      value={m.id}
-    >
-      {modelOptionLabel(m)}
-    </MenuItem>
-  ));
 };
 
 const fieldBoxSx = {
@@ -167,7 +146,29 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
   tlModelLabel = "TL LLM Model",
   localOcrModelLabel = "Local Worker Model",
   useResolvedQaModeForDisable = true,
+  token,
 }) => {
+  const [customRequest, setCustomRequest] =
+    React.useState<CustomModelRequest | null>(null);
+
+  /** A model Select's change: a model, or "Custom model ID…", which asks for one first. */
+  const pickModel = (
+    field: "ocrModel" | "tlModel" | "qaLlmModel" | "qaVlmModel",
+    provider: string,
+    task: ModelCapability,
+    picked: string,
+  ) => {
+    if (picked === CUSTOM_MODEL_VALUE) {
+      setCustomRequest({
+        provider,
+        task,
+        apply: (id) => onChange(field, id),
+      });
+    } else {
+      onChange(field, picked);
+    }
+  };
+
   const getFirstValidModel = (
     provider: string,
     capability: "ocr" | "tl" | "qaLLM" | "qaVLM",
@@ -234,6 +235,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
     routingStrategy,
     useFallbackModels,
     cleanupMode,
+    ocrMergeThreshold,
   } = value;
 
   const providers = settings?.activeProviders || [];
@@ -255,8 +257,14 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
   ];
   const overriddenCount =
     overrideFields.filter((v) => v !== "").length +
-    (useFallbackModels !== null ? 1 : 0);
-  const inheritedCount = overrideFields.length + 1 - overriddenCount;
+    (useFallbackModels !== null ? 1 : 0) +
+    (ocrMergeThreshold !== null ? 1 : 0);
+  const inheritedCount = overrideFields.length + 2 - overriddenCount;
+  const effectiveMergeThreshold =
+    ocrMergeThreshold ??
+    inherited.ocrMergeThreshold ??
+    settings?.ocrMergeThreshold ??
+    0.35;
 
   const effOcrProv =
     ocrProvider ||
@@ -386,7 +394,9 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
                     : ocrModel || inherited.ocrModel || ""
               }
               label={effectiveOcrModelLabel}
-              onChange={(e) => onChange("ocrModel", e.target.value)}
+              onChange={(e) =>
+                pickModel("ocrModel", effOcrProv, "ocr", e.target.value)
+              }
             >
               {ocrDisabled ? (
                 <MenuItem value={settings?.localOcrModel || "local"}>
@@ -398,6 +408,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
                   effOcrProv,
                   "ocr",
                   settings?.ocrVlmModelList,
+                  ocrModel || inherited.ocrModel,
                 )
               )}
             </Select>
@@ -408,6 +419,71 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
               size="small"
               sx={{ mt: 0.5 }}
               onClick={() => onChange("ocrModel", "")}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          )}
+        </Box>
+        {/* Third, beside the OCR fields it tunes: how far apart two OCR fragments may be and
+            still become one text region. */}
+        <Box sx={fieldBoxSx}>
+          <TextField
+            fullWidth
+            size="small"
+            type="number"
+            label="OCR Grouping Threshold"
+            value={effectiveMergeThreshold}
+            onChange={(e) => {
+              const parsed = parseFloat(e.target.value);
+              if (Number.isFinite(parsed))
+                onChange("ocrMergeThreshold", parsed);
+            }}
+            slotProps={{ htmlInput: { min: 0.05, max: 3, step: 0.05 } }}
+          />
+          {ocrMergeThreshold !== null && (
+            <IconButton
+              aria-label="Clear OCR Grouping Threshold override"
+              size="small"
+              sx={{ mt: 0.5 }}
+              onClick={() => onChange("ocrMergeThreshold", null)}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          )}
+        </Box>
+        <Box sx={fieldBoxSx}>
+          <FormControl
+            fullWidth
+            size="small"
+          >
+            <InputLabel>Cleanup Mode</InputLabel>
+            <Select
+              size="small"
+              value={
+                cleanupMode ||
+                inherited.cleanupMode ||
+                settings?.cleanupMode ||
+                "auto"
+              }
+              label="Cleanup Mode"
+              onChange={(e) => onChange("cleanupMode", e.target.value)}
+            >
+              {CLEANUP_MODE_OPTIONS.map((option) => (
+                <MenuItem
+                  key={option.value}
+                  value={option.value}
+                >
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {cleanupMode !== "" && (
+            <IconButton
+              aria-label="Clear Cleanup Mode override"
+              size="small"
+              sx={{ mt: 0.5 }}
+              onClick={() => onChange("cleanupMode", "")}
             >
               <CloseIcon fontSize="small" />
             </IconButton>
@@ -457,13 +533,16 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
                 tlCapabilityMissing ? "N/A" : tlModel || inherited.tlModel || ""
               }
               label={tlModelLabel}
-              onChange={(e) => onChange("tlModel", e.target.value)}
+              onChange={(e) =>
+                pickModel("tlModel", effTlProv, "tl", e.target.value)
+              }
             >
               {renderModelOptions(
                 settings?.providerModelsMap,
                 effTlProv,
                 "tl",
                 settings?.tlLlmModelList,
+                tlModel || inherited.tlModel,
               )}
             </Select>
           </FormControl>
@@ -554,13 +633,16 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
                   : qaLlmModel || inherited.qaLlmModel || ""
               }
               label="QA LLM Model"
-              onChange={(e) => onChange("qaLlmModel", e.target.value)}
+              onChange={(e) =>
+                pickModel("qaLlmModel", effQaProv, "qaLLM", e.target.value)
+              }
             >
               {renderModelOptions(
                 settings?.providerModelsMap,
                 effQaProv,
                 "qaLLM",
                 settings?.qaLlmModelList,
+                qaLlmModel || inherited.qaLlmModel,
               )}
             </Select>
           </FormControl>
@@ -589,13 +671,16 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
                   : qaVlmModel || inherited.qaVlmModel || ""
               }
               label="QA VLM Model"
-              onChange={(e) => onChange("qaVlmModel", e.target.value)}
+              onChange={(e) =>
+                pickModel("qaVlmModel", effQaProv, "qaVLM", e.target.value)
+              }
             >
               {renderModelOptions(
                 settings?.providerModelsMap,
                 effQaProv,
                 "qaVLM",
                 settings?.qaVlmModelList,
+                qaVlmModel || inherited.qaVlmModel,
               )}
             </Select>
           </FormControl>
@@ -673,45 +758,12 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
             </IconButton>
           )}
         </Box>
-        <Box sx={fieldBoxSx}>
-          <FormControl
-            fullWidth
-            size="small"
-          >
-            <InputLabel>Cleanup Mode</InputLabel>
-            <Select
-              size="small"
-              value={
-                cleanupMode ||
-                inherited.cleanupMode ||
-                settings?.cleanupMode ||
-                "auto"
-              }
-              label="Cleanup Mode"
-              onChange={(e) => onChange("cleanupMode", e.target.value)}
-            >
-              {CLEANUP_MODE_OPTIONS.map((option) => (
-                <MenuItem
-                  key={option.value}
-                  value={option.value}
-                >
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          {cleanupMode !== "" && (
-            <IconButton
-              aria-label="Clear Cleanup Mode override"
-              size="small"
-              sx={{ mt: 0.5 }}
-              onClick={() => onChange("cleanupMode", "")}
-            >
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          )}
-        </Box>
       </AccordionDetails>
+      <CustomModelDialog
+        request={customRequest}
+        onClose={() => setCustomRequest(null)}
+        token={token}
+      />
     </Accordion>
   );
 };

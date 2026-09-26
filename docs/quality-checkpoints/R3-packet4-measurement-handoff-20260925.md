@@ -226,7 +226,7 @@ Harmless noise you will see (do not fix it):
 | D2 | Latency ceilings | | |
 | D3 | Timing host | | |
 | D4 | Model pins | | |
-| D5 | Reconstruction method | | |
+| D5 | Reconstruction method | `auto`, after comparing forced TELEA and forced AOT-GAN chapters on the dev stack: "The current auto mode is actually perfect for what we are doing now" | 2026-09-26 |
 | D6 | Control denominator | | |
 
 ## 9. Useful queries

@@ -16,13 +16,15 @@ export const DEFAULT_TEXT_BOX_INSET: TextBoxInset = {
 };
 
 /**
- * System Settings' text-box geometry: padding as a percentage of each box's shorter side, capped
- * at a max px (either 0 turns padding off), then the share of the rest text may use. The backend
+ * System Settings' text-box geometry: padding as a percentage of each box's shorter side, raised
+ * to a min px (never more than a quarter of that side) and capped at a max px (0 turns padding
+ * off; the max wins over the min), then the share of the rest text may use. The backend
  * resolves the same rule per box for the renderer (`TextBoxGeometry::padding_px`); the editor
  * resolves it here, so both fit text into the same rectangle.
  */
 export interface TextBoxGeometry {
   paddingPercent: number;
+  paddingMinPx: number;
   paddingMaxPx: number;
   safetyPercent: number;
 }
@@ -30,6 +32,7 @@ export interface TextBoxGeometry {
 /** Reproduces the pre-settings export: 4 px on any box at least 100 px across, no shrink. */
 export const DEFAULT_TEXT_BOX_GEOMETRY: TextBoxGeometry = {
   paddingPercent: 4,
+  paddingMinPx: 0,
   paddingMaxPx: 4,
   safetyPercent: 100,
 };
@@ -45,9 +48,13 @@ export function insetForBox(
   const cap = Number.isFinite(geometry.paddingMaxPx)
     ? Math.min(64, Math.max(0, geometry.paddingMaxPx))
     : DEFAULT_TEXT_BOX_GEOMETRY.paddingMaxPx;
+  const floor = Number.isFinite(geometry.paddingMinPx)
+    ? Math.min(64, Math.max(0, geometry.paddingMinPx))
+    : DEFAULT_TEXT_BOX_GEOMETRY.paddingMinPx;
   const shortSide = Math.max(0, Math.min(box.width, box.height));
+  const scaled = (shortSide * percent) / 100;
   return {
-    paddingPx: Math.min((shortSide * percent) / 100, cap),
+    paddingPx: Math.min(Math.max(scaled, Math.min(floor, shortSide / 4)), cap),
     safetyPercent: geometry.safetyPercent,
   };
 }

@@ -292,4 +292,87 @@ describe("SettingsModal", () => {
       );
     });
   });
+
+  it(
+    "groups text fit with cleanup, keeps OpenRouter items apart, and saves the new fields",
+    { timeout: 15000 },
+    async () => {
+      (safeFetch as Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ...mockSettings,
+          ocrMergeThreshold: 0.35,
+          textBoxPaddingMinPx: 0,
+          customModels: [
+            {
+              provider: "openrouter",
+              task: "tl",
+              id: "stealth/space-bunny-alpha",
+            },
+          ],
+        }),
+      });
+      render(
+        <SettingsModal
+          isOpen={true}
+          onClose={mockOnClose}
+          token="mock-token"
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.queryByText("Loading settings...")).toBeNull();
+      });
+
+      const headings = screen
+        .getAllByText(
+          /^(OCR|Translation|Quality Assurance|Cleanup & Text Fit|Advanced Routing \(OpenRouter\))$/,
+        )
+        .map((h) => h.textContent);
+      expect(headings).toEqual([
+        "OCR",
+        "Translation",
+        "Quality Assurance",
+        "Cleanup & Text Fit",
+        "Advanced Routing (OpenRouter)",
+      ]);
+      // Every text-fit field sits under Cleanup & Text Fit, before Advanced Routing.
+      const order = Array.from(
+        document.querySelectorAll("label, .MuiTypography-overline"),
+      ).map((el) => el.textContent);
+      const at = (text: string) => order.indexOf(text);
+      for (const field of [
+        "Text Box Padding (%)",
+        "Min Padding (px)",
+        "Max Padding (px)",
+        "Text Safety Margin (%)",
+      ]) {
+        expect(at(field)).toBeGreaterThan(at("Cleanup & Text Fit"));
+        expect(at(field)).toBeLessThan(at("Advanced Routing (OpenRouter)"));
+      }
+      expect(at("OCR Grouping Threshold")).toBeLessThan(at("Translation"));
+      expect(
+        screen.getByText(/stealth\/space-bunny-alpha · openrouter tl/),
+      ).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText("OCR Grouping Threshold"), {
+        target: { value: "0.8" },
+      });
+      fireEvent.change(screen.getByLabelText("Min Padding (px)"), {
+        target: { value: "3" },
+      });
+      (safeFetch as Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockSettings,
+      });
+      fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
+
+      await waitFor(() => expect(mockOnClose).toHaveBeenCalled());
+      const put = (safeFetch as Mock).mock.calls.find(
+        ([url, init]) => url === "/api/settings" && init?.method === "PUT",
+      );
+      const body = JSON.parse(put![1].body);
+      expect(body.ocrMergeThreshold).toBe(0.8);
+      expect(body.textBoxPaddingMinPx).toBe(3);
+    },
+  );
 });

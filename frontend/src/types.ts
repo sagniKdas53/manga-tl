@@ -24,6 +24,8 @@ export interface Series {
   qaMode?: string;
   routingStrategy?: string;
   cleanupMode?: string;
+  /** OCR grouping threshold override, in characters; null inherits. */
+  ocrMergeThreshold?: number | null;
   useFallbackModels?: boolean | null;
   resolvedUseFallbackModels?: boolean;
   createdAt?: string;
@@ -60,6 +62,8 @@ export interface Chapter {
   qaMode?: string;
   routingStrategy?: string;
   cleanupMode?: string;
+  /** OCR grouping threshold override, in characters; null inherits. */
+  ocrMergeThreshold?: number | null;
   useFallbackModels?: boolean | null;
   resolvedUseFallbackModels?: boolean;
   useContextMemory?: boolean;
@@ -211,10 +215,19 @@ export interface LayerEditHistory {
   editedAt: string;
 }
 
+export interface CustomModel {
+  provider: string;
+  /** The catalog's task key: "ocr" | "tl" | "qaLLM" | "qaVLM". */
+  task: string;
+  id: string;
+}
+
 export interface ModelEntry {
   id: string;
   name: string;
   free?: boolean;
+  /** A model ID typed in by the owner rather than published in the catalog. */
+  custom?: boolean;
   pricing?: {
     currency?: string;
     promptPerMillion?: number;
@@ -254,10 +267,16 @@ export interface SystemSettingsDto {
 
   /** AUDIT-R1/F16: inset on each edge, as a percentage of the box's shorter side (0 = none)… */
   textBoxPaddingPercent?: number;
+  /** …raised to at least this many px (0 = no floor; at most a quarter of the box)… */
+  textBoxPaddingMinPx?: number;
   /** …capped at this many px (0 = none). */
   textBoxPaddingMaxPx?: number;
   /** Percent of what remains that text may use (100 = all of it). */
   textBoxSafetyPercent?: number;
   /** Global cleanup reconstruction mode; see `utils/cleanupModes`. */
   cleanupMode?: string;
+  /** Global OCR grouping threshold, in characters of white space. */
+  ocrMergeThreshold?: number;
+  /** Model IDs typed in rather than picked; replaced via PUT /api/settings/custom-models. */
+  customModels?: CustomModel[];
 }

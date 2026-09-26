@@ -98,6 +98,11 @@
           },
           "useFallbackModels": {
             "type": "boolean"
+          },
+          "ocrMergeThreshold": {
+            "description": "OCR grouping threshold: join fragments closer than this many characters, 0.05-3 (null inherits).",
+            "format": "double",
+            "type": "number"
           }
         },
         "type": "object"
@@ -1051,6 +1056,11 @@
           },
           "useFallbackModels": {
             "type": "boolean"
+          },
+          "ocrMergeThreshold": {
+            "description": "OCR grouping threshold: join fragments closer than this many characters, 0.05-3 (null inherits).",
+            "format": "double",
+            "type": "number"
           }
         },
         "type": "object"
@@ -1173,6 +1183,23 @@
           },
           "useFallbackModels": {
             "type": "boolean"
+          },
+          "ocrMergeThreshold": {
+            "description": "Global OCR grouping threshold, in characters of white space (0.05-3; default 0.35).",
+            "format": "double",
+            "type": "number"
+          },
+          "textBoxPaddingMinPx": {
+            "description": "Padding is never less than this many px (0 = no floor; at most a quarter of the box).",
+            "format": "int32",
+            "type": "integer"
+          },
+          "customModels": {
+            "description": "Model IDs typed in rather than picked from the catalog. Read-only on PUT /api/settings; replaced via PUT /api/settings/custom-models.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomModel"
+            }
           }
         },
         "type": "object"
@@ -1192,6 +1219,26 @@
           }
         },
         "type": "object"
+      },
+      "CustomModel": {
+        "type": "object",
+        "required": [
+          "provider",
+          "task",
+          "id"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "task": {
+            "type": "string",
+            "description": "Catalog task key: ocr, tl, qaLLM or qaVLM."
+          },
+          "id": {
+            "type": "string"
+          }
+        }
       }
     }
   },
@@ -4457,6 +4504,15 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "in": "query",
+            "name": "ocrMergeThreshold",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
           }
         ],
         "requestBody": {
@@ -4563,6 +4619,43 @@
         "tags": [
           "settings-controller"
         ]
+      }
+    },
+    "/api/settings/custom-models": {
+      "put": {
+        "tags": [
+          "settings-controller"
+        ],
+        "operationId": "putCustomModels",
+        "summary": "Replace the custom model IDs",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CustomModel"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CustomModel"
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   },

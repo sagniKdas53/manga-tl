@@ -942,6 +942,18 @@ pub async fn enqueue_job_with_ledger(
                         &settings.cleanup_mode,
                     ))),
                 );
+
+                // Chapter, then series, then System Settings; the OCR handler groups fragments
+                // with it and the rest of the pipeline ignores it.
+                job.insert(
+                    "ocrMergeThreshold".into(),
+                    json!(crate::settings::ocr_merge_threshold(
+                        chapter
+                            .ocr_merge_threshold
+                            .or(series.ocr_merge_threshold)
+                            .unwrap_or(settings.ocr_merge_threshold),
+                    )),
+                );
             }
         }
     }
@@ -960,6 +972,7 @@ pub async fn enqueue_job_with_ledger(
         "textBoxPaddingPercent".into(),
         json!(geometry.padding_percent),
     );
+    job.insert("textBoxPaddingMinPx".into(), json!(geometry.padding_min_px));
     job.insert("textBoxPaddingMaxPx".into(), json!(geometry.padding_max_px));
     job.insert(
         "textBoxSafetyPercent".into(),

@@ -65,6 +65,7 @@ pub struct Series {
     pub updated_at: DateTime<Utc>,
     pub routing_strategy: Option<String>,
     pub cleanup_mode: Option<String>,
+    pub ocr_merge_threshold: Option<f64>,
     pub use_fallback_models: Option<bool>,
     pub created_by: Option<Uuid>,
 }
@@ -94,6 +95,7 @@ pub struct Chapter {
     pub use_fallback_models: Option<bool>,
     pub routing_strategy: Option<String>,
     pub cleanup_mode: Option<String>,
+    pub ocr_merge_threshold: Option<f64>,
     pub series_id: Uuid,
 }
 

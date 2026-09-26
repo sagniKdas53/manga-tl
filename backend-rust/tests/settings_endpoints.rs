@@ -21,7 +21,7 @@ use manga_backend::state::AppState;
 
 const SECRET: &str = "test-secret-long-enough-for-hmac-signing-1234567890";
 const CATALOG_KEY: &str = "system:providers:config";
-const SETTING_KEYS: [&str; 14] = [
+const SETTING_KEYS: [&str; 17] = [
     "ocrProvider",
     "ocrModel",
     "tlProvider",
@@ -36,6 +36,9 @@ const SETTING_KEYS: [&str; 14] = [
     "textBoxPaddingMaxPx",
     "textBoxSafetyPercent",
     "cleanupMode",
+    "textBoxPaddingMinPx",
+    "ocrMergeThreshold",
+    "customModels",
 ];
 
 fn db_config_from_env() -> Option<DatabaseConfig> {
@@ -343,6 +346,8 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     obj.insert("textBoxPaddingMaxPx".to_string(), serde_json::json!(12));
     obj.insert("textBoxSafetyPercent".to_string(), serde_json::json!(80));
     obj.insert("cleanupMode".to_string(), serde_json::json!("TELEA"));
+    obj.insert("textBoxPaddingMinPx".to_string(), serde_json::json!(3));
+    obj.insert("ocrMergeThreshold".to_string(), serde_json::json!(0.8));
     let (status, _, echoed) = send(
         app.clone(),
         "PUT",
@@ -356,6 +361,8 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     assert_eq!(echoed["textBoxPaddingMaxPx"], 12);
     assert_eq!(echoed["textBoxSafetyPercent"], 80);
     assert_eq!(echoed["cleanupMode"], "telea", "stored normalised");
+    assert_eq!(echoed["textBoxPaddingMinPx"], 3);
+    assert_eq!(echoed["ocrMergeThreshold"], 0.8);
 
     let revised_pages: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM pages WHERE chapter_id = $1 AND scene_revision = 1",
@@ -390,6 +397,11 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     assert_eq!(echoed["textBoxPaddingMaxPx"], 12);
     assert_eq!(echoed["textBoxSafetyPercent"], 80);
     assert_eq!(echoed["cleanupMode"], "telea");
+    assert_eq!(echoed["textBoxPaddingMinPx"], 3);
+    assert_eq!(
+        echoed["ocrMergeThreshold"], 0.8,
+        "the threshold survives a legacy PUT"
+    );
     let padding: String = sqlx::query_scalar(
         "SELECT setting_value FROM system_settings WHERE setting_key = 'textBoxPaddingMaxPx'",
     )
@@ -516,6 +528,83 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
             .any(|e| e["entityId"] == chapter_id.to_string() && e["field"] == "tlModel"),
         "served model must not be flagged; got {orphaned:?}"
     );
+
+    // --- a custom model ID is valid once registered ---
+    sqlx::query("UPDATE chapters SET tl_model = 'stealth/space-bunny-alpha' WHERE id = $1")
+        .bind(chapter_id)
+        .execute(&pool)
+        .await
+        .expect("custom tl override");
+    let flagged = |body: &serde_json::Value| {
+        body["orphaned"].as_array().is_some_and(|list| {
+            list.iter()
+                .any(|e| e["entityId"] == chapter_id.to_string() && e["field"] == "tlModel")
+        })
+    };
+    let (_, _, body) = send(
+        app.clone(),
+        "GET",
+        "/tlhub/api/settings/validate",
+        Some(&token),
+        None,
+    )
+    .await;
+    assert!(flagged(&body), "an unregistered ID is still flagged");
+    let (status, _, registered) = send(
+        app.clone(),
+        "PUT",
+        "/tlhub/api/settings/custom-models",
+        Some(&token),
+        Some(
+            r#"[{"provider":"OpenRouter","task":"tl","id":" stealth/space-bunny-alpha "},
+                {"provider":"local","task":"ocr","id":"nope"}]"#
+                .to_string(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        registered,
+        serde_json::json!([{"provider":"openrouter","task":"tl","id":"stealth/space-bunny-alpha"}]),
+        "normalized, local dropped"
+    );
+    let (_, _, body) = send(
+        app.clone(),
+        "GET",
+        "/tlhub/api/settings/validate",
+        Some(&token),
+        None,
+    )
+    .await;
+    assert!(
+        !flagged(&body),
+        "a registered custom ID is valid; got {body:?}"
+    );
+    let (_, _, settings) = send(
+        app.clone(),
+        "GET",
+        "/tlhub/api/settings",
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(settings["customModels"], registered);
+    assert!(
+        settings["providerModelsMap"]["openrouter"]["tl"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["id"] == "stealth/space-bunny-alpha" && m["custom"] == true),
+        "listed for the picker; got {settings:?}"
+    );
+    let stored: String = sqlx::query_scalar(
+        "SELECT setting_value FROM system_settings WHERE setting_key = 'customModels'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("custom models persisted");
+    assert!(stored.contains("stealth/space-bunny-alpha"));
+    state.providers.set_custom_models(Vec::new());
 
     // --- restore shared state ---
     let _ = sqlx::query(

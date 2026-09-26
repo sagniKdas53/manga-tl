@@ -102,6 +102,9 @@ async fn main() {
     if let Some(redis) = &state.redis {
         state.providers.reload(redis).await;
     }
+    state
+        .providers
+        .set_custom_models(manga_backend::settings::custom_models(&state.pool).await);
     spawn_provider_config_listener(
         state.redis.as_ref().map(std::sync::Arc::clone),
         std::sync::Arc::clone(&state.providers),
