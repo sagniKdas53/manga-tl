@@ -25,11 +25,23 @@ createServer(async (request, response) => {
     response.end(JSON.stringify({ ...result, png: undefined, pngBase64: result.png.toString("base64") }));
   } catch (error) {
     // 503 + Retry-After for "busy" so the worker waits and resends; 400 stays "this scene is bad".
+    // Only the renderer's own errors carry their message back. Anything else is logged here and
+    // answered with a fixed text, so no stack or internal detail reaches the caller.
     const busy = error instanceof RendererBusyError;
-    const status = busy ? 503 : error instanceof RendererError ? 400 : 500;
     const headers = { "content-type": "application/json" };
     if (busy) headers["retry-after"] = "2";
+    let status = 500;
+    let message = "internal renderer error; see the page-renderer log";
+    if (busy || error instanceof RendererError) {
+      status = busy ? 503 : 400;
+      message = error.message;
+    } else if (error instanceof SyntaxError) {
+      status = 400;
+      message = "request body is not valid JSON";
+    } else {
+      console.error("[page-renderer] render failed:", error);
+    }
     response.writeHead(status, headers);
-    response.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+    response.end(JSON.stringify({ error: message }));
   }
 }).listen(Number(process.env.PORT || 8090));

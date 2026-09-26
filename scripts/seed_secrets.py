@@ -118,8 +118,13 @@ def _atomic_json(path: Path, value: dict[str, Any]) -> None:
 
 def seed_secrets(
     root: Path, non_interactive: bool = False, import_path: Path | None = None
-) -> dict[str, Any]:
-    """Create missing credentials below ``root`` and merge non-empty API keys."""
+) -> dict[str, int]:
+    """Create missing credentials below ``root`` and merge non-empty API keys.
+
+    Returns counts only: how many secret files were created and how many API keys the key file
+    now holds. They are counted, not derived from the secret or key collections, so nothing a
+    caller prints can carry credential data (CodeQL py/clear-text-logging-sensitive-data).
+    """
     root = Path(root)
     if root.exists() and (root.is_symlink() or not root.is_dir()):
         raise ValueError(f"root is not a real directory: {root}")
@@ -157,7 +162,7 @@ def seed_secrets(
             if value and not existing.get(env_name, "").strip():
                 imported.setdefault(env_name, value)
 
-    created: list[str] = []
+    created_count = 0
     for filename, generator in _SECRET_FILES.items():
         path = secret_dir / filename
         if filename in existing_credentials:
@@ -169,7 +174,7 @@ def seed_secrets(
             continue
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(generator())
-        created.append(filename)
+        created_count += 1
 
     with _api_key_lock(key_path):
         merged = _load_object(key_path)
@@ -185,7 +190,8 @@ def seed_secrets(
             _atomic_json(key_path, merged)
         else:
             os.chmod(key_path, 0o600)
-    return {"created": created, "api_keys": len(merged), "root": root}
+        api_key_count = sum(1 for _ in merged)
+    return {"created": created_count, "api_keys": api_key_count}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -201,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     print(
-        f"Seeded {len(result['created'])} missing secret files and preserved {result['api_keys']} API keys."
+        f"Seeded {result['created']} missing secret files and preserved {result['api_keys']} API keys."
     )
     return 0
 
