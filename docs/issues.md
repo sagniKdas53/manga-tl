@@ -1330,6 +1330,9 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 - **Next step:**
   - The harness should treat a page as settled only when no job for it is pending or running, and `last_rendered_at` is after the last QA.
   - Future runbooks list each source once.
+- **Two more gaps, seen 2026-09-27 on the OpenVINO canary:**
+  - `--register` sends no role, and the backend refuses a non-first registration without one ("Cannot register as Admin"). Register a `translator` with curl first and pass the credentials.
+  - A translator can't delete the series the harness creates (403), so test data needs an admin to remove it.
 
 ### `AUDIT-R12` (medium): SFX appear to shrink neighbouring balloons
 
