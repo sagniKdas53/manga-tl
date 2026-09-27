@@ -99,6 +99,18 @@ function semanticErrors(scene) {
       if (effectiveAction(ownerId) !== 'replace') errors.push(`cleanup ${cleanup.cleanup_id} is not authorized for ${ownerId}`);
     }
   }
+  // An owner-less cleanup is authorized by the user, not by a policy: a manual_cleanup object must name it.
+  const manualCleanupIds = new Set(
+    scene.objects.filter((object) => object.kind === 'manual_cleanup').flatMap((object) => object.cleanup_ids),
+  );
+  for (const cleanup of scene.cleanup_artifacts) {
+    if (cleanup.owner_ids.length === 0 && !manualCleanupIds.has(cleanup.cleanup_id)) {
+      errors.push(`owner-less cleanup ${cleanup.cleanup_id} is not named by a manual_cleanup object`);
+    }
+  }
+  for (const cleanupId of manualCleanupIds) {
+    if (!cleanupById.has(cleanupId)) errors.push(`manual cleanup references missing cleanup ${cleanupId}`);
+  }
   const objectIds = new Set();
   for (const object of scene.objects) {
     if (objectIds.has(object.object_id)) errors.push(`duplicate object ${object.object_id}`);
@@ -127,7 +139,7 @@ function validateFixture(name, scene, expectedValid) {
   console.log(`${expectedValid ? 'valid' : 'invalid'} ${name}`);
 }
 
-const validFixtures = ['logical-valid.json', 'resolved-valid.json', 'overlap-preserve-valid.json'];
+const validFixtures = ['logical-valid.json', 'resolved-valid.json', 'overlap-preserve-valid.json', 'inpainting-edits-valid.json'];
 for (const fixture of validFixtures) validateFixture(fixture, JSON.parse(fs.readFileSync(path.join(fixturesDir, fixture), 'utf8')), true);
 const nonFinite = fs.readFileSync(path.join(fixturesDir, 'non-finite-geometry.json'), 'utf8');
 try {
@@ -149,4 +161,5 @@ function validateInvalidCases(caseFile) {
 
 validateInvalidCases('invalid-cases.json');
 validateInvalidCases('resolved-invalid-cases.json');
+validateInvalidCases('inpainting-invalid-cases.json');
 console.log('page-scene/v1 fixtures: PASS');

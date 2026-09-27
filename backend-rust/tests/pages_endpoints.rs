@@ -1451,3 +1451,141 @@ async fn page_scene_api_round_trips_the_new_format_contract() {
     assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
     cleanup(&pool, NS).await;
 }
+
+/// Tracker R7 step 1: the editor reads a page's cleanup patches through an authenticated route.
+/// Covers auth, the page scoping (another page's sha is a 404), a malformed sha, the content type
+/// and the immutable cache header.
+#[tokio::test]
+async fn scene_asset_route_serves_only_this_pages_assets_to_signed_in_users() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    const NS: &str = "__page-e2e-scene-asset";
+    cleanup(&pool, NS).await;
+    let token = probe_user(
+        &pool,
+        &manga_backend::jwt::JwtUtils::new(SECRET.into(), 3_600_000),
+        NS,
+    )
+    .await;
+
+    let response = send_json(
+        app.clone(),
+        "POST",
+        "/tlhub/api/series",
+        &token,
+        r#"{"title":"R7 asset probe","readingDirection":"rightToLeft"}"#.to_string(),
+    )
+    .await;
+    assert_eq!(response.0, StatusCode::OK);
+    let series_id = json_field(&response.2, "id");
+    let response = send_json(
+        app.clone(),
+        "POST",
+        &format!("/tlhub/api/series/{series_id}/chapters"),
+        &token,
+        r#"{"chapterNumber":1}"#.to_string(),
+    )
+    .await;
+    assert_eq!(response.0, StatusCode::OK);
+    let chapter_id = json_field(&response.2, "id");
+    let mut page_ids = Vec::new();
+    for number in 1..=2 {
+        let body = multipart_body(
+            &chapter_id,
+            number,
+            &format!("r7-{number}.png"),
+            &seeded_png(Uuid::new_v4().as_u128() as u32),
+        );
+        let response = send_multipart(app.clone(), "/tlhub/api/images", &token, body).await;
+        let uploaded: serde_json::Value = serde_json::from_str(&response.2).unwrap();
+        page_ids.push(uploaded["pageId"].as_str().unwrap().to_string());
+    }
+    let (page_a, page_b) = (&page_ids[0], &page_ids[1]);
+
+    // A patch the worker would have uploaded for page A.
+    let patch = seeded_png(Uuid::new_v4().as_u128() as u32);
+    let sha = {
+        use sha2::Digest;
+        hex::encode(sha2::Sha256::digest(&patch))
+    };
+    let storage = MinioService::new(&minio_config_from_env().expect("minio env"));
+    storage
+        .upload_bytes(
+            &manga_backend::page_scene_builder::scene_asset_path(page_a.parse().unwrap(), &sha),
+            patch.clone(),
+            "image/png",
+        )
+        .await
+        .expect("stage patch");
+
+    let uri = format!("/tlhub/api/pages/{page_a}/scene-assets/{sha}");
+    let response = app
+        .clone()
+        .oneshot(Request::get(&uri).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::FORBIDDEN,
+        "no token, no bytes"
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get(&uri)
+                .header("Authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "image/png");
+    let cache = response.headers()["cache-control"]
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache.contains("immutable") && cache.contains("private"),
+        "{cache}"
+    );
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(&body[..], &patch[..], "the stored bytes, unchanged");
+
+    let (status, _, _, _) = send_get(
+        app.clone(),
+        &format!("/tlhub/api/pages/{page_b}/scene-assets/{sha}"),
+        &token,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::NOT_FOUND,
+        "page A's patch is not page B's"
+    );
+
+    for bad in [
+        "not-a-sha",
+        &sha.to_uppercase(),
+        &format!("..%2F{}", &sha[3..]),
+    ] {
+        let (status, _, _, _) = send_get(
+            app.clone(),
+            &format!("/tlhub/api/pages/{page_a}/scene-assets/{bad}"),
+            &token,
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{bad}");
+    }
+    let (status, _, _, _) = send_get(
+        app,
+        &format!("/tlhub/api/pages/{}/scene-assets/{sha}", Uuid::new_v4()),
+        &token,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "unknown page");
+    cleanup(&pool, NS).await;
+}

@@ -279,11 +279,14 @@ async function waitForPipeline(page, base, token, pageId, sample) {
   while (Date.now() < deadline) {
     const jobs = await requestJson(page.request, `${base}/api/jobs`, { headers: auth(token) });
     const active = jobs.jobs || [];
-    const failed = active.filter((job) => job.status === "FAILED" || job.status === "PAUSED");
+    const stopped = (job) => job.status === "FAILED" || job.status === "PAUSED";
+    // Only this page's failures stop its capture. A FAILED job stays in the list for good, so one
+    // stuck page used to block every later fixture (R7 run, 2026-09-27: sample61's QA).
+    const failed = active.filter((job) => stopped(job) && job.pageId === pageId);
     if (failed.length) {
       throw new Error(`${sample}: pipeline stopped with ${failed.length} failed or paused job(s)`);
     }
-    if (!active.length) {
+    if (!active.some((job) => !stopped(job))) {
       return requestJson(page.request, `${base}/api/pages/${pageId}`, { headers: auth(token) });
     }
     await page.waitForTimeout(2_000);

@@ -1043,6 +1043,8 @@ async fn apply_cleanup_callback(
 
     let mut expected = dispatched_cleanup_regions(&parent);
     let mut problems: Vec<String> = Vec::new();
+    // Regions whose cleanup columns this callback rewrote: the pass the Inpainting layer records.
+    let mut settled: Vec<Uuid> = Vec::new();
 
     // The digest the worker echoes binds its whole run to the exact list it was handed. A
     // mismatch means it worked from something else, whatever its per-region statuses say.
@@ -1103,6 +1105,7 @@ async fn apply_cleanup_callback(
                 .execute(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
+                settled.push(region_id);
             }
             status @ ("complete" | "degraded") => {
                 let changed = sqlx::query(
@@ -1142,6 +1145,8 @@ async fn apply_cleanup_callback(
                         "region {region_id} reported {status} but no longer belongs to page {}",
                         page.id
                     ));
+                } else {
+                    settled.push(region_id);
                 }
             }
             // `uncertain` is a deterministic content finding, not an infrastructure failure:
@@ -1175,6 +1180,8 @@ async fn apply_cleanup_callback(
                         "region {region_id} reported uncertain cleanup but no longer belongs to page {}",
                         page.id
                     ));
+                } else {
+                    settled.push(region_id);
                 }
             }
             "failed" => {
@@ -1207,6 +1214,12 @@ async fn apply_cleanup_callback(
             "region {missing} was dispatched but never reported"
         ));
     }
+
+    // Tracker R7: this pass's patches become a new Inpainting layer; the regions' older patches
+    // are retired to history (user decisions R7-D2/D2b).
+    crate::inpainting::record_cleanup_pass(&mut tx, page.id, &settled)
+        .await
+        .map_err(|e| e.to_string())?;
 
     // A cleanup queued for one merged region (see `merge_ocr_regions`) carries on into that
     // region's translation, not the page's: the rest of the page is already translated and paid for.

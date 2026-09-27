@@ -20,6 +20,7 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::{
+    inpainting::CleanupRef,
     models::{Image, Layer, LayerElement, NewPageSceneSnapshot, OcrRegion, Page},
     page_scene::{CONTRACT_VERSION, ValidatedPageScene, validate_page_scene},
     routes::page::content_type_by_extension,
@@ -242,6 +243,15 @@ fn encode_png(width: u32, height: u32, rgba: Vec<u8>) -> Result<Vec<u8>, String>
 /// Tracker R2 gate: the largest share of the page one cleanup patch may cover.
 pub const MAX_PATCH_PAGE_SHARE: f64 = 0.25;
 
+/// Share of the page a `{x, y, width, height}` rect covers, 0..1 (1 for a page of no size).
+pub fn bounds_page_share(bounds: &Value, page_w: i32, page_h: i32) -> f64 {
+    let dim = |key: &str| bounds.get(key).and_then(Value::as_f64).unwrap_or(0.0);
+    if page_w <= 0 || page_h <= 0 {
+        return 1.0;
+    }
+    (dim("width") * dim("height")) / (f64::from(page_w) * f64::from(page_h))
+}
+
 /// Share of the page a patch's bounds cover, 0..1.
 fn patch_page_share(raster: &Raster, page_w: i32, page_h: i32) -> f64 {
     let page = (page_w as f64) * (page_h as f64);
@@ -322,35 +332,6 @@ pub async fn plain_plate_cleanup(
         patch_sha256: patch_sha,
         bounds: json!({ "x": raster.x, "y": raster.y, "width": raster.width, "height": raster.height }),
         generator_sha256: hex::encode(Sha256::digest(b"plain-mask/v1")),
-    })
-}
-
-/// R3: the `cleanup_artifact` JSON for a worker-supplied glyph mask + reconstructed patch.
-/// `region`'s own `cleanup_generator_sha256` is trusted when present (the worker's own record
-/// of which method -- TELEA or AOT -- produced it); `fallback_generator_sha256` only covers a
-/// row where that field is somehow absent despite the asset refs being present.
-fn worker_cleanup_artifact(
-    cleanup_id: &str,
-    owner_id: &str,
-    source_sha256: &str,
-    mask_asset_id: &str,
-    patch_asset_id: &str,
-    region: &OcrRegion,
-    fallback_generator_sha256: &str,
-) -> Value {
-    json!({
-        "cleanup_id": cleanup_id,
-        "owner_ids": [owner_id],
-        "source_sha256": source_sha256,
-        "mask_asset_id": mask_asset_id,
-        "patch_asset_id": patch_asset_id,
-        "bounds": region.cleanup_bounds.clone().unwrap_or(json!({"x": 0, "y": 0, "width": 0, "height": 0})),
-        "generator_sha256": region
-            .cleanup_generator_sha256
-            .clone()
-            .unwrap_or_else(|| fallback_generator_sha256.to_string()),
-        "active_set_dependency": "independent",
-        "diagnostics": region.cleanup_diagnostics.clone().unwrap_or(json!([])),
     })
 }
 
@@ -442,6 +423,8 @@ pub async fn build_pipeline_scene(
     .await
     .map_err(|e| e.to_string())?;
 
+    let mut warnings: Vec<String> = Vec::new();
+
     // Same selection rule as the Pillow path it replaces: visible elements on visible
     // translation/sfx layers, painted in layer z-order.
     let layers: Vec<Layer> = sqlx::query_as(
@@ -464,7 +447,6 @@ pub async fn build_pipeline_scene(
         elements.extend(rows.into_iter().map(|e| (layer.z_order, e)));
     }
 
-    let mut warnings: Vec<String> = Vec::new();
     let fonts = configured_fonts();
     let font = fonts.first().expect("configured_fonts never returns empty");
 
@@ -487,8 +469,9 @@ pub async fn build_pipeline_scene(
     let mut objects: Vec<Value> = Vec::new();
     let mut asset_paths: BTreeMap<String, String> = BTreeMap::new();
 
-    // Which regions end up replaced: any visible element with non-empty text. Everything else is
-    // `review`, which the contract reads as "pixels untouched, visibly unresolved".
+    // Which regions end up replaced: any visible element with non-empty text, or a drawn
+    // Inpainting patch (below). Everything else is `review`, which the contract reads as "pixels
+    // untouched, visibly unresolved".
     let mut replaced: std::collections::HashSet<Uuid> = std::collections::HashSet::new();
     for (_, element) in &elements {
         if let Some(region_id) = element.region_id
@@ -498,6 +481,99 @@ pub async fn build_pipeline_scene(
                 .is_some_and(|t| !t.trim().is_empty())
         {
             replaced.insert(region_id);
+        }
+    }
+
+    // Tracker R7: the patches are the visible elements of the visible Inpainting layers, painted
+    // layer by layer (z_order, then age) and, within a layer, in each patch's stored order.
+    let inpainting_layers: Vec<Layer> = sqlx::query_as(
+        "SELECT * FROM layers WHERE page_id = $1 AND visible = TRUE AND LOWER(type) = 'inpainting' \
+         ORDER BY z_order ASC, created_at ASC, id ASC",
+    )
+    .bind(page_id)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let mut patch_elements: Vec<(LayerElement, CleanupRef)> = Vec::new();
+    for layer in &inpainting_layers {
+        let rows: Vec<LayerElement> = sqlx::query_as(
+            "SELECT * FROM layer_elements WHERE layer_id = $1 AND visible = TRUE \
+             AND cleanup_ref IS NOT NULL",
+        )
+        .bind(layer.id)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(|e| e.to_string())?;
+        let mut rows: Vec<(LayerElement, CleanupRef)> = rows
+            .into_iter()
+            .filter_map(|element| {
+                let reference = CleanupRef::parse(element.cleanup_ref.as_ref());
+                if reference.is_none() {
+                    warnings.push(format!(
+                        "inpainting element {} has an unreadable cleanup_ref",
+                        element.id
+                    ));
+                }
+                reference.map(|reference| (element, reference))
+            })
+            .collect();
+        rows.sort_by(|(a, ra), (b, rb)| ra.order.cmp(&rb.order).then(a.id.cmp(&b.id)));
+        patch_elements.extend(rows);
+    }
+    // User decision R7-D4: the region decides whether its patch is drawn. A region with no usable
+    // English -- rejected in review, judged a sound effect by QA, a failed or refused translation --
+    // keeps its source pixels,
+    // as before R7. Hiding a whole text layer (or one text element) keeps the patch: that is the
+    // cleaned page a user letters by hand.
+    let region_usable = |region: &OcrRegion| {
+        replaced.contains(&region.id)
+            || (!matches!(region.qa_status.as_deref(), Some("rejected" | "reject_sfx"))
+                && !region.translation_failed.unwrap_or(false)
+                && region
+                    .translated_text
+                    .as_deref()
+                    .is_some_and(|t| !t.trim().is_empty()))
+    };
+    let mut drawn_patches: Vec<(LayerElement, CleanupRef, Option<Uuid>, String, String)> =
+        Vec::new();
+    for (element, reference) in patch_elements {
+        let region = element
+            .region_id
+            .and_then(|id| regions.iter().find(|region| region.id == id));
+        if region.is_some_and(|region| !region_usable(region)) {
+            continue;
+        }
+        let (Some(width), Some(height)) = (
+            element.max_width.filter(|w| *w > 0),
+            element.max_height.filter(|h| *h > 0),
+        ) else {
+            warnings.push(format!(
+                "inpainting element {} has no size; not drawn",
+                element.id
+            ));
+            continue;
+        };
+        let _ = (width, height);
+        let patch_path = scene_asset_path(page_id, &reference.patch_sha256);
+        let mask_path = scene_asset_path(page_id, &reference.mask_sha256);
+        if !(state.storage.exists(&patch_path).await && state.storage.exists(&mask_path).await) {
+            warnings.push(format!(
+                "inpainting element {} names cleanup assets missing from storage; not drawn",
+                element.id
+            ));
+            continue;
+        }
+        drawn_patches.push((
+            element,
+            reference,
+            region.map(|r| r.id),
+            patch_path,
+            mask_path,
+        ));
+    }
+    for (_, _, region_id, _, _) in &drawn_patches {
+        if let Some(region_id) = region_id {
+            replaced.insert(*region_id);
         }
     }
 
@@ -538,6 +614,86 @@ pub async fn build_pipeline_scene(
     }
 
     let generator_sha256 = hex::encode(Sha256::digest(b"legacy-mask-polygon-fill/v1"));
+    let mut cleanup_ids_by_region: BTreeMap<Uuid, Vec<String>> = BTreeMap::new();
+    let mut emitted_assets: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (paint_index, (element, reference, region_id, patch_path, mask_path)) in
+        drawn_patches.iter().enumerate()
+    {
+        let mask_asset_id = format!("mask-{}", reference.mask_sha256);
+        let patch_asset_id = format!("patch-{}", reference.patch_sha256);
+        for (asset_id, kind, sha, length, path) in [
+            (
+                &mask_asset_id,
+                "glyph_mask",
+                &reference.mask_sha256,
+                reference.mask_byte_length,
+                mask_path,
+            ),
+            (
+                &patch_asset_id,
+                "cleanup_patch",
+                &reference.patch_sha256,
+                reference.patch_byte_length,
+                patch_path,
+            ),
+        ] {
+            if emitted_assets.insert(asset_id.clone()) {
+                assets.push(json!({
+                    "asset_id": asset_id,
+                    "kind": kind,
+                    "sha256": sha,
+                    "byte_length": length,
+                    "mime_type": "image/png",
+                }));
+                asset_paths.insert(asset_id.clone(), path.clone());
+            }
+        }
+        let cleanup_id = format!("cleanup-{}", element.id);
+        let owner_ids: Vec<String> = region_id
+            .and_then(|id| owner_by_region.get(&id).cloned())
+            .into_iter()
+            .collect();
+        let mut artifact = json!({
+            "cleanup_id": cleanup_id,
+            "owner_ids": owner_ids,
+            "source_sha256": source_sha256,
+            "mask_asset_id": mask_asset_id,
+            "patch_asset_id": patch_asset_id,
+            "bounds": {
+                "x": element.x,
+                "y": element.y,
+                "width": element.max_width.unwrap_or(1) as f64,
+                "height": element.max_height.unwrap_or(1) as f64,
+            },
+            "generator_sha256": reference.generator_sha256,
+            "active_set_dependency": "independent",
+            "diagnostics": region_id
+                .and_then(|id| regions.iter().find(|r| r.id == id))
+                .and_then(|r| r.cleanup_diagnostics.clone())
+                .filter(Value::is_array)
+                .unwrap_or(json!([])),
+        });
+        // Contract rule 7: absent means opaque, so an untouched patch's scene is unchanged.
+        if let Some(opacity) = element.opacity.filter(|o| o.is_finite() && *o < 1.0) {
+            artifact["opacity"] = json!(opacity.max(0.0));
+        }
+        cleanup_artifacts.push(artifact);
+        match region_id {
+            Some(region_id) => cleanup_ids_by_region
+                .entry(*region_id)
+                .or_default()
+                .push(cleanup_id),
+            // A patch whose region went away (OCR redo, import) is the user's to keep: contract
+            // rule 7 authorizes it through a manual_cleanup object instead of a policy.
+            None => objects.push(json!({
+                "object_id": format!("inpainting-{}", element.id),
+                "kind": "manual_cleanup",
+                "cleanup_ids": [cleanup_id],
+                "visible": true,
+                "z_index": paint_index as i64,
+            })),
+        }
+    }
     let mut z_index: i64 = 1;
     for (layer_z, element) in &elements {
         let text = element.text.clone().unwrap_or_default();
@@ -576,76 +732,15 @@ pub async fn build_pipeline_scene(
             .find(|r| r.id == region_id)
             .expect("owner_by_region is built from regions");
 
-        let mut cleanup_ids: Vec<String> = Vec::new();
-
-        // R3: the worker computes the real glyph mask + reconstructed patch and uploads them
-        // itself (same content-addressed `scene-assets/{page_id}/{sha256}.png` path this
-        // function already uses below); here we only register what it already put there. A
-        // missing ref, or a ref whose object never actually landed in storage, falls through
-        // to the pre-R3 raster/`legacy_patch_and_mask` path untouched -- never a worse result.
-        let worker_cleanup = match (
-            region.cleanup_mask_asset_id.as_deref(),
-            region.cleanup_mask_sha256.as_deref(),
-            region.cleanup_patch_asset_id.as_deref(),
-            region.cleanup_patch_sha256.as_deref(),
-        ) {
-            (Some(mask_asset_id), Some(mask_sha), Some(patch_asset_id), Some(patch_sha)) => {
-                let mask_path = scene_asset_path(page_id, mask_sha);
-                let patch_path = scene_asset_path(page_id, patch_sha);
-                if state.storage.exists(&mask_path).await && state.storage.exists(&patch_path).await
-                {
-                    Some((
-                        mask_asset_id,
-                        mask_sha,
-                        mask_path,
-                        patch_asset_id,
-                        patch_sha,
-                        patch_path,
-                    ))
-                } else {
-                    warnings.push(format!(
-                        "element {} region {region_id} has cleanup asset refs but the objects are missing \
-                         from storage; falling back to the legacy patch",
-                        element.id
-                    ));
-                    None
-                }
-            }
-            _ => None,
-        };
-
-        if let Some((mask_asset_id, mask_sha, mask_path, patch_asset_id, patch_sha, patch_path)) =
-            worker_cleanup
-        {
-            assets.push(json!({
-                "asset_id": mask_asset_id,
-                "kind": "glyph_mask",
-                "sha256": mask_sha,
-                "byte_length": region.cleanup_mask_byte_length.unwrap_or(0),
-                "mime_type": "image/png",
-            }));
-            asset_paths.insert(mask_asset_id.to_string(), mask_path);
-            assets.push(json!({
-                "asset_id": patch_asset_id,
-                "kind": "cleanup_patch",
-                "sha256": patch_sha,
-                "byte_length": region.cleanup_patch_byte_length.unwrap_or(0),
-                "mime_type": "image/png",
-            }));
-            asset_paths.insert(patch_asset_id.to_string(), patch_path);
-
-            let cleanup_id = format!("cleanup-{}", element.id);
-            cleanup_artifacts.push(worker_cleanup_artifact(
-                &cleanup_id,
-                &owner_id,
-                &source_sha256,
-                mask_asset_id,
-                patch_asset_id,
-                region,
-                &generator_sha256,
-            ));
-            cleanup_ids.push(cleanup_id);
-        } else {
+        // Tracker R7: the region's patches are its Inpainting elements, emitted above. A region
+        // that has a worker patch never gets the flat plate, even when its patch is hidden or
+        // deleted: then the source shows under the text. The plate is only the fallback for a
+        // region whose cleanup produced nothing.
+        let mut cleanup_ids: Vec<String> = cleanup_ids_by_region
+            .get(&region_id)
+            .cloned()
+            .unwrap_or_default();
+        if cleanup_ids.is_empty() && region.cleanup_patch_sha256.is_none() {
             let raster = parse_polygon(element.mask_polygon.as_ref())
                 .and_then(|points| rasterize_polygon(&points, page_w as i64, page_h as i64));
             if let Some(raster) = raster.filter(|raster| {
@@ -1057,70 +1152,44 @@ mod tests {
     }
 
     #[test]
-    fn worker_cleanup_artifact_uses_the_regions_own_bounds_generator_and_diagnostics() {
-        // The live `validate_page_scene` runtime validator does not check bounds/generator_sha256/
-        // diagnostics (only the offline JSON-Schema fixture runner does) -- this is the test that
-        // would actually catch a mistake in populating them from the worker-supplied region.
-        let region = region_with_cleanup(
+    fn an_inpainting_patch_keeps_the_regions_own_bounds_and_generator() {
+        let mut region = region_with_cleanup(
             Some(json!({"x": 12, "y": 34, "width": 56, "height": 78})),
             Some("a".repeat(64)),
-            Some(json!([
-                "reconstruction method: aot (pixel_spread=25.0)",
-                "residual ink: 3.0%"
-            ])),
+            Some(json!(["reconstruction method: aot (pixel_spread=25.0)"])),
         );
-        let artifact = worker_cleanup_artifact(
-            "cleanup-1",
-            "owner-1",
-            "b".repeat(64).as_str(),
-            "mask-1",
-            "patch-1",
-            &region,
-            "fallback-sha",
-        );
+        region.cleanup_patch_sha256 = Some("d".repeat(64));
+        region.cleanup_patch_byte_length = Some(900);
+        region.cleanup_mask_sha256 = Some("e".repeat(64));
+        region.cleanup_mask_byte_length = Some(80);
+        let reference = crate::inpainting::cleanup_ref_for_region(&region, 4).unwrap();
 
-        assert_eq!(artifact["cleanup_id"], json!("cleanup-1"));
-        assert_eq!(artifact["owner_ids"], json!(["owner-1"]));
-        assert_eq!(artifact["source_sha256"], json!("b".repeat(64)));
-        assert_eq!(artifact["mask_asset_id"], json!("mask-1"));
-        assert_eq!(artifact["patch_asset_id"], json!("patch-1"));
         assert_eq!(
-            artifact["bounds"],
+            reference.bounds,
             json!({"x": 12, "y": 34, "width": 56, "height": 78})
         );
-        assert_eq!(artifact["generator_sha256"], json!("a".repeat(64)));
-        assert_eq!(artifact["active_set_dependency"], json!("independent"));
+        assert_eq!(reference.generator_sha256, "a".repeat(64));
         assert_eq!(
-            artifact["diagnostics"],
-            json!([
-                "reconstruction method: aot (pixel_spread=25.0)",
-                "residual ink: 3.0%"
-            ])
+            (reference.patch_byte_length, reference.mask_byte_length),
+            (900, 80)
         );
+        assert_eq!(reference.order, 4);
     }
 
     #[test]
-    fn worker_cleanup_artifact_falls_back_when_the_region_lacks_optional_fields() {
-        // A row with the asset refs present but somehow missing bounds/generator/diagnostics
-        // (should not happen from the worker, but the field is nullable) must not panic or
-        // silently produce a malformed artifact.
-        let region = region_with_cleanup(None, None, None);
-        let artifact = worker_cleanup_artifact(
-            "cleanup-2",
-            "owner-2",
-            "c".repeat(64).as_str(),
-            "mask-2",
-            "patch-2",
-            &region,
-            "fallback-sha",
+    fn a_region_without_complete_cleanup_assets_has_no_inpainting_patch() {
+        // No bounds means nowhere to draw it; no sha means nothing to draw.
+        let mut region = region_with_cleanup(None, None, None);
+        region.cleanup_patch_sha256 = Some("d".repeat(64));
+        region.cleanup_mask_sha256 = Some("e".repeat(64));
+        assert!(crate::inpainting::cleanup_ref_for_region(&region, 0).is_none());
+        let mut region = region_with_cleanup(
+            Some(json!({"x": 0, "y": 0, "width": 5, "height": 5})),
+            None,
+            None,
         );
-
-        assert_eq!(
-            artifact["bounds"],
-            json!({"x": 0, "y": 0, "width": 0, "height": 0})
-        );
-        assert_eq!(artifact["generator_sha256"], json!("fallback-sha"));
-        assert_eq!(artifact["diagnostics"], json!([]));
+        region.cleanup_mask_sha256 = Some("e".repeat(64));
+        assert!(crate::inpainting::cleanup_ref_for_region(&region, 0).is_none());
     }
 
     #[test]

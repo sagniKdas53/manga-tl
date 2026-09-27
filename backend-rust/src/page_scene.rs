@@ -310,16 +310,49 @@ pub fn validate_page_scene(document: Value) -> Result<ValidatedPageScene, PageSc
                 "cleanup assets must be existing glyph_mask and cleanup_patch",
             ));
         }
+        if let Some(opacity) = cleanup.get("opacity")
+            && !opacity
+                .as_f64()
+                .is_some_and(|value| (0.0..=1.0).contains(&value))
+        {
+            return Err(error("cleanup opacity must be a number in [0, 1]"));
+        }
         let cleanup_owner_ids = array(required(cleanup, "owner_ids")?, "cleanup.owner_ids")?
             .iter()
             .map(|value| string_value(value, "cleanup.owner_ids[]").map(str::to_owned))
             .collect::<Result<HashSet<_>, _>>()?;
-        validate_replacement_request(
-            &policy_by_owner,
-            cleanup_owner_ids.iter().map(String::as_str),
-            None,
-        )?;
+        // Contract rule 7 (R7): an owner-less cleanup is a patch the user kept after its region
+        // went away. No policy authorizes it; a manual_cleanup object must name it (checked below).
+        if !cleanup_owner_ids.is_empty() {
+            validate_replacement_request(
+                &policy_by_owner,
+                cleanup_owner_ids.iter().map(String::as_str),
+                None,
+            )?;
+        }
         cleanup_owners.insert(cleanup_id, cleanup_owner_ids);
+    }
+    let mut manual_cleanup_ids = HashSet::new();
+    for item in objects {
+        let item = object(item, "editable object")?;
+        if string(item, "kind")? != "manual_cleanup" {
+            continue;
+        }
+        for cleanup_id in array(required(item, "cleanup_ids")?, "object.cleanup_ids")? {
+            let cleanup_id = string_value(cleanup_id, "object.cleanup_ids[]")?;
+            if !cleanup_owners.contains_key(cleanup_id) {
+                return Err(error("manual cleanup references a missing cleanup"));
+            }
+            manual_cleanup_ids.insert(cleanup_id.to_owned());
+        }
+    }
+    if cleanup_owners
+        .iter()
+        .any(|(id, owners)| owners.is_empty() && !manual_cleanup_ids.contains(id))
+    {
+        return Err(error(
+            "an owner-less cleanup must be named by a manual_cleanup object",
+        ));
     }
 
     let mut object_ids = HashSet::new();

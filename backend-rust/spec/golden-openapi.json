@@ -258,6 +258,11 @@
           "boxShape": {
             "type": "string"
           },
+          "cleanupRef": {
+            "additionalProperties": true,
+            "description": "Inpainting elements only (tracker R7): the cleanup patch this element draws. Keys: patchSha256, patchByteLength, maskSha256, maskByteLength, generatorSha256, bounds, order. On create, both assets must already exist for the page; an update ignores it.",
+            "type": "object"
+          },
           "editedAt": {
             "format": "date-time",
             "type": "string"
@@ -298,6 +303,13 @@
           "maxWidth": {
             "format": "int32",
             "type": "integer"
+          },
+          "opacity": {
+            "description": "Inpainting elements only (tracker R7): drawing opacity in [0, 1]; null is opaque.",
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
           },
           "overflow": {
             "type": "boolean"
@@ -361,6 +373,11 @@
           "boxShape": {
             "type": "string"
           },
+          "cleanupRef": {
+            "additionalProperties": true,
+            "description": "Inpainting elements only (tracker R7): the cleanup patch this element draws. Keys: patchSha256, patchByteLength, maskSha256, maskByteLength, generatorSha256, bounds, order. On create, both assets must already exist for the page; an update ignores it.",
+            "type": "object"
+          },
           "font": {
             "type": "string"
           },
@@ -380,6 +397,13 @@
           "maxWidth": {
             "format": "int32",
             "type": "integer"
+          },
+          "opacity": {
+            "description": "Inpainting elements only (tracker R7): drawing opacity in [0, 1]; null is opaque.",
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
           },
           "overflow": {
             "type": "boolean"
@@ -3828,6 +3852,54 @@
               }
             },
             "description": "Current render is pending or failed"
+          }
+        },
+        "tags": [
+          "Page Controller"
+        ]
+      }
+    },
+    "/api/pages/{pageId}/scene-assets/{sha256}": {
+      "get": {
+        "description": "One content-addressed cleanup asset (patch or glyph mask PNG) of this page. Requires a signed-in user. The bytes never change for a given sha256, so the response is cacheable as immutable.",
+        "operationId": "getPageSceneAsset",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pageId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sha256",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "description": "Not signed in"
+          },
+          "404": {
+            "description": "No such page, or the page has no asset with this sha256"
           }
         },
         "tags": [

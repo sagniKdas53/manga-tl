@@ -407,7 +407,7 @@ async fn image_archive_upload_and_project_restore() {
     assert_eq!(page_count, 2);
 
     // --- Case A: page-level project restore onto the next slot ---
-    let project = r#"{"schemaVersion":1,"layers":[{"type":"translation","targetLanguage":"en","visible":true,"zOrder":3,"elements":[{"text":"Restored text","font":"Comic Neue","size":18,"x":10,"y":12,"maxWidth":120,"maxHeight":40,"visible":true}]}]}"#;
+    let project = r#"{"schemaVersion":2,"layers":[{"type":"translation","targetLanguage":"en","visible":true,"zOrder":3,"elements":[{"text":"Restored text","font":"Comic Neue","size":18,"x":10,"y":12,"maxWidth":120,"maxHeight":40,"visible":true}]}]}"#;
     let project_zip = {
         let cursor = std::io::Cursor::new(Vec::new());
         let mut writer = zip::ZipWriter::new(cursor);
@@ -507,11 +507,160 @@ async fn image_archive_upload_and_project_restore() {
     .unwrap();
     assert_eq!(replacement_element_count, 1);
 
-    let unsupported = zip_of(
-        vec![("original.png".into(), png_bytes([40, 40, 240]))],
-        Some(r#"{"schemaVersion":2,"layers":[]}"#),
+    // Tracker R7-D3: version 1 has no cleanup patches and is refused, not converted.
+    for (version, fragment) in [(1, "no longer supported"), (3, "unsupported")] {
+        let unsupported = zip_of(
+            vec![("original.png".into(), png_bytes([40, 40, 240]))],
+            Some(&format!(r#"{{"schemaVersion":{version},"layers":[]}}"#)),
+        );
+        let body = multipart(&[], Some(("file", "unsupported.zip", &unsupported)));
+        let (status, _, body) = send(
+            &app,
+            "POST",
+            &format!("/tlhub/api/chapters/{chapter_id}/import-project"),
+            &token,
+            Some("multipart/form-data; boundary=__import_boundary__"),
+            body,
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "schemaVersion {version}");
+        assert!(
+            String::from_utf8_lossy(&body).contains(fragment),
+            "{}",
+            String::from_utf8_lossy(&body)
+        );
+    }
+
+    // --- Tracker R7: the Inpainting layer round-trips with its patches and edits ---
+    let patch = png_bytes([10, 200, 90]);
+    let mask = png_bytes([255, 255, 255]);
+    let digest = |bytes: &[u8]| {
+        use sha2::Digest;
+        hex::encode(sha2::Sha256::digest(bytes))
+    };
+    let (patch_sha, mask_sha) = (digest(&patch), digest(&mask));
+    let foreign_region = uuid::Uuid::new_v4();
+    let inpainting_project = format!(
+        r##"{{"schemaVersion":2,"layers":[{{"type":"inpainting","visible":true,"zOrder":-1,"elements":[
+            {{"x":14.5,"y":20,"maxWidth":90,"maxHeight":30,"visible":true,"opacity":0.4,"regionId":"{foreign_region}",
+              "cleanupRef":{{"patchSha256":"{patch_sha}","patchByteLength":{},"maskSha256":"{mask_sha}","maskByteLength":{},
+                             "generatorSha256":"{}","bounds":{{"x":10,"y":20,"width":60,"height":30}},"order":0}}}},
+            {{"x":0,"y":0,"maxWidth":5,"maxHeight":5,"visible":true,
+              "cleanupRef":{{"patchSha256":"{}","patchByteLength":1,"maskSha256":"{mask_sha}","maskByteLength":1,
+                             "generatorSha256":"{}","bounds":{{"x":0,"y":0,"width":5,"height":5}},"order":1}}}}
+        ]}},{{"type":"translation","targetLanguage":"en","visible":true,"zOrder":1,"elements":[
+            {{"id":"plated","text":"Hi","x":24,"y":24,"maxWidth":20,"maxHeight":20,"visible":true,"regionId":"{foreign_region}",
+              "backgroundColor":"#ff0000","maskPolygon":[[24,24],[44,24],[44,44],[24,44]]}}
+        ]}}]}}"##,
+        patch.len(),
+        mask.len(),
+        "0".repeat(64),
+        "e".repeat(64),
+        "0".repeat(64),
     );
-    let body = multipart(&[], Some(("file", "unsupported.zip", &unsupported)));
+    let archive = zip_of(
+        vec![
+            ("original.png".into(), png_bytes([40, 40, 240])),
+            (format!("cleanup/{patch_sha}.png"), patch.clone()),
+            (format!("cleanup/{mask_sha}.png"), mask.clone()),
+        ],
+        Some(&inpainting_project),
+    );
+    let body = multipart(&[], Some(("file", "inpainting.zip", &archive)));
+    let (status, _, resp_body) = send(
+        &app,
+        "POST",
+        &format!("/tlhub/api/chapters/{chapter_id}/import-project"),
+        &token,
+        Some("multipart/form-data; boundary=__import_boundary__"),
+        body,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&resp_body)
+    );
+    let page_id = uuid::Uuid::parse_str(
+        serde_json::from_slice::<serde_json::Value>(&resp_body).unwrap()["pageId"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    let restored: Vec<RestoredPatch> = sqlx::query_as(
+        "SELECT e.x, e.y, e.max_width, e.max_height, e.opacity, e.region_id, e.cleanup_ref \
+         FROM layer_elements e JOIN layers l ON l.id = e.layer_id WHERE l.page_id = $1 AND l.type = 'inpainting' \
+         ORDER BY (e.cleanup_ref->>'order')::int",
+    )
+    .bind(page_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        restored.len(),
+        2,
+        "the patch whose file is not in the archive is not restored; the fallback plate becomes one"
+    );
+    let (x, y, w, h, opacity, region, reference) = &restored[0];
+    assert_eq!((*x, *y, *w, *h, *opacity), (14.5, 20.0, 90, 30, Some(0.4)));
+    assert_eq!(
+        *region, None,
+        "another page's region id is not carried over"
+    );
+    assert_eq!(reference["patchSha256"], patch_sha.as_str());
+    let storage = MinioService::new(&MinioConfig {
+        endpoint: std::env::var("MINIO_TEST_ENDPOINT").unwrap(),
+        external_url: None,
+        access_key: Some("minioadmin".into()),
+        secret_key: Some("minioadmin".into()),
+    });
+    for sha in [&patch_sha, &mask_sha] {
+        assert!(
+            storage
+                .exists(&manga_backend::page_scene_builder::scene_asset_path(
+                    page_id, sha
+                ))
+                .await,
+            "the archive's cleanup file is stored under the new page"
+        );
+    }
+
+    // The text's fallback plate, whose region this page does not have, is now a region-less patch
+    // after the others, drawn by the builder's own plate rasteriser; the text keeps no polygon.
+    let (px, py, pw, ph, _, plate_region, plate_ref) = &restored[1];
+    assert_eq!(
+        (*px, *py, *pw, *ph, *plate_region),
+        (24.0, 24.0, 20, 20, None)
+    );
+    assert_eq!(plate_ref["order"], 1);
+    assert_eq!(
+        plate_ref["generatorSha256"],
+        {
+            use sha2::Digest;
+            hex::encode(sha2::Sha256::digest(b"plain-mask/v1"))
+        }
+        .as_str()
+    );
+    let text_polygon: Option<serde_json::Value> = sqlx::query_scalar(
+        "SELECT e.mask_polygon FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
+         WHERE l.page_id = $1 AND l.type = 'translation'",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(text_polygon, None);
+
+    // A cleanup file whose bytes do not match its name makes the archive unreadable.
+    let tampered = zip_of(
+        vec![
+            ("original.png".into(), png_bytes([40, 40, 240])),
+            (format!("cleanup/{patch_sha}.png"), mask.clone()),
+        ],
+        Some(&inpainting_project),
+    );
+    let body = multipart(&[], Some(("file", "tampered.zip", &tampered)));
     let (status, _, _) = send(
         &app,
         "POST",
@@ -525,6 +674,17 @@ async fn image_archive_upload_and_project_restore() {
 
     cleanup(&pool).await;
 }
+
+/// `(x, y, max_width, max_height, opacity, region_id, cleanup_ref)` of an imported patch.
+type RestoredPatch = (
+    f64,
+    f64,
+    i32,
+    i32,
+    Option<f64>,
+    Option<uuid::Uuid>,
+    serde_json::Value,
+);
 
 async fn cleanup(pool: &sqlx::PgPool) {
     sqlx::query("DELETE FROM users WHERE email LIKE '__impexp-%'")

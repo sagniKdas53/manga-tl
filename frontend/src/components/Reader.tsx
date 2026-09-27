@@ -26,6 +26,15 @@ import {
 import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
 import { paintLayerMask } from "../utils/maskPaint";
 import { elementFit } from "../utils/elementFit";
+import {
+  CLEANUP_PRESERVE_ASPECT_RATIO,
+  isInpaintingLayer,
+  isPatchElement,
+  fetchSceneAsset,
+  paintedPatches,
+  regionHasPatch,
+  usePatchImageUrls,
+} from "../utils/inpainting";
 import type { MergePreview } from "./ReaderIssues";
 import {
   regionIssues,
@@ -125,6 +134,12 @@ interface RenderItem {
   isLayerElement?: boolean;
 }
 
+/**
+ * One undo/redo step: the element's state to restore. Tracker R7: `op: "delete"` marks a deleted
+ * patch — on the undo stack, undoing re-creates it; on the redo stack, redoing deletes it again.
+ */
+type UndoEntry = LayerElement & { op?: "delete" };
+
 type SelectedItemType =
   | (RenderItem & Partial<Omit<LayerElement, keyof RenderItem>>)
   | (LayerElement & Partial<Omit<RenderItem, keyof LayerElement>>)
@@ -166,6 +181,9 @@ async function saveElementChanges(
         fontStyle: element.fontStyle || "normal",
         boxShape: element.boxShape,
         maskPolygon: element.maskPolygon,
+        // Always sent for a patch: the server keeps a value it is not given, so omitting an
+        // opacity that went back to "unset" (opaque) by Undo would leave the export faded.
+        ...(element.cleanupRef ? { opacity: element.opacity ?? 1 } : {}),
       }),
     });
 
@@ -454,8 +472,8 @@ export const Reader: React.FC<ReaderProps> = ({
   const [manuallyShownOcrLayers, setManuallyShownOcrLayers] = useState<
     Set<string>
   >(new Set());
-  const [undoStack, setUndoStack] = useState<LayerElement[]>([]);
-  const [redoStack, setRedoStack] = useState<LayerElement[]>([]);
+  const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<UndoEntry[]>([]);
 
   // Conversation and Layout enhancements
   const [groupByConversation, setGroupByConversation] = usePersistedState(
@@ -488,7 +506,7 @@ export const Reader: React.FC<ReaderProps> = ({
   const dragStart = useRef({ x: 0, y: 0 });
   const [draggedElement, setDraggedElement] = useState<{
     id: string;
-    type: "move";
+    type: "move" | "resize";
     startX: number;
     startY: number;
     startElX: number;
@@ -753,6 +771,27 @@ export const Reader: React.FC<ReaderProps> = ({
   const sortedLayers = React.useMemo(() => {
     return [...layers].sort((a, b) => a.layer.zOrder - b.layer.zOrder);
   }, [layers]);
+
+  // Tracker R7: the page's cleanup patches, in the export's paint order, drawn between the page
+  // image and every text layer. All regions, not the OCR-layer filter: a patch does not depend on
+  // which OCR boxes are showing.
+  const patches = React.useMemo(
+    () => paintedPatches(layers, ocrRegions),
+    [layers, ocrRegions],
+  );
+  const allRegionsById = React.useMemo(
+    () => new Map(ocrRegions.map((region) => [region.id, region])),
+    [ocrRegions],
+  );
+  const patchUrls = usePatchImageUrls(
+    selectedPage?.id,
+    user.token,
+    patches.map((patch) => patch.patchSha256),
+  );
+  const selectedPatch =
+    selectedItem?.isLayerElement && isPatchElement(selectedItem as LayerElement)
+      ? (selectedItem as LayerElement)
+      : null;
 
   // Compute union bounding box for conversations
   const conversationsWithRegions = React.useMemo(() => {
@@ -1294,11 +1333,85 @@ export const Reader: React.FC<ReaderProps> = ({
     setDirtyElements(new Set());
   }, [layers, user.token, showToast, showError]);
 
+  /** Tracker R7: deletes a patch element, as one undoable step. */
+  const deletePatchElement = useCallback(
+    async (element: LayerElement): Promise<boolean> => {
+      const res = await safeFetch(`/api/layer-elements/${element.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      if (!res.ok) {
+        showToast("Could not delete the patch.", "error");
+        return false;
+      }
+      setLayers((prevLayers) =>
+        prevLayers.map((l) => ({
+          ...l,
+          elements: l.elements.filter((el) => el.id !== element.id),
+        })),
+      );
+      setSelectedItem((prev) => (prev?.id === element.id ? null : prev));
+      return true;
+    },
+    [user.token, showToast],
+  );
+
+  /** Re-creates a deleted patch from its snapshot; every stacked step for it follows the new id. */
+  const restorePatchElement = useCallback(
+    async (snapshot: LayerElement): Promise<LayerElement | null> => {
+      const res = await safeFetch(`/api/layers/${snapshot.layerId}/elements`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
+        },
+        body: JSON.stringify({
+          x: snapshot.x,
+          y: snapshot.y,
+          maxWidth: snapshot.maxWidth,
+          maxHeight: snapshot.maxHeight,
+          rotation: 0,
+          visible: snapshot.visible === true,
+          opacity: snapshot.opacity ?? undefined,
+          regionId: snapshot.regionId ?? undefined,
+          cleanupRef: snapshot.cleanupRef,
+        }),
+      });
+      if (!res.ok) {
+        showToast("Could not restore the patch.", "error");
+        return null;
+      }
+      const restored = (await res.json()) as LayerElement;
+      const remap = (entries: UndoEntry[]) =>
+        entries.map((entry) =>
+          entry.id === snapshot.id ? { ...entry, id: restored.id } : entry,
+        );
+      setUndoStack(remap);
+      setRedoStack(remap);
+      setLayers((prevLayers) =>
+        prevLayers.map((l) =>
+          l.layer.id === restored.layerId
+            ? { ...l, elements: [...l.elements, restored] }
+            : l,
+        ),
+      );
+      return restored;
+    },
+    [user.token, showToast],
+  );
+
   const handleUndo = useCallback(async () => {
     if (undoStack.length === 0) return;
     const previous = undoStack.at(-1);
     if (!previous) return;
     setUndoStack((prev) => prev.slice(0, -1));
+    if (previous.op === "delete") {
+      const restored = await restorePatchElement(previous);
+      if (restored) {
+        setRedoStack((prev) => [...prev, { ...restored, op: "delete" }]);
+      }
+      return;
+    }
 
     let currentElement: LayerElement | undefined;
     setLayers((prevLayers) => {
@@ -1338,13 +1451,19 @@ export const Reader: React.FC<ReaderProps> = ({
     );
 
     await handleSaveElementChanges(previous, false);
-  }, [undoStack, handleSaveElementChanges]);
+  }, [undoStack, handleSaveElementChanges, restorePatchElement]);
 
   const handleRedo = useCallback(async () => {
     if (redoStack.length === 0) return;
     const next = redoStack.at(-1);
     if (!next) return;
     setRedoStack((prev) => prev.slice(0, -1));
+    if (next.op === "delete") {
+      if (await deletePatchElement(next)) {
+        setUndoStack((prev) => [...prev, { ...next, op: "delete" }]);
+      }
+      return;
+    }
 
     let currentElement: LayerElement | undefined;
     setLayers((prevLayers) => {
@@ -1382,7 +1501,7 @@ export const Reader: React.FC<ReaderProps> = ({
     );
 
     await handleSaveElementChanges(next, false);
-  }, [redoStack, handleSaveElementChanges]);
+  }, [redoStack, handleSaveElementChanges, deletePatchElement]);
 
   const handleMoveLayer = useCallback(
     async (layerId: string, direction: "up" | "down") => {
@@ -1531,6 +1650,7 @@ export const Reader: React.FC<ReaderProps> = ({
   const handleElementDragStart = (
     e: React.PointerEvent,
     element: LayerElement,
+    type: "move" | "resize" = "move",
   ) => {
     e.stopPropagation();
     e.preventDefault();
@@ -1553,7 +1673,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
     setDraggedElement({
       id: element.id,
-      type: "move",
+      type,
       startX: svgPoint.x,
       startY: svgPoint.y,
       startElX: element.x,
@@ -1580,6 +1700,36 @@ export const Reader: React.FC<ReaderProps> = ({
 
       const dx = svgPoint.x - draggedElement.startX;
       const dy = svgPoint.y - draggedElement.startY;
+
+      // Tracker R7: a patch resizes from its bottom-right corner, stretched to fill (as the
+      // export draws it), kept on the page and at least a few pixels big.
+      if (draggedElement.type === "resize") {
+        const maxWidth = Math.max(
+          4,
+          Math.min(
+            imageDims.w - draggedElement.startElX,
+            Math.round(draggedElement.startElW + dx),
+          ),
+        );
+        const maxHeight = Math.max(
+          4,
+          Math.min(
+            imageDims.h - draggedElement.startElY,
+            Math.round(draggedElement.startElH + dy),
+          ),
+        );
+        const resize = <T extends { id: string }>(el: T): T =>
+          el.id === draggedElement.id ? { ...el, maxWidth, maxHeight } : el;
+        setSelectedItem((prev) => (prev ? resize(prev) : prev));
+        setLayers((prevLayers) =>
+          prevLayers.map((l) =>
+            l.elements.some((el) => el.id === draggedElement.id)
+              ? { ...l, elements: l.elements.map(resize) }
+              : l,
+          ),
+        );
+        return;
+      }
 
       // Clamp position within image bounds
       const newX = Math.max(
@@ -2236,6 +2386,21 @@ export const Reader: React.FC<ReaderProps> = ({
   );
 
   const handleDeleteElement = async (elementId: string) => {
+    // Tracker R7: a patch delete is one undo step, so it needs no confirmation.
+    const patch = layers
+      .flatMap((l) => l.elements)
+      .find((el) => el.id === elementId && isPatchElement(el));
+    if (patch) {
+      if (await deletePatchElement(patch)) {
+        setUndoStack((prev) => [
+          ...prev.slice(-49),
+          { ...patch, op: "delete" },
+        ]);
+        setRedoStack([]);
+        showToast("Patch deleted. Undo brings it back.", "success");
+      }
+      return;
+    }
     setConfirmModal({
       isOpen: true,
       title: "Delete Element",
@@ -2450,6 +2615,7 @@ export const Reader: React.FC<ReaderProps> = ({
           return `Translation (${l.targetLanguage?.toUpperCase() || "EN"})`;
         if (l.type === "sfx") return "SFX Layer";
         if (l.type === "ocr") return "OCR Layer";
+        if (isInpaintingLayer(l)) return "Inpainting";
         return `Layer (${l.type})`;
       };
       const originalName = getLayerName(sourceLayer);
@@ -2510,6 +2676,9 @@ export const Reader: React.FC<ReaderProps> = ({
               boxShape: el.boxShape,
               maskPolygon: el.maskPolygon,
               regionId: el.regionId,
+              // Tracker R7: a patch copy draws the same patch.
+              cleanupRef: el.cleanupRef ?? undefined,
+              opacity: el.opacity ?? undefined,
               // id intentionally omitted — fresh UUIDs, standalone copies
             }),
           },
@@ -2674,7 +2843,10 @@ export const Reader: React.FC<ReaderProps> = ({
       // `import_project` reads only that. These PNGs are the rasterised deliverable, and an OCR
       // layer has no business in one. See `isExportableLayer`.
       for (const lData of layers) {
-        if (!isExportableLayer(lData.layer)) continue;
+        // Tracker R7: an Inpainting layer has no mask or text raster; its patches travel as the
+        // content-addressed files below.
+        if (!isExportableLayer(lData.layer) || isInpaintingLayer(lData.layer))
+          continue;
         const layerId = lData.layer.id;
 
         // Draw mask for this specific layer
@@ -2766,6 +2938,24 @@ export const Reader: React.FC<ReaderProps> = ({
         zip.file(`layer-${layerId}-translation.png`, textBlob);
       }
 
+      // 3. Tracker R7 (R7-D3): every patch and mask an Inpainting element draws, hidden history
+      // included, as cleanup/<sha256>.png. The importer checks each name against its bytes.
+      const cleanupShas = new Set(
+        layers
+          .flatMap((l) => l.elements)
+          .flatMap((el) =>
+            el.cleanupRef
+              ? [el.cleanupRef.patchSha256, el.cleanupRef.maskSha256]
+              : [],
+          ),
+      );
+      for (const sha of cleanupShas) {
+        zip.file(
+          `cleanup/${sha}.png`,
+          await fetchSceneAsset(selectedPage.id, sha, user.token),
+        );
+      }
+
       // 4. project.json
       let totalCostVal = 0.0;
       let unpricedCalls = 0;
@@ -2777,8 +2967,9 @@ export const Reader: React.FC<ReaderProps> = ({
         unpricedCalls += unpriced;
       });
 
+      const paintedIds = new Set(patches.map((patch) => patch.element.id));
       const projectData = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         pageNumber: selectedPage.pageNumber,
         imageId: selectedPage.imageId,
         dimensions: { width: W, height: H },
@@ -2810,7 +3001,13 @@ export const Reader: React.FC<ReaderProps> = ({
               maxWidth: el.maxWidth,
               maxHeight: el.maxHeight,
               rotation: el.rotation,
-              visible: el.visible,
+              // Tracker R7: an imported page has no regions to ask, so the region's verdicts
+              // are baked in here. A patch on a shown layer is visible only if it is painted
+              // now (R7-D4); hidden layers are history and keep what they had.
+              visible:
+                el.cleanupRef && lData.layer.visible === true
+                  ? paintedIds.has(el.id)
+                  : el.visible,
               wordWrap: el.wordWrap,
               backgroundColor: el.backgroundColor,
               textColor: el.textColor,
@@ -2818,11 +3015,20 @@ export const Reader: React.FC<ReaderProps> = ({
               fontStyle: el.fontStyle || "normal",
               isManuallyEdited: el.isManuallyEdited || false,
               boxShape: el.boxShape || "rectangular",
-              maskPolygon: el.maskPolygon,
+              // A region with a patch never gets the flat plate, so its polygon means nothing
+              // outside this page. Whatever polygon a region's text keeps is its fallback plate,
+              // which the importer turns into a patch.
+              maskPolygon:
+                el.regionId && regionHasPatch(allRegionsById.get(el.regionId))
+                  ? null
+                  : el.maskPolygon,
               regionId: el.regionId,
               qaStatus: el.region?.qaStatus,
               qaScore: el.region?.qaScore,
               qaFeedback: el.region?.qaFeedback,
+              ...(el.cleanupRef
+                ? { cleanupRef: el.cleanupRef, opacity: el.opacity ?? null }
+                : {}),
             })),
           };
         }),
@@ -2881,6 +3087,8 @@ export const Reader: React.FC<ReaderProps> = ({
     // callback was last built, or a settings change would apply to the reader and not the file.
     textBoxGeometry,
     layers,
+    patches,
+    allRegionsById,
     dirtyElements,
     saveAllPendingChanges,
   ]);
@@ -3694,6 +3902,37 @@ export const Reader: React.FC<ReaderProps> = ({
                       : "visible",
                 }}
               >
+                {/* Tracker R7: source → cleanup → text, as ContentScene paints the export. */}
+                <g data-scene-layer="cleanup">
+                  {patches.map((patch) =>
+                    patchUrls[patch.patchSha256] ? (
+                      <image
+                        key={patch.element.id}
+                        data-cleanup-id={`cleanup-${patch.element.id}`}
+                        href={patchUrls[patch.patchSha256]}
+                        x={patch.x}
+                        y={patch.y}
+                        width={patch.width}
+                        height={patch.height}
+                        preserveAspectRatio={CLEANUP_PRESERVE_ASPECT_RATIO}
+                        opacity={patch.opacity}
+                        onClick={(e) => {
+                          if (cleanScanlationView) return;
+                          e.stopPropagation();
+                          setSelectedItem({
+                            ...patch.element,
+                            isLayerElement: true,
+                          });
+                          setActiveLayerId(patch.element.layerId);
+                        }}
+                        style={{
+                          cursor: cleanScanlationView ? "default" : "pointer",
+                        }}
+                      />
+                    ) : null,
+                  )}
+                </g>
+
                 {showPanels &&
                   !cleanScanlationView &&
                   panels.map((p) => (
@@ -3849,7 +4088,13 @@ export const Reader: React.FC<ReaderProps> = ({
                     hasTranslation &&
                     lData.layer.type === "ocr" &&
                     !manuallyShownOcrLayers.has(lData.layer.id);
-                  if (!lData.layer.visible || isOcrHidden) return null;
+                  // Inpainting layers are painted above, under every text layer.
+                  if (
+                    !lData.layer.visible ||
+                    isOcrHidden ||
+                    isInpaintingLayer(lData.layer)
+                  )
+                    return null;
                   return lData.elements.map((element) => {
                     if (!element.visible) return null;
 
@@ -3885,9 +4130,20 @@ export const Reader: React.FC<ReaderProps> = ({
                     const cx = element.x + width / 2;
                     const cy = element.y + height / 2;
 
-                    // Support masking toggle via wordWrap field
+                    // Support masking toggle via wordWrap field. Tracker R7: a region with a
+                    // worker patch never gets the flat plate; the patch replaces it, and when
+                    // the patch is hidden or deleted the source shows instead.
+                    // Region-less text (manual, or imported) is never plated either: the
+                    // export draws it as manual text over the page. Only an "Add Mask" element
+                    // (no text) keeps its editor-only plate.
                     const isMaskEnabled =
-                      cleanScanlationView || element.wordWrap;
+                      (cleanScanlationView || element.wordWrap) &&
+                      !regionHasPatch(
+                        element.regionId
+                          ? allRegionsById.get(element.regionId)
+                          : null,
+                      ) &&
+                      !(!element.regionId && (element.text || "").trim());
 
                     return (
                       <g
@@ -4399,6 +4655,60 @@ export const Reader: React.FC<ReaderProps> = ({
                       </g>
                     );
                   })}
+
+                {/* Tracker R7: the selected patch's frame and handles, above the text so a patch
+                    under a text box can still be moved and resized. Editor chrome only. */}
+                {selectedPatch &&
+                  !cleanScanlationView &&
+                  selectedPatch.visible === true && (
+                    <g data-editor-handle="inpainting">
+                      <rect
+                        x={selectedPatch.x}
+                        y={selectedPatch.y}
+                        width={selectedPatch.maxWidth || 1}
+                        height={selectedPatch.maxHeight || 1}
+                        fill="white"
+                        fillOpacity={0}
+                        stroke="var(--primary)"
+                        strokeWidth={2 * screenPx}
+                        strokeDasharray={`${6 * screenPx} ${3 * screenPx}`}
+                        style={{
+                          cursor: "move",
+                          pointerEvents: "auto",
+                          touchAction: "none",
+                        }}
+                        onPointerDown={(e) =>
+                          handleElementDragStart(e, selectedPatch, "move")
+                        }
+                      />
+                      <rect
+                        aria-label="Resize patch"
+                        x={
+                          selectedPatch.x +
+                          (selectedPatch.maxWidth || 1) -
+                          6 * screenPx
+                        }
+                        y={
+                          selectedPatch.y +
+                          (selectedPatch.maxHeight || 1) -
+                          6 * screenPx
+                        }
+                        width={12 * screenPx}
+                        height={12 * screenPx}
+                        fill="var(--primary)"
+                        stroke="#ffffff"
+                        strokeWidth={1.5 * screenPx}
+                        style={{
+                          cursor: "nwse-resize",
+                          pointerEvents: "auto",
+                          touchAction: "none",
+                        }}
+                        onPointerDown={(e) =>
+                          handleElementDragStart(e, selectedPatch, "resize")
+                        }
+                      />
+                    </g>
+                  )}
               </svg>
             </div>
           </div>

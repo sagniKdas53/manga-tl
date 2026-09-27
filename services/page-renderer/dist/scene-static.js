@@ -26,7 +26,7 @@ var PageSceneStatic = (() => {
   // ../../packages/page-scene/src/layout.ts
   var DEFAULT_TEXT_BOX_INSET = {
     paddingPx: 4,
-    safetyPercent: 95
+    safetyPercent: 100
   };
   var FONT_SIZE_MINIMUM = 6;
   var LINE_HEIGHT_MULTIPLIER = 1.2;
@@ -368,6 +368,12 @@ var PageSceneStatic = (() => {
   }
 
   // ../../packages/page-scene/src/ContentScene.ts
+  var CLEANUP_PRESERVE_ASPECT_RATIO = "none";
+  function cleanupOpacity(opacity) {
+    if (opacity === void 0 || !Number.isFinite(opacity) || opacity >= 1)
+      return void 0;
+    return Math.max(0, opacity);
+  }
   var STROKE_WIDTH_RATIO = 0.18;
   function resolvedTextLayout(scene) {
     return scene.objects.filter((object) => object.lineBoxes.length > 0).map((object) => ({
@@ -395,20 +401,28 @@ var PageSceneStatic = (() => {
   function resolvePageScene(input, measureText) {
     const diagnostics = [];
     const objects = [];
-    for (const object of [...input.textObjects].sort((left, right) => left.zIndex - right.zIndex)) {
+    for (const object of [...input.textObjects].sort(
+      (left, right) => left.zIndex - right.zIndex
+    )) {
       if (!object.visible) continue;
       if (!object.text) {
-        diagnostics.push({ code: "empty-manual-text", objectId: object.objectId });
+        diagnostics.push({
+          code: "empty-manual-text",
+          objectId: object.objectId
+        });
         objects.push({ objectId: object.objectId, fontSize: 0, lineBoxes: [] });
         continue;
       }
       const bounds = unrotatedBounds(object.transform);
       if (bounds.x < 0 || bounds.y < 0 || bounds.x + bounds.width > input.source.width || bounds.y + bounds.height > input.source.height) {
-        diagnostics.push({ code: "object-clips-page", objectId: object.objectId });
+        diagnostics.push({
+          code: "object-clips-page",
+          objectId: object.objectId
+        });
       }
       const fitBox = textFitBox(object.transform, {
         paddingPx: object.style.padding,
-        safetyPercent: 100
+        safetyPercent: object.style.safetyPercent ?? 100
       });
       const fit = fitTextInBox(
         {
@@ -437,11 +451,30 @@ var PageSceneStatic = (() => {
           fitBox.width
         );
         const x = object.alignment === "start" ? fitBox.x : object.alignment === "end" ? fitBox.x + fitBox.width - width : center - width / 2;
-        return { x, y: startY + index * lineHeight - lineHeight / 2, width, height: lineHeight, text: line };
+        return {
+          x,
+          y: startY + index * lineHeight - lineHeight / 2,
+          width,
+          height: lineHeight,
+          text: line
+        };
       });
-      objects.push({ objectId: object.objectId, fontSize: fit.fontSize, lineBoxes });
+      objects.push({
+        objectId: object.objectId,
+        fontSize: fit.fontSize,
+        lineBoxes
+      });
     }
     return { input, objects, diagnostics };
+  }
+  function svgNumber(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      throw new TypeError(
+        `page-scene: expected a finite number, got ${String(value)}`
+      );
+    }
+    return String(numeric);
   }
   function escapeXml(value) {
     return value.replace(
@@ -460,26 +493,35 @@ var PageSceneStatic = (() => {
     const resolvedById = new Map(
       scene.objects.map((object) => [object.objectId, object])
     );
-    const cleanupMarkup = [...scene.input.cleanupAssets].filter((asset) => asset.visible).sort((left, right) => left.zIndex - right.zIndex).map(
-      (asset) => `<image data-cleanup-id="${escapeXml(asset.cleanupId)}" href="${escapeXml(asset.href)}" x="${asset.x}" y="${asset.y}" width="${asset.width}" height="${asset.height}"/>`
-    ).join("");
+    const cleanupMarkup = [...scene.input.cleanupAssets].filter((asset) => asset.visible).sort((left, right) => left.zIndex - right.zIndex).map((asset) => {
+      const opacity = cleanupOpacity(asset.opacity);
+      const opacityAttribute = opacity === void 0 ? "" : ` opacity="${svgNumber(opacity)}"`;
+      return `<image data-cleanup-id="${escapeXml(asset.cleanupId)}" href="${escapeXml(asset.href)}" x="${svgNumber(asset.x)}" y="${svgNumber(asset.y)}" width="${svgNumber(asset.width)}" height="${svgNumber(asset.height)}" preserveAspectRatio="${CLEANUP_PRESERVE_ASPECT_RATIO}"${opacityAttribute}/>`;
+    }).join("");
     const glyphMarkup = [...scene.input.textObjects].filter((object) => object.visible).sort((left, right) => left.zIndex - right.zIndex).map((object) => {
       const resolved = resolvedById.get(object.objectId);
       if (!resolved || resolved.lineBoxes.length === 0) return "";
       const centerX = object.transform.x + object.transform.width / 2;
       const centerY = object.transform.y + object.transform.height / 2;
-      const common = `font-family="${escapeXml(object.style.fontFamily)}" font-size="${resolved.fontSize}" font-weight="${object.style.weight}" text-anchor="start" style="writing-mode:${object.writingMode}"`;
-      const lineText = (line, paint) => `<text x="${line.x}" y="${line.y + line.height * 0.8}" ${paint} ${common}>${escapeXml(line.text)}</text>`;
+      const common = `font-family="${escapeXml(object.style.fontFamily)}" font-size="${svgNumber(resolved.fontSize)}" font-weight="${svgNumber(object.style.weight)}" text-anchor="start" style="writing-mode:${escapeXml(object.writingMode)}"`;
+      const lineText = (line, paint) => `<text x="${svgNumber(line.x)}" y="${svgNumber(line.y + line.height * 0.8)}" ${paint} ${common}>${escapeXml(line.text)}</text>`;
       const strokePass = object.style.stroke ? resolved.lineBoxes.map(
         (line) => lineText(
           line,
-          `fill="none" stroke="${escapeXml(object.style.stroke)}" stroke-width="${Math.max(1, resolved.fontSize * STROKE_WIDTH_RATIO)}" stroke-linejoin="round" stroke-linecap="round"`
+          `fill="none" stroke="${escapeXml(object.style.stroke)}" stroke-width="${svgNumber(Math.max(1, resolved.fontSize * STROKE_WIDTH_RATIO))}" stroke-linejoin="round" stroke-linecap="round"`
         )
       ).join("") : "";
-      const fillPass = resolved.lineBoxes.map((line) => lineText(line, `fill="${escapeXml(object.style.fill)}" stroke="none"`)).join("");
-      return `<g data-text-object-id="${escapeXml(object.objectId)}" transform="rotate(${object.transform.rotationDegrees} ${centerX} ${centerY})"><g data-text-pass="stroke">${strokePass}</g><g data-text-pass="fill">${fillPass}</g></g>`;
+      const fillPass = resolved.lineBoxes.map(
+        (line) => lineText(
+          line,
+          `fill="${escapeXml(object.style.fill)}" stroke="none"`
+        )
+      ).join("");
+      return `<g data-text-object-id="${escapeXml(object.objectId)}" transform="rotate(${svgNumber(object.transform.rotationDegrees)} ${svgNumber(centerX)} ${svgNumber(centerY)})"><g data-text-pass="stroke">${strokePass}</g><g data-text-pass="fill">${fillPass}</g></g>`;
     }).join("");
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${source.width}" height="${source.height}" viewBox="0 0 ${source.width} ${source.height}" data-scene-content="page-scene-v1"><image data-scene-layer="source" href="${escapeXml(source.href)}" x="0" y="0" width="${source.width}" height="${source.height}"/><g data-scene-layer="cleanup">${cleanupMarkup}</g><g data-scene-layer="glyphs">${glyphMarkup}</g></svg>`;
+    const width = svgNumber(source.width);
+    const height = svgNumber(source.height);
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" data-scene-content="page-scene-v1"><image data-scene-layer="source" href="${escapeXml(source.href)}" x="0" y="0" width="${width}" height="${height}"/><g data-scene-layer="cleanup">${cleanupMarkup}</g><g data-scene-layer="glyphs">${glyphMarkup}</g></svg>`;
   }
 
   // src/static-entry.ts

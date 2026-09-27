@@ -863,6 +863,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/pages/{pageId}/scene-assets/{sha256}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One content-addressed cleanup asset (patch or glyph mask PNG) of this page. Requires a signed-in user. The bytes never change for a given sha256, so the response is cacheable as immutable. */
+        get: operations["getPageSceneAsset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pages/{pageId}/regions/merge": {
         parameters: {
             query?: never;
@@ -1158,6 +1175,10 @@ export interface components {
             autoSize?: boolean;
             backgroundColor?: string;
             boxShape?: string;
+            /** @description Inpainting elements only (tracker R7): the cleanup patch this element draws. Keys: patchSha256, patchByteLength, maskSha256, maskByteLength, generatorSha256, bounds, order. On create, both assets must already exist for the page; an update ignores it. */
+            cleanupRef?: {
+                [key: string]: unknown;
+            };
             /** Format: date-time */
             editedAt?: string;
             font?: string;
@@ -1175,6 +1196,11 @@ export interface components {
             maxHeight?: number;
             /** Format: int32 */
             maxWidth?: number;
+            /**
+             * Format: double
+             * @description Inpainting elements only (tracker R7): drawing opacity in [0, 1]; null is opaque.
+             */
+            opacity?: number;
             overflow?: boolean;
             qaFeedback?: string;
             /** Format: double */
@@ -1200,6 +1226,10 @@ export interface components {
             autoSize?: boolean;
             backgroundColor?: string;
             boxShape?: string;
+            /** @description Inpainting elements only (tracker R7): the cleanup patch this element draws. Keys: patchSha256, patchByteLength, maskSha256, maskByteLength, generatorSha256, bounds, order. On create, both assets must already exist for the page; an update ignores it. */
+            cleanupRef?: {
+                [key: string]: unknown;
+            };
             font?: string;
             fontStyle?: string;
             fontWeight?: string;
@@ -1208,6 +1238,11 @@ export interface components {
             maxHeight?: number;
             /** Format: int32 */
             maxWidth?: number;
+            /**
+             * Format: double
+             * @description Inpainting elements only (tracker R7): drawing opacity in [0, 1]; null is opaque.
+             */
+            opacity?: number;
             overflow?: boolean;
             /** Format: uuid */
             regionId?: string;
@@ -3247,6 +3282,43 @@ export interface operations {
                         status: "pending" | "failed";
                     };
                 };
+            };
+        };
+    };
+    getPageSceneAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+                sha256: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description Not signed in */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such page, or the page has no asset with this sha256 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -31,6 +31,8 @@ import SidebarSection from "./SidebarSection";
 import type { SystemStyleObject, Theme } from "@mui/system";
 import type { Layer, LayerElement, OcrRegion } from "../types";
 import { inReadingOrder, regionRowStatus } from "../utils/regionReview";
+import { isInpaintingLayer, isPatchElement } from "../utils/inpainting";
+import PatchInspector from "./PatchInspector";
 import {
   translationElementByRegion,
   type IssueAction,
@@ -757,7 +759,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                                 ? "SFX Layer"
                                 : lData.layer.type === "ocr"
                                   ? "OCR Layer"
-                                  : `Layer (${lData.layer.type})`}
+                                  : isInpaintingLayer(lData.layer)
+                                    ? "Inpainting"
+                                    : `Layer (${lData.layer.type})`}
                         </Typography>
                         <Typography
                           component="span"
@@ -855,10 +859,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                               ? regionById.get(element.regionId)
                               : undefined;
                             const rowStatus = regionRowStatus(region, element);
-                            const label =
-                              (element.text || "").trim() ||
-                              (region?.text || "").trim() ||
-                              "(no text)";
+                            const label = isPatchElement(element)
+                              ? `Patch${region ? ` · ${(region.text || "").trim()}` : " · no region"}`
+                              : (element.text || "").trim() ||
+                                (region?.text || "").trim() ||
+                                "(no text)";
                             return (
                               <Box
                                 key={element.id}
@@ -1103,673 +1108,700 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
         </>
       )}
 
-      {selectedItem && selectedItem.isLayerElement && (
-        <Grid
-          className="ocr-detail-card"
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            gap: "12px",
-          }}
-        >
-          <Box sx={inspectorHeaderRowSx}>
-            <Box>
-              <Typography
-                variant="overline"
-                component="div"
-                sx={inspectorTitleSx}
-              >
-                Element Inspector
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={inspectorSubtitleSx}
-              >
-                {selectedItem.text !== undefined && selectedItem.text !== null
-                  ? "Text element"
-                  : "Mask element"}
-              </Typography>
-            </Box>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => setSelectedItem(null)}
-              sx={deselectButtonSx}
-            >
-              Deselect
-            </Button>
-          </Box>
+      {selectedItem &&
+        selectedItem.isLayerElement &&
+        isPatchElement(selectedItem as LayerElement) && (
+          <PatchInspector
+            key={selectedItem.id}
+            element={selectedItem as LayerElement}
+            region={
+              selectedItem.regionId
+                ? regionById.get(selectedItem.regionId)
+                : undefined
+            }
+            onUpdate={handleUpdateSelectedElement}
+            onSetVisibility={handleSetElementVisibility}
+            onDelete={handleDeleteElement}
+            onDeselect={() => setSelectedItem(null)}
+          />
+        )}
 
-          {/* Content */}
-          <SidebarSection title="Content">
-            <Grid
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "4px",
-              }}
-            >
-              <FieldLabel htmlFor="element-text-content">
-                Text Content
-              </FieldLabel>
-              <TextField
-                id="element-text-content"
-                multiline
-                minRows={3}
-                fullWidth
+      {selectedItem &&
+        selectedItem.isLayerElement &&
+        !isPatchElement(selectedItem as LayerElement) && (
+          <Grid
+            className="ocr-detail-card"
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+            }}
+          >
+            <Box sx={inspectorHeaderRowSx}>
+              <Box>
+                <Typography
+                  variant="overline"
+                  component="div"
+                  sx={inspectorTitleSx}
+                >
+                  Element Inspector
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={inspectorSubtitleSx}
+                >
+                  {selectedItem.text !== undefined && selectedItem.text !== null
+                    ? "Text element"
+                    : "Mask element"}
+                </Typography>
+              </Box>
+              <Button
                 variant="outlined"
                 size="small"
-                value={selectedItem.text || ""}
-                onChange={(e) =>
-                  handleUpdateSelectedElement({ text: e.target.value })
-                }
-                sx={textContentFieldSx}
-              />
-            </Grid>
+                onClick={() => setSelectedItem(null)}
+                sx={deselectButtonSx}
+              >
+                Deselect
+              </Button>
+            </Box>
 
-            {/* Manual Region Redo Section */}
-            {selectedItem.regionId && (
+            {/* Content */}
+            <SidebarSection title="Content">
+              <Grid
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                }}
+              >
+                <FieldLabel htmlFor="element-text-content">
+                  Text Content
+                </FieldLabel>
+                <TextField
+                  id="element-text-content"
+                  multiline
+                  minRows={3}
+                  fullWidth
+                  variant="outlined"
+                  size="small"
+                  value={selectedItem.text || ""}
+                  onChange={(e) =>
+                    handleUpdateSelectedElement({ text: e.target.value })
+                  }
+                  sx={textContentFieldSx}
+                />
+              </Grid>
+
+              {/* Manual Region Redo Section */}
+              {selectedItem.regionId && (
+                <Grid
+                  container
+                  spacing={1}
+                  sx={regionRedoGridSx}
+                >
+                  <Grid
+                    size={6}
+                    sx={regionRedoColSx}
+                  >
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      style={{
+                        justifyContent: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        padding: "8px 6px",
+                        height: "36px",
+                      }}
+                      disabled={
+                        isRedoingRegionOcr ||
+                        (selectedItem &&
+                          "layerType" in selectedItem &&
+                          (selectedItem.layerType === "translation" ||
+                            selectedItem.layerType === "tl"))
+                      }
+                      title={
+                        selectedItem &&
+                        "layerType" in selectedItem &&
+                        (selectedItem.layerType === "translation" ||
+                          selectedItem.layerType === "tl")
+                          ? "Select an OCR layer element to redo OCR"
+                          : undefined
+                      }
+                      onClick={() => {
+                        const actualRegion = ocrRegions.find(
+                          (r) => r.id === selectedItem.regionId,
+                        );
+                        if (actualRegion) handleRedoRegion(actualRegion, "ocr");
+                      }}
+                    >
+                      {isRedoingRegionOcr ? (
+                        <CircularProgress
+                          size={12}
+                          sx={redoSpinnerMarginSx}
+                        />
+                      ) : (
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                        >
+                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                        </svg>
+                      )}
+                      Redo OCR
+                    </Button>
+                  </Grid>
+
+                  <Grid
+                    size={6}
+                    sx={regionRedoColSx}
+                  >
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      style={{
+                        justifyContent: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        padding: "8px 6px",
+                        height: "36px",
+                      }}
+                      disabled={isRedoingRegionTl}
+                      onClick={() => {
+                        const actualRegion = ocrRegions.find(
+                          (r) => r.id === selectedItem.regionId,
+                        );
+                        if (actualRegion)
+                          handleRedoRegion(actualRegion, "translation");
+                      }}
+                    >
+                      {isRedoingRegionTl ? (
+                        <CircularProgress
+                          size={12}
+                          sx={redoSpinnerMarginSx}
+                        />
+                      ) : (
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                        >
+                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                        </svg>
+                      )}
+                      Redo TL
+                    </Button>
+                  </Grid>
+                </Grid>
+              )}
+            </SidebarSection>
+
+            {/* Position & Size */}
+            <SidebarSection title="Position & Size">
+              {/* Positioning Coordinates Row */}
               <Grid
                 container
                 spacing={1}
-                sx={regionRedoGridSx}
               >
                 <Grid
                   size={6}
-                  sx={regionRedoColSx}
+                  sx={fieldColumnSx}
                 >
-                  <Button
-                    fullWidth
-                    variant="outlined"
+                  <FieldLabel htmlFor="element-x">X Position</FieldLabel>
+                  <TextField
+                    id="element-x"
+                    type="number"
                     size="small"
-                    style={{
-                      justifyContent: "center",
-                      gap: "6px",
-                      fontSize: "12px",
-                      padding: "8px 6px",
-                      height: "36px",
-                    }}
-                    disabled={
-                      isRedoingRegionOcr ||
-                      (selectedItem &&
-                        "layerType" in selectedItem &&
-                        (selectedItem.layerType === "translation" ||
-                          selectedItem.layerType === "tl"))
+                    value={selectedItem.x}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        x: parseFloat(e.target.value) || 0,
+                      })
                     }
-                    title={
-                      selectedItem &&
-                      "layerType" in selectedItem &&
-                      (selectedItem.layerType === "translation" ||
-                        selectedItem.layerType === "tl")
-                        ? "Select an OCR layer element to redo OCR"
-                        : undefined
-                    }
-                    onClick={() => {
-                      const actualRegion = ocrRegions.find(
-                        (r) => r.id === selectedItem.regionId,
-                      );
-                      if (actualRegion) handleRedoRegion(actualRegion, "ocr");
-                    }}
-                  >
-                    {isRedoingRegionOcr ? (
-                      <CircularProgress
-                        size={12}
-                        sx={redoSpinnerMarginSx}
-                      />
-                    ) : (
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                      </svg>
-                    )}
-                    Redo OCR
-                  </Button>
+                    sx={numericFieldInputSx}
+                  />
                 </Grid>
-
                 <Grid
                   size={6}
-                  sx={regionRedoColSx}
+                  sx={fieldColumnSx}
                 >
-                  <Button
-                    fullWidth
-                    variant="outlined"
+                  <FieldLabel htmlFor="element-y">Y Position</FieldLabel>
+                  <TextField
+                    id="element-y"
+                    type="number"
                     size="small"
-                    style={{
-                      justifyContent: "center",
-                      gap: "6px",
-                      fontSize: "12px",
-                      padding: "8px 6px",
-                      height: "36px",
-                    }}
-                    disabled={isRedoingRegionTl}
-                    onClick={() => {
-                      const actualRegion = ocrRegions.find(
-                        (r) => r.id === selectedItem.regionId,
-                      );
-                      if (actualRegion)
-                        handleRedoRegion(actualRegion, "translation");
-                    }}
-                  >
-                    {isRedoingRegionTl ? (
-                      <CircularProgress
-                        size={12}
-                        sx={redoSpinnerMarginSx}
-                      />
-                    ) : (
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                      </svg>
-                    )}
-                    Redo TL
-                  </Button>
+                    value={selectedItem.y}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        y: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    sx={numericFieldInputSx}
+                  />
                 </Grid>
               </Grid>
-            )}
-          </SidebarSection>
 
-          {/* Position & Size */}
-          <SidebarSection title="Position & Size">
-            {/* Positioning Coordinates Row */}
-            <Grid
-              container
-              spacing={1}
-            >
+              {/* Dimensions Row */}
               <Grid
-                size={6}
-                sx={fieldColumnSx}
+                container
+                spacing={1}
               >
-                <FieldLabel htmlFor="element-x">X Position</FieldLabel>
-                <TextField
-                  id="element-x"
-                  type="number"
-                  size="small"
-                  value={selectedItem.x}
-                  onChange={(e) =>
-                    handleUpdateSelectedElement({
-                      x: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                  sx={numericFieldInputSx}
-                />
+                <Grid
+                  size={6}
+                  sx={fieldColumnSx}
+                >
+                  <FieldLabel htmlFor="element-max-width">Max Width</FieldLabel>
+                  <TextField
+                    id="element-max-width"
+                    type="number"
+                    size="small"
+                    value={selectedItem.maxWidth || 0}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        maxWidth: parseInt(e.target.value) || 0,
+                      })
+                    }
+                    sx={numericFieldInputSx}
+                  />
+                </Grid>
+                <Grid
+                  size={6}
+                  sx={fieldColumnSx}
+                >
+                  <FieldLabel htmlFor="element-max-height">
+                    Max Height
+                  </FieldLabel>
+                  <TextField
+                    id="element-max-height"
+                    type="number"
+                    size="small"
+                    value={selectedItem.maxHeight || 0}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        maxHeight: parseInt(e.target.value) || 0,
+                      })
+                    }
+                    sx={numericFieldInputSx}
+                  />
+                </Grid>
               </Grid>
-              <Grid
-                size={6}
-                sx={fieldColumnSx}
-              >
-                <FieldLabel htmlFor="element-y">Y Position</FieldLabel>
-                <TextField
-                  id="element-y"
-                  type="number"
-                  size="small"
-                  value={selectedItem.y}
-                  onChange={(e) =>
-                    handleUpdateSelectedElement({
-                      y: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                  sx={numericFieldInputSx}
-                />
-              </Grid>
-            </Grid>
 
-            {/* Dimensions Row */}
-            <Grid
-              container
-              spacing={1}
-            >
+              {/* Drag & Reshape Mode Buttons — contextually swap to Undo during active modes */}
               <Grid
-                size={6}
-                sx={fieldColumnSx}
+                style={{ display: "flex", flexDirection: "column", gap: "6px" }}
               >
-                <FieldLabel htmlFor="element-max-width">Max Width</FieldLabel>
-                <TextField
-                  id="element-max-width"
-                  type="number"
-                  size="small"
-                  value={selectedItem.maxWidth || 0}
-                  onChange={(e) =>
-                    handleUpdateSelectedElement({
-                      maxWidth: parseInt(e.target.value) || 0,
-                    })
-                  }
-                  sx={numericFieldInputSx}
-                />
-              </Grid>
-              <Grid
-                size={6}
-                sx={fieldColumnSx}
-              >
-                <FieldLabel htmlFor="element-max-height">Max Height</FieldLabel>
-                <TextField
-                  id="element-max-height"
-                  type="number"
-                  size="small"
-                  value={selectedItem.maxHeight || 0}
-                  onChange={(e) =>
-                    handleUpdateSelectedElement({
-                      maxHeight: parseInt(e.target.value) || 0,
-                    })
-                  }
-                  sx={numericFieldInputSx}
-                />
-              </Grid>
-            </Grid>
-
-            {/* Drag & Reshape Mode Buttons — contextually swap to Undo during active modes */}
-            <Grid
-              style={{ display: "flex", flexDirection: "column", gap: "6px" }}
-            >
-              <Grid style={{ display: "flex", gap: "6px" }}>
-                {/* LEFT BUTTON: Drag (idle) or Undo (while reshaping) */}
-                {interactionMode === "reshape" ? (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<UndoIcon />}
-                    style={{ flex: 1, fontSize: "12px" }}
-                    onClick={handleUndo}
-                    disabled={undoStack.length === 0}
-                    title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
-                  >
-                    Undo
-                  </Button>
-                ) : (
-                  <Button
-                    variant={
-                      interactionMode === "drag" ? "contained" : "outlined"
-                    }
-                    size="small"
-                    startIcon={<OpenWithIcon />}
-                    style={{ flex: 1, fontSize: "12px" }}
-                    onClick={() =>
-                      setInteractionMode((prev) =>
-                        prev === "drag" ? "none" : "drag",
-                      )
-                    }
-                    title="Drag the element to a new position on the image"
-                    sx={
-                      interactionMode === "drag" ? activeModeGlowSx : undefined
-                    }
-                  >
-                    {interactionMode === "drag" ? "Dragging…" : "Drag"}
-                  </Button>
-                )}
-
-                {/* RIGHT BUTTON: Reshape (idle) or Undo (while dragging) */}
-                {interactionMode === "drag" ? (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<UndoIcon />}
-                    style={{ flex: 1, fontSize: "12px" }}
-                    onClick={handleUndo}
-                    disabled={undoStack.length === 0}
-                    title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
-                  >
-                    Undo
-                  </Button>
-                ) : (
-                  <Button
-                    variant={
-                      interactionMode === "reshape" ? "contained" : "outlined"
-                    }
-                    size="small"
-                    startIcon={<CropIcon />}
-                    style={{ flex: 1, fontSize: "12px" }}
-                    onClick={() => {
-                      if (interactionMode === "reshape") {
-                        setInteractionMode("none");
-                      } else {
-                        handleEnterReshapeMode(selectedItem as LayerElement);
+                <Grid style={{ display: "flex", gap: "6px" }}>
+                  {/* LEFT BUTTON: Drag (idle) or Undo (while reshaping) */}
+                  {interactionMode === "reshape" ? (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<UndoIcon />}
+                      style={{ flex: 1, fontSize: "12px" }}
+                      onClick={handleUndo}
+                      disabled={undoStack.length === 0}
+                      title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
+                    >
+                      Undo
+                    </Button>
+                  ) : (
+                    <Button
+                      variant={
+                        interactionMode === "drag" ? "contained" : "outlined"
                       }
-                    }}
-                    title="Drag individual vertices to reshape the bubble polygon. Auto-generates polygon for rect/ellipse shapes."
-                    sx={
-                      interactionMode === "reshape"
-                        ? activeModeGlowSx
-                        : undefined
-                    }
+                      size="small"
+                      startIcon={<OpenWithIcon />}
+                      style={{ flex: 1, fontSize: "12px" }}
+                      onClick={() =>
+                        setInteractionMode((prev) =>
+                          prev === "drag" ? "none" : "drag",
+                        )
+                      }
+                      title="Drag the element to a new position on the image"
+                      sx={
+                        interactionMode === "drag"
+                          ? activeModeGlowSx
+                          : undefined
+                      }
+                    >
+                      {interactionMode === "drag" ? "Dragging…" : "Drag"}
+                    </Button>
+                  )}
+
+                  {/* RIGHT BUTTON: Reshape (idle) or Undo (while dragging) */}
+                  {interactionMode === "drag" ? (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<UndoIcon />}
+                      style={{ flex: 1, fontSize: "12px" }}
+                      onClick={handleUndo}
+                      disabled={undoStack.length === 0}
+                      title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
+                    >
+                      Undo
+                    </Button>
+                  ) : (
+                    <Button
+                      variant={
+                        interactionMode === "reshape" ? "contained" : "outlined"
+                      }
+                      size="small"
+                      startIcon={<CropIcon />}
+                      style={{ flex: 1, fontSize: "12px" }}
+                      onClick={() => {
+                        if (interactionMode === "reshape") {
+                          setInteractionMode("none");
+                        } else {
+                          handleEnterReshapeMode(selectedItem as LayerElement);
+                        }
+                      }}
+                      title="Drag individual vertices to reshape the bubble polygon. Auto-generates polygon for rect/ellipse shapes."
+                      sx={
+                        interactionMode === "reshape"
+                          ? activeModeGlowSx
+                          : undefined
+                      }
+                    >
+                      {interactionMode === "reshape" ? "Reshaping…" : "Reshape"}
+                    </Button>
+                  )}
+                </Grid>
+                {interactionMode !== "none" && (
+                  <Typography
+                    variant="caption"
+                    sx={interactionHintTextSx}
                   >
-                    {interactionMode === "reshape" ? "Reshaping…" : "Reshape"}
-                  </Button>
+                    {interactionMode === "drag"
+                      ? "Touch or drag the bubble on the page to move it."
+                      : "Drag a vertex to reshape, or the top handle to rotate."}
+                  </Typography>
                 )}
               </Grid>
-              {interactionMode !== "none" && (
-                <Typography
-                  variant="caption"
-                  sx={interactionHintTextSx}
-                >
-                  {interactionMode === "drag"
-                    ? "Touch or drag the bubble on the page to move it."
-                    : "Drag a vertex to reshape, or the top handle to rotate."}
-                </Typography>
-              )}
-            </Grid>
-          </SidebarSection>
+            </SidebarSection>
 
-          {/* Typography */}
-          <SidebarSection title="Typography">
-            {/* Font & Style settings */}
-            <Grid
-              container
-              spacing={1}
-            >
+            {/* Typography */}
+            <SidebarSection title="Typography">
+              {/* Font & Style settings */}
               <Grid
-                size={6}
-                sx={fieldColumnSx}
+                container
+                spacing={1}
               >
-                <FieldLabel id="element-font-family-label">
-                  Font Family
-                </FieldLabel>
+                <Grid
+                  size={6}
+                  sx={fieldColumnSx}
+                >
+                  <FieldLabel id="element-font-family-label">
+                    Font Family
+                  </FieldLabel>
+                  <Select
+                    labelId="element-font-family-label"
+                    size="small"
+                    value={selectedItem.font || "Comic Neue"}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({ font: e.target.value })
+                    }
+                    sx={selectFieldSx}
+                  >
+                    <MenuItem value="Comic Neue">Comic Neue</MenuItem>
+                    <MenuItem value="Bangers">Bangers</MenuItem>
+                    <MenuItem value="Luckiest Guy">Luckiest Guy</MenuItem>
+                    <MenuItem value="Arial">Arial</MenuItem>
+                    <MenuItem value="Courier New">Courier New</MenuItem>
+                  </Select>
+                </Grid>
+                <Grid
+                  size={6}
+                  sx={fieldColumnSx}
+                >
+                  <FieldLabel htmlFor="element-font-size">
+                    Font Size (pt)
+                  </FieldLabel>
+                  <TextField
+                    id="element-font-size"
+                    type="number"
+                    size="small"
+                    value={selectedItem.size || 16}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        size: parseFloat(e.target.value) || 12,
+                        autoSize: false,
+                      })
+                    }
+                    sx={numericFieldInputSx}
+                  />
+                </Grid>
+              </Grid>
+
+              {/* Font Weight & Style Row */}
+              <Grid
+                container
+                spacing={1}
+              >
+                <Grid
+                  size={6}
+                  sx={fieldColumnSx}
+                >
+                  <FieldLabel id="element-font-weight-label">
+                    Font Weight
+                  </FieldLabel>
+                  <Select
+                    labelId="element-font-weight-label"
+                    size="small"
+                    value={selectedItem.fontWeight || "normal"}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        fontWeight: e.target.value as string,
+                      })
+                    }
+                    sx={selectFieldSx}
+                  >
+                    <MenuItem value="normal">Normal</MenuItem>
+                    <MenuItem value="bold">Bold</MenuItem>
+                  </Select>
+                </Grid>
+                <Grid
+                  size={6}
+                  sx={fieldColumnSx}
+                >
+                  <FieldLabel id="element-font-style-label">
+                    Font Style
+                  </FieldLabel>
+                  <Select
+                    labelId="element-font-style-label"
+                    size="small"
+                    value={selectedItem.fontStyle || "normal"}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        fontStyle: e.target.value as string,
+                      })
+                    }
+                    sx={selectFieldSx}
+                  >
+                    <MenuItem value="normal">Normal</MenuItem>
+                    <MenuItem value="italic">Italic</MenuItem>
+                  </Select>
+                </Grid>
+              </Grid>
+            </SidebarSection>
+
+            {/* Appearance */}
+            <SidebarSection title="Appearance">
+              {/* Box Shape selection */}
+              <Grid
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                }}
+              >
+                <FieldLabel id="element-box-shape-label">Box Shape</FieldLabel>
                 <Select
-                  labelId="element-font-family-label"
+                  labelId="element-box-shape-label"
                   size="small"
-                  value={selectedItem.font || "Comic Neue"}
+                  value={selectedItem.boxShape || "rectangular"}
                   onChange={(e) =>
-                    handleUpdateSelectedElement({ font: e.target.value })
+                    handleUpdateSelectedElement({
+                      boxShape: e.target.value as string,
+                    })
                   }
                   sx={selectFieldSx}
                 >
-                  <MenuItem value="Comic Neue">Comic Neue</MenuItem>
-                  <MenuItem value="Bangers">Bangers</MenuItem>
-                  <MenuItem value="Luckiest Guy">Luckiest Guy</MenuItem>
-                  <MenuItem value="Arial">Arial</MenuItem>
-                  <MenuItem value="Courier New">Courier New</MenuItem>
+                  <MenuItem value="rectangular">Rectangular</MenuItem>
+                  <MenuItem value="elliptical">
+                    Elliptical (Contour-Based)
+                  </MenuItem>
                 </Select>
               </Grid>
+
+              {/* Mask Background Color (only relevant if clean background mask is enabled) */}
+              {selectedItem.wordWrap && (
+                <ColorPicker
+                  label="Mask Background Color"
+                  value={
+                    selectedItem.backgroundColor !== undefined &&
+                    selectedItem.backgroundColor !== null
+                      ? selectedItem.backgroundColor
+                      : "#ffffff"
+                  }
+                  onChange={(val) =>
+                    handleUpdateSelectedElement({ backgroundColor: val })
+                  }
+                  onLaunchEyeDropper={() =>
+                    handleLaunchEyeDropper("backgroundColor")
+                  }
+                  allowTransparent={true}
+                />
+              )}
+
+              {/* Text Color (only relevant if it is a text-bearing element) */}
+              {selectedItem.text !== undefined &&
+                selectedItem.text !== null && (
+                  <ColorPicker
+                    label="Text Color"
+                    value={
+                      selectedItem.textColor !== undefined &&
+                      selectedItem.textColor !== null
+                        ? selectedItem.textColor
+                        : "#000000"
+                    }
+                    onChange={(val) =>
+                      handleUpdateSelectedElement({ textColor: val })
+                    }
+                    onLaunchEyeDropper={() =>
+                      handleLaunchEyeDropper("textColor")
+                    }
+                    allowTransparent={false}
+                  />
+                )}
+
+              {/* Rotation Slider */}
               <Grid
-                size={6}
-                sx={fieldColumnSx}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                }}
               >
-                <FieldLabel htmlFor="element-font-size">
-                  Font Size (pt)
+                <FieldLabel id="element-rotation-label">
+                  Rotation ({selectedItem.rotation || 0}°)
                 </FieldLabel>
-                <TextField
-                  id="element-font-size"
-                  type="number"
+                <Slider
+                  aria-labelledby="element-rotation-label"
                   size="small"
-                  value={selectedItem.size || 16}
-                  onChange={(e) =>
+                  min={0}
+                  max={360}
+                  value={selectedItem.rotation || 0}
+                  onChange={(_, val) =>
                     handleUpdateSelectedElement({
-                      size: parseFloat(e.target.value) || 12,
-                      autoSize: false,
+                      rotation: val as number,
                     })
                   }
-                  sx={numericFieldInputSx}
+                  sx={rotationSliderSx}
                 />
               </Grid>
-            </Grid>
+            </SidebarSection>
 
-            {/* Font Weight & Style Row */}
-            <Grid
-              container
-              spacing={1}
-            >
+            {/* Behavior */}
+            <SidebarSection title="Behavior">
+              {/* Checkboxes Row */}
               <Grid
-                size={6}
-                sx={fieldColumnSx}
-              >
-                <FieldLabel id="element-font-weight-label">
-                  Font Weight
-                </FieldLabel>
-                <Select
-                  labelId="element-font-weight-label"
-                  size="small"
-                  value={selectedItem.fontWeight || "normal"}
-                  onChange={(e) =>
-                    handleUpdateSelectedElement({
-                      fontWeight: e.target.value as string,
-                    })
-                  }
-                  sx={selectFieldSx}
-                >
-                  <MenuItem value="normal">Normal</MenuItem>
-                  <MenuItem value="bold">Bold</MenuItem>
-                </Select>
-              </Grid>
-              <Grid
-                size={6}
-                sx={fieldColumnSx}
-              >
-                <FieldLabel id="element-font-style-label">
-                  Font Style
-                </FieldLabel>
-                <Select
-                  labelId="element-font-style-label"
-                  size="small"
-                  value={selectedItem.fontStyle || "normal"}
-                  onChange={(e) =>
-                    handleUpdateSelectedElement({
-                      fontStyle: e.target.value as string,
-                    })
-                  }
-                  sx={selectFieldSx}
-                >
-                  <MenuItem value="normal">Normal</MenuItem>
-                  <MenuItem value="italic">Italic</MenuItem>
-                </Select>
-              </Grid>
-            </Grid>
-          </SidebarSection>
-
-          {/* Appearance */}
-          <SidebarSection title="Appearance">
-            {/* Box Shape selection */}
-            <Grid
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "4px",
-              }}
-            >
-              <FieldLabel id="element-box-shape-label">Box Shape</FieldLabel>
-              <Select
-                labelId="element-box-shape-label"
-                size="small"
-                value={selectedItem.boxShape || "rectangular"}
-                onChange={(e) =>
-                  handleUpdateSelectedElement({
-                    boxShape: e.target.value as string,
-                  })
-                }
-                sx={selectFieldSx}
-              >
-                <MenuItem value="rectangular">Rectangular</MenuItem>
-                <MenuItem value="elliptical">
-                  Elliptical (Contour-Based)
-                </MenuItem>
-              </Select>
-            </Grid>
-
-            {/* Mask Background Color (only relevant if clean background mask is enabled) */}
-            {selectedItem.wordWrap && (
-              <ColorPicker
-                label="Mask Background Color"
-                value={
-                  selectedItem.backgroundColor !== undefined &&
-                  selectedItem.backgroundColor !== null
-                    ? selectedItem.backgroundColor
-                    : "#ffffff"
-                }
-                onChange={(val) =>
-                  handleUpdateSelectedElement({ backgroundColor: val })
-                }
-                onLaunchEyeDropper={() =>
-                  handleLaunchEyeDropper("backgroundColor")
-                }
-                allowTransparent={true}
-              />
-            )}
-
-            {/* Text Color (only relevant if it is a text-bearing element) */}
-            {selectedItem.text !== undefined && selectedItem.text !== null && (
-              <ColorPicker
-                label="Text Color"
-                value={
-                  selectedItem.textColor !== undefined &&
-                  selectedItem.textColor !== null
-                    ? selectedItem.textColor
-                    : "#000000"
-                }
-                onChange={(val) =>
-                  handleUpdateSelectedElement({ textColor: val })
-                }
-                onLaunchEyeDropper={() => handleLaunchEyeDropper("textColor")}
-                allowTransparent={false}
-              />
-            )}
-
-            {/* Rotation Slider */}
-            <Grid
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "4px",
-              }}
-            >
-              <FieldLabel id="element-rotation-label">
-                Rotation ({selectedItem.rotation || 0}°)
-              </FieldLabel>
-              <Slider
-                aria-labelledby="element-rotation-label"
-                size="small"
-                min={0}
-                max={360}
-                value={selectedItem.rotation || 0}
-                onChange={(_, val) =>
-                  handleUpdateSelectedElement({
-                    rotation: val as number,
-                  })
-                }
-                sx={rotationSliderSx}
-              />
-            </Grid>
-          </SidebarSection>
-
-          {/* Behavior */}
-          <SidebarSection title="Behavior">
-            {/* Checkboxes Row */}
-            <Grid
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-              }}
-            >
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={selectedItem.autoSize}
-                    onChange={(e) =>
-                      handleUpdateSelectedElement({
-                        autoSize: e.target.checked,
-                      })
-                    }
-                  />
-                }
-                slotProps={{ typography: { sx: { fontSize: "12px" } } }}
-                label="Auto-size text to fit bubble"
-              />
-
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={selectedItem.visible === true}
-                    onChange={(e) =>
-                      handleUpdateSelectedElement({
-                        visible: e.target.checked,
-                      })
-                    }
-                  />
-                }
-                slotProps={{ typography: { sx: { fontSize: "12px" } } }}
-                label="Visible"
-              />
-
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={selectedItem.wordWrap}
-                    onChange={(e) =>
-                      handleUpdateSelectedElement({
-                        wordWrap: e.target.checked,
-                      })
-                    }
-                  />
-                }
-                slotProps={{ typography: { sx: { fontSize: "12px" } } }}
-                label="Clean background mask"
-              />
-            </Grid>
-          </SidebarSection>
-
-          {/* Action Buttons */}
-          <Grid
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "6px",
-              marginTop: "4px",
-            }}
-          >
-            {dirtyElements.has(selectedItem.id) && (
-              <Box sx={unsavedChangesRowSx}>
-                <Box sx={unsavedChangesDotSx} />
-                Unsaved changes
-              </Box>
-            )}
-            <Grid style={{ display: "flex", gap: "8px" }}>
-              <Button
-                variant="contained"
-                color="primary"
-                size="small"
                 style={{
-                  flex: 1,
-                  padding: "8px",
-                  boxShadow: "none",
-                  border: dirtyElements.has(selectedItem.id)
-                    ? "1px solid var(--warning, #eab308)"
-                    : undefined,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
                 }}
-                onClick={() =>
-                  handleSaveElementChanges(selectedItem as LayerElement)
-                }
               >
-                Save
-              </Button>
-              <Button
-                variant="outlined"
-                color="error"
-                size="small"
-                style={{
-                  flex: 1,
-                  padding: "8px",
-                }}
-                onClick={() => handleDeleteElement(selectedItem.id)}
-              >
-                Delete
-              </Button>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={selectedItem.autoSize}
+                      onChange={(e) =>
+                        handleUpdateSelectedElement({
+                          autoSize: e.target.checked,
+                        })
+                      }
+                    />
+                  }
+                  slotProps={{ typography: { sx: { fontSize: "12px" } } }}
+                  label="Auto-size text to fit bubble"
+                />
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={selectedItem.visible === true}
+                      onChange={(e) =>
+                        handleUpdateSelectedElement({
+                          visible: e.target.checked,
+                        })
+                      }
+                    />
+                  }
+                  slotProps={{ typography: { sx: { fontSize: "12px" } } }}
+                  label="Visible"
+                />
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={selectedItem.wordWrap}
+                      onChange={(e) =>
+                        handleUpdateSelectedElement({
+                          wordWrap: e.target.checked,
+                        })
+                      }
+                    />
+                  }
+                  slotProps={{ typography: { sx: { fontSize: "12px" } } }}
+                  label="Clean background mask"
+                />
+              </Grid>
+            </SidebarSection>
+
+            {/* Action Buttons */}
+            <Grid
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                marginTop: "4px",
+              }}
+            >
+              {dirtyElements.has(selectedItem.id) && (
+                <Box sx={unsavedChangesRowSx}>
+                  <Box sx={unsavedChangesDotSx} />
+                  Unsaved changes
+                </Box>
+              )}
+              <Grid style={{ display: "flex", gap: "8px" }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="small"
+                  style={{
+                    flex: 1,
+                    padding: "8px",
+                    boxShadow: "none",
+                    border: dirtyElements.has(selectedItem.id)
+                      ? "1px solid var(--warning, #eab308)"
+                      : undefined,
+                  }}
+                  onClick={() =>
+                    handleSaveElementChanges(selectedItem as LayerElement)
+                  }
+                >
+                  Save
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  size="small"
+                  style={{
+                    flex: 1,
+                    padding: "8px",
+                  }}
+                  onClick={() => handleDeleteElement(selectedItem.id)}
+                >
+                  Delete
+                </Button>
+              </Grid>
             </Grid>
           </Grid>
-        </Grid>
-      )}
+        )}
 
       {selectedItem && !selectedItem.isLayerElement && (
         <Grid

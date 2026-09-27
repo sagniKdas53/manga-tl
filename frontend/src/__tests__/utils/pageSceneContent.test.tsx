@@ -154,3 +154,44 @@ describe("page-scene content", () => {
     expect(document.querySelector("[data-editor-handle]")).toBeNull();
   });
 });
+
+describe("cleanup patches as the editor leaves them (tracker R7)", () => {
+  const svgFor = (assets: PageSceneContentInput["cleanupAssets"]) =>
+    new DOMParser().parseFromString(
+      renderPageSceneSvg(
+        resolvePageScene(
+          { ...sceneInput(), cleanupAssets: assets },
+          measureText,
+        ),
+      ),
+      "image/svg+xml",
+    );
+  const base = sceneInput().cleanupAssets[0];
+
+  it("stretches a resized patch to its rect and leaves an opaque one without an opacity", () => {
+    const image = svgFor([{ ...base, width: 80, height: 10 }]).querySelector(
+      '[data-cleanup-id="cleanup-dialogue"]',
+    );
+    expect(image?.getAttribute("preserveAspectRatio")).toBe("none");
+    expect(image?.getAttribute("width")).toBe("80");
+    expect(image?.getAttribute("height")).toBe("10");
+    expect(image?.hasAttribute("opacity")).toBe(false);
+  });
+
+  it("carries a faded patch's opacity and paints overlapping patches in zIndex order", () => {
+    const document = svgFor([
+      { ...base, cleanupId: "upper", zIndex: 2, opacity: 0.4 },
+      { ...base, cleanupId: "lower", zIndex: 1, opacity: 1 },
+      { ...base, cleanupId: "hidden", zIndex: 3, visible: false },
+    ]);
+    const painted = [...document.querySelectorAll("[data-cleanup-id]")].map(
+      (image) => image.getAttribute("data-cleanup-id"),
+    );
+    expect(painted).toEqual(["lower", "upper"]);
+    expect(
+      document
+        .querySelector('[data-cleanup-id="upper"]')
+        ?.getAttribute("opacity"),
+    ).toBe("0.4");
+  });
+});

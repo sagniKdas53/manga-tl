@@ -11,6 +11,7 @@ pub mod config;
 pub mod db;
 pub mod error;
 pub mod export;
+pub mod inpainting;
 pub mod jobs;
 pub mod jwt;
 pub mod logging;

@@ -47,6 +47,24 @@ export interface SceneCleanupAsset extends SceneAsset {
   y: number;
   zIndex: number;
   visible: boolean;
+  /** Contract rule 7 (tracker R7): the editor's patch opacity in [0, 1]; absent means 1. */
+  opacity?: number;
+}
+
+/**
+ * A cleanup patch fills its rect exactly, whatever the rect's aspect ratio. An edited patch may be
+ * resized non-uniformly, and SVG's default (`xMidYMid meet`) would letterbox it instead. The editor
+ * canvas draws its patches with the same value so the two agree pixel for pixel.
+ */
+export const CLEANUP_PRESERVE_ASPECT_RATIO = "none";
+
+/** The opacity attribute a cleanup patch carries, or undefined when it is opaque. */
+export function cleanupOpacity(
+  opacity: number | undefined,
+): number | undefined {
+  if (opacity === undefined || !Number.isFinite(opacity) || opacity >= 1)
+    return undefined;
+  return Math.max(0, opacity);
 }
 
 export interface PageSceneContentInput {
@@ -79,7 +97,9 @@ export interface ResolvedTextLayout {
   lines: string[];
 }
 
-export function resolvedTextLayout(scene: ResolvedPageScene): ResolvedTextLayout[] {
+export function resolvedTextLayout(
+  scene: ResolvedPageScene,
+): ResolvedTextLayout[] {
   return scene.objects
     .filter((object) => object.lineBoxes.length > 0)
     .map((object) => ({
@@ -129,10 +149,15 @@ export function resolvePageScene(
   const diagnostics: SceneLayoutDiagnostic[] = [];
   const objects: ResolvedTextObject[] = [];
 
-  for (const object of [...input.textObjects].sort((left, right) => left.zIndex - right.zIndex)) {
+  for (const object of [...input.textObjects].sort(
+    (left, right) => left.zIndex - right.zIndex,
+  )) {
     if (!object.visible) continue;
     if (!object.text) {
-      diagnostics.push({ code: "empty-manual-text", objectId: object.objectId });
+      diagnostics.push({
+        code: "empty-manual-text",
+        objectId: object.objectId,
+      });
       objects.push({ objectId: object.objectId, fontSize: 0, lineBoxes: [] });
       continue;
     }
@@ -144,7 +169,10 @@ export function resolvePageScene(
       bounds.x + bounds.width > input.source.width ||
       bounds.y + bounds.height > input.source.height
     ) {
-      diagnostics.push({ code: "object-clips-page", objectId: object.objectId });
+      diagnostics.push({
+        code: "object-clips-page",
+        objectId: object.objectId,
+      });
     }
 
     const fitBox = textFitBox(object.transform, {
@@ -187,9 +215,19 @@ export function resolvePageScene(
           : object.alignment === "end"
             ? fitBox.x + fitBox.width - width
             : center - width / 2;
-      return { x, y: startY + index * lineHeight - lineHeight / 2, width, height: lineHeight, text: line };
+      return {
+        x,
+        y: startY + index * lineHeight - lineHeight / 2,
+        width,
+        height: lineHeight,
+        text: line,
+      };
     });
-    objects.push({ objectId: object.objectId, fontSize: fit.fontSize, lineBoxes });
+    objects.push({
+      objectId: object.objectId,
+      fontSize: fit.fontSize,
+      lineBoxes,
+    });
   }
 
   return { input, objects, diagnostics };
@@ -203,7 +241,9 @@ export function resolvePageScene(
 function svgNumber(value: number): string {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
-    throw new TypeError(`page-scene: expected a finite number, got ${String(value)}`);
+    throw new TypeError(
+      `page-scene: expected a finite number, got ${String(value)}`,
+    );
   }
   return String(numeric);
 }
@@ -234,10 +274,12 @@ export function renderPageSceneSvg(scene: ResolvedPageScene): string {
   const cleanupMarkup = [...scene.input.cleanupAssets]
     .filter((asset) => asset.visible)
     .sort((left, right) => left.zIndex - right.zIndex)
-    .map(
-      (asset) =>
-        `<image data-cleanup-id="${escapeXml(asset.cleanupId)}" href="${escapeXml(asset.href)}" x="${svgNumber(asset.x)}" y="${svgNumber(asset.y)}" width="${svgNumber(asset.width)}" height="${svgNumber(asset.height)}"/>`,
-    )
+    .map((asset) => {
+      const opacity = cleanupOpacity(asset.opacity);
+      const opacityAttribute =
+        opacity === undefined ? "" : ` opacity="${svgNumber(opacity)}"`;
+      return `<image data-cleanup-id="${escapeXml(asset.cleanupId)}" href="${escapeXml(asset.href)}" x="${svgNumber(asset.x)}" y="${svgNumber(asset.y)}" width="${svgNumber(asset.width)}" height="${svgNumber(asset.height)}" preserveAspectRatio="${CLEANUP_PRESERVE_ASPECT_RATIO}"${opacityAttribute}/>`;
+    })
     .join("");
   const glyphMarkup = [...scene.input.textObjects]
     .filter((object) => object.visible)
@@ -264,7 +306,12 @@ export function renderPageSceneSvg(scene: ResolvedPageScene): string {
             .join("")
         : "";
       const fillPass = resolved.lineBoxes
-        .map((line) => lineText(line, `fill="${escapeXml(object.style.fill)}" stroke="none"`))
+        .map((line) =>
+          lineText(
+            line,
+            `fill="${escapeXml(object.style.fill)}" stroke="none"`,
+          ),
+        )
         .join("");
       return `<g data-text-object-id="${escapeXml(object.objectId)}" transform="rotate(${svgNumber(object.transform.rotationDegrees)} ${svgNumber(centerX)} ${svgNumber(centerY)})"><g data-text-pass="stroke">${strokePass}</g><g data-text-pass="fill">${fillPass}</g></g>`;
     })

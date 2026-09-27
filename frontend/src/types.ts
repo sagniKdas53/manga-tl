@@ -146,6 +146,8 @@ export interface OcrRegion {
   safeTextY?: number | null;
   safeTextW?: number | null;
   safeTextH?: number | null;
+  /** Set when the region has a worker (or plain-plate) cleanup patch; see tracker R7. */
+  cleanupPatchSha256?: string | null;
 }
 
 export interface ConversationRegion {
@@ -161,7 +163,7 @@ export interface Conversation {
 
 export interface Layer {
   id: string;
-  type: string; // translation | ocr | notes | mask | sfx
+  type: string; // translation | ocr | notes | mask | sfx | inpainting
   targetLanguage?: string | null;
   // AUDIT-F25. Nullable in the database and `Option<bool>` in the model, so the API really can
   // send `null` and this used to lie about it. A null is *hidden*: that is what the canvas does,
@@ -204,6 +206,23 @@ export interface LayerElement {
   layerType?: string | null;
   layerVisible?: boolean | null;
   layerMetadata?: Record<string, unknown> | null;
+  /** Inpainting elements only (tracker R7): the cleanup patch this element draws. */
+  cleanupRef?: CleanupRef | null;
+  /** Inpainting elements only: drawing opacity in [0, 1]; null is opaque. */
+  opacity?: number | null;
+}
+
+/** What an Inpainting element draws: content-addressed assets under the page's scene-assets. */
+export interface CleanupRef {
+  patchSha256: string;
+  patchByteLength: number;
+  maskSha256: string;
+  maskByteLength: number;
+  generatorSha256: string;
+  /** The worker's bounds for the patch, where "reset" puts it back. */
+  bounds: { x: number; y: number; width: number; height: number };
+  /** Paint position within its layer. */
+  order: number;
 }
 
 export interface LayerEditHistory {

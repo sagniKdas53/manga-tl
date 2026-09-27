@@ -52,6 +52,7 @@ fn accepts_every_shared_valid_fixture() {
         "logical-valid.json",
         "resolved-valid.json",
         "overlap-preserve-valid.json",
+        "inpainting-edits-valid.json",
     ] {
         let scene = fixture(name);
         let validated =
@@ -71,7 +72,11 @@ fn rejects_every_shared_invalid_fixture() {
         )
         .is_err()
     );
-    for case_file in ["invalid-cases.json", "resolved-invalid-cases.json"] {
+    for case_file in [
+        "invalid-cases.json",
+        "resolved-invalid-cases.json",
+        "inpainting-invalid-cases.json",
+    ] {
         let cases = fixture(case_file);
         let base_name = cases["base_fixture"].as_str().unwrap();
         for case in cases["cases"].as_array().unwrap() {

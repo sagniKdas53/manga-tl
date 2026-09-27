@@ -394,6 +394,30 @@ async fn plain_mask_becomes_the_regions_cleanup() {
         (None, Some(false)),
         "history layers keep what they had"
     );
+    // Tracker R7: the plate is the region's patch on the Inpainting layer, at the plate's bounds.
+    let patch_on_layer: (f64, f64, i32, i32, serde_json::Value) = sqlx::query_as(
+        "SELECT e.x, e.y, e.max_width, e.max_height, e.cleanup_ref FROM layer_elements e \
+         JOIN layers l ON l.id = e.layer_id \
+         WHERE l.page_id = $1 AND l.type = 'inpainting' AND l.visible AND e.visible AND e.region_id = $2",
+    )
+    .bind(page_id)
+    .bind(region)
+    .fetch_one(&pool)
+    .await
+    .expect("one visible inpainting patch for the region");
+    assert_eq!(
+        (
+            patch_on_layer.0,
+            patch_on_layer.1,
+            patch_on_layer.2,
+            patch_on_layer.3
+        ),
+        (36.0, 46.0, 68, 32)
+    );
+    assert_eq!(
+        patch_on_layer.4["patchSha256"],
+        serde_json::json!(path.rsplit('/').next().unwrap().trim_end_matches(".png"))
+    );
 
     cleanup_series(&pool, series_id).await;
 }
@@ -680,6 +704,16 @@ async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
+    // Tracker R7: the pass is a new Inpainting layer holding the merged block's patch.
+    let patches: Vec<(Option<Uuid>, f64, f64, i32, i32)> = sqlx::query_as(
+        "SELECT e.region_id, e.x, e.y, e.max_width, e.max_height FROM layer_elements e \
+         JOIN layers l ON l.id = e.layer_id WHERE l.page_id = $1 AND l.type = 'inpainting' AND l.visible AND e.visible",
+    )
+    .bind(page_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(patches, vec![(Some(first), 37.0, 174.0, 236, 155)]);
     let queued: Vec<(String, String)> = sqlx::query_as(
         "SELECT id, type FROM jobs WHERE image_id = $1 AND type IN ('translation', 'region-redo-tl')",
     )

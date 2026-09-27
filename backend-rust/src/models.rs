@@ -287,6 +287,14 @@ pub struct LayerElement {
     pub y: f64,
     pub layer_id: Uuid,
     pub region_id: Option<Uuid>,
+    /// Tracker R7: set only on an Inpainting element; see `crate::inpainting::CleanupRef`.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub cleanup_ref: Option<serde_json::Value>,
+    /// Tracker R7: an Inpainting element's opacity in [0, 1]; NULL is opaque.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub opacity: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

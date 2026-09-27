@@ -166,15 +166,47 @@ pub async fn create_layer_element(
         Ok(json) => json,
         Err(_) => return error::unreadable_body(instance),
     };
-    let layer_exists: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM layers WHERE id = $1)")
+    let opacity = match dto.checked_opacity() {
+        Ok(opacity) => opacity,
+        Err(message) => return (StatusCode::BAD_REQUEST, message).into_response(),
+    };
+    let layer: Option<(Uuid, String)> =
+        sqlx::query_as("SELECT page_id, type FROM layers WHERE id = $1")
             .bind(layer_id)
-            .fetch_one(&state.pool)
+            .fetch_optional(&state.pool)
             .await
-            .unwrap_or(false);
-    if !layer_exists {
+            .unwrap_or(None);
+    let Some((layer_page_id, layer_type)) = layer else {
         return StatusCode::NOT_FOUND.into_response();
-    }
+    };
+    // Tracker R7: a patch may only name assets this page already holds, so an element can never
+    // make the renderer (or the asset route) reach into another page's storage.
+    let cleanup_ref = match dto.cleanupRef.as_ref() {
+        None => None,
+        Some(value) => {
+            if !layer_type.eq_ignore_ascii_case(crate::inpainting::LAYER_TYPE) {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    "cleanupRef is only allowed on an inpainting layer",
+                )
+                    .into_response();
+            }
+            let Some(reference) = crate::inpainting::CleanupRef::parse(Some(value)) else {
+                return (StatusCode::BAD_REQUEST, "cleanupRef is malformed").into_response();
+            };
+            for sha in [&reference.patch_sha256, &reference.mask_sha256] {
+                let path = crate::page_scene_builder::scene_asset_path(layer_page_id, sha);
+                if !state.storage.exists(&path).await {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        "cleanupRef names an asset this page does not have",
+                    )
+                        .into_response();
+                }
+            }
+            Some(serde_json::to_value(reference).expect("CleanupRef serializes"))
+        }
+    };
 
     let mut tx = match state.pool.begin().await {
         Ok(tx) => tx,
@@ -197,8 +229,8 @@ pub async fn create_layer_element(
     let element: LayerElement = sqlx::query_as(
         "INSERT INTO layer_elements (id, auto_size, background_color, box_shape, font, font_style, \
            font_weight, is_manually_edited, mask_polygon, max_height, max_width, overflow, rotation, \
-           size, text, text_color, visible, word_wrap, x, y, layer_id, region_id) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, $9, $10, false, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) \
+           size, text, text_color, visible, word_wrap, x, y, layer_id, region_id, cleanup_ref, opacity) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, $9, $10, false, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) \
          RETURNING *",
     )
     .bind(Uuid::new_v4())
@@ -221,6 +253,8 @@ pub async fn create_layer_element(
     .bind(dto.y.unwrap_or(100.0))
     .bind(layer_id)
     .bind(dto.regionId)
+    .bind(cleanup_ref)
+    .bind(opacity)
     .fetch_one(&mut *tx)
     .await
     .expect("element insert");

@@ -1186,6 +1186,54 @@ pub async fn get_page_rendered(
     response
 }
 
+/// GET /api/pages/{pageId}/scene-assets/{sha256} — one cleanup patch or glyph mask of this page.
+///
+/// Tracker R7: the editor draws the same patches the export does, and until now only the render
+/// job could read them (as presigned URLs). The object is looked up under this page's own prefix,
+/// so a sha belonging to another page is a 404 here. Content-addressed, hence `immutable`.
+pub async fn get_page_scene_asset(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path((page_id, sha256)): Path<(Uuid, String)>,
+) -> Response {
+    // The sha becomes part of a storage key; anything but 64 lowercase hex is refused outright.
+    if sha256.len() != 64
+        || !sha256
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    if find_page(&state.pool, page_id).await.is_none() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let path = crate::page_scene_builder::scene_asset_path(page_id, &sha256);
+    let bytes = match state.storage.download(&path).await {
+        Ok(stream) => match stream.collect().await {
+            Ok(body) => body.to_vec(),
+            Err(err) => {
+                tracing::error!("Could not read scene asset {path}: {err}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        },
+        Err(_) => return StatusCode::NOT_FOUND.into_response(),
+    };
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("image/png"),
+    );
+    // Private: the route needs a signed-in user, so shared caches must not keep a copy.
+    headers.insert(
+        header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("private, max-age=31536000, immutable"),
+    );
+    if let Ok(etag) = axum::http::HeaderValue::from_str(&format!("\"{sha256}\"")) {
+        headers.insert(header::ETAG, etag);
+    }
+    (StatusCode::OK, headers, Body::from(bytes)).into_response()
+}
+
 /// GET /api/images/{imageId}/reader — WebP variant or the original fallback.
 pub async fn get_image_reader(
     State(state): State<AppState>,
@@ -1782,7 +1830,7 @@ pub async fn review_ocr_region(
                 sqlx::query(
                     "UPDATE layer_elements e SET mask_polygon = $2, background_color = $3, word_wrap = TRUE \
                      FROM layers l WHERE e.layer_id = l.id AND l.type NOT ILIKE 'ocr' AND l.visible \
-                       AND e.region_id = $1",
+                       AND LOWER(l.type) <> 'inpainting' AND e.region_id = $1",
                 )
                 .bind(id)
                 .bind(polygon)
@@ -1790,6 +1838,10 @@ pub async fn review_ocr_region(
                 .execute(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
+                // Tracker R7: the plain plate is this region's patch now, on the Inpainting layer.
+                crate::inpainting::record_region_patch(&mut tx, region.page_id, id)
+                    .await
+                    .map_err(|e| e.to_string())?;
                 show_translations(&mut tx, id).await?;
             }
             _ => {
@@ -1992,6 +2044,16 @@ pub async fn merge_ocr_regions(
                 .await
                 .map_err(|e| e.to_string())?;
         }
+        // Tracker R7-D2: the absorbed regions' patches are history, not garbage. They leave the
+        // picture (hidden) but stay on their Inpainting layer, like a hidden translation.
+        sqlx::query(
+            "UPDATE layer_elements e SET region_id = NULL, visible = FALSE FROM layers l \
+             WHERE e.layer_id = l.id AND e.region_id = ANY($1) AND LOWER(l.type) = 'inpainting'",
+        )
+        .bind(&absorbed)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
         sqlx::query(
             "UPDATE layer_elements e SET region_id = NULL FROM layers l \
              WHERE e.layer_id = l.id AND e.region_id = ANY($1) AND l.type NOT ILIKE 'ocr' \
@@ -2051,6 +2113,7 @@ pub async fn merge_ocr_regions(
                text = CASE WHEN l.type ILIKE 'ocr' THEN $7 ELSE NULL END, \
                visible = CASE WHEN l.type ILIKE 'ocr' THEN e.visible ELSE FALSE END \
              FROM layers l WHERE e.layer_id = l.id AND e.region_id = $1 \
+               AND LOWER(l.type) <> 'inpainting' \
                AND (l.type ILIKE 'ocr' OR l.visible IS TRUE)",
         )
         .bind(survivor.id)
@@ -2063,6 +2126,11 @@ pub async fn merge_ocr_regions(
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
+        // The survivor's old patch covered only its own old box; the merged block gets a new one
+        // from its own cleanup pass. Until then, no patch.
+        crate::inpainting::record_cleanup_pass(&mut tx, page_id, &[survivor.id])
+            .await
+            .map_err(|e| e.to_string())?;
         crate::jobs::coordinator::refresh_review_summary(&mut tx, page_id).await?;
         crate::page_freshness::advance_page_revision(&mut tx, page_id)
             .await
@@ -2324,6 +2392,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::patch(update_page_number),
         )
         .route("/pages/{pageId}/rendered", get(get_page_rendered))
+        .route(
+            "/pages/{pageId}/scene-assets/{sha256}",
+            get(get_page_scene_asset),
+        )
         .route("/chapters/{chapterId}/pages", get(list_pages))
         .route(
             "/chapters/{chapterId}/pages/reorder",
@@ -2390,6 +2462,10 @@ pub async fn upload_zip_archive(
             if let Err(message) = validate_project_schema(&project_bytes) {
                 return zip_error(format!("error: {message}"));
             }
+            let cleanup_assets = match archive_cleanup_assets(&contents.entries) {
+                Ok(assets) => assets,
+                Err(message) => return zip_error(format!("error: {message}")),
+            };
             let processed = match validate_and_process_image_bytes(
                 Some(&original_name),
                 original_bytes.clone(),
@@ -2512,9 +2588,16 @@ pub async fn upload_zip_archive(
                 },
             };
 
-            if restore_project_page(state, page.id, &project_bytes, false, replacement_image_id)
-                .await
-                .is_err()
+            if restore_project_page(
+                state,
+                page.id,
+                &project_bytes,
+                false,
+                replacement_image_id,
+                &cleanup_assets,
+            )
+            .await
+            .is_err()
             {
                 return StatusCode::INTERNAL_SERVER_ERROR.into_response();
             }
@@ -2682,7 +2765,10 @@ pub async fn insert_image_public(
     insert_image(pool, filename, storage_path, hash, created_by).await
 }
 
-const PROJECT_SCHEMA_VERSION: u64 = 1;
+/// Tracker R7 (user decision R7-D3): version 2 adds the Inpainting layer -- `cleanup/<sha256>.png`
+/// files beside `project.json`, and `cleanupRef`/`opacity` on its elements. Version 1 is refused,
+/// not converted (standing no-compatibility rule): it cannot say where its cleanup went.
+const PROJECT_SCHEMA_VERSION: u64 = 2;
 
 fn validate_project_schema(project_json: &[u8]) -> Result<(), &'static str> {
     let root: serde_json::Value =
@@ -2692,20 +2778,57 @@ fn validate_project_schema(project_json: &[u8]) -> Result<(), &'static str> {
         .and_then(serde_json::Value::as_u64)
     {
         Some(PROJECT_SCHEMA_VERSION) => Ok(()),
+        Some(1) => Err(
+            "project.json schemaVersion 1 is no longer supported: it has no cleanup patches. Export the page again.",
+        ),
         Some(_) => Err("project.json schemaVersion is unsupported"),
         None => Err("project.json schemaVersion is required"),
     }
 }
 
+/// Tracker R7: the archive's `cleanup/<sha256>.png` files. Each name must be the digest of its
+/// bytes; one that is not makes the whole archive unreadable rather than a page with a wrong patch.
+fn archive_cleanup_assets(
+    entries: &std::collections::BTreeMap<String, Vec<u8>>,
+) -> Result<Vec<(String, Vec<u8>)>, String> {
+    let mut assets = Vec::new();
+    for (name, bytes) in entries {
+        let Some(sha) = name
+            .strip_prefix("cleanup/")
+            .and_then(|rest| rest.strip_suffix(".png"))
+        else {
+            continue;
+        };
+        if !crate::inpainting::is_sha256(sha) {
+            return Err(format!("{name} is not named by a sha256"));
+        }
+        if hex::encode(sha2::Sha256::digest(bytes)) != sha {
+            return Err(format!("{name} does not match its sha256"));
+        }
+        assets.push((sha.to_string(), bytes.clone()));
+    }
+    Ok(assets)
+}
+
 /// Restores `layers`/`elements` from a project.json; returns counts on success.
 /// `track_manual_edits` stamps the image's last_edited_at when manual edits exist
 /// (the chapters/{id}/import-project behaviour).
+/// A fallback plate an archive's text carried for a region this page does not have (tracker R7).
+struct ImportedPlate {
+    element_id: Uuid,
+    polygon: serde_json::Value,
+    colour: Option<String>,
+    /// `(layer zOrder, original element id)`: the order the exporting page's builder painted it.
+    paint_key: (i32, String),
+}
+
 async fn restore_project_layers(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     page_id: Uuid,
     project_json: &[u8],
     track_manual_edits: bool,
-) -> Result<(usize, usize), ()> {
+    cleanup_shas: &std::collections::HashSet<String>,
+) -> Result<(usize, usize, Vec<ImportedPlate>), ()> {
     let root: serde_json::Value = serde_json::from_slice(project_json).map_err(|_| ())?;
     let layers_node = root
         .get("layers")
@@ -2716,6 +2839,7 @@ async fn restore_project_layers(
     let mut imported_layers = 0usize;
     let mut imported_elements = 0usize;
     let mut has_manual_edits = false;
+    let mut plates: Vec<ImportedPlate> = Vec::new();
 
     for layer_node in &layers_node {
         let ltype = layer_node
@@ -2848,14 +2972,79 @@ async fn restore_project_layers(
                 .get("regionId")
                 .and_then(|v| v.as_str())
                 .and_then(|s| Uuid::parse_str(s).ok());
+            // A region id is only meaningful on the page it came from. Imported anywhere else it
+            // named a missing row (a foreign-key failure) or another page's region; now the link
+            // is dropped, and an Inpainting patch without one is kept as the user's (contract
+            // rule 7).
+            let had_region = region_id.is_some();
+            let region_id = match region_id {
+                Some(id) => sqlx::query_scalar::<_, Uuid>(
+                    "SELECT id FROM ocr_regions WHERE id = $1 AND page_id = $2",
+                )
+                .bind(id)
+                .bind(page_id)
+                .fetch_optional(&mut **tx)
+                .await
+                .map_err(|_| ())?,
+                None => None,
+            };
+            // Tracker R7: an Inpainting element draws the archive's patch, or is not restored.
+            let cleanup_ref = match el.get("cleanupRef").filter(|v| !v.is_null()) {
+                None => None,
+                Some(value) => match crate::inpainting::CleanupRef::parse(Some(value)) {
+                    Some(reference)
+                        if cleanup_shas.contains(&reference.patch_sha256)
+                            && cleanup_shas.contains(&reference.mask_sha256) =>
+                    {
+                        Some(serde_json::to_value(reference).expect("CleanupRef serializes"))
+                    }
+                    _ => {
+                        tracing::warn!(
+                            "project import: a patch on page {page_id} names cleanup files the archive lacks; skipped"
+                        );
+                        continue;
+                    }
+                },
+            };
+            let opacity = el
+                .get("opacity")
+                .and_then(|v| v.as_f64())
+                .filter(|o| o.is_finite())
+                .map(|o| o.clamp(0.0, 1.0));
+
+            let element_id = Uuid::new_v4();
+            // Tracker R7: a region's text still carrying a polygon was drawn over a fallback
+            // plate (the exporter strips it where the region had a patch). Without the region
+            // the builder would not plate it, so it becomes a patch (restore_project_page).
+            if had_region
+                && region_id.is_none()
+                && visible
+                && el_visible
+                && matches!(ltype.to_lowercase().as_str(), "translation" | "sfx")
+                && !text.trim().is_empty()
+                && let Some(polygon) = mask_polygon.clone()
+            {
+                plates.push(ImportedPlate {
+                    element_id,
+                    polygon,
+                    colour: background_color.clone(),
+                    paint_key: (
+                        z_order,
+                        el.get("id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                    ),
+                });
+            }
 
             sqlx::query(
                 "INSERT INTO layer_elements (id, text, font, size, auto_size, max_width, max_height, word_wrap, rotation, \
                  x, y, visible, background_color, text_color, font_weight, font_style, box_shape, mask_polygon, \
-                 is_manually_edited, layer_id, region_id) \
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)",
+                 is_manually_edited, layer_id, region_id, cleanup_ref, opacity) \
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)",
             )
-            .bind(Uuid::new_v4())
+            .bind(element_id)
             .bind(text)
             .bind(font)
             .bind(size)
@@ -2876,6 +3065,8 @@ async fn restore_project_layers(
             .bind(is_manually_edited)
             .bind(layer_id)
             .bind(region_id)
+            .bind(cleanup_ref)
+            .bind(opacity)
             .execute(&mut **tx)
             .await
             .map_err(|_| ())?;
@@ -2898,7 +3089,7 @@ async fn restore_project_layers(
         }
     }
 
-    Ok((imported_layers, imported_elements))
+    Ok((imported_layers, imported_elements, plates))
 }
 
 async fn restore_project_page(
@@ -2907,7 +3098,24 @@ async fn restore_project_page(
     project_json: &[u8],
     track_manual_edits: bool,
     replacement_image_id: Option<Uuid>,
+    cleanup_assets: &[(String, Vec<u8>)],
 ) -> Result<(usize, usize), ()> {
+    // Content-addressed and page-scoped, so uploading before the transaction is safe: a failed
+    // restore leaves only objects nothing points at yet.
+    for (sha, bytes) in cleanup_assets {
+        let path = crate::page_scene_builder::scene_asset_path(page_id, sha);
+        if !state.storage.exists(&path).await
+            && let Err(err) = state
+                .storage
+                .upload_bytes(&path, bytes.clone(), "image/png")
+                .await
+        {
+            tracing::error!("project import: could not store cleanup asset {path}: {err}");
+            return Err(());
+        }
+    }
+    let cleanup_shas: std::collections::HashSet<String> =
+        cleanup_assets.iter().map(|(sha, _)| sha.clone()).collect();
     let mut tx = state.pool.begin().await.map_err(|_| ())?;
     clear_page_layers(&mut tx, page_id).await.map_err(|_| ())?;
     if let Some(image_id) = replacement_image_id {
@@ -2918,7 +3126,64 @@ async fn restore_project_page(
             .await
             .map_err(|_| ())?;
     }
-    let counts = restore_project_layers(&mut tx, page_id, project_json, track_manual_edits).await?;
+    let (layers, elements, mut plates) = restore_project_layers(
+        &mut tx,
+        page_id,
+        project_json,
+        track_manual_edits,
+        &cleanup_shas,
+    )
+    .await?;
+    let counts = (layers, elements);
+    if !plates.is_empty() {
+        let (page_w, page_h): (Option<i32>, Option<i32>) = sqlx::query_as(
+            "SELECT i.width, i.height FROM pages p JOIN images i ON i.id = p.image_id WHERE p.id = $1",
+        )
+        .bind(page_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|_| ())?;
+        let (page_w, page_h) = (page_w.unwrap_or(0), page_h.unwrap_or(0));
+        plates.sort_by(|a, b| a.paint_key.cmp(&b.paint_key));
+        let mut patches = Vec::new();
+        for plate in &plates {
+            match crate::page_scene_builder::plain_plate_cleanup(
+                state,
+                page_id,
+                &plate.polygon,
+                plate.colour.as_deref(),
+                page_w,
+                page_h,
+            )
+            .await
+            {
+                // The builder's R2 gate: no plate over a quarter of the page.
+                Ok(patch)
+                    if crate::page_scene_builder::bounds_page_share(
+                        &patch.bounds,
+                        page_w,
+                        page_h,
+                    ) <= crate::page_scene_builder::MAX_PATCH_PAGE_SHARE =>
+                {
+                    patches.push(patch)
+                }
+                Ok(_) => {}
+                Err(err) => tracing::warn!(
+                    "project import: plate for element {} not converted: {err}",
+                    plate.element_id
+                ),
+            }
+        }
+        crate::inpainting::record_imported_plates(&mut tx, page_id, &patches)
+            .await
+            .map_err(|_| ())?;
+        let converted: Vec<Uuid> = plates.iter().map(|plate| plate.element_id).collect();
+        sqlx::query("UPDATE layer_elements SET mask_polygon = NULL WHERE id = ANY($1)")
+            .bind(&converted)
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| ())?;
+    }
     if replacement_image_id.is_some() {
         // New source pixels: every cleanup patch and OCR box on this page was computed from the
         // old ones, so the generation fence has to move with them (R3 phase-separation design,
@@ -2958,6 +3223,7 @@ pub async fn import_project(
 
     let mut project_json: Option<Vec<u8>> = None;
     let mut original: Option<(String, Vec<u8>)> = None;
+    let mut cleanup_assets: Result<Vec<(String, Vec<u8>)>, String> = Ok(Vec::new());
 
     const INSTANCE: &str = "/api/chapters/{chapterId}/import-project";
     loop {
@@ -2992,6 +3258,7 @@ pub async fn import_project(
         }
         match crate::archive::read_archive(&bytes) {
             Ok(contents) => {
+                cleanup_assets = archive_cleanup_assets(&contents.entries);
                 project_json = contents.project_json;
                 original = contents.original_image;
                 let lower = filename.to_lowercase();
@@ -3020,6 +3287,10 @@ pub async fn import_project(
     if let Err(message) = validate_project_schema(&project_bytes) {
         return error::bad_request(message, INSTANCE);
     }
+    let cleanup_assets = match cleanup_assets {
+        Ok(assets) => assets,
+        Err(message) => return error::bad_request(&message, INSTANCE),
+    };
     let page_count: i32 =
         sqlx::query_scalar("SELECT COUNT(*)::int FROM pages WHERE chapter_id = $1")
             .bind(chapter_id)
@@ -3142,7 +3413,16 @@ pub async fn import_project(
         }
     };
 
-    match restore_project_page(&state, page.id, &project_bytes, true, replacement_image_id).await {
+    match restore_project_page(
+        &state,
+        page.id,
+        &project_bytes,
+        true,
+        replacement_image_id,
+        &cleanup_assets,
+    )
+    .await
+    {
         Ok((layers_count, elements_count)) => {
             tracing::info!(
                 "Successfully imported project ZIP to chapter {chapter_id}: {layers_count} layers and {elements_count} elements imported."

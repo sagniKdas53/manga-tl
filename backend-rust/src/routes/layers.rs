@@ -84,6 +84,25 @@ pub struct LayerElementInput {
     pub maskPolygon: Option<serde_json::Value>,
     #[serde(default)]
     pub regionId: Option<Uuid>,
+    /// Tracker R7: an Inpainting element's opacity, in [0, 1].
+    #[serde(default)]
+    pub opacity: Option<f64>,
+    /// Tracker R7: what an Inpainting element draws. Accepted only when creating an element on an
+    /// Inpainting layer (undoing a delete, importing a project); an update never changes it.
+    #[serde(default)]
+    pub cleanupRef: Option<serde_json::Value>,
+}
+
+impl LayerElementInput {
+    /// The opacity to store, or an error message for a value outside [0, 1].
+    pub fn checked_opacity(&self) -> Result<Option<f64>, &'static str> {
+        match self.opacity {
+            Some(value) if !(value.is_finite() && (0.0..=1.0).contains(&value)) => {
+                Err("opacity must be a number between 0 and 1")
+            }
+            other => Ok(other),
+        }
+    }
 }
 
 /// captureStateMap port.
@@ -97,6 +116,7 @@ fn capture_state(el: &LayerElement) -> serde_json::Value {
         "fontWeight": el.font_weight, "fontStyle": el.font_style, "boxShape": el.box_shape,
         "maskPolygon": el.mask_polygon.as_ref().map(|v| serde_json::Value::String(v.to_string())),
         "regionId": el.region_id.map(|r| r.to_string()),
+        "opacity": el.opacity,
     })
 }
 
@@ -117,6 +137,10 @@ pub async fn update_layer_element(
     let Json(dto) = match body {
         Ok(json) => json,
         Err(_) => return error::unreadable_body(instance),
+    };
+    let opacity = match dto.checked_opacity() {
+        Ok(opacity) => opacity,
+        Err(message) => return (StatusCode::BAD_REQUEST, message).into_response(),
     };
 
     let Some(element) =
@@ -144,6 +168,7 @@ pub async fn update_layer_element(
            font_style = COALESCE($17, font_style), box_shape = COALESCE($18, box_shape), \
            mask_polygon = COALESCE($19, mask_polygon), \
            region_id = CASE WHEN $20::uuid IS NULL THEN region_id ELSE $20 END, \
+           opacity = COALESCE($21, opacity), \
            is_manually_edited = true, edited_at = now() \
          WHERE id = $1 RETURNING *",
     )
@@ -171,6 +196,7 @@ pub async fn update_layer_element(
             .and_then(crate::models::normalize_mask_polygon),
     )
     .bind(dto.regionId)
+    .bind(opacity)
     .fetch_one(&mut *tx)
     .await
     .expect("layer element update");

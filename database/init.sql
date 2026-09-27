@@ -243,7 +243,13 @@ CREATE TABLE public.layer_elements (
     x double precision NOT NULL,
     y double precision NOT NULL,
     layer_id uuid NOT NULL,
-    region_id uuid
+    region_id uuid,
+    -- Tracker R7: an element on an `inpainting` layer is one cleanup patch. `cleanup_ref` names its
+    -- content-addressed assets (patch/mask sha256, byte lengths, generator, the worker's original
+    -- bounds, and `order`, its paint position within the layer); x/y/max_width/max_height are where
+    -- it is drawn now. NULL on text elements. `opacity` NULL means opaque.
+    cleanup_ref jsonb,
+    opacity double precision CHECK (opacity IS NULL OR (opacity >= 0 AND opacity <= 1))
 );
 
 
