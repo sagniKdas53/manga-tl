@@ -586,6 +586,137 @@ async fn a_region_whose_cleanup_produced_nothing_keeps_its_flat_plate() {
     cleanup_series(&pool, series_id).await;
 }
 
+/// A page cloned from an already-processed image carries its source's cleanup: the region
+/// columns, the storage objects under its own prefix, and an Inpainting layer the scene draws.
+/// A region whose objects are gone is cloned without a patch rather than failing the clone.
+#[tokio::test]
+async fn a_cloned_page_carries_its_sources_cleanup() {
+    let Some((_app, pool, state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    let (source_series, source_page, _, ocr, tl) = seed_page(&pool).await;
+    let kept = seed_region(
+        &pool,
+        source_page,
+        (ocr, tl),
+        1,
+        (20, 30, 60, 40),
+        "やあ",
+        "Hello",
+        None,
+    )
+    .await;
+    let lost = seed_region(
+        &pool,
+        source_page,
+        (ocr, tl),
+        2,
+        (100, 150, 50, 40),
+        "ねえ",
+        "Hey",
+        None,
+    )
+    .await;
+    let (patch, mask) = (sha('c'), sha('d'));
+    give_patch(&state, source_page, kept, &patch, &mask, (12, 22, 76, 56)).await;
+    give_patch(
+        &state,
+        source_page,
+        lost,
+        &sha('e'),
+        &sha('f'),
+        (92, 142, 66, 56),
+    )
+    .await;
+    state
+        .storage
+        .delete_quietly(&manga_backend::page_scene_builder::scene_asset_path(
+            source_page,
+            &sha('f'),
+        ))
+        .await;
+
+    let (target_series, target_page, _, _, _) = seed_page(&pool).await;
+    let region_map = manga_backend::clone::clone_ocr_data(&pool, source_page, target_page).await;
+    assert_eq!(region_map.len(), 2);
+    let copied = manga_backend::clone::clone_cleanup_data(
+        &pool,
+        &state.storage,
+        source_page,
+        target_page,
+        &region_map,
+    )
+    .await
+    .expect("clone cleanup");
+    assert_eq!(
+        copied, 1,
+        "only the region whose objects exist gets a patch"
+    );
+
+    let patches: Vec<(Uuid, Option<String>)> =
+        sqlx::query_as("SELECT id, cleanup_patch_sha256::text FROM ocr_regions WHERE page_id = $1")
+            .bind(target_page)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    let patch_of = |source: Uuid| {
+        patches
+            .iter()
+            .find(|(id, _)| *id == region_map[&source])
+            .and_then(|(_, p)| p.clone())
+    };
+    assert_eq!(patch_of(kept), Some(patch.clone()));
+    assert_eq!(patch_of(lost), None);
+    for digest in [&patch, &mask] {
+        assert!(
+            state
+                .storage
+                .exists(&manga_backend::page_scene_builder::scene_asset_path(
+                    target_page,
+                    digest
+                ))
+                .await,
+            "the object is copied under the cloned page's own prefix"
+        );
+    }
+
+    let elements: Vec<(Option<Uuid>, String)> = sqlx::query_as(
+        "SELECT e.region_id, e.cleanup_ref->>'patchSha256' FROM layer_elements e \
+         JOIN layers l ON l.id = e.layer_id WHERE l.page_id = $1 AND l.type = 'inpainting' AND l.visible",
+    )
+    .bind(target_page)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(elements, vec![(Some(region_map[&kept]), patch.clone())]);
+    // R7-D4: a patch is drawn once its region has English, which the clone's translation step
+    // (copied or re-run) supplies next.
+    sqlx::query("UPDATE ocr_regions SET translated_text = 'Hello there' WHERE page_id = $1")
+        .bind(target_page)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let drawn = scene(&state, target_page).await;
+    assert!(
+        cleanups(&drawn)
+            .iter()
+            .any(
+                |artifact| artifact["patch_asset_id"] == format!("patch-{patch}").as_str()
+                    && artifact["bounds"]["x"] == 12.0
+                    && artifact["bounds"]["width"] == 76.0
+            ),
+        "the scene draws the copied patch: {:?} / {}",
+        cleanups(&drawn),
+        drawn["provenance"]["warnings"]
+    );
+
+    cleanup_series(&pool, source_series).await;
+    cleanup_series(&pool, target_series).await;
+}
+
 async fn send(
     app: &Router,
     method: &str,
