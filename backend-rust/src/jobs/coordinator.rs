@@ -26,7 +26,10 @@ pub const REDO_REASON_TTL_SECS: u64 = 24 * 3600;
 pub const JOB_LEASE_SECS: i64 = 120;
 pub const JOB_MAX_RUNTIME_SECS: i64 = 3600;
 /// Worker queues in drain order (heavy first). Also used by the dispatcher.
-pub const HEAVY_QUEUES: [&str; 5] = [
+// Dispatched in this order: a hand-marked repaint is someone waiting at the editor, so it goes
+// ahead of a chapter's pipeline.
+pub const HEAVY_QUEUES: [&str; 6] = [
+    "queue:manual-cleanup",
     "queue:cleanup",
     "queue:qa-re-ocr",
     "queue:region-redo-ocr",

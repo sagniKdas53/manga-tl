@@ -64,7 +64,8 @@ pub async fn resume_queue(State(state): State<AppState>, _user: AuthUser) -> Res
     StatusCode::OK.into_response()
 }
 
-const QUEUE_KEYS: [&str; 10] = [
+const QUEUE_KEYS: [&str; 11] = [
+    "queue:manual-cleanup",
     "queue:panel-detection",
     "queue:ocr",
     "queue:layout",

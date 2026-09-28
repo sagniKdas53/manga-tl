@@ -4002,6 +4002,114 @@
         ]
       }
     },
+    "/api/pages/{pageId}/manual-cleanup": {
+      "post": {
+        "description": "Queue a repaint of one hand-marked area of the page (the editor's inpainting view). The mark is tidied (small gaps closed, enclosed holes filled) and repainted on the page as the export draws it now, with the chosen method. The result arrives as one region-less patch on a new Inpainting layer above the page's others; its re-render queues no QA pass. Progress is reported through the usual job_update events.",
+        "operationId": "queueManualCleanup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pageId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "bounds": {
+                    "description": "Where the mask sits, in page pixels. Must lie inside the page.",
+                    "properties": {
+                      "height": {
+                        "type": "integer"
+                      },
+                      "width": {
+                        "type": "integer"
+                      },
+                      "x": {
+                        "type": "integer"
+                      },
+                      "y": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y",
+                      "width",
+                      "height"
+                    ],
+                    "type": "object"
+                  },
+                  "fillColor": {
+                    "description": "#rrggbb; required when method is flat.",
+                    "type": "string"
+                  },
+                  "mask": {
+                    "description": "Base64 PNG, exactly bounds.width x bounds.height, whose alpha marks the area to repaint. A data:image/png;base64, prefix is accepted.",
+                    "type": "string"
+                  },
+                  "method": {
+                    "enum": [
+                      "auto",
+                      "aot",
+                      "telea",
+                      "flat"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mask",
+                  "bounds",
+                  "method"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "properties": {
+                    "maskSha256": {
+                      "type": "string"
+                    },
+                    "pageId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "queued": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Queued"
+          },
+          "400": {
+            "description": "Unknown method, missing fill colour, or a mask that is not a PNG, does not match its bounds, marks nothing or lies outside the page"
+          },
+          "404": {
+            "description": "No such page"
+          }
+        },
+        "tags": [
+          "Page Controller"
+        ]
+      }
+    },
     "/api/series": {
       "get": {
         "operationId": "listSeries",

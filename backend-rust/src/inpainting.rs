@@ -280,6 +280,37 @@ pub async fn record_region_patch(
     Ok(())
 }
 
+/// A hand-marked repaint from the mask editor (2026-09-28): one region-less patch on a new
+/// Inpainting layer above the page's others, so it paints over every earlier patch and under all
+/// text. The element is marked manually edited, which keeps the page's re-renders from queuing a
+/// paid QA pass. Returns the layer and element ids, or `None` for unusable bounds.
+pub async fn record_manual_patch(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    page_id: Uuid,
+    reference: &CleanupRef,
+) -> Result<Option<(Uuid, Uuid)>, sqlx::Error> {
+    let Some((x, y, w, h)) = rect_of(&reference.bounds) else {
+        return Ok(None);
+    };
+    let layer_id = create_layer(tx, page_id, "manual").await?;
+    let element_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO layer_elements (id, x, y, max_width, max_height, rotation, visible, auto_size, \
+           word_wrap, overflow, is_manually_edited, edited_at, layer_id, region_id, cleanup_ref, opacity) \
+         VALUES ($1, $2, $3, $4, $5, 0, TRUE, FALSE, FALSE, FALSE, TRUE, now(), $6, NULL, $7, NULL)",
+    )
+    .bind(element_id)
+    .bind(x)
+    .bind(y)
+    .bind(w)
+    .bind(h)
+    .bind(layer_id)
+    .bind(serde_json::to_value(reference).expect("CleanupRef serializes"))
+    .execute(&mut **tx)
+    .await?;
+    Ok(Some((layer_id, element_id)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

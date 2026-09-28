@@ -454,6 +454,8 @@ export interface ReaderRightSidebarProps {
   setSelectedItem: (item: any) => void;
   activeLayerId: string | null;
   setActiveLayerId: (id: string | null) => void;
+  /** Clicking an Inpainting layer's row opens (or, clicked again, closes) the mask editor. */
+  onInpaintingLayerClick?: (layerId: string) => void;
   sortedLayers: LayerData[];
   layers: LayerData[];
   manuallyShownOcrLayers: Set<string>;
@@ -530,6 +532,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     setSelectedItem,
     activeLayerId,
     setActiveLayerId,
+    onInpaintingLayerClick,
     sortedLayers,
     handleMoveLayer,
     handleCreateTranslationLayer,
@@ -702,7 +705,12 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 return (
                   <React.Fragment key={lData.layer.id}>
                     <Box
-                      onClick={() => setActiveLayerId(lData.layer.id)}
+                      onClick={() => {
+                        setActiveLayerId(lData.layer.id);
+                        if (isInpaintingLayer(lData.layer)) {
+                          onInpaintingLayerClick?.(lData.layer.id);
+                        }
+                      }}
                       sx={[
                         layerRowBaseSx,
                         {

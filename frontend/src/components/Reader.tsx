@@ -36,6 +36,7 @@ import {
   usePatchImageUrls,
 } from "../utils/inpainting";
 import type { MergePreview } from "./ReaderIssues";
+import InpaintingEditor from "./InpaintingEditor";
 import {
   regionIssues,
   translationElementByRegion,
@@ -465,6 +466,9 @@ export const Reader: React.FC<ReaderProps> = ({
     { layer: Layer; elements: LayerElement[] }[]
   >([]);
   const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
+  // The mask editor: text and OCR hidden, patch masks tinted, a brush over the page. Held as the
+  // page it was opened on, so moving to another page closes it.
+  const [inpaintingPageId, setInpaintingPageId] = useState<string | null>(null);
   const [cleanScanlationView, setCleanScanlationView] = usePersistedState(
     "manga_clean_view",
     false,
@@ -795,6 +799,8 @@ export const Reader: React.FC<ReaderProps> = ({
     () => paintedPatches(layers, ocrRegions),
     [layers, ocrRegions],
   );
+  const inpaintingView =
+    inpaintingPageId !== null && inpaintingPageId === selectedPage?.id;
   const allRegionsById = React.useMemo(
     () => new Map(ocrRegions.map((region) => [region.id, region])),
     [ocrRegions],
@@ -804,6 +810,22 @@ export const Reader: React.FC<ReaderProps> = ({
     user.token,
     patches.map((patch) => patch.patchSha256),
   );
+  // Only fetched in the mask editor, which tints each patch's mask where it sits.
+  const maskUrls = usePatchImageUrls(
+    selectedPage?.id,
+    user.token,
+    inpaintingView
+      ? patches.flatMap((patch) =>
+          patch.element.cleanupRef ? [patch.element.cleanupRef.maskSha256] : [],
+        )
+      : [],
+  );
+  const handleInpaintingLayerClick = (layerId: string) =>
+    setInpaintingPageId(
+      inpaintingView && activeLayerId === layerId
+        ? null
+        : (selectedPage?.id ?? null),
+    );
   const selectedPatch =
     selectedItem?.isLayerElement && isPatchElement(selectedItem as LayerElement)
       ? (selectedItem as LayerElement)
@@ -3949,7 +3971,41 @@ export const Reader: React.FC<ReaderProps> = ({
                   )}
                 </g>
 
+                {inpaintingView && (
+                  <g
+                    data-scene-layer="mask-tints"
+                    pointerEvents="none"
+                  >
+                    <defs>
+                      <filter id="inpainting-mask-tint">
+                        {/* White mask -> translucent amber, so the patches read at a glance. */}
+                        <feColorMatrix
+                          type="matrix"
+                          values="0 0 0 0 1  0 0 0 0 0.6  0 0 0 0 0  0 0 0 0.35 0"
+                        />
+                      </filter>
+                    </defs>
+                    {patches.map((patch) => {
+                      const mask = patch.element.cleanupRef?.maskSha256;
+                      return mask && maskUrls[mask] ? (
+                        <image
+                          key={`tint-${patch.element.id}`}
+                          data-mask-tint={patch.element.id}
+                          href={maskUrls[mask]}
+                          x={patch.x}
+                          y={patch.y}
+                          width={patch.width}
+                          height={patch.height}
+                          preserveAspectRatio={CLEANUP_PRESERVE_ASPECT_RATIO}
+                          filter="url(#inpainting-mask-tint)"
+                        />
+                      ) : null;
+                    })}
+                  </g>
+                )}
+
                 {showPanels &&
+                  !inpaintingView &&
                   !cleanScanlationView &&
                   panels.map((p) => (
                     <rect
@@ -3965,6 +4021,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
                 {showOcr &&
                   !cleanScanlationView &&
+                  !inpaintingView &&
                   renderItems.map((item) => {
                     const isSelected = selectedItem?.id === item.id;
                     const isApproved = item.approved;
@@ -4106,6 +4163,7 @@ export const Reader: React.FC<ReaderProps> = ({
                     !manuallyShownOcrLayers.has(lData.layer.id);
                   // Inpainting layers are painted above, under every text layer.
                   if (
+                    inpaintingView ||
                     !lData.layer.visible ||
                     isOcrHidden ||
                     isInpaintingLayer(lData.layer)
@@ -4530,6 +4588,7 @@ export const Reader: React.FC<ReaderProps> = ({
                 {/* Issues stay findable with the OCR boxes off: an amber dashed outline and the
                     region's number, sized in screen pixels. Clicking opens it in the inspector. */}
                 {!mergeMode &&
+                  !inpaintingView &&
                   !(showOcr && !cleanScanlationView) &&
                   issues.map(({ region: r }) => {
                     const isSelected = selectedItem?.id === `region-${r.id}`;
@@ -4726,6 +4785,29 @@ export const Reader: React.FC<ReaderProps> = ({
                     </g>
                   )}
               </svg>
+              {inpaintingView &&
+                selectedPage &&
+                isImageLoaded &&
+                imageDims.w > 0 &&
+                imageDims.h > 0 && (
+                  <InpaintingEditor
+                    pageId={selectedPage.id}
+                    token={user.token}
+                    width={imageDims.w}
+                    height={imageDims.h}
+                    key={selectedPage.id}
+                    onDone={() => setInpaintingPageId(null)}
+                    onQueued={() =>
+                      showToast(
+                        "Repaint queued — the new patch appears when it lands",
+                        "info",
+                      )
+                    }
+                    onError={(message) =>
+                      showToast(`Repaint failed: ${message}`, "error")
+                    }
+                  />
+                )}
             </div>
           </div>
         </div>
@@ -4737,6 +4819,7 @@ export const Reader: React.FC<ReaderProps> = ({
             setSelectedItem={setSelectedItem}
             activeLayerId={activeLayerId}
             setActiveLayerId={setActiveLayerId}
+            onInpaintingLayerClick={handleInpaintingLayerClick}
             sortedLayers={sortedLayers}
             layers={layers}
             manuallyShownOcrLayers={manuallyShownOcrLayers}

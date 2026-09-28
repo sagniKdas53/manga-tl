@@ -947,6 +947,49 @@ pub async fn cleanup_callback(
     }
 }
 
+/// POST /api/internal/jobs/callback/manual-cleanup — the mask editor's repaint landed (or failed).
+pub async fn manual_cleanup_callback(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Result<Json<Value>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    let Ok(Json(payload)) = body else {
+        return crate::error::unreadable_body("/api/internal/jobs/callback/manual-cleanup");
+    };
+    if let Some(denied) = guard(&state, &headers) {
+        return denied;
+    }
+    let identity = match callback_identity(&headers, job_id_of(&payload)) {
+        Ok(identity) => identity,
+        Err(rejection) => return rejection.into_response(),
+    };
+    let Some(image_id) = payload
+        .get("imageId")
+        .and_then(Value::as_str)
+        .and_then(|id| Uuid::parse_str(id).ok())
+    else {
+        return internal_error_text("imageId missing or unparsable");
+    };
+    let result = coordinator::CALLBACK_IDENTITY
+        .scope(
+            identity,
+            super::manual_cleanup::apply_callback(&state, image_id, page_id_of(&payload), &payload),
+        )
+        .await;
+    match result {
+        Ok(()) => StatusCode::OK.into_response(),
+        Err(super::manual_cleanup::CallbackError::Superseded) => (
+            StatusCode::CONFLICT,
+            "This manual repaint has been superseded; its result was not applied",
+        )
+            .into_response(),
+        Err(super::manual_cleanup::CallbackError::Failed(err)) => {
+            tracing::error!("Error processing manual-cleanup callback: {err}");
+            internal_error_text(err)
+        }
+    }
+}
+
 /// Why a cleanup callback was not applied. The distinction reaches the worker as the status code,
 /// because the two want opposite things from it: a superseded attempt must stop, while a failure
 /// to apply a current attempt's result is worth another delivery.
@@ -1870,6 +1913,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/jobs/callback/cleanup",
             axum::routing::post(cleanup_callback),
+        )
+        .route(
+            "/jobs/callback/manual-cleanup",
+            axum::routing::post(manual_cleanup_callback),
         )
         .route(
             "/jobs/callback/layout",

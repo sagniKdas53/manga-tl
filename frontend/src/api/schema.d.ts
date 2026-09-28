@@ -897,6 +897,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/pages/{pageId}/manual-cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Queue a repaint of one hand-marked area of the page (the editor's inpainting view). The mark is tidied (small gaps closed, enclosed holes filled) and repainted on the page as the export draws it now, with the chosen method. The result arrives as one region-less patch on a new Inpainting layer above the page's others; its re-render queues no QA pass. Progress is reported through the usual job_update events. */
+        post: operations["queueManualCleanup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/series": {
         parameters: {
             query?: never;
@@ -3369,6 +3386,65 @@ export interface operations {
                 content?: never;
             };
             /** @description A region is not on this page */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    queueManualCleanup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Where the mask sits, in page pixels. Must lie inside the page. */
+                    bounds: {
+                        height: number;
+                        width: number;
+                        x: number;
+                        y: number;
+                    };
+                    /** @description #rrggbb; required when method is flat. */
+                    fillColor?: string;
+                    /** @description Base64 PNG, exactly bounds.width x bounds.height, whose alpha marks the area to repaint. A data:image/png;base64, prefix is accepted. */
+                    mask: string;
+                    /** @enum {string} */
+                    method: "auto" | "aot" | "telea" | "flat";
+                };
+            };
+        };
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        maskSha256?: string;
+                        /** Format: uuid */
+                        pageId?: string;
+                        queued?: boolean;
+                    };
+                };
+            };
+            /** @description Unknown method, missing fill colour, or a mask that is not a PNG, does not match its bounds, marks nothing or lies outside the page */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such page */
             404: {
                 headers: {
                     [name: string]: unknown;

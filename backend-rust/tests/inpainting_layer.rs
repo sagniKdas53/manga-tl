@@ -829,3 +829,358 @@ async fn a_patch_element_can_only_name_this_pages_assets_and_a_sane_opacity() {
 
     cleanup_series(&pool, series_id).await;
 }
+
+/// A PNG of `w` x `h` whose alpha marks everything (or nothing).
+fn mask_png(w: u32, h: u32, marked: bool) -> String {
+    let mut buffer = image::RgbaImage::new(w, h);
+    for pixel in buffer.pixels_mut() {
+        pixel.0 = [255, 255, 255, if marked { 255 } else { 0 }];
+    }
+    let mut png = std::io::Cursor::new(Vec::new());
+    buffer
+        .write_to(&mut png, image::ImageFormat::Png)
+        .expect("encode mask");
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(png.into_inner())
+}
+
+/// The mask editor's endpoint refuses what the worker could not repaint, and queues the rest
+/// ahead of the pipeline with the page's current draw list as the underlay.
+#[tokio::test]
+async fn a_manual_repaint_is_validated_and_queued_ahead_of_the_pipeline() {
+    let Some((app, pool, state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    assert_eq!(manga_backend::jobs::HEAVY_QUEUES[0], "queue:manual-cleanup");
+    let token = translator(&pool).await;
+    let (series_id, page_id, _image_id, ocr, tl) = seed_page(&pool).await;
+    let region = seed_region(
+        &pool,
+        page_id,
+        (ocr, tl),
+        1,
+        (20, 30, 60, 40),
+        "やあ",
+        "Hello",
+        None,
+    )
+    .await;
+    let patch = sha('7');
+    give_patch(&state, page_id, region, &patch, &sha('8'), (18, 28, 64, 44)).await;
+    record_pass(&state, page_id, &[region]).await.unwrap();
+    let uri = format!("/tlhub/api/pages/{page_id}/manual-cleanup");
+    let request = |mask: String, bounds: serde_json::Value, method: &str| serde_json::json!({ "mask": mask, "bounds": bounds, "method": method });
+    let inside = serde_json::json!({ "x": 10, "y": 20, "width": 12, "height": 8 });
+
+    for (body, why) in [
+        (
+            request(mask_png(12, 8, true), inside.clone(), "lama"),
+            "an unknown method",
+        ),
+        (
+            request(mask_png(12, 8, true), inside.clone(), "flat"),
+            "a flat fill with no colour",
+        ),
+        (
+            request(
+                mask_png(12, 8, true),
+                serde_json::json!({ "x": 195, "y": 0, "width": 12, "height": 8 }),
+                "auto",
+            ),
+            "a mask past the page's right edge",
+        ),
+        (
+            request(mask_png(10, 8, true), inside.clone(), "auto"),
+            "a mask not the size of its bounds",
+        ),
+        (
+            request(mask_png(12, 8, false), inside.clone(), "auto"),
+            "a mask that marks nothing",
+        ),
+        (
+            request("not base64!".into(), inside.clone(), "auto"),
+            "a mask that is not base64",
+        ),
+    ] {
+        let (status, text) = send(&app, "POST", &uri, &token, body).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{why}: {text}");
+    }
+    let (status, _) = send(
+        &app,
+        "POST",
+        &format!("/tlhub/api/pages/{}/manual-cleanup", Uuid::new_v4()),
+        &token,
+        request(mask_png(12, 8, true), inside.clone(), "auto"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let (status, text) = send(
+        &app,
+        "POST",
+        &uri,
+        &token,
+        request(mask_png(12, 8, true), inside.clone(), "auto"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{text}");
+    let accepted: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let mask_sha = accepted["maskSha256"].as_str().unwrap().to_owned();
+    assert!(
+        state
+            .storage
+            .exists(&manga_backend::page_scene_builder::scene_asset_path(
+                page_id, &mask_sha
+            ))
+            .await,
+        "the mark is stored under the page's own prefix"
+    );
+    let payload: String = sqlx::query_scalar(
+        "SELECT payload FROM jobs WHERE page_id = $1 AND type = 'manual-cleanup' AND status = 'PENDING'",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .expect("one queued manual-cleanup job");
+    let payload: serde_json::Value = serde_json::from_str(&payload).unwrap();
+    assert_eq!(payload["manualMask"]["sha256"], mask_sha.as_str());
+    assert_eq!(payload["manualMask"]["width"], 12);
+    assert_eq!(payload["method"], "auto");
+    assert!(
+        payload["imageUrl"]
+            .as_str()
+            .is_some_and(|url| !url.is_empty())
+    );
+    let underlay = payload["underlay"].as_array().unwrap();
+    assert_eq!(
+        underlay.len(),
+        1,
+        "the one visible patch is the underlay: {underlay:?}"
+    );
+    assert_eq!(
+        underlay[0]["path"],
+        manga_backend::page_scene_builder::scene_asset_path(page_id, &patch).as_str()
+    );
+
+    let _ = sqlx::query("DELETE FROM jobs WHERE page_id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await;
+    cleanup_series(&pool, series_id).await;
+}
+
+async fn processing_manual_job(pool: &sqlx::PgPool, page_id: Uuid, image_id: Uuid) -> String {
+    let job_id = Uuid::new_v4().to_string();
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, image_id, page_id, attempt, max_attempts, payload, \
+           input_generation, lease_token, created_at, updated_at) \
+         VALUES ($1, 'manual-cleanup', 'PROCESSING', $2, $3, 1, 3, '{}', \
+           (SELECT input_generation FROM pages WHERE id = $3), 'lease-m', now(), now())",
+    )
+    .bind(&job_id)
+    .bind(image_id)
+    .bind(page_id)
+    .execute(pool)
+    .await
+    .expect("manual job");
+    job_id
+}
+
+async fn manual_callback(
+    app: &Router,
+    pool: &sqlx::PgPool,
+    job_id: &str,
+    body: serde_json::Value,
+) -> StatusCode {
+    let input_generation: i32 =
+        sqlx::query_scalar("SELECT input_generation FROM jobs WHERE id = $1")
+            .bind(job_id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    let request = Request::builder()
+        .method("POST")
+        .uri("/tlhub/api/internal/jobs/callback/manual-cleanup")
+        .header("Content-Type", "application/json")
+        .header("X-Internal-Token", INTERNAL_TOKEN)
+        .header("X-Job-Id", job_id)
+        .header("X-Job-Attempt", "1")
+        .header("X-Input-Generation", input_generation.to_string())
+        .header("X-Lease-Token", "lease-m")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    finish(app.clone().oneshot(request).await.unwrap()).await.0
+}
+
+/// A landed repaint is one region-less, hand-edited patch on a new Inpainting layer above the
+/// others, and the scene draws it; a repaint whose objects are missing, or that the worker
+/// reports failed, fails its job and adds nothing.
+#[tokio::test]
+async fn a_manual_repaint_lands_on_a_new_top_inpainting_layer() {
+    let Some((app, pool, state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    let (series_id, page_id, image_id, ocr, tl) = seed_page(&pool).await;
+    let region = seed_region(
+        &pool,
+        page_id,
+        (ocr, tl),
+        1,
+        (20, 30, 60, 40),
+        "やあ",
+        "Hello",
+        None,
+    )
+    .await;
+    give_patch(
+        &state,
+        page_id,
+        region,
+        &sha('1'),
+        &sha('2'),
+        (18, 28, 64, 44),
+    )
+    .await;
+    let pass = record_pass(&state, page_id, &[region]).await.unwrap();
+    let revision_before: i32 = sqlx::query_scalar("SELECT scene_revision FROM pages WHERE id = $1")
+        .bind(page_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    let (patch, mask) = (sha('3'), sha('4'));
+    for digest in [&patch, &mask] {
+        state
+            .storage
+            .upload_bytes(
+                &manga_backend::page_scene_builder::scene_asset_path(page_id, digest),
+                b"png".to_vec(),
+                "image/png",
+            )
+            .await
+            .unwrap();
+    }
+    let complete = |patch: &str, mask: &str, job_id: &str| {
+        serde_json::json!({
+            "jobId": job_id, "imageId": image_id, "pageId": page_id, "status": "complete",
+            "cleanupPatchSha256": patch, "cleanupPatchByteLength": 3,
+            "cleanupMaskSha256": mask, "cleanupMaskByteLength": 3,
+            "cleanupGeneratorSha256": sha('0'),
+            "cleanupBounds": { "x": 30, "y": 40, "width": 16, "height": 12 },
+            "diagnostics": ["manual repaint: telea (mode=auto)"],
+        })
+    };
+
+    let job = processing_manual_job(&pool, page_id, image_id).await;
+    assert_eq!(
+        manual_callback(&app, &pool, &job, complete(&patch, &mask, &job)).await,
+        StatusCode::OK
+    );
+    let (pass_z, status): (i32, String) = (
+        sqlx::query_scalar("SELECT z_order FROM layers WHERE id = $1")
+            .bind(pass)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        sqlx::query_scalar("SELECT status FROM jobs WHERE id = $1")
+            .bind(&job)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+    );
+    assert_eq!(status, "COMPLETED");
+    let manual: Vec<(i32, bool, Option<Uuid>, bool, String)> = sqlx::query_as(
+        "SELECT l.z_order, l.visible, e.region_id, e.is_manually_edited, e.cleanup_ref->>'patchSha256' \
+         FROM layers l JOIN layer_elements e ON e.layer_id = l.id \
+         WHERE l.page_id = $1 AND l.type = 'inpainting' AND l.id <> $2",
+    )
+    .bind(page_id)
+    .bind(pass)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(manual.len(), 1, "one new layer holding one patch");
+    let (z, visible, region_id, hand_edited, drawn) = &manual[0];
+    assert!(*z > pass_z && *visible, "above the earlier pass, and shown");
+    assert_eq!(
+        (region_id, *hand_edited),
+        (&None, true),
+        "region-less and hand-edited (no QA)"
+    );
+    assert_eq!(drawn, &patch);
+    let revision_after: i32 = sqlx::query_scalar("SELECT scene_revision FROM pages WHERE id = $1")
+        .bind(page_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(
+        revision_after > revision_before,
+        "the page is marked for re-render"
+    );
+    let drawn_scene = scene(&state, page_id).await;
+    assert!(
+        cleanups(&drawn_scene)
+            .iter()
+            .any(|artifact| artifact["patch_asset_id"] == format!("patch-{patch}").as_str()),
+        "the export draws the repaint"
+    );
+
+    // Objects that never reached storage: the job fails and nothing is added.
+    let missing = processing_manual_job(&pool, page_id, image_id).await;
+    assert_eq!(
+        manual_callback(
+            &app,
+            &pool,
+            &missing,
+            complete(&sha('5'), &sha('6'), &missing)
+        )
+        .await,
+        StatusCode::OK
+    );
+    // The worker says it could not repaint.
+    let refused = processing_manual_job(&pool, page_id, image_id).await;
+    assert_eq!(
+        manual_callback(
+            &app,
+            &pool,
+            &refused,
+            serde_json::json!({ "jobId": refused, "imageId": image_id, "pageId": page_id,
+                                "status": "failed", "diagnostics": ["the mark is empty"] }),
+        )
+        .await,
+        StatusCode::OK
+    );
+    for (job_id, reason) in [
+        (&missing, "assets missing"),
+        (&refused, "the mark is empty"),
+    ] {
+        let (status, error): (String, Option<String>) =
+            sqlx::query_as("SELECT status, error FROM jobs WHERE id = $1")
+                .bind(job_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(status, "FAILED");
+        assert!(error.unwrap_or_default().contains(reason));
+    }
+    let layers: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM layers WHERE page_id = $1 AND type = 'inpainting'",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(layers, 2, "only the one landed repaint added a layer");
+
+    let _ = sqlx::query("DELETE FROM jobs WHERE page_id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await;
+    cleanup_series(&pool, series_id).await;
+}

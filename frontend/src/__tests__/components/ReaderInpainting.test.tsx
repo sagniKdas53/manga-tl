@@ -466,7 +466,10 @@ describe("Reader Inpainting layer (tracker R7)", () => {
     );
     mockSafeFetch.mockImplementation((url: string) => {
       if (/\/api\/pages\/[^/]+$/.test(url)) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(details) });
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(details),
+        });
       }
       if (url.includes("/scene-assets/")) {
         return Promise.resolve({
@@ -483,5 +486,165 @@ describe("Reader Inpainting layer (tracker R7)", () => {
       expect(overlay.querySelectorAll(".svg-ocr-box")).toHaveLength(2),
     );
     expect(overlay.textContent).not.toContain("やあ");
+  });
+});
+
+describe("Mask editor (inpainting view)", () => {
+  // jsdom has no canvas: a stand-in that records filled dots as marked pixels.
+  let lastArc: { x: number; y: number } | null = null;
+  let marked: Array<{ x: number; y: number }> = [];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    marked = [];
+    vi.spyOn(URL, "createObjectURL").mockImplementation(() => "blob:asset");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+      function (this: HTMLCanvasElement) {
+        return {
+          font: "",
+          measureText: (text: string) => ({
+            width: text.length * 8,
+            actualBoundingBoxAscent: 10,
+            actualBoundingBoxDescent: 3,
+          }),
+          beginPath: () => {},
+          moveTo: () => {},
+          lineTo: () => {},
+          stroke: () => {},
+          arc: (x: number, y: number) => {
+            lastArc = { x: Math.round(x), y: Math.round(y) };
+          },
+          fill: () => {
+            if (lastArc) marked.push(lastArc);
+          },
+          clearRect: () => {
+            marked = [];
+          },
+          putImageData: () => {},
+          createImageData: (width: number, height: number) => ({
+            data: new Uint8ClampedArray(width * height * 4),
+            width,
+            height,
+          }),
+          getImageData: () => {
+            const data = new Uint8ClampedArray(this.width * this.height * 4);
+            for (const { x, y } of marked)
+              data[(y * this.width + x) * 4 + 3] = 255;
+            return { data, width: this.width, height: this.height };
+          },
+        } as unknown as CanvasRenderingContext2D;
+      } as unknown as HTMLCanvasElement["getContext"],
+    );
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+      "data:image/png;base64,AAAA",
+    );
+    mockSafeFetch.mockImplementation((url: string) => {
+      if (/\/api\/pages\/[^/]+$/.test(url)) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(pageDetails()),
+        });
+      }
+      if (url.includes("/scene-assets/")) {
+        return Promise.resolve({
+          ok: true,
+          blob: () => Promise.resolve(new Blob(["png"], { type: "image/png" })),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 202,
+        json: () => Promise.resolve({ queued: true }),
+        text: () => Promise.resolve(""),
+      });
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("finds the box of what was painted and turns it into a white mask", async () => {
+    const { markBounds, binaryMask } =
+      await import("../../utils/inpaintingMask");
+    const rgba = new Uint8ClampedArray(6 * 4 * 4);
+    rgba[(1 * 6 + 2) * 4 + 3] = 128;
+    rgba[(2 * 6 + 4) * 4 + 3] = 255;
+    expect(markBounds(rgba, 6, 4)).toEqual({ x: 2, y: 1, width: 3, height: 2 });
+    expect(markBounds(new Uint8ClampedArray(6 * 4 * 4), 6, 4)).toBeNull();
+    const mask = binaryMask(rgba, 6, { x: 2, y: 1, width: 3, height: 2 });
+    expect(Array.from(mask.slice(0, 4))).toEqual([255, 255, 255, 255]);
+    expect(mask[3 * 4 + 3]).toBe(0);
+  });
+
+  it("opens from the Inpainting layer, hides the text, tints the masks, and applies a brushed mark", async () => {
+    await renderReader();
+    const overlay = document.querySelector(".svg-overlay")!;
+    await waitFor(() => expect(overlay.textContent).toContain("Hello"));
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Inpainting"));
+    });
+    const toolbar = await screen.findByRole("toolbar", {
+      name: "Inpainting tools",
+    });
+    expect(overlay.textContent).not.toContain("Hello");
+    expect(overlay.querySelectorAll(".svg-ocr-box")).toHaveLength(0);
+    await waitFor(() =>
+      expect(
+        overlay.querySelector('[data-mask-tint="patch-el"]'),
+      ).not.toBeNull(),
+    );
+    expect(
+      calls("GET", new RegExp(`/api/pages/p1/scene-assets/${MASK}$`)),
+    ).toHaveLength(1);
+
+    const canvas = screen.getByTestId("inpainting-canvas");
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1200,
+      height: 1600,
+      right: 1200,
+      bottom: 1600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    const apply = screen.getByRole("button", { name: "Apply" });
+    expect(apply).toBeDisabled();
+    fireEvent.pointerDown(canvas, { clientX: 100, clientY: 200, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 110, clientY: 205, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 110, clientY: 205, pointerId: 1 });
+    await waitFor(() => expect(apply).not.toBeDisabled());
+
+    await act(async () => {
+      fireEvent.click(apply);
+    });
+    await waitFor(() =>
+      expect(calls("POST", /\/api\/pages\/p1\/manual-cleanup$/)).toHaveLength(
+        1,
+      ),
+    );
+    const [, init] = calls("POST", /\/api\/pages\/p1\/manual-cleanup$/)[0];
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body).toEqual({
+      mask: "data:image/png;base64,AAAA",
+      bounds: { x: 100, y: 200, width: 11, height: 6 },
+      method: "auto",
+    });
+    expect(mockShowToast).toHaveBeenCalledWith(
+      expect.stringContaining("Repaint queued"),
+      "info",
+    );
+
+    fireEvent.click(
+      Array.from(toolbar.querySelectorAll("button")).find(
+        (button) => button.textContent === "Done",
+      )!,
+    );
+    await waitFor(() => expect(overlay.textContent).toContain("Hello"));
+    expect(screen.queryByTestId("inpainting-canvas")).toBeNull();
   });
 });

@@ -2416,6 +2416,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::post(merge_ocr_regions),
         )
         .route(
+            "/pages/{pageId}/manual-cleanup",
+            axum::routing::post(super::manual_cleanup::queue_manual_cleanup),
+        )
+        .route(
             "/chapters/{chapterId}/import-project",
             axum::routing::post(import_project),
         )

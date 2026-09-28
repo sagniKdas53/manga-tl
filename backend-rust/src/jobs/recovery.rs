@@ -380,6 +380,7 @@ const RENDER_BLOCKING_JOBS: &[&str] = &[
     "ocr",
     "layout",
     "cleanup",
+    "manual-cleanup",
     "translation",
     "region-redo-tl",
     "region-redo-ocr",
