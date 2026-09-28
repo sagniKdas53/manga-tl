@@ -1970,7 +1970,7 @@ pub async fn handle_layout_callback(
             let source_sha = image.hash.clone().unwrap_or_default();
             let image_url = state
                 .storage
-                .presigned_get_url(&image.storage_path)
+                .presigned_job_url(&image.storage_path)
                 .await
                 .map_err(|err| format!("could not presign source for cleanup: {err}"))?;
             let cleanup_regions = regions

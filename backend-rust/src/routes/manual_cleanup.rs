@@ -195,7 +195,7 @@ pub async fn queue_manual_cleanup(
             return (StatusCode::INTERNAL_SERVER_ERROR, err).into_response();
         }
     };
-    let image_url = match state.storage.presigned_get_url(&storage_path).await {
+    let image_url = match state.storage.presigned_job_url(&storage_path).await {
         Ok(url) => url,
         Err(err) => {
             return (

@@ -268,7 +268,7 @@ pub async fn enqueue_current_snapshot_render(
     {
         let url = state
             .storage
-            .presigned_get_url(&path)
+            .presigned_job_url(&path)
             .await
             .map_err(|err| format!("could not presign scene asset {path}: {err}"))?;
         asset_urls.insert(asset_id, serde_json::json!(url));

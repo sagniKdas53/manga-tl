@@ -27,6 +27,7 @@ import { useNotifications } from "./useNotifications";
 import { useToast } from "./ToastContext";
 import ConfirmModal from "./ConfirmModal";
 import { useDependencyLogger } from "../hooks/useDependencyLogger";
+import { formatErrorMessage } from "../utils/jobErrorMessage";
 
 interface Job {
   id: string;
@@ -443,43 +444,6 @@ const renderProviderModel = (job: Job, parsed: ParsedPayload | null) => {
   }
 
   return providerModel || null;
-};
-
-const formatErrorMessage = (error: string) => {
-  if (!error) return "";
-  if (
-    error.includes("Max retries exceeded") ||
-    error.includes("NameResolutionError") ||
-    error.includes("Failed to resolve") ||
-    error.includes("ConnectionError")
-  ) {
-    return "Could not connect to internal service (Network Error).";
-  }
-  if (
-    error.includes("500 Server Error") ||
-    error.includes("500 Internal Server Error")
-  ) {
-    return "Internal API returned 500 error.";
-  }
-  if (
-    error.includes("402") &&
-    (error.includes("Payment Required") || error.includes("Insufficient Quota"))
-  ) {
-    return "Provider Error (402): Out of credits or payment required.";
-  }
-  if (error.includes("404") && error.includes("Not Found")) {
-    return "Provider Error (404): Resource or model not found.";
-  }
-  if (
-    error.includes("401") ||
-    error.includes("Unauthorized") ||
-    error.includes("AuthenticationError")
-  ) {
-    return "Provider Error (401): Invalid API key or unauthorized.";
-  }
-  const match = error.match(/([a-zA-Z]+Error):\s*(.+)/);
-  if (match) return `${match[1]}: ${match[2].substring(0, 100)}`;
-  return error.length > 100 ? error.substring(0, 100) + "..." : error;
 };
 
 interface QueueManagerProps {

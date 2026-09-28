@@ -269,10 +269,39 @@ impl MinioService {
         String,
         aws_sdk_s3::error::SdkError<aws_sdk_s3::operation::get_object::GetObjectError>,
     > {
+        self.presigned_get_url_for(object_path, Duration::from_secs(10 * 60))
+            .await
+    }
+
+    /// Presigned GET URL for a queued job's payload: 7 days, the SigV4 maximum.
+    ///
+    /// A job can sit in its queue for hours behind a large batch (or across a laptop shutdown),
+    /// and the worker's retries resend the same payload, so a 10-minute link expires before the
+    /// job ever runs and every attempt fails with 403 (2026-09-28: 13 re-renders queued at 05:33
+    /// first ran at 11:33).
+    pub async fn presigned_job_url(
+        &self,
+        object_path: &str,
+    ) -> Result<
+        String,
+        aws_sdk_s3::error::SdkError<aws_sdk_s3::operation::get_object::GetObjectError>,
+    > {
+        self.presigned_get_url_for(object_path, Duration::from_secs(7 * 24 * 60 * 60))
+            .await
+    }
+
+    async fn presigned_get_url_for(
+        &self,
+        object_path: &str,
+        expires_in: Duration,
+    ) -> Result<
+        String,
+        aws_sdk_s3::error::SdkError<aws_sdk_s3::operation::get_object::GetObjectError>,
+    > {
         let presigning = PresigningConfig::builder()
-            .expires_in(Duration::from_secs(10 * 60))
+            .expires_in(expires_in)
             .build()
-            .expect("fixed 10-minute expiry is valid");
+            .expect("expiry is within the SigV4 limit of 7 days");
         let url = self
             .client
             .get_object()
