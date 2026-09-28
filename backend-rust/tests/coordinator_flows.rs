@@ -1406,14 +1406,19 @@ async fn ocr_redo_replaces_regions_but_keeps_earlier_layers() {
             .all(|(visible, _, region)| !visible && region.is_none()),
         "it is hidden and no longer points at a deleted region"
     );
-    let ocr_layers: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM layers WHERE page_id = $1 AND type = 'ocr' AND visible",
+    // OCR layers are created hidden (2026-09-28): the editor would otherwise paint the Japanese
+    // over the cleaned page. The editor finds the current pass by z-order, not visibility.
+    let ocr_layers: Vec<bool> = sqlx::query_scalar(
+        "SELECT visible FROM layers WHERE page_id = $1 AND type = 'ocr' ORDER BY z_order",
     )
     .bind(page_id)
-    .fetch_one(&pool)
+    .fetch_all(&pool)
     .await
     .unwrap();
-    assert_eq!(ocr_layers, 1, "only the new OCR layer is shown");
+    assert!(
+        !ocr_layers.is_empty() && ocr_layers.iter().all(|visible| !visible),
+        "the new OCR pass is created hidden, like every OCR layer: {ocr_layers:?}"
+    );
 
     cleanup_series(&pool, series_id).await;
 }

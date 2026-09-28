@@ -742,14 +742,30 @@ export const Reader: React.FC<ReaderProps> = ({
   const [isRedoingRegionOcr, setIsRedoingRegionOcr] = useState(false);
   const [isRedoingRegionTl, setIsRedoingRegionTl] = useState(false);
 
-  const visibleOcrRegionIds = React.useMemo(() => {
+  // The current OCR pass's regions: the newest full OCR layer plus the region-redo overlays above
+  // it. Not read from visibility: OCR layers are created hidden (2026-09-28) so their text is not
+  // painted over the cleaned page, and the eye only decides that.
+  const currentOcrRegionIds = React.useMemo(() => {
+    const ocrLayers = layers.filter((lData) => lData.layer.type === "ocr");
+    const newestPass = ocrLayers
+      .filter(
+        (lData) =>
+          (lData.layer.metadataJson as { overlay?: boolean } | undefined)
+            ?.overlay !== true,
+      )
+      .reduce<number | null>(
+        (newest, lData) =>
+          newest === null || lData.layer.zOrder > newest
+            ? lData.layer.zOrder
+            : newest,
+        null,
+      );
     const ids = new Set<string>();
-    layers.forEach((lData) => {
-      if (lData.layer.type === "ocr" && lData.layer.visible) {
-        lData.elements.forEach((el) => {
-          if (el.regionId) ids.add(el.regionId);
-        });
-      }
+    ocrLayers.forEach((lData) => {
+      if (newestPass !== null && lData.layer.zOrder < newestPass) return;
+      lData.elements.forEach((el) => {
+        if (el.regionId) ids.add(el.regionId);
+      });
     });
     return ids;
   }, [layers]);
@@ -757,16 +773,16 @@ export const Reader: React.FC<ReaderProps> = ({
   const filteredOcrRegions = React.useMemo(() => {
     const hasOcrLayer = layers.some((lData) => lData.layer.type === "ocr");
     if (!hasOcrLayer) return ocrRegions;
-    return ocrRegions.filter((r) => visibleOcrRegionIds.has(r.id));
-  }, [ocrRegions, layers, visibleOcrRegionIds]);
+    return ocrRegions.filter((r) => currentOcrRegionIds.has(r.id));
+  }, [ocrRegions, layers, currentOcrRegionIds]);
 
   const filteredConversations = React.useMemo(() => {
     const hasOcrLayer = layers.some((lData) => lData.layer.type === "ocr");
     if (!hasOcrLayer) return conversations;
     return conversations.filter((conv) =>
-      conv.regions.some((cr) => visibleOcrRegionIds.has(cr.regionId)),
+      conv.regions.some((cr) => currentOcrRegionIds.has(cr.regionId)),
     );
-  }, [conversations, layers, visibleOcrRegionIds]);
+  }, [conversations, layers, currentOcrRegionIds]);
 
   const sortedLayers = React.useMemo(() => {
     return [...layers].sort((a, b) => a.layer.zOrder - b.layer.zOrder);

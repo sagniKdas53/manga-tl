@@ -430,4 +430,58 @@ describe("Reader Inpainting layer (tracker R7)", () => {
       ).toHaveLength(1),
     );
   });
+
+  it("keeps a hidden OCR layer's regions selectable without painting its Japanese", async () => {
+    // OCR layers are created hidden (2026-09-28). The region tools follow the newest OCR pass and
+    // its redo overlays whatever their visibility; an older pass stays out.
+    const ocrElement = (id: string, regionId: string, layerId: string) => ({
+      ...textElement(id, regionId, null),
+      text: "やあ",
+      backgroundColor: null,
+      layerId,
+    });
+    const ocrLayer = (id: string, zOrder: number, overlay = false) => ({
+      id,
+      type: "ocr",
+      visible: false,
+      zOrder,
+      createdAt: "2026-09-27T00:00:00Z",
+      metadataJson: overlay ? { overlay: true } : {},
+    });
+    const details = pageDetails();
+    details.ocrRegions.push({ ...details.ocrRegions[1], id: "r-old" });
+    (details.layers as unknown[]).push(
+      {
+        layer: ocrLayer("layer-ocr-old", -2),
+        elements: [ocrElement("ocr-old", "r-old", "layer-ocr-old")],
+      },
+      {
+        layer: ocrLayer("layer-ocr", -1),
+        elements: [ocrElement("ocr-1", "r1", "layer-ocr")],
+      },
+      {
+        layer: ocrLayer("layer-ocr-redo", 2, true),
+        elements: [ocrElement("ocr-2", "r2", "layer-ocr-redo")],
+      },
+    );
+    mockSafeFetch.mockImplementation((url: string) => {
+      if (/\/api\/pages\/[^/]+$/.test(url)) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(details) });
+      }
+      if (url.includes("/scene-assets/")) {
+        return Promise.resolve({
+          ok: true,
+          blob: () => Promise.resolve(new Blob(["png"], { type: "image/png" })),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    await renderReader();
+    const overlay = document.querySelector(".svg-overlay")!;
+    await waitFor(() =>
+      expect(overlay.querySelectorAll(".svg-ocr-box")).toHaveLength(2),
+    );
+    expect(overlay.textContent).not.toContain("やあ");
+  });
 });

@@ -1714,9 +1714,12 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
         json!(chrono::Utc::now().to_rfc3339()),
     );
 
+    // Created hidden (user, 2026-09-28): a visible OCR layer paints the recognised Japanese over the
+    // cleaned page in the editor. The editor's region tools follow the newest OCR layer whatever
+    // its visibility, so the eye only decides whether its text is painted.
     let layer_id = Uuid::new_v4();
     sqlx::query(
-        "INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) VALUES ($1,'ocr',TRUE,$2,$3,$4,now())",
+        "INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) VALUES ($1,'ocr',FALSE,$2,$3,$4,now())",
     )
     .bind(layer_id)
     .bind(next_z)
@@ -3660,14 +3663,17 @@ pub async fn create_region_redo_overlay(
         "last_modified": chrono::Utc::now().to_rfc3339(),
     });
 
+    // An OCR overlay starts hidden like every OCR layer (see `handle_ocr_callback`); its element is
+    // still the region's current read, which the editor finds whatever the layer's visibility.
     let layer_id = Uuid::new_v4();
     sqlx::query(
         "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) \
-         VALUES ($1,$2,$3,TRUE,$4,$5,$6,now())",
+         VALUES ($1,$2,$3,$4,$5,$6,$7,now())",
     )
     .bind(layer_id)
     .bind(&source_layer.layer_type)
     .bind(&source_layer.target_language)
+    .bind(!source_layer.layer_type.eq_ignore_ascii_case("ocr"))
     .bind(next_z)
     .bind(&metadata)
     .bind(page_id)
