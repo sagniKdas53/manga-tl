@@ -964,6 +964,37 @@ async fn a_manual_repaint_is_validated_and_queued_ahead_of_the_pipeline() {
         underlay[0]["path"],
         manga_backend::page_scene_builder::scene_asset_path(page_id, &patch).as_str()
     );
+    assert!(
+        payload["imageUrl"]
+            .as_str()
+            .is_some_and(|url| url.contains("X-Amz-Expires=604800")),
+        "a queued job's source link lasts 7 days, not 10 minutes"
+    );
+
+    // The eraser over an automatic patch: a restore needs no colour and no underlay.
+    let _ = sqlx::query("DELETE FROM jobs WHERE page_id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await;
+    let (status, text) = send(
+        &app,
+        "POST",
+        &uri,
+        &token,
+        request(mask_png(12, 8, true), inside.clone(), "restore"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{text}");
+    let payload: String = sqlx::query_scalar(
+        "SELECT payload FROM jobs WHERE page_id = $1 AND type = 'manual-cleanup' AND status = 'PENDING'",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .expect("one queued restore job");
+    let payload: serde_json::Value = serde_json::from_str(&payload).unwrap();
+    assert_eq!(payload["method"], "restore");
+    assert_eq!(payload["underlay"], serde_json::json!([]));
 
     let _ = sqlx::query("DELETE FROM jobs WHERE page_id = $1")
         .bind(page_id)

@@ -4,9 +4,11 @@ import {
   fireEvent,
   waitFor,
   act,
+  within,
 } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import Reader from "../../components/Reader";
+import { clearSceneAssetCache } from "../../utils/inpainting";
 
 /**
  * Tracker R7: the editor draws the cleaned page. Each cleanup patch is an <image> on the Inpainting
@@ -247,6 +249,7 @@ const calls = (method: string, pattern: RegExp) =>
 describe("Reader Inpainting layer (tracker R7)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearSceneAssetCache();
     vi.spyOn(URL, "createObjectURL").mockImplementation(
       () => `blob:patch-${PATCH.slice(0, 6)}`,
     );
@@ -490,19 +493,27 @@ describe("Reader Inpainting layer (tracker R7)", () => {
 });
 
 describe("Mask editor (inpainting view)", () => {
-  // jsdom has no canvas: a stand-in that records filled dots as marked pixels.
-  let lastArc: { x: number; y: number } | null = null;
-  let marked: Array<{ x: number; y: number }> = [];
+  // jsdom has no canvas: a stand-in where each canvas keeps the dots filled on it as marked
+  // pixels, honouring the two composite operations the editor uses.
+  let marks = new WeakMap<HTMLCanvasElement, Set<string>>();
+  const marksOf = (canvas: HTMLCanvasElement) => {
+    if (!marks.has(canvas)) marks.set(canvas, new Set());
+    return marks.get(canvas)!;
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    marked = [];
+    clearSceneAssetCache();
+    marks = new WeakMap();
     vi.spyOn(URL, "createObjectURL").mockImplementation(() => "blob:asset");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
       function (this: HTMLCanvasElement) {
-        return {
+        const [canvas] = [this];
+        let lastArc: { x: number; y: number } | null = null;
+        const ctx = {
           font: "",
+          globalCompositeOperation: "source-over",
           measureText: (text: string) => ({
             width: text.length * 8,
             actualBoundingBoxAscent: 10,
@@ -516,10 +527,19 @@ describe("Mask editor (inpainting view)", () => {
             lastArc = { x: Math.round(x), y: Math.round(y) };
           },
           fill: () => {
-            if (lastArc) marked.push(lastArc);
+            if (!lastArc) return;
+            const key = `${lastArc.x},${lastArc.y}`;
+            if (ctx.globalCompositeOperation === "destination-out")
+              marksOf(canvas).delete(key);
+            else marksOf(canvas).add(key);
           },
-          clearRect: () => {
-            marked = [];
+          clearRect: () => marksOf(canvas).clear(),
+          drawImage: (source: HTMLCanvasElement) => {
+            for (const key of marksOf(source)) {
+              if (ctx.globalCompositeOperation === "destination-out")
+                marksOf(canvas).delete(key);
+              else marksOf(canvas).add(key);
+            }
           },
           putImageData: () => {},
           createImageData: (width: number, height: number) => ({
@@ -528,12 +548,17 @@ describe("Mask editor (inpainting view)", () => {
             height,
           }),
           getImageData: () => {
-            const data = new Uint8ClampedArray(this.width * this.height * 4);
-            for (const { x, y } of marked)
-              data[(y * this.width + x) * 4 + 3] = 255;
-            return { data, width: this.width, height: this.height };
+            const data = new Uint8ClampedArray(
+              canvas.width * canvas.height * 4,
+            );
+            for (const key of marksOf(canvas)) {
+              const [x, y] = key.split(",").map(Number);
+              data[(y * canvas.width + x) * 4 + 3] = 255;
+            }
+            return { data, width: canvas.width, height: canvas.height };
           },
-        } as unknown as CanvasRenderingContext2D;
+        };
+        return ctx as unknown as CanvasRenderingContext2D;
       } as unknown as HTMLCanvasElement["getContext"],
     );
     vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
@@ -646,5 +671,94 @@ describe("Mask editor (inpainting view)", () => {
     );
     await waitFor(() => expect(overlay.textContent).toContain("Hello"));
     expect(screen.queryByTestId("inpainting-canvas")).toBeNull();
+  });
+
+  it("puts its tools in the sidebar's place, never pans while painting, and restores what the eraser marks", async () => {
+    await renderReader();
+    const overlay = document.querySelector(".svg-overlay")!;
+    await waitFor(() => expect(overlay.textContent).toContain("Hello"));
+    await act(async () => {
+      fireEvent.click(screen.getByText("Inpainting"));
+    });
+    const panel = await screen.findByRole("toolbar", {
+      name: "Inpainting tools",
+    });
+    // The panel is the sidebar now: nothing floats over the page.
+    expect(
+      screen.getByTestId("inpainting-panel-host").contains(panel),
+    ).toBe(true);
+    expect(document.querySelector(".reader-right-sidebar-nhentai")).toBe(
+      panel,
+    );
+
+    // The patch list highlights a patch on the page.
+    const row = panel.querySelector('[data-patch-row="patch-el"]')!;
+    expect(row.textContent).toContain("Hello");
+    fireEvent.click(row);
+    await waitFor(() =>
+      expect(
+        overlay.querySelector('[data-patch-highlight="patch-el"]'),
+      ).not.toBeNull(),
+    );
+
+    const canvas = screen.getByTestId("inpainting-canvas");
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1200,
+      height: 1600,
+      right: 1200,
+      bottom: 1600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    const transform = () =>
+      (document.querySelector('[style*="translate("]') as HTMLElement).style
+        .transform;
+    const before = transform();
+    const drag = (fromX: number, toX: number) => {
+      fireEvent.mouseDown(canvas, { clientX: fromX, clientY: 300, button: 0 });
+      fireEvent.pointerDown(canvas, {
+        clientX: fromX,
+        clientY: 300,
+        pointerId: 1,
+        button: 0,
+      });
+      fireEvent.pointerMove(canvas, { clientX: toX, clientY: 300, pointerId: 1 });
+      fireEvent.mouseMove(canvas, { clientX: toX, clientY: 300 });
+      fireEvent.pointerUp(canvas, { clientX: toX, clientY: 300, pointerId: 1 });
+      fireEvent.mouseUp(canvas, { clientX: toX, clientY: 300 });
+    };
+
+    // A brush stroke, then Cancel: nothing is left to apply, and the page never moved.
+    const apply = within(panel).getByRole("button", { name: "Apply" });
+    const cancel = within(panel).getByRole("button", { name: "Cancel" });
+    drag(100, 180);
+    await waitFor(() => expect(apply).not.toBeDisabled());
+    expect(transform()).toBe(before);
+    fireEvent.click(cancel);
+    await waitFor(() => expect(apply).toBeDisabled());
+
+    // The eraser over unpainted page is a restore mark, sent as its own job.
+    fireEvent.click(within(panel).getByRole("button", { name: "Eraser" }));
+    drag(400, 420);
+    await waitFor(() => expect(apply).not.toBeDisabled());
+    await act(async () => {
+      fireEvent.click(apply);
+    });
+    await waitFor(() =>
+      expect(calls("POST", /\/api\/pages\/p1\/manual-cleanup$/)).toHaveLength(
+        1,
+      ),
+    );
+    const [, init] = calls("POST", /\/api\/pages\/p1\/manual-cleanup$/)[0];
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.method).toBe("restore");
+    expect(body.bounds).toEqual({ x: 400, y: 300, width: 21, height: 1 });
+    expect(mockShowToast).toHaveBeenCalledWith(
+      expect.stringContaining("Restore queued"),
+      "info",
+    );
   });
 });

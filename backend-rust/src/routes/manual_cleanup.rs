@@ -27,7 +27,9 @@ use crate::page_scene_builder::scene_asset_path;
 use crate::state::AppState;
 
 pub const JOB_TYPE: &str = "manual-cleanup";
-pub const METHODS: &[&str] = &["auto", "aot", "telea", "flat"];
+/// `restore` is the editor's eraser over an automatic patch: the worker copies the original page
+/// back where marked, so it needs no underlay.
+pub const METHODS: &[&str] = &["auto", "aot", "telea", "flat", "restore"];
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 pub struct MaskBounds {
@@ -186,7 +188,11 @@ pub async fn queue_manual_cleanup(
             .into_response();
     }
 
-    let underlay = match underlay(&state, page_id, revision).await {
+    let underlay = match if method == "restore" {
+        Ok(Vec::new())
+    } else {
+        underlay(&state, page_id, revision).await
+    } {
         Ok(underlay) => underlay,
         Err(err) => {
             tracing::error!(

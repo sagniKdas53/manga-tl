@@ -6,7 +6,7 @@
  * (`backend-rust/src/page_scene_builder.rs`, `build_pipeline_scene`) so the editor paints exactly
  * what the export paints: the same patches, in the same order, at the same rects and opacity.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { cleanupOpacity } from "@manga-library/page-scene";
 import type { Layer, LayerElement, OcrRegion } from "../types";
 import { safeFetch } from "../utils";
@@ -140,9 +140,11 @@ export async function fetchSceneAsset(
   pageId: string,
   sha256: string,
   token: string,
+  priority: RequestPriority = "auto",
 ): Promise<Blob> {
   const response = await safeFetch(sceneAssetUrl(pageId, sha256), {
     headers: { Authorization: `Bearer ${token}` },
+    priority,
   });
   if (!response.ok) {
     throw new Error(
@@ -153,77 +155,113 @@ export async function fetchSceneAsset(
 }
 
 /**
- * Object URLs for the page's patches, keyed by sha256. Patches are immutable, so each is fetched
- * once per page; the URLs are revoked when the page changes or the editor closes.
+ * Object URLs for scene assets (patches and masks), shared by every page of the session.
+ *
+ * Assets are content-addressed, so one sha256 is one image wherever it appears. The first
+ * version kept URLs per page and revoked them on every page turn, so each turn -- forward or
+ * back -- re-fetched all of a page's patches after the page was already on screen: measured
+ * 2026-09-28 at 3-17 requests landing 0.25-0.95 s after the page image, the English sitting
+ * on the un-erased Japanese until they did. This cache survives page turns, the Reader fills it
+ * ahead of time from its details prefetch, and least-recently-used entries past the limit are
+ * revoked.
+ */
+const ASSET_CACHE_LIMIT = 600;
+const assetCache = new Map<
+  string,
+  { url: string | null; pending: Promise<string | null> | null }
+>();
+
+const touchAsset = (sha256: string) => {
+  const entry = assetCache.get(sha256);
+  if (!entry) return;
+  assetCache.delete(sha256);
+  assetCache.set(sha256, entry);
+};
+
+const evictAssets = () => {
+  for (const [sha256, entry] of assetCache) {
+    if (assetCache.size <= ASSET_CACHE_LIMIT) break;
+    if (!entry.url) continue; // still loading
+    assetCache.delete(sha256);
+    URL.revokeObjectURL(entry.url);
+  }
+};
+
+/** The asset's object URL if it is already loaded. */
+export const peekSceneAssetUrl = (sha256: string) =>
+  assetCache.get(sha256)?.url ?? undefined;
+
+/** Loads (once) and caches one asset's object URL; null if it could not be fetched. */
+export function loadSceneAssetUrl(
+  pageId: string,
+  sha256: string,
+  token: string,
+  priority: RequestPriority = "auto",
+): Promise<string | null> {
+  const hit = assetCache.get(sha256);
+  if (hit?.url) {
+    touchAsset(sha256);
+    return Promise.resolve(hit.url);
+  }
+  if (hit?.pending) return hit.pending;
+  const pending = fetchSceneAsset(pageId, sha256, token, priority)
+    .then((blob) => {
+      const url = URL.createObjectURL(blob);
+      assetCache.set(sha256, { url, pending: null });
+      touchAsset(sha256);
+      evictAssets();
+      return url;
+    })
+    .catch((err) => {
+      assetCache.delete(sha256);
+      console.error(err);
+      return null;
+    });
+  assetCache.set(sha256, { url: null, pending });
+  return pending;
+}
+
+/** Empties the cache, revoking every URL (sign-out, tests). */
+export function clearSceneAssetCache() {
+  for (const entry of assetCache.values()) {
+    if (entry.url) URL.revokeObjectURL(entry.url);
+  }
+  assetCache.clear();
+}
+
+/**
+ * Object URLs for these assets of the page, keyed by sha256, from the shared cache. What is
+ * already cached is returned on the first render; the rest arrives together once it has loaded.
  */
 export function usePatchImageUrls(
   pageId: string | null | undefined,
   token: string,
   sha256s: string[],
 ): Record<string, string> {
-  const [loaded, setLoaded] = useState<{
-    pageId: string | null;
-    urls: Record<string, string>;
-  }>({
-    pageId: null,
-    urls: {},
-  });
-  const owned = useRef<{ pageId: string | null; urls: string[] }>({
-    pageId: null,
-    urls: [],
-  });
+  const [, setLoadedCount] = useState(0);
   const wanted = [...new Set(sha256s)].sort().join(",");
-
-  // Revoke everything the previous page created, and everything on unmount.
-  useEffect(() => {
-    return () => {
-      owned.current.urls.forEach((url) => URL.revokeObjectURL(url));
-      owned.current = { pageId: null, urls: [] };
-    };
-  }, [pageId]);
 
   useEffect(() => {
     if (!pageId || !wanted) return;
-    const have = loaded.pageId === pageId ? loaded.urls : {};
-    const missing = wanted.split(",").filter((sha) => !(sha in have));
+    const missing = wanted.split(",").filter((sha) => !peekSceneAssetUrl(sha));
     if (!missing.length) return;
     let cancelled = false;
     void Promise.all(
-      missing.map(async (sha) => {
-        try {
-          return [
-            sha,
-            URL.createObjectURL(await fetchSceneAsset(pageId, sha, token)),
-          ] as const;
-        } catch (err) {
-          console.error(err);
-          return null;
-        }
-      }),
-    ).then((entries) => {
-      const fetched = entries.filter((entry) => entry !== null);
-      if (cancelled) {
-        fetched.forEach(([, url]) => URL.revokeObjectURL(url));
-        return;
-      }
-      owned.current = {
-        pageId,
-        urls: [...owned.current.urls, ...fetched.map(([, url]) => url)],
-      };
-      setLoaded((prev) => ({
-        pageId,
-        urls: {
-          ...(prev.pageId === pageId ? prev.urls : {}),
-          ...Object.fromEntries(fetched),
-        },
-      }));
+      missing.map((sha) => loadSceneAssetUrl(pageId, sha, token)),
+    ).then(() => {
+      if (!cancelled) setLoadedCount((count) => count + 1);
     });
     return () => {
       cancelled = true;
     };
-    // `loaded` is read only to skip what is already fetched; re-running on it would fetch nothing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageId, token, wanted]);
 
-  return loaded.pageId === pageId ? loaded.urls : {};
+  const urls: Record<string, string> = {};
+  if (pageId && wanted) {
+    for (const sha of wanted.split(",")) {
+      const url = peekSceneAssetUrl(sha);
+      if (url) urls[sha] = url;
+    }
+  }
+  return urls;
 }

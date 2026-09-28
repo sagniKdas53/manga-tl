@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Layer, LayerElement, OcrRegion } from "../../types";
 import {
+  clearSceneAssetCache,
+  loadSceneAssetUrl,
+  peekSceneAssetUrl,
   paintedPatches,
   regionAllowsPatch,
   regionHasPatch,
@@ -214,5 +217,40 @@ describe("the region decides (R7-D4)", () => {
       false,
     );
     expect(regionHasPatch(undefined)).toBe(false);
+  });
+});
+
+describe("scene asset cache", () => {
+  it("fetches an asset once for every page and caller, and keeps it across page turns", async () => {
+    const utils = await import("../../utils");
+    clearSceneAssetCache();
+    const fetchSpy = vi
+      .spyOn(utils, "safeFetch")
+      .mockResolvedValue(new Response(new Blob(["png"]), { status: 200 }));
+    const create = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValue("blob:one");
+    const revoke = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => {});
+    const sha = "a".repeat(64);
+
+    expect(peekSceneAssetUrl(sha)).toBeUndefined();
+    const [first, second] = await Promise.all([
+      loadSceneAssetUrl("p1", sha, "t", "low"),
+      loadSceneAssetUrl("p1", sha, "t"),
+    ]);
+    expect([first, second]).toEqual(["blob:one", "blob:one"]);
+    expect(await loadSceneAssetUrl("p2", sha, "t")).toBe("blob:one");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0][1]).toMatchObject({ priority: "low" });
+    expect(peekSceneAssetUrl(sha)).toBe("blob:one");
+    expect(revoke).not.toHaveBeenCalled();
+
+    clearSceneAssetCache();
+    expect(revoke).toHaveBeenCalledWith("blob:one");
+    fetchSpy.mockRestore();
+    create.mockRestore();
+    revoke.mockRestore();
   });
 });

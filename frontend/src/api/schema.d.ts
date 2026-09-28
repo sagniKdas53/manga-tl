@@ -3418,7 +3418,7 @@ export interface operations {
                     /** @description Base64 PNG, exactly bounds.width x bounds.height, whose alpha marks the area to repaint. A data:image/png;base64, prefix is accepted. */
                     mask: string;
                     /** @enum {string} */
-                    method: "auto" | "aot" | "telea" | "flat";
+                    method: "auto" | "aot" | "telea" | "flat" | "restore";
                 };
             };
         };

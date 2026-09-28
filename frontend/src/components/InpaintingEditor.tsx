@@ -1,4 +1,5 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useRef } from "react";
+import { createPortal } from "react-dom";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
@@ -13,52 +14,102 @@ import BrushIcon from "@mui/icons-material/Brush";
 import AutoFixOffIcon from "@mui/icons-material/AutoFixOff";
 import UndoIcon from "@mui/icons-material/Undo";
 import RedoIcon from "@mui/icons-material/Redo";
-import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
-import { safeFetch } from "../utils";
-import { binaryMask, markBounds } from "../utils/inpaintingMask";
+import SidebarSection from "./SidebarSection";
+import {
+  PAINT_COLOUR,
+  RESTORE_COLOUR,
+  useInpaintingEditor,
+  type InpaintingEditorState,
+  type RepaintMethod,
+} from "../hooks/useInpaintingEditor";
 
 /**
- * The mask editor (2026-09-28): the user paints over what a cleanup pass left behind, and Apply
- * queues a repaint of that area (`POST /api/pages/{id}/manual-cleanup`). The result comes back as
- * a new patch on its own Inpainting layer, through the Reader's usual job-update refresh.
+ * The mask editor's two halves (2026-09-28): the brush canvases, laid over the page image, and
+ * the tool panel, which takes the right sidebar's place so nothing floats over the page.
  *
- * The canvas is the page's own pixel grid (CSS-scaled with the image), so a stroke's coordinates
- * are page pixels and the mask needs no rescaling.
+ * One `InpaintingSession` per page (the Reader keys it by page id, so a new page starts blank)
+ * owns the state and portals each half into the host element the Reader gives it.
+ *
+ * The canvases are the page's own pixel grid (CSS-scaled with the image), so a stroke's
+ * coordinates are page pixels and the masks need no rescaling.
  */
 
-export type RepaintMethod = "auto" | "aot" | "telea" | "flat";
-
-const HISTORY_LIMIT = 30;
-const STROKE_COLOUR = "rgb(255, 64, 160)";
-
-interface InpaintingEditorProps {
+interface SessionProps {
   pageId: string;
   token: string;
-  /** The page's pixel size: the canvas's own resolution. */
+  /** The page's pixel size: the canvases' own resolution. */
   width: number;
   height: number;
+  /** Where the canvases go: a box exactly over the page image. */
+  canvasHost: HTMLElement | null;
+  /** Where the panel goes: the right sidebar's slot. */
+  panelHost: HTMLElement | null;
+  patches: PatchListItem[];
+  highlightedPatchId: string | null;
+  onHighlightPatch: (id: string | null) => void;
   onDone: () => void;
-  onQueued: () => void;
+  onQueued: (what: "repaint" | "restore" | "both") => void;
   onError: (message: string) => void;
 }
 
-/** The brush canvas, laid over the page image. */
-export const InpaintingCanvas = React.forwardRef<
-  HTMLCanvasElement,
-  {
-    width: number;
-    height: number;
-    brushSize: number;
-    erasing: boolean;
-    onStrokeEnd: () => void;
-  }
->(function InpaintingCanvas(
-  { width, height, brushSize, erasing, onStrokeEnd },
-  ref,
-) {
-  const last = useRef<{ x: number; y: number } | null>(null);
+export default function InpaintingSession({
+  pageId,
+  token,
+  width,
+  height,
+  canvasHost,
+  panelHost,
+  patches,
+  highlightedPatchId,
+  onHighlightPatch,
+  onDone,
+  onQueued,
+  onError,
+}: SessionProps) {
+  const editor = useInpaintingEditor({
+    pageId,
+    token,
+    width,
+    height,
+    onQueued,
+    onError,
+  });
+  return (
+    <>
+      {canvasHost && createPortal(<InpaintingCanvas editor={editor} />, canvasHost)}
+      {panelHost &&
+        createPortal(
+          <InpaintingPanel
+            editor={editor}
+            patches={patches}
+            highlightedPatchId={highlightedPatchId}
+            onHighlightPatch={onHighlightPatch}
+            onDone={onDone}
+          />,
+          panelHost,
+        )}
+    </>
+  );
+}
 
-  const pointOf = (e: React.PointerEvent<HTMLCanvasElement>) => {
+/** The page's two marks: pink = repaint, red = put the original back. */
+function InpaintingCanvas({ editor }: { editor: InpaintingEditorState }) {
+  const cursor = useRef<HTMLDivElement | null>(null);
+  const drawing = useRef(false);
+  const {
+    width,
+    height,
+    brushSize,
+    panKeyHeld,
+    tool,
+    paintRef,
+    restoreRef,
+    beginStroke,
+    extendStroke,
+    endStroke,
+  } = editor;
+
+  const pointOf = (e: React.PointerEvent<HTMLElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     return {
       x: ((e.clientX - rect.left) * width) / Math.max(1, rect.width),
@@ -66,326 +117,329 @@ export const InpaintingCanvas = React.forwardRef<
     };
   };
 
-  const stroke = (
-    canvas: HTMLCanvasElement,
-    from: { x: number; y: number },
-    to: { x: number; y: number },
-  ) => {
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.globalCompositeOperation = erasing ? "destination-out" : "source-over";
-    ctx.strokeStyle = STROKE_COLOUR;
-    ctx.fillStyle = STROKE_COLOUR;
-    ctx.lineWidth = brushSize;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.arc(to.x, to.y, brushSize / 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.stroke();
+  // The brush outline follows the pointer without a React render per move.
+  const moveCursor = (e: React.PointerEvent<HTMLElement>) => {
+    const ring = cursor.current;
+    if (!ring) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const size = (brushSize * rect.width) / Math.max(1, width);
+    ring.style.display = "block";
+    ring.style.width = `${size}px`;
+    ring.style.height = `${size}px`;
+    ring.style.left = `${e.clientX - rect.left - size / 2}px`;
+    ring.style.top = `${e.clientY - rect.top - size / 2}px`;
+  };
+
+  const finish = () => {
+    if (!drawing.current) return;
+    drawing.current = false;
+    endStroke();
+  };
+
+  const layer: React.CSSProperties = {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    opacity: 0.5,
+    pointerEvents: "none",
   };
 
   return (
-    <canvas
-      ref={ref}
+    <div
       data-testid="inpainting-canvas"
-      width={width}
-      height={height}
       style={{
         position: "absolute",
         inset: 0,
-        width: "100%",
-        height: "100%",
-        opacity: 0.5,
-        cursor: "crosshair",
-        touchAction: "none",
         zIndex: 3,
+        cursor: panKeyHeld ? "grab" : "none",
+        touchAction: "none",
+        // Space held: let the pointer through so the reader pans instead of painting.
+        pointerEvents: panKeyHeld ? "none" : "auto",
       }}
+      // Pointer and mouse events are separate streams; the reader pans on mousedown.
+      onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.stopPropagation();
         e.currentTarget.setPointerCapture?.(e.pointerId);
-        const point = pointOf(e);
-        last.current = point;
-        stroke(e.currentTarget, point, point);
+        drawing.current = true;
+        beginStroke(pointOf(e));
       }}
       onPointerMove={(e) => {
-        if (!last.current) return;
-        const point = pointOf(e);
-        stroke(e.currentTarget, last.current, point);
-        last.current = point;
+        moveCursor(e);
+        if (drawing.current) extendStroke(pointOf(e));
       }}
-      onPointerUp={() => {
-        if (!last.current) return;
-        last.current = null;
-        onStrokeEnd();
+      onPointerUp={finish}
+      onPointerCancel={finish}
+      onPointerLeave={(e) => {
+        if (cursor.current) cursor.current.style.display = "none";
+        if (!e.currentTarget.hasPointerCapture?.(e.pointerId)) finish();
       }}
-      onPointerLeave={() => {
-        if (!last.current) return;
-        last.current = null;
-        onStrokeEnd();
-      }}
-    />
-  );
-});
-
-/**
- * Canvas + toolbar. Rendered inside the page's positioned image box, so the canvas lines up with
- * the image; the toolbar is fixed to the bottom of the window.
- */
-export default function InpaintingEditor({
-  pageId,
-  token,
-  width,
-  height,
-  onDone,
-  onQueued,
-  onError,
-}: InpaintingEditorProps) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [erasing, setErasing] = useState(false);
-  const [brushSize, setBrushSize] = useState(24);
-  const [method, setMethod] = useState<RepaintMethod>("auto");
-  const [fillColor, setFillColor] = useState("#ffffff");
-  const [sending, setSending] = useState(false);
-  // Snapshots of the canvas after each stroke. `step` strokes are on screen (0 = blank);
-  // `strokes` is how many snapshots exist, so Redo knows when there is nothing to redo.
-  const history = useRef<ImageData[]>([]);
-  const [step, setStep] = useState(0);
-  const [strokes, setStrokes] = useState(0);
-  const [hasMark, setHasMark] = useState(false);
-
-  const context = () => canvasRef.current?.getContext("2d") ?? null;
-
-  const refreshHasMark = useCallback(() => {
-    const ctx = context();
-    if (!ctx) return setHasMark(false);
-    setHasMark(
-      markBounds(ctx.getImageData(0, 0, width, height).data, width, height) !==
-        null,
-    );
-  }, [width, height]);
-
-  // The Reader keys this component by page, so a new page always starts from a blank mark.
-  const resetHistory = () => {
-    context()?.clearRect(0, 0, width, height);
-    history.current = [];
-    setStep(0);
-    setStrokes(0);
-    setHasMark(false);
-  };
-
-  const onStrokeEnd = () => {
-    const ctx = context();
-    if (!ctx) return;
-    const kept = history.current.slice(0, step);
-    kept.push(ctx.getImageData(0, 0, width, height));
-    history.current = kept.slice(-HISTORY_LIMIT);
-    setStep(history.current.length);
-    setStrokes(history.current.length);
-    refreshHasMark();
-  };
-
-  /** Puts the canvas back to how it was after `count` strokes. */
-  const show = (count: number) => {
-    const ctx = context();
-    if (!ctx || count < 0 || count > history.current.length) return;
-    if (count === 0) ctx.clearRect(0, 0, width, height);
-    else ctx.putImageData(history.current[count - 1], 0, 0);
-    setStep(count);
-    refreshHasMark();
-  };
-
-  const apply = async () => {
-    const ctx = context();
-    if (!ctx) return;
-    const pixels = ctx.getImageData(0, 0, width, height).data;
-    const box = markBounds(pixels, width, height);
-    if (!box) return;
-    const cut = document.createElement("canvas");
-    cut.width = box.width;
-    cut.height = box.height;
-    const cutCtx = cut.getContext("2d");
-    if (!cutCtx) return;
-    const cutPixels = cutCtx.createImageData(box.width, box.height);
-    cutPixels.data.set(binaryMask(pixels, width, box));
-    cutCtx.putImageData(cutPixels, 0, 0);
-    setSending(true);
-    try {
-      const res = await safeFetch(`/api/pages/${pageId}/manual-cleanup`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          mask: cut.toDataURL("image/png"),
-          bounds: box,
-          method,
-          ...(method === "flat" ? { fillColor } : {}),
-        }),
-      });
-      if (!res.ok) {
-        const detail = await res.text().catch(() => "");
-        throw new Error(detail || `Repaint failed (${res.status})`);
-      }
-      resetHistory();
-      onQueued();
-    } catch (err) {
-      onError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <>
-      <InpaintingCanvas
-        ref={canvasRef}
+    >
+      <canvas
+        ref={paintRef}
+        data-testid="inpainting-paint"
         width={width}
         height={height}
-        brushSize={brushSize}
-        erasing={erasing}
-        onStrokeEnd={onStrokeEnd}
+        style={layer}
       />
-      <Box
-        role="toolbar"
-        aria-label="Inpainting tools"
-        onPointerDown={(e) => e.stopPropagation()}
-        sx={{
-          position: "fixed",
-          left: "50%",
-          bottom: 16,
-          transform: "translateX(-50%)",
-          zIndex: 1300,
-          display: "flex",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: 1.5,
-          px: 2,
-          py: 1,
-          maxWidth: "calc(100vw - 32px)",
-          borderRadius: 2,
-          bgcolor: "var(--bg-card-content)",
-          backdropFilter: "blur(8px)",
-          color: "var(--text-main, inherit)",
-          boxShadow: 6,
+      <canvas
+        ref={restoreRef}
+        data-testid="inpainting-restore"
+        width={width}
+        height={height}
+        style={layer}
+      />
+      <div
+        ref={cursor}
+        style={{
+          position: "absolute",
+          display: "none",
+          borderRadius: "50%",
+          border: `1.5px solid ${tool === "brush" ? PAINT_COLOUR : RESTORE_COLOUR}`,
+          boxShadow: "0 0 0 1px rgba(255,255,255,0.8)",
+          pointerEvents: "none",
         }}
-      >
-        <Typography
-          variant="caption"
-          sx={{ fontWeight: 700 }}
-        >
-          Inpainting
-        </Typography>
+      />
+    </div>
+  );
+}
+
+export interface PatchListItem {
+  /** The patch element's id. */
+  id: string;
+  label: string;
+  detail: string;
+}
+
+interface PanelProps {
+  editor: InpaintingEditorState;
+  patches: PatchListItem[];
+  highlightedPatchId: string | null;
+  onHighlightPatch: (id: string | null) => void;
+  onDone: () => void;
+}
+
+const rowSx = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "flex-start",
+  width: "100%",
+  textAlign: "left",
+  px: 1,
+  py: 0.75,
+  borderRadius: "6px",
+  border: "1px solid transparent",
+  cursor: "pointer",
+  bgcolor: "transparent",
+  color: "inherit",
+  font: "inherit",
+  "&:hover": { bgcolor: "var(--bg-hover, rgba(127,127,127,0.08))" },
+} as const;
+
+/** The tools and the page's patch list, in the right sidebar's place. */
+function InpaintingPanel({
+  editor,
+  patches,
+  highlightedPatchId,
+  onHighlightPatch,
+  onDone,
+}: PanelProps) {
+  const canApply = (editor.hasPaint || editor.hasRestore) && !editor.sending;
+  return (
+    <Box
+      className="reader-right-sidebar-nhentai"
+      role="toolbar"
+      aria-label="Inpainting tools"
+    >
+      <SidebarSection title="Inpainting">
         <ToggleButtonGroup
           size="small"
           exclusive
-          value={erasing ? "eraser" : "brush"}
-          onChange={(_e, value) => value && setErasing(value === "eraser")}
+          fullWidth
+          value={editor.tool}
+          onChange={(_e, value) => value && editor.setTool(value)}
+          sx={{ mb: 1 }}
         >
           <ToggleButton
             value="brush"
             aria-label="Brush"
           >
-            <BrushIcon fontSize="small" />
+            <BrushIcon
+              fontSize="small"
+              sx={{ mr: 0.75 }}
+            />
+            Repaint
           </ToggleButton>
           <ToggleButton
             value="eraser"
             aria-label="Eraser"
           >
-            <AutoFixOffIcon fontSize="small" />
+            <AutoFixOffIcon
+              fontSize="small"
+              sx={{ mr: 0.75 }}
+            />
+            Restore
           </ToggleButton>
         </ToggleButtonGroup>
-        <Box sx={{ width: 120, display: "flex", alignItems: "center", gap: 1 }}>
+        <Typography
+          variant="caption"
+          component="p"
+          sx={{ color: "var(--text-muted)", mb: 1, lineHeight: 1.4 }}
+        >
+          {editor.tool === "brush"
+            ? "Paint over what should be repainted (pink)."
+            : "Rub out your own paint, or mark where an automatic patch should go and the original page come back (red)."}{" "}
+          Hold Space to pan.
+        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
+          <Typography
+            variant="caption"
+            sx={{ minWidth: 30 }}
+          >
+            Size
+          </Typography>
           <Slider
             size="small"
             min={4}
             max={200}
-            value={brushSize}
-            onChange={(_e, value) => setBrushSize(value as number)}
+            value={editor.brushSize}
+            onChange={(_e, value) => editor.setBrushSize(value as number)}
             aria-label="Brush size"
           />
           <Typography
             variant="caption"
-            sx={{ minWidth: 28 }}
+            sx={{ minWidth: 28, textAlign: "right" }}
           >
-            {brushSize}
+            {editor.brushSize}
           </Typography>
         </Box>
-        <Tooltip title="Undo stroke">
-          <span>
-            <IconButton
-              size="small"
-              aria-label="Undo stroke"
-              disabled={step === 0}
-              onClick={() => show(step - 1)}
-            >
-              <UndoIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip title="Redo stroke">
-          <span>
-            <IconButton
-              size="small"
-              aria-label="Redo stroke"
-              disabled={step >= strokes}
-              onClick={() => show(step + 1)}
-            >
-              <RedoIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip title="Clear the mark">
-          <span>
-            <IconButton
-              size="small"
-              aria-label="Clear the mark"
-              disabled={!hasMark}
-              onClick={resetHistory}
-            >
-              <DeleteSweepIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Select
-          size="small"
-          value={method}
-          onChange={(e) => setMethod(e.target.value as RepaintMethod)}
-          inputProps={{ "aria-label": "Repaint method" }}
-          sx={{ minWidth: 110 }}
-        >
-          <MenuItem value="auto">Auto</MenuItem>
-          <MenuItem value="aot">AOT</MenuItem>
-          <MenuItem value="telea">Telea</MenuItem>
-          <MenuItem value="flat">Flat colour</MenuItem>
-        </Select>
-        {method === "flat" && (
-          <input
-            type="color"
-            aria-label="Fill colour"
-            value={fillColor}
-            onChange={(e) => setFillColor(e.target.value)}
-          />
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5 }}>
+          <Select
+            size="small"
+            value={editor.method}
+            onChange={(e) => editor.setMethod(e.target.value as RepaintMethod)}
+            inputProps={{ "aria-label": "Repaint method" }}
+            sx={{ flex: 1 }}
+          >
+            <MenuItem value="auto">Auto</MenuItem>
+            <MenuItem value="aot">AOT</MenuItem>
+            <MenuItem value="telea">Telea</MenuItem>
+            <MenuItem value="flat">Flat colour</MenuItem>
+          </Select>
+          {editor.method === "flat" && (
+            <input
+              type="color"
+              aria-label="Fill colour"
+              value={editor.fillColor}
+              onChange={(e) => editor.setFillColor(e.target.value)}
+            />
+          )}
+          <Tooltip title="Undo stroke">
+            <span>
+              <IconButton
+                size="small"
+                aria-label="Undo stroke"
+                disabled={!editor.canUndo}
+                onClick={editor.undo}
+              >
+                <UndoIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title="Redo stroke">
+            <span>
+              <IconButton
+                size="small"
+                aria-label="Redo stroke"
+                disabled={!editor.canRedo}
+                onClick={editor.redo}
+              >
+                <RedoIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Box>
+        <Box sx={{ display: "flex", gap: 1 }}>
+          <Button
+            size="small"
+            variant="contained"
+            disabled={!canApply}
+            onClick={() => void editor.apply()}
+          >
+            {editor.sending ? "Queuing…" : "Apply"}
+          </Button>
+          <Button
+            size="small"
+            variant="text"
+            disabled={!(editor.hasPaint || editor.hasRestore) || editor.sending}
+            onClick={editor.cancel}
+          >
+            Cancel
+          </Button>
+          <Box sx={{ flex: 1 }} />
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={onDone}
+          >
+            Done
+          </Button>
+        </Box>
+      </SidebarSection>
+
+      <SidebarSection title={`Patches on this page (${patches.length})`}>
+        {patches.length === 0 ? (
+          <Typography
+            variant="body2"
+            sx={{ color: "var(--text-muted)" }}
+          >
+            No patches yet.
+          </Typography>
+        ) : (
+          <Box
+            component="ul"
+            sx={{ listStyle: "none", m: 0, p: 0 }}
+          >
+            {patches.map((patch) => {
+              const active = patch.id === highlightedPatchId;
+              return (
+                <li key={patch.id}>
+                  <Box
+                    component="button"
+                    type="button"
+                    data-patch-row={patch.id}
+                    aria-pressed={active}
+                    onClick={() => onHighlightPatch(active ? null : patch.id)}
+                    sx={{
+                      ...rowSx,
+                      ...(active && {
+                        borderColor: "var(--primary)",
+                        bgcolor: "var(--primary-soft, rgba(33,150,243,0.08))",
+                      }),
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      noWrap
+                      sx={{ maxWidth: "100%", fontWeight: active ? 600 : 400 }}
+                    >
+                      {patch.label}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "var(--text-muted)" }}
+                    >
+                      {patch.detail}
+                    </Typography>
+                  </Box>
+                </li>
+              );
+            })}
+          </Box>
         )}
-        <Button
-          size="small"
-          variant="contained"
-          disabled={!hasMark || sending}
-          onClick={() => void apply()}
-        >
-          {sending ? "Queuing…" : "Apply"}
-        </Button>
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={onDone}
-        >
-          Done
-        </Button>
-      </Box>
-    </>
+      </SidebarSection>
+    </Box>
   );
 }

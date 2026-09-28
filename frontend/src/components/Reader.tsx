@@ -32,11 +32,12 @@ import {
   isPatchElement,
   fetchSceneAsset,
   paintedPatches,
+  loadSceneAssetUrl,
   regionHasPatch,
   usePatchImageUrls,
 } from "../utils/inpainting";
 import type { MergePreview } from "./ReaderIssues";
-import InpaintingEditor from "./InpaintingEditor";
+import InpaintingSession, { type PatchListItem } from "./InpaintingEditor";
 import {
   regionIssues,
   translationElementByRegion,
@@ -469,6 +470,14 @@ export const Reader: React.FC<ReaderProps> = ({
   // The mask editor: text and OCR hidden, patch masks tinted, a brush over the page. Held as the
   // page it was opened on, so moving to another page closes it.
   const [inpaintingPageId, setInpaintingPageId] = useState<string | null>(null);
+  // Where the editor's two halves mount: over the page image, and in the right sidebar's slot.
+  const [inpaintingCanvasHost, setInpaintingCanvasHost] =
+    useState<HTMLDivElement | null>(null);
+  const [inpaintingPanelHost, setInpaintingPanelHost] =
+    useState<HTMLDivElement | null>(null);
+  const [highlightedPatchId, setHighlightedPatchId] = useState<string | null>(
+    null,
+  );
   const [cleanScanlationView, setCleanScanlationView] = usePersistedState(
     "manga_clean_view",
     false,
@@ -805,11 +814,45 @@ export const Reader: React.FC<ReaderProps> = ({
     () => new Map(ocrRegions.map((region) => [region.id, region])),
     [ocrRegions],
   );
+  // The mask editor's patch list: topmost first, as the layer list reads.
+  const patchListItems = React.useMemo<PatchListItem[]>(() => {
+    const inpaintingLayers = sortedLayers.filter(({ layer }) =>
+      isInpaintingLayer(layer),
+    );
+    const layerNumber = new Map(
+      inpaintingLayers.map(({ layer }, i) => [layer.id, i + 1]),
+    );
+    return [...patches].reverse().map(({ element, width, height }) => {
+      const region = element.regionId
+        ? allRegionsById.get(element.regionId)
+        : undefined;
+      const text = region
+        ? (region.translatedText || region.text || "").replace(/\s+/g, " ")
+        : "";
+      return {
+        id: element.id,
+        label: region ? text || "Region patch" : "Hand-marked patch",
+        detail: `Inpainting ${layerNumber.get(element.layerId) ?? "?"} · ${Math.round(width)}×${Math.round(height)}`,
+      };
+    });
+  }, [patches, sortedLayers, allRegionsById]);
   const patchUrls = usePatchImageUrls(
     selectedPage?.id,
     user.token,
     patches.map((patch) => patch.patchSha256),
   );
+  // The overlay (patches and text) waits for the page's patches, so the English is never drawn
+  // over un-erased Japanese; after a second it shows anyway, with whatever has arrived.
+  const [patchWaitOverFor, setPatchWaitOverFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isImageLoaded || !selectedPage) return;
+    const pageId = selectedPage.id;
+    const timer = window.setTimeout(() => setPatchWaitOverFor(pageId), 1000);
+    return () => window.clearTimeout(timer);
+  }, [isImageLoaded, selectedPage]);
+  const patchesSettled =
+    patchWaitOverFor === selectedPage?.id ||
+    patches.every((patch) => patchUrls[patch.patchSha256]);
   // Only fetched in the mask editor, which tints each patch's mask where it sits.
   const maskUrls = usePatchImageUrls(
     selectedPage?.id,
@@ -1207,11 +1250,19 @@ export const Reader: React.FC<ReaderProps> = ({
           (p) => p.id !== currentPageId,
         );
 
+        // A nearby page's cleanup patches are warmed with its details: they are what makes the
+        // page look translated, and fetching them only once the page is on screen showed the
+        // English over un-erased Japanese for up to a second (measured 2026-09-28).
+        const warmPatches = (pageId: string, data: PageDetails) => {
+          for (const patch of paintedPatches(data.layers, data.ocrRegions)) {
+            void loadSceneAssetUrl(pageId, patch.patchSha256, user.token, "low");
+          }
+        };
         pagesToPrefetch.forEach((p) => {
-          if (
-            !pageDetailsCache.current.has(p.id) &&
-            !prefetchQueue.current.has(p.id)
-          ) {
+          const cached = pageDetailsCache.current.get(p.id);
+          if (cached) {
+            warmPatches(p.id, cached);
+          } else if (!prefetchQueue.current.has(p.id)) {
             prefetchQueue.current.add(p.id);
 
             // Prefetch details (must use the PAGE id, not the image id).
@@ -1220,6 +1271,7 @@ export const Reader: React.FC<ReaderProps> = ({
             // refetch. Leaving successful ids queued would permanently block re-prefetching a
             // page after the LRU evicts it.
             fetchPageDetails(p.id)
+              .then((data) => warmPatches(p.id, data))
               .catch((e) => {
                 console.error("Prefetch error", e);
               })
@@ -3935,7 +3987,7 @@ export const Reader: React.FC<ReaderProps> = ({
                   // before the bytes do, which used to paint annotations over a blank page;
                   // this also still hides stale overlays while new page data loads.
                   visibility:
-                    isLoadingPageDetails || !isImageLoaded
+                    isLoadingPageDetails || !isImageLoaded || !patchesSettled
                       ? "hidden"
                       : "visible",
                 }}
@@ -4001,6 +4053,22 @@ export const Reader: React.FC<ReaderProps> = ({
                         />
                       ) : null;
                     })}
+                    {patches
+                      .filter((patch) => patch.element.id === highlightedPatchId)
+                      .map((patch) => (
+                        <rect
+                          key={`highlight-${patch.element.id}`}
+                          data-patch-highlight={patch.element.id}
+                          x={patch.x}
+                          y={patch.y}
+                          width={patch.width}
+                          height={patch.height}
+                          fill="rgba(33,150,243,0.12)"
+                          stroke="var(--primary, #2196f3)"
+                          strokeWidth={3 * screenPx}
+                          strokeDasharray={`${8 * screenPx} ${5 * screenPx}`}
+                        />
+                      ))}
                   </g>
                 )}
 
@@ -4790,30 +4858,53 @@ export const Reader: React.FC<ReaderProps> = ({
                 isImageLoaded &&
                 imageDims.w > 0 &&
                 imageDims.h > 0 && (
-                  <InpaintingEditor
-                    pageId={selectedPage.id}
-                    token={user.token}
-                    width={imageDims.w}
-                    height={imageDims.h}
-                    key={selectedPage.id}
-                    onDone={() => setInpaintingPageId(null)}
-                    onQueued={() =>
-                      showToast(
-                        "Repaint queued — the new patch appears when it lands",
-                        "info",
-                      )
-                    }
-                    onError={(message) =>
-                      showToast(`Repaint failed: ${message}`, "error")
-                    }
-                  />
+                  <>
+                    <div
+                      ref={setInpaintingCanvasHost}
+                      style={{ position: "absolute", inset: 0, zIndex: 3 }}
+                    />
+                    <InpaintingSession
+                      key={selectedPage.id}
+                      pageId={selectedPage.id}
+                      token={user.token}
+                      width={imageDims.w}
+                      height={imageDims.h}
+                      canvasHost={inpaintingCanvasHost}
+                      panelHost={inpaintingPanelHost}
+                      patches={patchListItems}
+                      highlightedPatchId={highlightedPatchId}
+                      onHighlightPatch={setHighlightedPatchId}
+                      onDone={() => setInpaintingPageId(null)}
+                      onQueued={(what) =>
+                        showToast(
+                          what === "restore"
+                            ? "Restore queued — the original comes back when it lands"
+                            : what === "both"
+                              ? "Repaint and restore queued — they appear when they land"
+                              : "Repaint queued — the new patch appears when it lands",
+                          "info",
+                        )
+                      }
+                      onError={(message) =>
+                        showToast(`Repaint failed: ${message}`, "error")
+                      }
+                    />
+                  </>
                 )}
             </div>
           </div>
         </div>
 
-        {/* Right Sidebar (Property Inspector) */}
-        {showRightSidebar && (
+        {/* Right Sidebar (Property Inspector); the mask editor's panel takes its place. Shown
+            even when the sidebar is toggled off: the view has no other way to Apply or leave. */}
+        {inpaintingView && (
+          <div
+            ref={setInpaintingPanelHost}
+            data-testid="inpainting-panel-host"
+            style={{ display: "contents" }}
+          />
+        )}
+        {showRightSidebar && !inpaintingView && (
           <ReaderRightSidebar
             selectedItem={selectedItem}
             setSelectedItem={setSelectedItem}
