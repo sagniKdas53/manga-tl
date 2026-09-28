@@ -2,7 +2,16 @@
 
 Start with the current checkpoint below and the [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md). The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
 
-Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. Next: the typesetting phase, starting with R7 (see the 2026-09-26 night section). [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25). Read the summary and [current next-session handoff](output-quality-next-session-20260924.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. Next: the typesetting phase, starting with R7 (see the 2026-09-26 night section). [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25). Read the summary and [current next-session handoff](output-quality-next-session-20260929.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+
+## Status at a glance (2026-09-29 — R7 verdict pending; the plan after it)
+
+**Read [output-quality-next-session-20260929.md](output-quality-next-session-20260929.md) first.** It records the 2026-09-28 work (mask editor, restore, leftover-ink cleanup, 7-day job links, patch prefetch), the 400-page verdict run on chrome-box, and the order after R7: `AUDIT-R21` → `AUDIT-R23` → M7 (including M8's I06) → merge PRs #47 and #152.
+
+**Decisions (user, 2026-09-28):**
+- Quality first. R3's disruption cases wait for a later reliability/speed round.
+- R3's latency item is closed by the cleanup speed packet (OpenVINO + flushed denormals).
+- M9 comes after the merge.
 
 ## Status at a glance (2026-09-27 — R7 built; waiting for the user's review)
 
@@ -323,8 +332,8 @@ M3 (deciding what text to erase vs. protect, e.g. keeping sound effects untransl
 | R1 | Switched real pipeline runs onto the Chromium renderer (M4) instead of the old Python drawing code | Done |
 | R2 | Stopped the pipeline from painting one big flat rectangle over the art where text used to be | Done on the six fixtures. The wider 24-page control set is deliberately held until after R3 finishes, because R3 will change those same pixels again — no point measuring twice |
 | R6 | Fixes a bug where one speech balloon with several lines/columns of text was being split into several separate regions, each mistranslated on its own | **Done** — live test passed 2026-09-19 on all 5 required checks |
-| R3 | Removes source lettering and reconstructs the background | Data path, sequential phase separation, attempt-safe recovery and recheck removal are **implemented and test-covered** (Packets 1–2, 2026-09-22). **NOT PASSED:** all three gates stay open — dev-stack activity observed 2026-09-22, but no controlled speed comparison or cleanup-only quality pass; five historical captured fixtures only. [Next packets](quality-checkpoints/R3-phase-separation-handoff-20260921.md#next-work-in-bounded-packets). |
-| R7 | New: makes R3's cleanup patches their own editable layer in the reader/editor, instead of invisible outside the exported PNG | Open; separate-cleanup-stage dependency landed. Live page 8 confirms the gap. Geometry-only first cut, decoupled from text, with cleanup project round-trip; see OQ-03/OQ-05. |
+| R3 | Removes source lettering and reconstructs the background | **Closed 2026-09-26** on the user's acceptance of Packet 4. Latency closed by the cleanup speed packet (2026-09-27); the disruption cases move to a later reliability/speed round (user, 2026-09-28). `AUDIT-R24`/`R25` filed. |
+| R7 | New: makes R3's cleanup patches their own editable layer in the reader/editor, instead of invisible outside the exported PNG | Built 2026-09-27, extended 2026-09-28 (mask editor, restore, leftover-ink cleanup); **awaiting the user's verdict** on the 400-page chrome-box run. Plan after it: [next-session 2026-09-29](output-quality-next-session-20260929.md). |
 | R5 | Translation-provider configuration and execution reliability | Ongoing. Chunk concurrency/reasoning cap are implemented; combined live speedup unmeasured. Superseded-attempt handling landed 2026-09-22 with Packet 2 (fenced claims, lease-based recovery — `AUDIT-B21`/`AUDIT-B25` fixed in code, awaiting live evidence); complete QA coverage remains required work. |
 
 ### Remaining acceptance and integration
