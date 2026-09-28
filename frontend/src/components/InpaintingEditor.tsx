@@ -76,7 +76,8 @@ export default function InpaintingSession({
   });
   return (
     <>
-      {canvasHost && createPortal(<InpaintingCanvas editor={editor} />, canvasHost)}
+      {canvasHost &&
+        createPortal(<InpaintingCanvas editor={editor} />, canvasHost)}
       {panelHost &&
         createPortal(
           <InpaintingPanel

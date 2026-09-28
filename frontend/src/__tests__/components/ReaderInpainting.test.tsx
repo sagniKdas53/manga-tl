@@ -684,12 +684,10 @@ describe("Mask editor (inpainting view)", () => {
       name: "Inpainting tools",
     });
     // The panel is the sidebar now: nothing floats over the page.
-    expect(
-      screen.getByTestId("inpainting-panel-host").contains(panel),
-    ).toBe(true);
-    expect(document.querySelector(".reader-right-sidebar-nhentai")).toBe(
-      panel,
+    expect(screen.getByTestId("inpainting-panel-host").contains(panel)).toBe(
+      true,
     );
+    expect(document.querySelector(".reader-right-sidebar-nhentai")).toBe(panel);
 
     // The patch list highlights a patch on the page.
     const row = panel.querySelector('[data-patch-row="patch-el"]')!;
@@ -725,7 +723,11 @@ describe("Mask editor (inpainting view)", () => {
         pointerId: 1,
         button: 0,
       });
-      fireEvent.pointerMove(canvas, { clientX: toX, clientY: 300, pointerId: 1 });
+      fireEvent.pointerMove(canvas, {
+        clientX: toX,
+        clientY: 300,
+        pointerId: 1,
+      });
       fireEvent.mouseMove(canvas, { clientX: toX, clientY: 300 });
       fireEvent.pointerUp(canvas, { clientX: toX, clientY: 300, pointerId: 1 });
       fireEvent.mouseUp(canvas, { clientX: toX, clientY: 300 });

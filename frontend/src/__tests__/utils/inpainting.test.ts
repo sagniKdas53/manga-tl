@@ -227,9 +227,7 @@ describe("scene asset cache", () => {
     const fetchSpy = vi
       .spyOn(utils, "safeFetch")
       .mockResolvedValue(new Response(new Blob(["png"]), { status: 200 }));
-    const create = vi
-      .spyOn(URL, "createObjectURL")
-      .mockReturnValue("blob:one");
+    const create = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:one");
     const revoke = vi
       .spyOn(URL, "revokeObjectURL")
       .mockImplementation(() => {});

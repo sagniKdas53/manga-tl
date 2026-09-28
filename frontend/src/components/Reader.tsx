@@ -1255,7 +1255,12 @@ export const Reader: React.FC<ReaderProps> = ({
         // English over un-erased Japanese for up to a second (measured 2026-09-28).
         const warmPatches = (pageId: string, data: PageDetails) => {
           for (const patch of paintedPatches(data.layers, data.ocrRegions)) {
-            void loadSceneAssetUrl(pageId, patch.patchSha256, user.token, "low");
+            void loadSceneAssetUrl(
+              pageId,
+              patch.patchSha256,
+              user.token,
+              "low",
+            );
           }
         };
         pagesToPrefetch.forEach((p) => {
@@ -4054,7 +4059,9 @@ export const Reader: React.FC<ReaderProps> = ({
                       ) : null;
                     })}
                     {patches
-                      .filter((patch) => patch.element.id === highlightedPatchId)
+                      .filter(
+                        (patch) => patch.element.id === highlightedPatchId,
+                      )
                       .map((patch) => (
                         <rect
                           key={`highlight-${patch.element.id}`}
