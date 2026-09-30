@@ -5,6 +5,7 @@ import {
   waitFor,
   act,
   within,
+  cleanup,
 } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import Reader from "../../components/Reader";
@@ -283,6 +284,53 @@ describe("Reader Inpainting layer (tracker R7)", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("marks a flagged region only while Show debug is on, never over the reading views", async () => {
+    // 2026-09-30: with the debug boxes off, flagged regions still got amber outlines, and Clean
+    // Scanlation drew them over the finished page. Debug on is where they show (in the box
+    // colour); the Issues list finds them either way.
+    const base = mockSafeFetch.getMockImplementation()!;
+    mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (/\/api\/pages\/[^/]+$/.test(url)) {
+        const details = pageDetails();
+        Object.assign(details.ocrRegions[1], { qaStatus: "failed" });
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(details),
+        });
+      }
+      return base(url, init);
+    });
+    const outlines = () =>
+      Array.from(document.querySelectorAll(".svg-overlay title")).filter((t) =>
+        t.textContent?.startsWith("Needs a look"),
+      ).length;
+    const flaggedBoxes = () =>
+      Array.from(
+        document.querySelectorAll<SVGRectElement>(".svg-overlay .svg-ocr-box"),
+      ).filter((box) =>
+        ["#ef4444", "rgb(239, 68, 68)"].includes(box.style.stroke),
+      ).length;
+    try {
+      localStorage.setItem("manga_clean_view", "false");
+      localStorage.setItem("manga_show_ocr", "true");
+      await renderReader();
+      expect(flaggedBoxes()).toBe(1);
+      cleanup();
+
+      for (const clean of ["false", "true"]) {
+        localStorage.setItem("manga_show_ocr", "false");
+        localStorage.setItem("manga_clean_view", clean);
+        await renderReader();
+        expect(outlines()).toBe(0);
+        expect(flaggedBoxes()).toBe(0);
+        cleanup();
+      }
+    } finally {
+      localStorage.removeItem("manga_show_ocr");
+      localStorage.removeItem("manga_clean_view");
+    }
   });
 
   it("paints the patch after the page image and before any text, as the export does", async () => {

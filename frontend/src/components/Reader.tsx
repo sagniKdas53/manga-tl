@@ -4660,67 +4660,10 @@ export const Reader: React.FC<ReaderProps> = ({
                   });
                 })}
 
-                {/* Issues stay findable with the OCR boxes off: an amber dashed outline and the
-                    region's number, sized in screen pixels. Clicking opens it in the inspector. */}
-                {!mergeMode &&
-                  !inpaintingView &&
-                  !(showOcr && !cleanScanlationView) &&
-                  issues.map(({ region: r }) => {
-                    const isSelected = selectedItem?.id === `region-${r.id}`;
-                    const badge = 11 * screenPx;
-                    return (
-                      <g
-                        key={`issue-${r.id}`}
-                        onClick={() => selectRegionForReview(r)}
-                        style={{
-                          cursor: "pointer",
-                          pointerEvents:
-                            interactionMode !== "none" ? "none" : "auto",
-                        }}
-                      >
-                        <title>Needs a look: click to inspect</title>
-                        <rect
-                          x={r.bboxX}
-                          y={r.bboxY}
-                          width={r.bboxW}
-                          height={r.bboxH}
-                          rx={4 * screenPx}
-                          style={{
-                            fill: isSelected
-                              ? "color-mix(in srgb, var(--warning) 18%, transparent)"
-                              : "color-mix(in srgb, var(--warning) 6%, transparent)",
-                            stroke: "var(--warning)",
-                            strokeWidth: isSelected ? 3 : 2,
-                            strokeDasharray: isSelected ? undefined : "6 4",
-                            vectorEffect: "non-scaling-stroke",
-                          }}
-                        />
-                        <circle
-                          cx={r.bboxX}
-                          cy={r.bboxY}
-                          r={badge}
-                          fill="var(--warning)"
-                          stroke="#ffffff"
-                          strokeWidth={1.5}
-                          style={{ vectorEffect: "non-scaling-stroke" }}
-                        />
-                        <text
-                          x={r.bboxX}
-                          y={r.bboxY}
-                          style={{
-                            textAnchor: "middle",
-                            dominantBaseline: "central",
-                            fontSize: `${12 * screenPx}px`,
-                            fontWeight: 700,
-                            fill: "#1f1400",
-                            pointerEvents: "none",
-                          }}
-                        >
-                          {r.bubbleReadingOrder || "!"}
-                        </text>
-                      </g>
-                    );
-                  })}
+                {/* Issues are shown by the debug boxes (Show debug colours a flagged region) and by
+                    the Issues list in the sidebar. The amber outlines that used to mark them with
+                    the boxes off were removed on 2026-09-30: with debug off the page is for
+                    reading, and Clean Scanlation drew them over the finished page. */}
 
                 {/* Merge mode: the path the picked pieces will be read along. */}
                 {mergeMode && mergePreview && mergePreview.order.length > 1 && (
