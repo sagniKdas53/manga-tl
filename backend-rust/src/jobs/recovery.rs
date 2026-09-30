@@ -334,6 +334,154 @@ pub async fn enqueue_current_snapshot_render(
     Ok(true)
 }
 
+/// Serves the page's current snapshot from the render it already has when the two draw the same
+/// thing ([`crate::page_scene::scene_content_digest`]), instead of queueing a render.
+///
+/// A revision can advance without anything drawable changing: a settings save that re-wrote the
+/// defaults bumped every page in the library on 2026-09-30, and the sweep queued 650 renders,
+/// each followed by a paid QA pass. Clearing the queue did not help, because the pages stayed
+/// dirty and the next sweep queued them again. Here the old artifact is filed under the new
+/// revision (a COMPLETED render job and a succeeded ledger row pointing at the same PNG), so the
+/// page is current, the reader and exports find it, and no render or QA runs.
+///
+/// Only the debounce sweep calls this. It declines when a render is already queued, running or
+/// done for this revision, and when a QA job is waiting on a render of it: those renders carry
+/// pipeline intent (final pass, completion) that a reused artifact would drop.
+async fn reuse_unchanged_render(
+    state: &AppState,
+    page: &crate::models::Page,
+) -> Result<bool, String> {
+    let Some(snapshot) = crate::page_scene::current_snapshot(&state.pool, page.id)
+        .await
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(false);
+    };
+    let pending: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM page_render_jobs WHERE page_id = $1 AND page_revision = $2 \
+                          AND status IN ('queued', 'running', 'succeeded')) \
+             OR EXISTS (SELECT 1 FROM jobs WHERE page_id = $1 AND type = 'qa' \
+                          AND status IN ('PENDING', 'PROCESSING') \
+                          AND payload::jsonb->'requiredRender'->>'pageRevision' = $3)",
+    )
+    .bind(page.id)
+    .bind(snapshot.revision)
+    .bind(snapshot.revision.to_string())
+    .fetch_one(&state.pool)
+    .await
+    .map_err(|err| err.to_string())?;
+    if pending {
+        return Ok(false);
+    }
+
+    // The artifact the page shows now, with the scene it was drawn from.
+    let previous: Option<(String, serde_json::Value)> = sqlx::query_as(
+        "SELECT render.job_id, snapshot.scene_json \
+         FROM pages page \
+         JOIN page_render_jobs render ON render.job_id = page.current_render_job_id \
+         JOIN page_scene_snapshots snapshot \
+           ON snapshot.page_id = render.page_id AND snapshot.revision = render.page_revision \
+         WHERE page.id = $1 AND render.status = 'succeeded' \
+           AND render.rendered_png_storage_path IS NOT NULL",
+    )
+    .bind(page.id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|err| err.to_string())?;
+    let Some((previous_job_id, previous_scene)) = previous else {
+        return Ok(false);
+    };
+    let same = crate::page_scene::scene_content_digest(&previous_scene)
+        .and_then(|old| {
+            crate::page_scene::scene_content_digest(&snapshot.scene_json).map(|new| old == new)
+        })
+        .unwrap_or(false);
+    if !same {
+        return Ok(false);
+    }
+
+    let job_id = Uuid::new_v4().to_string();
+    let payload = serde_json::json!({
+        "jobId": job_id,
+        "type": "render",
+        "imageId": page.image_id.to_string(),
+        "pageId": page.id.to_string(),
+        "chapterId": page.chapter_id.to_string(),
+        "pageRevision": snapshot.revision,
+        "logicalSceneSha256": snapshot.logical_scene_sha256,
+        "reusedRenderJobId": previous_job_id,
+    })
+    .to_string();
+    let mut tx = state.pool.begin().await.map_err(|err| err.to_string())?;
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, image_id, page_id, attempt, max_attempts, payload, \
+                           input_generation, created_at, updated_at) \
+         VALUES ($1, 'render', 'COMPLETED', $2, $3, 1, 3, $4, $5, now(), now())",
+    )
+    .bind(&job_id)
+    .bind(page.image_id)
+    .bind(page.id)
+    .bind(&payload)
+    .bind(page.input_generation)
+    .execute(&mut *tx)
+    .await
+    .map_err(|err| err.to_string())?;
+    sqlx::query(
+        "INSERT INTO page_render_jobs \
+         (job_id, page_id, page_revision, logical_scene_sha256, rendered_png_sha256, \
+          rendered_png_storage_path, renderer_build_sha256, browser_build_sha256, status, \
+          diagnostics_json, layout_json, completed_at) \
+         SELECT $1, page_id, $2, $3, rendered_png_sha256, rendered_png_storage_path, \
+                renderer_build_sha256, browser_build_sha256, 'succeeded', diagnostics_json, \
+                layout_json, now() \
+         FROM page_render_jobs WHERE job_id = $4",
+    )
+    .bind(&job_id)
+    .bind(snapshot.revision)
+    .bind(&snapshot.logical_scene_sha256)
+    .bind(&previous_job_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|err| err.to_string())?;
+    let pointed = sqlx::query(
+        "UPDATE pages SET current_render_job_id = $1, last_rendered_at = now() \
+         WHERE id = $2 AND scene_revision = $3",
+    )
+    .bind(&job_id)
+    .bind(page.id)
+    .bind(snapshot.revision)
+    .execute(&mut *tx)
+    .await
+    .map_err(|err| err.to_string())?;
+    if pointed.rows_affected() == 0 {
+        // Edited again since the snapshot; the next sweep handles the newer revision.
+        tx.rollback().await.map_err(|err| err.to_string())?;
+        return Ok(false);
+    }
+    tx.commit().await.map_err(|err| err.to_string())?;
+    let _ = sqlx::query("UPDATE images SET last_rendered_at = now() WHERE id = $1")
+        .bind(page.image_id)
+        .execute(&state.pool)
+        .await;
+
+    if let Ok(Some(job)) =
+        sqlx::query_as::<_, crate::models::Job>("SELECT * FROM jobs WHERE id = $1")
+            .bind(&job_id)
+            .fetch_optional(&state.pool)
+            .await
+    {
+        state
+            .sse
+            .emit_event_for_image(
+                page.image_id,
+                "job_update",
+                &serde_json::to_string(&job).unwrap_or_default(),
+            )
+            .await;
+    }
+    Ok(true)
+}
+
 /// Pages whose scene could not be built, with when that happened. A page that cannot be
 /// snapshotted (no image hash, invalid rows) would otherwise be retried every 5 s with the same
 /// error; it waits five minutes instead, like a failed render job does.
@@ -435,6 +583,7 @@ pub async fn process_pending_renders(state: &AppState) {
     }
 
     let mut triggered = 0usize;
+    let mut reused = 0usize;
     for mut page in pages {
         if snapshot_backoff_active(page.id) {
             continue;
@@ -491,6 +640,18 @@ pub async fn process_pending_renders(state: &AppState) {
             }
         }
 
+        match reuse_unchanged_render(state, &page).await {
+            Ok(true) => {
+                reused += 1;
+                continue;
+            }
+            Ok(false) => {}
+            Err(err) => tracing::warn!(
+                "Could not check page {} for an unchanged render: {err}; rendering it",
+                page.id
+            ),
+        }
+
         match enqueue_current_snapshot_render(state, &page, serde_json::Map::new()).await {
             Ok(true) => {
                 triggered += 1;
@@ -502,6 +663,11 @@ pub async fn process_pending_renders(state: &AppState) {
     }
     if triggered > 0 {
         tracing::info!("Enqueued {triggered} debounced render jobs");
+    }
+    if reused > 0 {
+        tracing::info!(
+            "Kept {reused} existing renders: their pages' new revisions draw the same scene"
+        );
     }
 }
 

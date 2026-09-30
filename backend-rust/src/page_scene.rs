@@ -431,6 +431,27 @@ pub fn logical_scene_digest(document: &Value) -> Result<String, PageSceneError> 
     Ok(hex::encode(Sha256::digest(canonical.as_bytes())))
 }
 
+/// What a render draws, independent of which revision it was filed under.
+///
+/// [`logical_scene_digest`] names one immutable snapshot, so it covers `page.revision` and the
+/// build provenance; two snapshots that draw the same pixels still differ there. This digest drops
+/// both, so a revision bump that changed nothing drawable (a settings save that re-wrote the
+/// defaults, a clone, a redeploy) can be recognised and served from the render already made.
+pub fn scene_content_digest(document: &Value) -> Result<String, PageSceneError> {
+    let mut content = document.clone();
+    let root = content
+        .as_object_mut()
+        .ok_or_else(|| error("scene must be an object"))?;
+    root.insert("scene_kind".to_owned(), Value::String("logical".to_owned()));
+    root.remove("resolved_layout");
+    root.remove("provenance");
+    if let Some(page) = root.get_mut("page").and_then(Value::as_object_mut) {
+        page.remove("revision");
+    }
+    let canonical = canonical_json(&content)?;
+    Ok(hex::encode(Sha256::digest(canonical.as_bytes())))
+}
+
 fn canonical_json(value: &Value) -> Result<String, PageSceneError> {
     match value {
         Value::Null | Value::Bool(_) | Value::String(_) => Ok(value.to_string()),
@@ -557,4 +578,34 @@ fn action(value: &str) -> Result<&str, PageSceneError> {
 }
 fn error(message: &str) -> PageSceneError {
     PageSceneError(message.to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn scene(revision: i32, commit: &str, text: &str) -> Value {
+        json!({
+            "scene_kind": "logical",
+            "page": { "page_id": "p", "revision": revision, "source": { "sha256": "s" } },
+            "provenance": { "app_commit": commit, "warnings": [] },
+            "objects": [{ "object_id": "text-1", "text": text }],
+        })
+    }
+
+    #[test]
+    fn content_digest_ignores_revision_and_provenance_but_not_what_is_drawn() {
+        let base = scene_content_digest(&scene(3, "aaa", "Hello")).unwrap();
+        assert_eq!(
+            base,
+            scene_content_digest(&scene(4, "bbb", "Hello")).unwrap()
+        );
+        assert_ne!(base, scene_content_digest(&scene(3, "aaa", "Hi")).unwrap());
+        // The snapshot's own identity still tells revisions apart.
+        assert_ne!(
+            logical_scene_digest(&scene(3, "aaa", "Hello")).unwrap(),
+            logical_scene_digest(&scene(4, "aaa", "Hello")).unwrap()
+        );
+    }
 }

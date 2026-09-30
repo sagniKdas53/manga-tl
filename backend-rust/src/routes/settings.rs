@@ -143,16 +143,19 @@ async fn build_dto(state: &AppState) -> SystemSettingsDto {
     }
 }
 
-async fn save_geometry_settings_and_invalidate(
+/// Saves the text-box geometry. Like the cleanup mode, it applies from now on: the next scene
+/// built for a page (an edit, a pipeline pass, a redo) uses it, and pages already rendered keep
+/// their render. It used to bump every page in the library, so any change -- or, while rows were
+/// compared instead of effective values, a save of the unchanged defaults -- re-rendered the whole
+/// library and sent every page to paid QA (650 pages on 2026-09-30). The editor canvas reads the
+/// setting live, so it shows the new geometry before a page's export does.
+async fn save_geometry_settings(
     state: &AppState,
     padding_percent: Option<i32>,
     padding_min_px: Option<i32>,
     padding_max_px: Option<i32>,
     safety: Option<i32>,
 ) -> Result<(), sqlx::Error> {
-    let mut tx = state.pool.begin().await?;
-    let mut changed = false;
-
     for (key, value) in [
         (
             "textBoxPaddingPercent",
@@ -171,33 +174,18 @@ async fn save_geometry_settings_and_invalidate(
         let Some(value) = value else {
             continue;
         };
-        let value = value.to_string();
-        let current: Option<String> = sqlx::query_scalar(
-            "SELECT setting_value FROM system_settings WHERE setting_key = $1 FOR UPDATE",
-        )
-        .bind(key)
-        .fetch_optional(&mut *tx)
-        .await?;
-        if current.as_deref() == Some(value.as_str()) {
-            continue;
-        }
+        // Written only when it differs, so `updated_at` says when the geometry last changed.
         sqlx::query(
             "INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ($1, $2, now()) \
-             ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = now()",
+             ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = now() \
+             WHERE system_settings.setting_value IS DISTINCT FROM EXCLUDED.setting_value",
         )
         .bind(key)
-        .bind(value)
-        .execute(&mut *tx)
+        .bind(value.to_string())
+        .execute(&state.pool)
         .await?;
-        changed = true;
     }
-
-    if changed {
-        sqlx::query("UPDATE pages SET last_edited_at = now(), scene_revision = scene_revision + 1")
-            .execute(&mut *tx)
-            .await?;
-    }
-    tx.commit().await
+    Ok(())
 }
 
 /// GET /api/settings
@@ -253,7 +241,7 @@ pub async fn update_settings(
         .await;
     }
 
-    if let Err(err) = save_geometry_settings_and_invalidate(
+    if let Err(err) = save_geometry_settings(
         &state,
         dto.textBoxPaddingPercent,
         dto.textBoxPaddingMinPx,
@@ -262,7 +250,7 @@ pub async fn update_settings(
     )
     .await
     {
-        tracing::error!("Could not persist geometry settings and invalidate pages: {err}");
+        tracing::error!("Could not persist geometry settings: {err}");
         return crate::error::internal_error("/api/settings");
     }
 

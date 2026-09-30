@@ -855,10 +855,13 @@ async fn recovery_reset_stale_and_debounced_render() {
     .execute(&pool)
     .await
     .expect("third page revision");
+    // A scene that draws something the revision-1 render does not; an identical one would be
+    // served from that render instead of queueing a job (`reuse_unchanged_render`).
     sqlx::query(
         "INSERT INTO page_scene_snapshots \
          (page_id, revision, contract_version, source_sha256, logical_scene_sha256, scene_json) \
-         VALUES ($1, 2, 'page-scene/v1', repeat('a', 64), repeat('d', 64), '{}'::jsonb)",
+         VALUES ($1, 2, 'page-scene/v1', repeat('a', 64), repeat('d', 64), \
+                 '{\"objects\": [{\"object_id\": \"text-revision-2\"}]}'::jsonb)",
     )
     .bind(page_id)
     .execute(&pool)

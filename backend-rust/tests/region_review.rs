@@ -299,10 +299,177 @@ async fn cleanup_series(pool: &sqlx::PgPool, series_id: Uuid) {
     }
 }
 
+async fn pending_renders(pool: &sqlx::PgPool, image_id: Uuid) -> i64 {
+    sqlx::query_scalar(
+        "SELECT COUNT(*) FROM jobs WHERE image_id = $1 AND type = 'render' AND status = 'PENDING'",
+    )
+    .bind(image_id)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// `process_pending_renders` sweeps every dirty page in the database, not just the calling test's.
+/// These tests share one database, so a sweep in one would render, snapshot or reuse another's
+/// page halfway through its setup; they take turns.
+static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// A revision that changes nothing drawn keeps the render the page already has; a real edit
+/// still renders. On 2026-09-30 a settings save bumped every page, the sweep queued 650 renders
+/// (each then judged by paid QA), and clearing the queue only made the sweep queue them again.
+#[tokio::test]
+async fn an_unchanged_scene_keeps_its_render() {
+    let _serial = SERIAL.lock().await;
+    let Some((_app, pool, state)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL/REDIS_TEST_ADDR not set");
+        return;
+    };
+    let (series_id, page_id, image_id, ocr_layer, tl_layer) = seed_page(&pool).await;
+    seed_region(
+        &pool,
+        page_id,
+        (ocr_layer, tl_layer),
+        1,
+        (20, 20, 100, 60),
+        "こんにちは",
+        "Hello",
+        None,
+    )
+    .await;
+    // Each step leaves the page either clean or dirty in one UPDATE: the other tests in this
+    // binary run the same sweep over the whole table in parallel, and would otherwise catch this
+    // page half set up.
+    let edit = "UPDATE pages SET scene_revision = scene_revision + 1, \
+                  last_rendered_at = now() - interval '30 minutes', \
+                  last_edited_at = now() - interval '20 minutes' WHERE id = $1";
+
+    // First render: queued, then completed the way the render callback leaves it.
+    sqlx::query("UPDATE pages SET last_edited_at = now() - interval '1 hour' WHERE id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    manga_backend::jobs::recovery::process_pending_renders(&state).await;
+    assert_eq!(
+        pending_renders(&pool, image_id).await,
+        1,
+        "a new page renders"
+    );
+    let first: String = sqlx::query_scalar(
+        "UPDATE page_render_jobs SET status = 'succeeded', rendered_png_sha256 = repeat('a', 64), \
+           rendered_png_storage_path = 'rendered/keep.png', completed_at = now() \
+         WHERE page_id = $1 RETURNING job_id",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE jobs SET status = 'COMPLETED' WHERE id = $1")
+        .bind(&first)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "UPDATE pages SET current_render_job_id = $1, last_rendered_at = now() - interval '30 minutes' \
+         WHERE id = $2",
+    )
+    .bind(&first)
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // A bump that draws nothing new, as the settings save did.
+    sqlx::query(edit)
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    manga_backend::jobs::recovery::process_pending_renders(&state).await;
+    assert_eq!(
+        pending_renders(&pool, image_id).await,
+        0,
+        "nothing to draw, nothing queued"
+    );
+    let (revision_now, current): (i32, Option<String>) =
+        sqlx::query_as("SELECT scene_revision, current_render_job_id FROM pages WHERE id = $1")
+            .bind(page_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let current = current.expect("page points at a render");
+    assert_ne!(current, first, "the reuse is filed under the new revision");
+    let (ledger_revision, status, path): (i32, String, Option<String>) = sqlx::query_as(
+        "SELECT page_revision, status, rendered_png_storage_path FROM page_render_jobs WHERE job_id = $1",
+    )
+    .bind(&current)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(ledger_revision, revision_now);
+    assert_eq!(status, "succeeded");
+    assert_eq!(
+        path.as_deref(),
+        Some("rendered/keep.png"),
+        "same pixels, no new render"
+    );
+    assert!(
+        matches!(
+            manga_backend::page_scene::current_render_artifact(&pool, page_id)
+                .await
+                .unwrap(),
+            manga_backend::page_scene::CurrentRenderArtifact::Ready(_)
+        ),
+        "the reader and exports see a current artifact"
+    );
+    let qa: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE image_id = $1 AND type = 'qa'")
+            .bind(image_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(qa, 0, "no QA for a render that did not happen");
+
+    // The page is clean now: another sweep leaves it alone.
+    manga_backend::jobs::recovery::process_pending_renders(&state).await;
+    assert_eq!(pending_renders(&pool, image_id).await, 0);
+
+    // A real edit still renders.
+    sqlx::query("UPDATE layer_elements SET text = 'Hi there' WHERE layer_id = $1")
+        .bind(tl_layer)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(edit)
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    manga_backend::jobs::recovery::process_pending_renders(&state).await;
+    assert_eq!(
+        pending_renders(&pool, image_id).await,
+        1,
+        "changed text renders"
+    );
+
+    sqlx::query("UPDATE pages SET current_render_job_id = NULL WHERE id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM page_render_jobs WHERE page_id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    cleanup_series(&pool, series_id).await;
+}
+
 /// "Cover with a plain mask": the plate becomes the region's cleanup (so the render uses it) and
 /// the translation element gets the same polygon in the bubble colour (so the Reader draws it).
 #[tokio::test]
 async fn plain_mask_becomes_the_regions_cleanup() {
+    let _serial = SERIAL.lock().await;
     let Some((app, pool, state)) = app().await else {
         return;
     };
@@ -425,6 +592,7 @@ async fn plain_mask_becomes_the_regions_cleanup() {
 /// "Keep translation": a QA flag is dismissed and the translation shown.
 #[tokio::test]
 async fn keeping_the_translation_clears_the_flag() {
+    let _serial = SERIAL.lock().await;
     let Some((app, pool, _state)) = app().await else {
         return;
     };
@@ -478,6 +646,7 @@ async fn keeping_the_translation_clears_the_flag() {
 /// translation, not the page's; the redone translation advances the page so it renders.
 #[tokio::test]
 async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
+    let _serial = SERIAL.lock().await;
     let Some((app, pool, state)) = app().await else {
         return;
     };

@@ -364,16 +364,18 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     assert_eq!(echoed["textBoxPaddingMinPx"], 3);
     assert_eq!(echoed["ocrMergeThreshold"], 0.8);
 
-    let revised_pages: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM pages WHERE chapter_id = $1 AND scene_revision = 1",
+    // A geometry change applies to renders from now on. It used to bump every page in the
+    // library, which queued a render and a paid QA pass for each (650 pages on 2026-09-30).
+    let untouched_pages: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pages WHERE chapter_id = $1 AND scene_revision = 0",
     )
     .bind(chapter_id)
     .fetch_one(&pool)
     .await
     .expect("geometry revisions");
     assert_eq!(
-        revised_pages, 2,
-        "a geometry change invalidates every affected page"
+        untouched_pages, 2,
+        "a geometry change re-renders nothing already done"
     );
     // The stale tab now saves an unrelated model setting.
     let mut legacy = put_body.clone();
@@ -411,7 +413,7 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     assert_eq!(padding, "12");
 
     let revisions_after_legacy_put: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM pages WHERE chapter_id = $1 AND scene_revision = 1",
+        "SELECT COUNT(*) FROM pages WHERE chapter_id = $1 AND scene_revision = 0",
     )
     .bind(chapter_id)
     .fetch_one(&pool)
@@ -419,7 +421,7 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     .expect("unchanged geometry revisions");
     assert_eq!(
         revisions_after_legacy_put, 2,
-        "an unrelated settings save must not invalidate pages again"
+        "a model change applies to jobs from now on; it re-renders nothing"
     );
     // --- validate with an EMPTY catalog is permissive: {"orphaned":[]} ---
     redis.delete(CATALOG_KEY).await.expect("del catalog");

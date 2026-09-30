@@ -802,7 +802,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 size="small"
                 type="number"
                 label="Text Safety Margin (%)"
-                helperText="Share of the padded box text may use; 100 = all of it"
+                helperText="Share of the padded box text may use; 100 = all of it. Text box settings apply to pages rendered from now on"
                 value={settings.textBoxSafetyPercent ?? 100}
                 onChange={(e) =>
                   handleChange(
