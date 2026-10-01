@@ -1632,24 +1632,46 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 </Select>
               </Grid>
 
-              {/* Mask Background Color (only relevant if clean background mask is enabled) */}
-              {selectedItem.wordWrap && (
-                <ColorPicker
-                  label="Mask Background Color"
-                  value={
-                    selectedItem.backgroundColor !== undefined &&
-                    selectedItem.backgroundColor !== null
-                      ? selectedItem.backgroundColor
-                      : "#ffffff"
-                  }
-                  onChange={(val) =>
-                    handleUpdateSelectedElement({ backgroundColor: val })
-                  }
-                  onLaunchEyeDropper={() =>
-                    handleLaunchEyeDropper("backgroundColor")
-                  }
-                  allowTransparent={true}
-                />
+              {/* One stored colour, two uses (page_scene_builder.rs): the export always draws
+                  text with a halo in it, and a region with no cleanup patch gets a plain plate
+                  of it. A text element shows it as the outline; a text-less mask as its fill.
+                  Splitting it into two fields is a follow-up (2026-10-01). */}
+              {selectedItem.text !== undefined && selectedItem.text !== null ? (
+                <>
+                  <ColorPicker
+                    label="Outline Color"
+                    value={selectedItem.backgroundColor ?? ""}
+                    onChange={(val) =>
+                      handleUpdateSelectedElement({ backgroundColor: val })
+                    }
+                    onLaunchEyeDropper={() =>
+                      handleLaunchEyeDropper("backgroundColor")
+                    }
+                    allowTransparent={true}
+                  />
+                  <Typography
+                    variant="caption"
+                    component="p"
+                    sx={{ color: "var(--text-muted)", mt: -0.5, mb: 1 }}
+                  >
+                    Also fills the plain mask where this region has no cleanup
+                    patch. Transparent: no outline.
+                  </Typography>
+                </>
+              ) : (
+                selectedItem.wordWrap && (
+                  <ColorPicker
+                    label="Mask Color"
+                    value={selectedItem.backgroundColor ?? "#ffffff"}
+                    onChange={(val) =>
+                      handleUpdateSelectedElement({ backgroundColor: val })
+                    }
+                    onLaunchEyeDropper={() =>
+                      handleLaunchEyeDropper("backgroundColor")
+                    }
+                    allowTransparent={true}
+                  />
+                )
               )}
 
               {/* Text Color (only relevant if it is a text-bearing element) */}

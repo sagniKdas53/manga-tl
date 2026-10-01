@@ -12,6 +12,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import BrushIcon from "@mui/icons-material/Brush";
 import AutoFixOffIcon from "@mui/icons-material/AutoFixOff";
+import PanToolIcon from "@mui/icons-material/PanTool";
 import UndoIcon from "@mui/icons-material/Undo";
 import RedoIcon from "@mui/icons-material/Redo";
 import SidebarSection from "./SidebarSection";
@@ -101,7 +102,7 @@ function InpaintingCanvas({ editor }: { editor: InpaintingEditorState }) {
     width,
     height,
     brushSize,
-    panKeyHeld,
+    panning,
     tool,
     paintRef,
     restoreRef,
@@ -153,15 +154,17 @@ function InpaintingCanvas({ editor }: { editor: InpaintingEditorState }) {
         position: "absolute",
         inset: 0,
         zIndex: 3,
-        cursor: panKeyHeld ? "grab" : "none",
+        cursor: panning ? "grab" : "none",
         touchAction: "none",
-        // Space held: let the pointer through so the reader pans instead of painting.
-        pointerEvents: panKeyHeld ? "none" : "auto",
+        // Pan tool or Space held: let the pointer through so the reader pans instead of painting.
+        pointerEvents: panning ? "none" : "auto",
       }}
       // Pointer and mouse events are separate streams; the reader pans on mousedown.
-      onMouseDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => {
+        if (!panning) e.stopPropagation();
+      }}
       onPointerDown={(e) => {
-        if (e.button !== 0) return;
+        if (e.button !== 0 || panning) return;
         e.stopPropagation();
         e.currentTarget.setPointerCapture?.(e.pointerId);
         drawing.current = true;
@@ -283,6 +286,16 @@ function InpaintingPanel({
             />
             Restore
           </ToggleButton>
+          <ToggleButton
+            value="pan"
+            aria-label="Pan"
+          >
+            <PanToolIcon
+              fontSize="small"
+              sx={{ mr: 0.75 }}
+            />
+            Pan
+          </ToggleButton>
         </ToggleButtonGroup>
         <Typography
           variant="caption"
@@ -290,9 +303,10 @@ function InpaintingPanel({
           sx={{ color: "var(--text-muted)", mb: 1, lineHeight: 1.4 }}
         >
           {editor.tool === "brush"
-            ? "Paint over what should be repainted (pink)."
-            : "Rub out your own paint, or mark where an automatic patch should go and the original page come back (red)."}{" "}
-          Hold Space to pan.
+            ? "Paint over what should be repainted (pink). Hold Space to pan."
+            : editor.tool === "eraser"
+              ? "Rub out your own paint, or mark where an automatic patch should go and the original page come back (red). Hold Space to pan."
+              : "Drag the page to move it. Your marks stay as they are."}
         </Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
           <Typography

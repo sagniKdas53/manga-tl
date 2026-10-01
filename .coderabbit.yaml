@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Everything else comes from the organization's settings in the CodeRabbit UI.
+inheritance: true
+reviews:
+  path_filters:
+    # Dated run records, checkpoints and measurement evidence for the output-quality work: history,
+    # not code. They pushed PR #152 past the 300-file review limit (2026-10-01).
+    - "!docs/quality-checkpoints/**"
+    - "!docs/quality-runs/**"
+    - "!docs/quality-evidence/**"

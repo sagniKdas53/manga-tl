@@ -4,6 +4,10 @@ Start with the current checkpoint below and the [2026-09-23 evidence report](qua
 
 Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. Next: the typesetting phase, starting with R7 (see the 2026-09-26 night section). [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25). Read the summary and [current next-session handoff](output-quality-next-session-20260929.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
 
+## Status at a glance (2026-10-01 — R7 closing; merge next)
+
+**Read [output-quality-r7-close-20261001.md](output-quality-r7-close-20261001.md) first.** The user's R7 review gave ten points. Four are fixed to close R7: the mask panel no longer pans the page, a Pan tool, the editor draws the export's text outline, and the outline colour is labelled as such. Then PRs #47 and #152 leave draft, CodeRabbit's findings are fixed, and both merge. Cleanup masks, one-balloon grouping, text style, layer merge and automatic angles follow in their own PRs.
+
 ## Status at a glance (2026-09-29 — R7 verdict pending; the plan after it)
 
 **Read [output-quality-next-session-20260929.md](output-quality-next-session-20260929.md) first.** It records the 2026-09-28 work (mask editor, restore, leftover-ink cleanup, 7-day job links, patch prefetch), the 400-page verdict run on chrome-box, and the order after R7: `AUDIT-R21` → `AUDIT-R23` → M7 (including M8's I06) → merge PRs #47 and #152.

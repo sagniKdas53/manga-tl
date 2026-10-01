@@ -19,7 +19,10 @@ import { binaryMask, markBounds } from "../utils/inpaintingMask";
  */
 
 export type RepaintMethod = "auto" | "aot" | "telea" | "flat";
-export type InpaintingTool = "brush" | "eraser";
+/** The two tools that mark the page. */
+export type MarkTool = "brush" | "eraser";
+/** "pan" moves the page instead of marking it, as holding Space does. */
+export type InpaintingTool = MarkTool | "pan";
 
 export const PAINT_COLOUR = "rgb(255, 64, 160)";
 export const RESTORE_COLOUR = "rgb(230, 20, 20)";
@@ -30,7 +33,7 @@ interface Point {
 }
 
 interface Stroke {
-  tool: InpaintingTool;
+  tool: MarkTool;
   size: number;
   points: Point[];
 }
@@ -90,7 +93,7 @@ export function useInpaintingEditor({
   // `step` strokes are on screen; `tools[i]` is stroke i's tool, so the buttons can tell what is
   // marked and Redo knows when there is nothing to redo.
   const [step, setStep] = useState(0);
-  const [tools, setTools] = useState<InpaintingTool[]>([]);
+  const [tools, setTools] = useState<MarkTool[]>([]);
   const [panKeyHeld, setPanKeyHeld] = useState(false);
 
   /** One segment of a stroke, on both canvases. */
@@ -143,6 +146,7 @@ export function useInpaintingEditor({
   );
 
   const beginStroke = (point: Point) => {
+    if (tool === "pan") return;
     const stroke = { tool, size: brushSize, points: [point] };
     current.current = stroke;
     segment(stroke, point, point);
@@ -292,6 +296,8 @@ export function useInpaintingEditor({
     cancel,
     apply,
     panKeyHeld,
+    // The canvas lets the pointer through to the page, which pans on a drag.
+    panning: panKeyHeld || tool === "pan",
     beginStroke,
     extendStroke,
     endStroke,

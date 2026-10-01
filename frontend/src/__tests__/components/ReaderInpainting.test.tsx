@@ -356,6 +356,33 @@ describe("Reader Inpainting layer (tracker R7)", () => {
     });
   });
 
+  // 2026-10-01: the export draws every text with a halo in its background colour; the editor drew
+  // none, so the canvas and the download disagreed on every outlined line.
+  it("outlines the text in its background colour, every halo under every fill, as the export does", async () => {
+    await renderReader();
+    const overlay = document.querySelector(".svg-overlay")!;
+    await waitFor(() => expect(overlay.textContent).toContain("Hello"));
+    const passes = [
+      ...overlay.querySelectorAll<HTMLElement>("[data-text-pass]"),
+    ].filter((el) => el.textContent?.includes("Hello"));
+    const strokes = passes.filter((el) => el.dataset.textPass === "stroke");
+    const fills = passes.filter((el) => el.dataset.textPass === "fill");
+    expect(strokes.length).toBeGreaterThan(0);
+    expect(strokes.length).toBe(fills.length);
+    for (const stroke of strokes) {
+      expect(stroke.getAttribute("style")).toMatch(
+        /-webkit-text-stroke: [\d.]+px #ffffff/,
+      );
+      expect(stroke.style.color).toBe("transparent");
+      // Halos first: each lies before every fill in the box it belongs to.
+      const box = stroke.parentElement!;
+      const firstFill = [...box.children].findIndex(
+        (el) => (el as HTMLElement).dataset.textPass === "fill",
+      );
+      expect([...box.children].indexOf(stroke)).toBeLessThan(firstFill);
+    }
+  });
+
   it("drops the flat plate where the region has a patch, and keeps it where cleanup gave none", async () => {
     await renderReader();
     const plates = [...document.querySelectorAll(".svg-overlay polygon")].map(
@@ -810,5 +837,47 @@ describe("Mask editor (inpainting view)", () => {
       expect.stringContaining("Restore queued"),
       "info",
     );
+  });
+
+  // 2026-10-01 video: dragging the Size slider moved the page by the drag's width. The panel is a
+  // React portal, so its mouse events bubbled to the canvas's pan handlers through the React tree.
+  it("never pans when a drag starts in the panel, and pans with the Pan tool", async () => {
+    await renderReader();
+    const overlay = document.querySelector(".svg-overlay")!;
+    await waitFor(() => expect(overlay.textContent).toContain("Hello"));
+    await act(async () => {
+      fireEvent.click(screen.getByText("Inpainting"));
+    });
+    const panel = await screen.findByRole("toolbar", {
+      name: "Inpainting tools",
+    });
+    const transform = () =>
+      (document.querySelector('[style*="translate("]') as HTMLElement).style
+        .transform;
+    const before = transform();
+
+    const slider = within(panel).getByRole("slider", { name: "Brush size" });
+    fireEvent.mouseDown(slider, { clientX: 100, clientY: 50, button: 0 });
+    fireEvent.mouseMove(slider, { clientX: 240, clientY: 50 });
+    fireEvent.mouseUp(slider, { clientX: 240, clientY: 50 });
+    expect(transform()).toBe(before);
+
+    // The Pan tool: a drag on the page moves it and leaves no mark.
+    fireEvent.click(within(panel).getByRole("button", { name: "Pan" }));
+    const canvas = screen.getByTestId("inpainting-canvas");
+    fireEvent.mouseDown(canvas, { clientX: 100, clientY: 300, button: 0 });
+    fireEvent.pointerDown(canvas, {
+      clientX: 100,
+      clientY: 300,
+      pointerId: 1,
+      button: 0,
+    });
+    fireEvent.pointerMove(canvas, { clientX: 180, clientY: 300, pointerId: 1 });
+    fireEvent.mouseMove(canvas, { clientX: 180, clientY: 300 });
+    fireEvent.pointerUp(canvas, { clientX: 180, clientY: 300, pointerId: 1 });
+    fireEvent.mouseUp(canvas, { clientX: 180, clientY: 300 });
+    expect(transform()).not.toBe(before);
+    expect(transform()).toContain("translate(80px, 0px)");
+    expect(within(panel).getByRole("button", { name: "Apply" })).toBeDisabled();
   });
 });

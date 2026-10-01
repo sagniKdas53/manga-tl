@@ -26,6 +26,7 @@ import {
 import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
 import { paintLayerMask } from "../utils/maskPaint";
 import { elementFit } from "../utils/elementFit";
+import { STROKE_WIDTH_RATIO } from "@manga-library/page-scene";
 import {
   CLEANUP_PRESERVE_ASPECT_RATIO,
   isInpaintingLayer,
@@ -3246,7 +3247,14 @@ export const Reader: React.FC<ReaderProps> = ({
   }, [curPageNum, navigateToPage]);
 
   // --- PANNING / DRAGGING WORKSPACE ---
+  // The mask editor's panel and its Select menu are React portals rendered from inside the canvas,
+  // so their events bubble to these handlers through the React tree although they sit outside the
+  // canvas in the DOM. Dragging the brush-size slider used to pan the page (2026-10-01).
+  const fromOutsideCanvas = (e: React.SyntheticEvent) =>
+    !e.currentTarget.contains(e.target as Node);
+
   const handleMouseDownCanvas = (e: React.MouseEvent) => {
+    if (fromOutsideCanvas(e)) return;
     if (interactionMode !== "none") return;
     if (e.button !== 0) return; // Only left click
     if (draggedElement) return;
@@ -3287,6 +3295,7 @@ export const Reader: React.FC<ReaderProps> = ({
   // --- TOUCH HANDLERS FOR TOUCH SCREENS ---
   const handleTouchStart = (e: React.TouchEvent) => {
     if (!isTouchScreen) return;
+    if (fromOutsideCanvas(e)) return;
 
     // Ignore touch if inside interactive components
     const target = e.target as HTMLElement;
@@ -3380,6 +3389,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
   const handleCanvasAreaClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isTouchScreen) return;
+    if (fromOutsideCanvas(e)) return;
     if (hasMoved.current) return; // Ignore clicks that were drags
 
     const target = e.target as HTMLElement;
@@ -4273,6 +4283,21 @@ export const Reader: React.FC<ReaderProps> = ({
                     // so this is that padding after every guard textFitBox applies.
                     const previewPadding = svgFitBox.x - element.x;
                     const textToRender = fit.lines.join("\n");
+                    // The export's halo (ContentScene): a stroke in the element's background colour,
+                    // drawn for every line before any fill, so no line's halo covers its neighbour.
+                    const outlineColour = element.backgroundColor?.trim();
+                    const textPasses: ("stroke" | "fill")[] = outlineColour
+                      ? ["stroke", "fill"]
+                      : ["fill"];
+                    const textPassStyle = (
+                      pass: "stroke" | "fill",
+                    ): React.CSSProperties =>
+                      pass === "fill"
+                        ? { color: element.textColor || "#000000" }
+                        : {
+                            color: "transparent",
+                            WebkitTextStroke: `${Math.max(1, fontSize * STROKE_WIDTH_RATIO)}px ${outlineColour}`,
+                          };
 
                     const width = element.maxWidth || 100;
                     const height = element.maxHeight || 100;
@@ -4597,60 +4622,76 @@ export const Reader: React.FC<ReaderProps> = ({
                                   height: "100%",
                                 }}
                               >
-                                {fit.lines.map((line, i) => {
-                                  const lineCenterX =
-                                    fit.lineCenters &&
-                                    fit.lineCenters.at(i) !== undefined
-                                      ? (fit.lineCenters.at(i) ??
-                                        element.x + width / 2)
-                                      : element.x + width / 2;
-                                  const lineH = fontSize * 1.2;
-                                  const startY =
-                                    element.y +
-                                    height / 2 -
-                                    ((fit.lines.length - 1) * lineH) / 2;
-                                  const lineY = startY + i * lineH;
+                                {textPasses.flatMap((pass) =>
+                                  fit.lines.map((line, i) => {
+                                    const lineCenterX =
+                                      fit.lineCenters &&
+                                      fit.lineCenters.at(i) !== undefined
+                                        ? (fit.lineCenters.at(i) ??
+                                          element.x + width / 2)
+                                        : element.x + width / 2;
+                                    const lineH = fontSize * 1.2;
+                                    const startY =
+                                      element.y +
+                                      height / 2 -
+                                      ((fit.lines.length - 1) * lineH) / 2;
+                                    const lineY = startY + i * lineH;
 
-                                  return (
-                                    <div
-                                      key={i}
-                                      style={{
-                                        position: "absolute",
-                                        left: `${lineCenterX - element.x - previewPadding}px`,
-                                        top: `${lineY - element.y - previewPadding}px`,
-                                        transform: "translate(-50%, -50%)",
-                                        fontFamily: `"${element.font || "Comic Neue"}", sans-serif`,
-                                        fontSize: `${fontSize}px`,
-                                        fontWeight:
-                                          element.fontWeight || "normal",
-                                        fontStyle:
-                                          element.fontStyle || "normal",
-                                        color: element.textColor || "#000000",
-                                        lineHeight: "1.2",
-                                        whiteSpace: "nowrap",
-                                      }}
-                                    >
-                                      {line}
-                                    </div>
-                                  );
-                                })}
+                                    return (
+                                      <div
+                                        key={`${pass}-${i}`}
+                                        data-text-pass={pass}
+                                        style={{
+                                          position: "absolute",
+                                          left: `${lineCenterX - element.x - previewPadding}px`,
+                                          top: `${lineY - element.y - previewPadding}px`,
+                                          transform: "translate(-50%, -50%)",
+                                          fontFamily: `"${element.font || "Comic Neue"}", sans-serif`,
+                                          fontSize: `${fontSize}px`,
+                                          fontWeight:
+                                            element.fontWeight || "normal",
+                                          fontStyle:
+                                            element.fontStyle || "normal",
+                                          lineHeight: "1.2",
+                                          whiteSpace: "nowrap",
+                                          ...textPassStyle(pass),
+                                        }}
+                                      >
+                                        {line}
+                                      </div>
+                                    );
+                                  }),
+                                )}
                               </div>
                             ) : (
                               <div
                                 style={{
-                                  fontFamily: `"${element.font || "Comic Neue"}", sans-serif`,
-                                  fontSize: `${fontSize}px`,
-                                  fontWeight: element.fontWeight || "normal",
-                                  fontStyle: element.fontStyle || "normal",
-                                  color: element.textColor || "#000000",
-                                  lineHeight: "1.2",
-                                  whiteSpace: "pre-wrap",
-                                  wordBreak: "break-word",
-                                  textAlign: "center",
+                                  display: "grid",
                                   width: "100%",
                                 }}
                               >
-                                {textToRender}
+                                {textPasses.map((pass) => (
+                                  <div
+                                    key={pass}
+                                    data-text-pass={pass}
+                                    style={{
+                                      gridArea: "1 / 1",
+                                      fontFamily: `"${element.font || "Comic Neue"}", sans-serif`,
+                                      fontSize: `${fontSize}px`,
+                                      fontWeight:
+                                        element.fontWeight || "normal",
+                                      fontStyle: element.fontStyle || "normal",
+                                      lineHeight: "1.2",
+                                      whiteSpace: "pre-wrap",
+                                      wordBreak: "break-word",
+                                      textAlign: "center",
+                                      width: "100%",
+                                      ...textPassStyle(pass),
+                                    }}
+                                  >
+                                    {textToRender}
+                                  </div>
+                                ))}
                               </div>
                             )}
                           </div>
