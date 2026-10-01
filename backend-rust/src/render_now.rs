@@ -151,6 +151,7 @@ async fn render(state: &AppState, page_id: Uuid) -> Result<RenderNow, String> {
         lease_token: lease_token.unwrap_or_default(),
     };
     let image_id = image_id.unwrap_or(page.image_id);
+    emit_job_update(state, &job_id, image_id).await;
     let payload: Value = payload
         .as_deref()
         .and_then(|raw| serde_json::from_str(raw).ok())
@@ -178,6 +179,7 @@ async fn render(state: &AppState, page_id: Uuid) -> Result<RenderNow, String> {
                     .execute(&state.pool)
                     .await;
             }
+            emit_job_update(state, &job_id, image_id).await;
             Ok(RenderNow::Current { revision })
         }
         Err(DrawError::Unavailable(reason)) => {
@@ -199,6 +201,7 @@ async fn render(state: &AppState, page_id: Uuid) -> Result<RenderNow, String> {
             if let Some(raw) = payload.as_object().map(|_| payload.to_string()) {
                 coordinator::push_job_to_redis(state, "render", &raw).await;
             }
+            emit_job_update(state, &job_id, image_id).await;
             Ok(RenderNow::Unavailable(reason))
         }
         Err(DrawError::Failed(reason)) => {
@@ -216,8 +219,29 @@ async fn render(state: &AppState, page_id: Uuid) -> Result<RenderNow, String> {
             .bind(&job_id)
             .execute(&state.pool)
             .await;
+            emit_job_update(state, &job_id, image_id).await;
             Ok(RenderNow::Failed(reason))
         }
+    }
+}
+
+/// The `job_update` event a worker's status report would have sent (`update_job_status`), so the
+/// queue manager and the reader see this render start and end.
+async fn emit_job_update(state: &AppState, job_id: &str, image_id: Uuid) {
+    if let Ok(Some(job)) =
+        sqlx::query_as::<_, crate::models::Job>("SELECT * FROM jobs WHERE id = $1")
+            .bind(job_id)
+            .fetch_optional(&state.pool)
+            .await
+    {
+        state
+            .sse
+            .emit_event_for_image(
+                image_id,
+                "job_update",
+                &serde_json::to_string(&job).unwrap_or_default(),
+            )
+            .await;
     }
 }
 

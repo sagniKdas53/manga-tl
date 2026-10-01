@@ -1199,9 +1199,11 @@ pub async fn render_page_now(
     if user.role.eq_ignore_ascii_case("viewer") {
         return error::access_denied("/api/pages/{pageId}/render");
     }
-    if find_page(&state.pool, page_id).await.is_none() {
+    let Some(page) = find_page(&state.pool, page_id).await else {
         return StatusCode::NOT_FOUND.into_response();
-    }
+    };
+    // So this user's reader and queue manager get the render's job events.
+    state.sse.map_image_to_user(page.image_id, user.id).await;
     match crate::render_now::render_page_now(&state, page_id).await {
         crate::render_now::RenderNow::Current { revision } => {
             Json(json!({ "status": "succeeded", "revision": revision })).into_response()
