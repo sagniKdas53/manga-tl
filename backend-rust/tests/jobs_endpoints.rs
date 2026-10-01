@@ -940,7 +940,15 @@ async fn recovery_reset_stale_and_debounced_render() {
         .execute(&pool)
         .await
         .expect("re-stamp edit");
-    seed_job_with_image(&pool, "FAILED", "render", image_id).await;
+    // A render job carries its page (AUDIT-B17); the cooldown is per page, since duplicate-upload
+    // clones share an image and one clone's failure must not hold back the others.
+    let failed_render = seed_job_with_image(&pool, "FAILED", "render", image_id).await;
+    sqlx::query("UPDATE jobs SET page_id = $2 WHERE id = $1")
+        .bind(&failed_render)
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .expect("failed render names its page");
     manga_backend::jobs::recovery::process_pending_renders(&state).await;
     let render_jobs: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE image_id = $1 AND type = 'render'")

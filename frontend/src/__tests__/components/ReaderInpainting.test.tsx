@@ -616,7 +616,16 @@ describe("Mask editor (inpainting view)", () => {
               else marksOf(canvas).add(key);
             }
           },
-          putImageData: () => {},
+          putImageData: (image: ImageData, dx: number, dy: number) => {
+            const marked = marksOf(canvas);
+            for (let i = 3; i < image.data.length; i += 4) {
+              if (!image.data[i]) continue;
+              const pixel = (i - 3) / 4;
+              marked.add(
+                `${dx + (pixel % image.width)},${dy + Math.floor(pixel / image.width)}`,
+              );
+            }
+          },
           createImageData: (width: number, height: number) => ({
             data: new Uint8ClampedArray(width * height * 4),
             width,
@@ -837,6 +846,85 @@ describe("Mask editor (inpainting view)", () => {
       expect.stringContaining("Restore queued"),
       "info",
     );
+  });
+
+  // CodeRabbit on #152: Apply posts the repaint, then the restore. When only the restore fails,
+  // a retry used to queue the repaint a second time, landing a duplicate Inpainting layer.
+  it("retries only the restore when the repaint was queued and the restore failed", async () => {
+    await renderReader();
+    const overlay = document.querySelector(".svg-overlay")!;
+    await waitFor(() => expect(overlay.textContent).toContain("Hello"));
+    await act(async () => {
+      fireEvent.click(screen.getByText("Inpainting"));
+    });
+    const panel = await screen.findByRole("toolbar", {
+      name: "Inpainting tools",
+    });
+    const fallback = mockSafeFetch.getMockImplementation()!;
+    let posts = 0;
+    mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (/manual-cleanup$/.test(url) && init?.method === "POST") {
+        posts += 1;
+        if (posts === 2) {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            text: () => Promise.resolve("storage down"),
+          });
+        }
+      }
+      return fallback(url, init);
+    });
+    const canvas = screen.getByTestId("inpainting-canvas");
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1200,
+      height: 1600,
+      right: 1200,
+      bottom: 1600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    const stroke = (fromX: number, toX: number) => {
+      fireEvent.pointerDown(canvas, {
+        clientX: fromX,
+        clientY: 300,
+        pointerId: 1,
+        button: 0,
+      });
+      fireEvent.pointerMove(canvas, {
+        clientX: toX,
+        clientY: 300,
+        pointerId: 1,
+      });
+      fireEvent.pointerUp(canvas, { clientX: toX, clientY: 300, pointerId: 1 });
+    };
+    stroke(100, 120); // repaint
+    fireEvent.click(within(panel).getByRole("button", { name: "Eraser" }));
+    stroke(400, 420); // restore
+    const apply = within(panel).getByRole("button", { name: "Apply" });
+    await waitFor(() => expect(apply).not.toBeDisabled());
+
+    await act(async () => {
+      fireEvent.click(apply);
+    });
+    await waitFor(() => expect(posts).toBe(2));
+    expect(mockShowToast).toHaveBeenCalledWith(
+      expect.stringContaining("Repaint queued; the restore failed"),
+      "error",
+    );
+    // The retry: only the restore goes, and only once.
+    await waitFor(() => expect(apply).not.toBeDisabled());
+    await act(async () => {
+      fireEvent.click(apply);
+    });
+    await waitFor(() => expect(posts).toBe(3));
+    const sent = calls("POST", /\/api\/pages\/p1\/manual-cleanup$/).map(
+      ([, init]) => JSON.parse((init as RequestInit).body as string).method,
+    );
+    expect(sent).toEqual(["auto", "restore", "restore"]);
   });
 
   // 2026-10-01 video: dragging the Size slider moved the page by the drag's width. The panel is a

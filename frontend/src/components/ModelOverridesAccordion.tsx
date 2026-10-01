@@ -433,10 +433,16 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
             type="number"
             label="OCR Grouping Threshold"
             value={effectiveMergeThreshold}
+            // The ceiling while typing, the floor on blur: a floor per keystroke turns the "0" of
+            // "0.3" into 0.05 and the user can never type it.
             onChange={(e) => {
               const parsed = parseFloat(e.target.value);
               if (Number.isFinite(parsed))
-                onChange("ocrMergeThreshold", parsed);
+                onChange("ocrMergeThreshold", Math.min(3, parsed));
+            }}
+            onBlur={() => {
+              if (ocrMergeThreshold !== null && ocrMergeThreshold < 0.05)
+                onChange("ocrMergeThreshold", 0.05);
             }}
             slotProps={{ htmlInput: { min: 0.05, max: 3, step: 0.05 } }}
           />

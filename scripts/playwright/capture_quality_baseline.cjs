@@ -65,7 +65,6 @@ const PIPELINE_SETTINGS = {
   translation: { provider: "openrouter", model: TL_MODEL, fallback_models: false },
   qa: { provider: "openrouter", llm_model: TL_MODEL, vlm_model: "google/gemini-3.1-flash-lite", mode: "auto" },
 };
-const EXPORT_RENDERED = "Export Rendered PNG";
 
 function parseArgs(argv) {
   const args = {
@@ -347,7 +346,13 @@ async function captureExports(page, browser, base, token, record, out, skipRende
   await clickAndDownload(page, EXPORT_PNG, path.join(sampleDir, "export.png"));
   await clickAndDownload(page, EXPORT_ZIP, path.join(sampleDir, "project.zip"));
   if (!skipRendered) {
-    await clickAndDownload(page, EXPORT_RENDERED, path.join(sampleDir, "rendered.png"));
+    // The Reader has no "Export Rendered PNG" button since R1: "Export Page (PNG)" is the render
+    // artifact. Save the API copy, the bytes currentRender.sha256 names.
+    const rendered = await page.request.fetch(`${base}/api/pages/${record.page_id}/rendered`, {
+      headers: auth(token),
+    });
+    if (!rendered.ok()) throw new Error(`${record.sample}: rendered artifact HTTP ${rendered.status()}`);
+    fs.writeFileSync(path.join(sampleDir, "rendered.png"), await rendered.body());
   }
 
   try {

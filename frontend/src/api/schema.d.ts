@@ -332,6 +332,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/internal/jobs/callback/manual-cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The mask editor's repaint result: status complete or failed, and on success the patch and mask assets with their page bounds. Lands as a new top Inpainting layer. */
+        post: operations["manualCleanupCallback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/internal/jobs/callback/layout": {
         parameters: {
             query?: never;
@@ -1165,7 +1182,7 @@ export interface components {
             /** Format: uuid */
             regionId?: string;
             /** @enum {string} */
-            status?: "complete" | "degraded" | "excluded" | "failed";
+            status?: "complete" | "degraded" | "excluded" | "failed" | "uncertain";
         };
         JsonNode: Record<string, never>;
         Layer: {
@@ -2174,6 +2191,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CleanupCallbackDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    manualCleanupCallback: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JsonNode"];
             };
         };
         responses: {

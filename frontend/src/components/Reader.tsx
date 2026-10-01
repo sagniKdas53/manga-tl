@@ -1502,9 +1502,16 @@ export const Reader: React.FC<ReaderProps> = ({
     if (!previous) return;
     setUndoStack((prev) => prev.slice(0, -1));
     if (previous.op === "delete") {
-      const restored = await restorePatchElement(previous);
+      // A failed restore (an error reply, or the request throwing) puts the step back, so the
+      // patch the toast promised Undo would bring back still can be.
+      const restored = await restorePatchElement(previous).catch(() => {
+        showToast("Could not restore the patch.", "error");
+        return null;
+      });
       if (restored) {
         setRedoStack((prev) => [...prev, { ...restored, op: "delete" }]);
+      } else {
+        setUndoStack((prev) => [...prev, previous]);
       }
       return;
     }
@@ -1547,7 +1554,7 @@ export const Reader: React.FC<ReaderProps> = ({
     );
 
     await handleSaveElementChanges(previous, false);
-  }, [undoStack, handleSaveElementChanges, restorePatchElement]);
+  }, [undoStack, handleSaveElementChanges, restorePatchElement, showToast]);
 
   const handleRedo = useCallback(async () => {
     if (redoStack.length === 0) return;

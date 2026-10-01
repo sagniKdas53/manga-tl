@@ -2187,9 +2187,10 @@ async fn queue_region_cleanup(
         .fetch_one(&state.pool)
         .await
         .map_err(|e| e.to_string())?;
+    // A queued job's link: it may wait behind a chapter backlog for longer than ten minutes.
     let image_url = state
         .storage
-        .presigned_get_url(&storage_path)
+        .presigned_job_url(&storage_path)
         .await
         .map_err(|err| format!("could not presign source for cleanup: {err}"))?;
     let entries = vec![crate::jobs::coordinator::cleanup_region_entry(
@@ -3150,6 +3151,10 @@ async fn restore_project_page(
         let (page_w, page_h) = (page_w.unwrap_or(0), page_h.unwrap_or(0));
         plates.sort_by(|a, b| a.paint_key.cmp(&b.paint_key));
         let mut patches = Vec::new();
+        // Only a plate that became a patch gives up its mask polygon. One refused by the size gate
+        // or by plain_plate_cleanup keeps it, so the scene still draws its plate (or, past the
+        // gate, warns and draws the text over source) instead of the mask silently vanishing.
+        let mut converted: Vec<Uuid> = Vec::new();
         for plate in &plates {
             match crate::page_scene_builder::plain_plate_cleanup(
                 state,
@@ -3169,9 +3174,13 @@ async fn restore_project_page(
                         page_h,
                     ) <= crate::page_scene_builder::MAX_PATCH_PAGE_SHARE =>
                 {
-                    patches.push(patch)
+                    patches.push(patch);
+                    converted.push(plate.element_id);
                 }
-                Ok(_) => {}
+                Ok(_) => tracing::warn!(
+                    "project import: plate for element {} is over the page-share gate; kept as a mask",
+                    plate.element_id
+                ),
                 Err(err) => tracing::warn!(
                     "project import: plate for element {} not converted: {err}",
                     plate.element_id
@@ -3181,7 +3190,6 @@ async fn restore_project_page(
         crate::inpainting::record_imported_plates(&mut tx, page_id, &patches)
             .await
             .map_err(|_| ())?;
-        let converted: Vec<Uuid> = plates.iter().map(|plate| plate.element_id).collect();
         sqlx::query("UPDATE layer_elements SET mask_polygon = NULL WHERE id = ANY($1)")
             .bind(&converted)
             .execute(&mut *tx)

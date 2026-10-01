@@ -8,7 +8,8 @@
 --     exec -T db psql -U tladmin -d manga_library -v ON_ERROR_STOP=1 < database/migrations/2026-09-27-r7-inpainting-layer.sql
 --
 -- Safe to re-run: columns are added only if missing, and a page that already has an Inpainting
--- layer is skipped.
+-- layer is skipped. On a database from `main`, run 2026-10-01-upgrade-from-main.sql first: this
+-- file reads ocr_regions' cleanup columns, which main does not have.
 
 BEGIN;
 

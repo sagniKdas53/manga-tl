@@ -985,6 +985,76 @@ async fn delete_page_closes_the_gap_in_page_numbers() {
     order_cleanup(&pool, NS, TITLE).await;
 }
 
+// CodeRabbit on #152: deleting a page cascades to its scene snapshots, and a render job's ledger
+// row referenced its snapshot with ON DELETE RESTRICT -- so deleting any page that had ever been
+// rendered failed (the route's expect turned that into a 500).
+#[tokio::test]
+async fn delete_page_takes_its_render_ledger_with_it() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    const NS: &str = "__pgdelrender-e2e";
+    const TITLE: &str = "PageOrder Delete Rendered Probe";
+    let token = order_probe(&pool, NS, TITLE).await;
+    let (_chapter_id, page_ids) = chapter_with_pages(&app, &pool, &token, TITLE, 2).await;
+    let page_id = uuid::Uuid::parse_str(&page_ids[0]).expect("page uuid");
+    let job_id = format!("e2e-render-{}", uuid::Uuid::new_v4());
+    let digest = "a".repeat(64);
+    sqlx::query(
+        "INSERT INTO page_scene_snapshots (page_id, revision, contract_version, source_sha256, \
+         logical_scene_sha256, scene_json) VALUES ($1, 0, 'page-scene/v1', $2, $2, '{}'::jsonb)",
+    )
+    .bind(page_id)
+    .bind(&digest)
+    .execute(&pool)
+    .await
+    .expect("seed snapshot");
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, page_id, created_at, updated_at) \
+         VALUES ($1, 'render', 'COMPLETED', $2, now(), now())",
+    )
+    .bind(&job_id)
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("seed render job");
+    sqlx::query(
+        "INSERT INTO page_render_jobs (job_id, page_id, page_revision, logical_scene_sha256, status) \
+         VALUES ($1, $2, 0, $3, 'succeeded')",
+    )
+    .bind(&job_id)
+    .bind(page_id)
+    .bind(&digest)
+    .execute(&pool)
+    .await
+    .expect("seed render ledger");
+
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "DELETE",
+        &format!("/tlhub/api/pages/{}", page_ids[0]),
+        &token,
+        String::new(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let ledger: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM page_render_jobs WHERE page_id = $1")
+            .bind(page_id)
+            .fetch_one(&pool)
+            .await
+            .expect("ledger count");
+    assert_eq!(ledger, 0, "the render ledger went with its page");
+
+    sqlx::query("DELETE FROM jobs WHERE id = $1")
+        .bind(&job_id)
+        .execute(&pool)
+        .await
+        .expect("render job cleanup");
+    order_cleanup(&pool, NS, TITLE).await;
+}
+
 #[tokio::test]
 async fn page_number_can_still_reach_the_last_slot_after_a_delete() {
     let Some((app, pool)) = app().await else {

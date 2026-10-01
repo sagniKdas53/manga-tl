@@ -210,7 +210,18 @@ export class PageRenderer {
     if (!this.browser) throw new RendererError("renderer is not started");
     const { scene, requestedFonts } = this.validate(request);
     const context = await this.acquireContext();
-    const page = await context.newPage();
+    let page;
+    try {
+      page = await context.newPage();
+    } catch (error) {
+      // A context that cannot open a page (closed, or its browser crashed) is dropped, not
+      // returned to the pool: kept, it stayed "in use" and every later render was told the
+      // renderer is busy until the service restarted.
+      this.inUse.delete(context);
+      this.contexts = this.contexts.filter((candidate) => candidate !== context);
+      await context.close().catch(() => {});
+      throw error;
+    }
     try {
       const fonts = [...requestedFonts].map((fontId) => this.fonts.get(fontId));
       await page.setContent(

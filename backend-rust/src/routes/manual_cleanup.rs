@@ -119,6 +119,11 @@ pub async fn queue_manual_cleanup(
     Path(page_id): Path<Uuid>,
     body: Result<Json<ManualCleanupRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
+    // A repaint lands as a page patch and advances the scene revision: an edit, as region merge
+    // and redo are, so the same roles.
+    if !user.role.eq_ignore_ascii_case("admin") && !user.role.eq_ignore_ascii_case("translator") {
+        return crate::error::access_denied("/api/pages/{pageId}/manual-cleanup");
+    }
     let request = match body {
         Ok(Json(request)) => request,
         Err(rejection) => return bad_request(rejection.body_text()),
@@ -152,13 +157,16 @@ pub async fn queue_manual_cleanup(
         return bad_request("the page's image has no recorded size");
     };
     let bounds = request.bounds;
-    if bounds.width <= 0
-        || bounds.height <= 0
-        || bounds.x < 0
-        || bounds.y < 0
-        || bounds.x + bounds.width > i64::from(page_w)
-        || bounds.y + bounds.height > i64::from(page_h)
-    {
+    // Checked: the four numbers are the client's, and `x + width` can overflow i64 (a panic in a
+    // debug build; in release a wrapped, negative sum that passes the page check).
+    let fits = |start: i64, len: i64, limit: i32| {
+        start >= 0
+            && len > 0
+            && start
+                .checked_add(len)
+                .is_some_and(|end| end <= i64::from(limit))
+    };
+    if !fits(bounds.x, bounds.width, page_w) || !fits(bounds.y, bounds.height, page_h) {
         return bad_request("the mask lies outside the page");
     }
 

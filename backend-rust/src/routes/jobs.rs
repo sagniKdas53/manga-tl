@@ -64,19 +64,16 @@ pub async fn resume_queue(State(state): State<AppState>, _user: AuthUser) -> Res
     StatusCode::OK.into_response()
 }
 
-const QUEUE_KEYS: [&str; 11] = [
-    "queue:manual-cleanup",
-    "queue:panel-detection",
-    "queue:ocr",
-    "queue:layout",
-    "queue:translation",
-    "queue:render",
-    "queue:qa",
-    "queue:qa-re-ocr",
-    "queue:region-redo",
-    "queue:region-redo-ocr",
-    "queue:region-redo-tl",
-];
+/// Every queue the dispatcher drains, plus the retired `queue:region-redo` a long-lived Redis may
+/// still hold. Derived, not listed: a hand-kept list missed `queue:cleanup`, so a clear deleted
+/// cleanup rows and left their payloads for workers to pop.
+fn queue_keys() -> impl Iterator<Item = &'static str> {
+    use crate::jobs::coordinator::{HEAVY_QUEUES, LIGHT_QUEUES};
+    HEAVY_QUEUES
+        .into_iter()
+        .chain(LIGHT_QUEUES)
+        .chain(["queue:region-redo"])
+}
 
 /// DELETE /api/jobs/clear?force=
 pub async fn clear_queue(
@@ -99,7 +96,7 @@ pub async fn clear_queue(
     match result {
         Ok(res) => {
             if let Some(r) = redis(&state).await {
-                for key in QUEUE_KEYS {
+                for key in queue_keys() {
                     let _ = r.delete(key).await;
                 }
             }

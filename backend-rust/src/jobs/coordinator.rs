@@ -992,7 +992,11 @@ pub async fn enqueue_job_with_ledger(
         .unwrap_or(job_row_id);
     let payload = Value::Object(job).to_string();
 
+    // One transaction for the job and its render ledger: a ledger INSERT that failed after the job
+    // row committed left a PENDING job the render callback rejects (no ledger) and the debounce
+    // re-enqueues beside.
     let inserted: Result<(), sqlx::Error> = async {
+        let mut tx = state.pool.begin().await?;
         sqlx::query(
             "INSERT INTO jobs (id, type, status, image_id, page_id, attempt, max_attempts, trace_id, payload, input_generation, lease_token, created_at, updated_at) \
              VALUES ($1, $2, 'PENDING', $3, $4, 1, 3, $5, $6, $7, $8, now(), now())",
@@ -1009,7 +1013,7 @@ pub async fn enqueue_job_with_ledger(
         .bind(&payload)
         .bind(input_generation)
         .bind(&lease_token)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await?;
         if let Some(ledger) = &ledger {
             sqlx::query(
@@ -1021,10 +1025,10 @@ pub async fn enqueue_job_with_ledger(
             .bind(ledger.page_id)
             .bind(ledger.page_revision)
             .bind(&ledger.logical_scene_sha256)
-            .execute(&state.pool)
+            .execute(&mut *tx)
             .await?;
         }
-        Ok(())
+        tx.commit().await
     }
     .await;
 

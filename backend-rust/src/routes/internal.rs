@@ -261,7 +261,8 @@ pub async fn update_job_status(
                                     THEN now() + make_interval(secs => $13) \
                                     ELSE lease_expires_at END, \
            updated_at = now() \
-         WHERE id = $1 AND attempt = $10 AND input_generation = $11 AND lease_token = $12",
+         WHERE id = $1 AND attempt = $10 AND input_generation = $11 AND lease_token = $12 \
+           AND status = $15",
     )
     .bind(&job_id)
     .bind(payload.get("status").map(String::as_str))
@@ -277,8 +278,15 @@ pub async fn update_job_status(
     .bind(&identity.lease_token)
     .bind(coordinator::JOB_LEASE_SECS as f64)
     .bind(reported_progress)
+    // The compare in compare-and-swap. The SELECT ... FOR UPDATE above runs outside a
+    // transaction, so its lock is gone by now: two deliveries of one start could both read
+    // PENDING and both pass `allowed`. Only the one whose UPDATE still sees that status wins.
+    .bind(job.status.as_str())
     .execute(&state.pool)
     .await;
+    if matches!(&result, Ok(done) if done.rows_affected() == 0) {
+        return (StatusCode::CONFLICT, "Job attempt changed concurrently").into_response();
+    }
 
     if result.is_ok() && job.job_type == "render" {
         let ledger_status = match new_status.as_str() {

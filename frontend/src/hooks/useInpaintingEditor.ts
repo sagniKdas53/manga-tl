@@ -95,6 +95,11 @@ export function useInpaintingEditor({
   const [step, setStep] = useState(0);
   const [tools, setTools] = useState<MarkTool[]>([]);
   const [panKeyHeld, setPanKeyHeld] = useState(false);
+  // A restore mark carried over from an Apply whose repaint was queued but whose restore failed:
+  // the repaint is gone from the canvas and the history, and replays start from this instead of
+  // blank, so a retry sends only the restore.
+  const carriedRestore = useRef<ImageData | null>(null);
+  const [hasCarriedRestore, setHasCarriedRestore] = useState(false);
 
   /** One segment of a stroke, on both canvases. */
   const segment = useCallback(
@@ -135,7 +140,10 @@ export function useInpaintingEditor({
   const replay = useCallback(
     (count: number) => {
       paintRef.current?.getContext("2d")?.clearRect(0, 0, width, height);
-      restoreRef.current?.getContext("2d")?.clearRect(0, 0, width, height);
+      const restore = restoreRef.current?.getContext("2d");
+      restore?.clearRect(0, 0, width, height);
+      if (carriedRestore.current)
+        restore?.putImageData(carriedRestore.current, 0, 0);
       for (const stroke of strokes.current.slice(0, count)) {
         stroke.points.forEach((point, i) =>
           segment(stroke, stroke.points[Math.max(0, i - 1)], point),
@@ -176,6 +184,8 @@ export function useInpaintingEditor({
   const cancel = () => {
     strokes.current = [];
     current.current = null;
+    carriedRestore.current = null;
+    setHasCarriedRestore(false);
     replay(0);
     setStep(0);
     setTools([]);
@@ -184,7 +194,7 @@ export function useInpaintingEditor({
   const live = tools.slice(0, step);
   // Enough to enable the buttons; Apply measures the pixels (an eraser may have rubbed paint out).
   const hasPaint = live.includes("brush");
-  const hasRestore = live.includes("eraser");
+  const hasRestore = live.includes("eraser") || hasCarriedRestore;
 
   const cutMark = (canvas: HTMLCanvasElement | null) => {
     const ctx = canvas?.getContext("2d");
@@ -223,6 +233,7 @@ export function useInpaintingEditor({
     const restore = cutMark(restoreRef.current);
     if (!repaint && !restore) return;
     setSending(true);
+    let repaintQueued = false;
     try {
       if (repaint) {
         await post({
@@ -230,12 +241,29 @@ export function useInpaintingEditor({
           method,
           ...(method === "flat" ? { fillColor } : {}),
         });
+        repaintQueued = true;
       }
       if (restore) await post({ ...restore, method: "restore" });
       cancel();
       onQueued(repaint && restore ? "both" : repaint ? "repaint" : "restore");
     } catch (err) {
-      onError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      if (repaintQueued) {
+        // The repaint is on its way: a retry must not queue it again. Keep only the restore mark.
+        carriedRestore.current =
+          restoreRef.current
+            ?.getContext("2d")
+            ?.getImageData(0, 0, width, height) ?? null;
+        strokes.current = [];
+        current.current = null;
+        setStep(0);
+        setTools([]);
+        setHasCarriedRestore(carriedRestore.current !== null);
+        replay(0);
+        onError(`Repaint queued; the restore failed: ${message}`);
+      } else {
+        onError(message);
+      }
     } finally {
       setSending(false);
     }

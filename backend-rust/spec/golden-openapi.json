@@ -189,7 +189,8 @@
               "complete",
               "degraded",
               "excluded",
-              "failed"
+              "failed",
+              "uncertain"
             ],
             "type": "string"
           }
@@ -2142,6 +2143,87 @@
         "tags": [
           "internal-job-controller"
         ]
+      }
+    },
+    "/api/internal/jobs/callback/manual-cleanup": {
+      "post": {
+        "operationId": "manualCleanupCallback",
+        "parameters": [
+          {
+            "description": "Job id of the attempt making this call. Must match the body's jobId.",
+            "in": "header",
+            "name": "X-Job-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Attempt number of the job as the backend dispatched it.",
+            "in": "header",
+            "name": "X-Job-Attempt",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page source/geometry generation the attempt was dispatched for.",
+            "in": "header",
+            "name": "X-Input-Generation",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Lease token issued with this attempt. A superseded token is answered 409.",
+            "in": "header",
+            "name": "X-Lease-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JsonNode"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Not the current job attempt: superseded, already applied, or an illegal state transition."
+          }
+        },
+        "tags": [
+          "internal-job-controller"
+        ],
+        "description": "The mask editor's repaint result: status complete or failed, and on success the patch and mask assets with their page bounds. Lands as a new top Inpainting layer."
       }
     },
     "/api/internal/jobs/callback/layout": {

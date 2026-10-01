@@ -223,6 +223,15 @@ lost. That is a backup-and-restore question (`db-backup` is still in the product
 reason to carry a runner in every stack for the case that has not happened. `AUDIT-B18` is closed
 against this decision; per-element columns (`AUDIT-F16` follow-up) are no longer gated on it.
 
+**One exception, for the PR #152 merge (2026-10-01).** Production holds the user's library, which a
+recreate would lose. `database/migrations/` therefore carries two hand-applied, re-runnable files
+for that one upgrade: `2026-10-01-upgrade-from-main.sql` (main's schema to this branch's; checked
+by loading main's `init.sql`, applying it, and comparing `pg_dump --schema-only` with the branch's
+`init.sql` -- identical apart from column order) and then `2026-09-27-r7-inpainting-layer.sql`
+(the R7 backfill). Whether production takes them or is recreated from a backup is the user's call
+at deploy time. The rule above is unchanged: no runner, `init.sql` stays the schema, and a dev or
+test stack is still recreated.
+
 ---
 
 ## Open Issues Summary

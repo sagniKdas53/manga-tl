@@ -80,7 +80,10 @@ function parseArgs(argv) {
       case "--out": args.out = next(); break;
       case "--pages": args.pages = next(); break;
       case "--settle-ms": args.settleMs = Number(next()); break;
-      case "--rendered": args.rendered = true; break;
+      case "--rendered":
+        // The Reader lost its "Export Rendered PNG" button in R1; clicking for it only times out.
+        console.error("--rendered is gone: fetch GET /api/pages/{pageId}/rendered (the Python arm) instead.");
+        process.exit(2);
       case "--keep-zip": args.keepZip = true; break;
       case "--force": args.force = true; break;
       case "--headed": args.headed = true; break;
@@ -268,7 +271,7 @@ capture_exports.cjs — capture the browser-side half of corpus/exports/
   --base <url>        default http://localhost:8080/tlhub  [TLHUB_BASE]
   --email <addr>      [TLHUB_EMAIL]
   --password <pass>   [TLHUB_PASSWORD]
-  --rendered          also click "Export Rendered PNG" (prefer the API arm)
+  --rendered          removed: the render is GET /api/pages/{pageId}/rendered (the API arm)
   --keep-zip          keep page-N-layers.zip after extracting project.json
   --force             re-capture pages that already have output
   --headed            run with a visible browser

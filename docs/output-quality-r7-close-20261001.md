@@ -17,8 +17,32 @@ It replaces the order in [output-quality-next-session-20260929.md](output-qualit
    not split into its own PR.
 3. Both PRs leave draft. CodeRabbit's findings are fixed on both: #47 had 21 open threads and
    "changes requested" on 2026-10-01; #152 gets its first review.
-4. Merge: worker #47 first, then bump the parent's `worker` pointer to a commit on worker `main`;
-   apply `database/migrations/` to production before it runs `main`.
+4. Merge: worker #47 first, then bump the parent's `worker` pointer to a commit on worker `main`.
+5. Production, before it runs `main` (the user's call at deploy time):
+   - **Database.** Upgrade in place or recreate from a backup. In place:
+     `2026-10-01-upgrade-from-main.sql`, then `2026-09-27-r7-inpainting-layer.sql` (both
+     re-runnable). The first was checked by loading main's `init.sql`, applying it, and comparing
+     `pg_dump --schema-only` with the branch's `init.sql`: identical apart from column order.
+   - **Models.** The worker now refuses to start without CTD and AOT (#47). Production mounts
+     `./data/worker/huggingface` as the cache, so `ctd_seg_dyn.onnx` and `lama_aot.onnx` go in its
+     `models/`, with the pinned checksums from `worker/src/worker/config.py`.
+
+## Review rounds (2026-10-01)
+
+- **#47:** 21 threads (CodeRabbit and Codex). 17 fixed in worker `460c7d0`; four answered and left
+  open: quality-filtered regions (2 threads; the backend already gives absent regions a hidden row),
+  uncontained fragments (a page with no panels must still join multi-line captions), and the
+  heartbeat (the backend accepts one only while `PROCESSING`). A follow-up, `7a180d4`: a callback
+  refused with 409 is terminal.
+- **#152:** `.coderabbit.yaml` took effect (186 files reviewed, 166 filtered). 17 CodeRabbit threads
+  fixed, plus Codex's migration (above), import-plate and render-backoff findings. Three Codex
+  findings are answered and parked:
+  - client-written scene validation is not the full JSON Schema. `PUT /pages/{id}/scene` has no
+    caller in the app; full validation needs a schema crate. Follow-up.
+  - a manual repaint is not fenced against patch edits made while it runs (about 10 s). Fencing on
+    the scene revision would also reject repaints when the user edits text meanwhile. Follow-up.
+  - a duplicate-upload clone copies the pipeline's cleanup, not the source page's hand edits. By
+    design: the clone takes machine output and translates fresh.
 
 ## The ten points
 

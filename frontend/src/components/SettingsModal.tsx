@@ -492,13 +492,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 label="OCR Grouping Threshold"
                 helperText="Join OCR fragments closer than this many characters; higher joins more. Applies on redo OCR"
                 value={settings.ocrMergeThreshold ?? 0.35}
+                // The ceiling while typing, the floor on blur: a floor per keystroke turns the "0"
+                // of "0.3" into 0.05 and the user can never type it.
                 onChange={(e) => {
                   const parsed = parseFloat(e.target.value);
                   if (Number.isFinite(parsed)) {
-                    handleChange(
-                      "ocrMergeThreshold",
-                      Math.min(3, Math.max(0.05, parsed)),
-                    );
+                    handleChange("ocrMergeThreshold", Math.min(3, parsed));
+                  }
+                }}
+                onBlur={() => {
+                  if ((settings.ocrMergeThreshold ?? 0.35) < 0.05) {
+                    handleChange("ocrMergeThreshold", 0.05);
                   }
                 }}
                 slotProps={{ htmlInput: { min: 0.05, max: 3, step: 0.05 } }}

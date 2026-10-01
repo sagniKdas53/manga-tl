@@ -588,11 +588,13 @@ pub async fn process_pending_renders(state: &AppState) {
         if snapshot_backoff_active(page.id) {
             continue;
         }
-        // Skip when a render failed within the last five minutes for this image.
+        // Skip when a render failed within the last five minutes for this page. By page, not
+        // image: duplicate-upload clones share an image, and one clone's failed render held back
+        // every other clone's for five minutes.
         let last_render: Option<crate::models::Job> = sqlx::query_as(
-            "SELECT * FROM jobs WHERE image_id = $1 AND type = 'render' ORDER BY created_at DESC LIMIT 1",
+            "SELECT * FROM jobs WHERE page_id = $1 AND type = 'render' ORDER BY created_at DESC LIMIT 1",
         )
-        .bind(page.image_id)
+        .bind(page.id)
         .fetch_optional(&state.pool)
         .await
         .unwrap_or(None);

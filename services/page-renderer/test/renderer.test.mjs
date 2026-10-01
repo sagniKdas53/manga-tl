@@ -144,3 +144,21 @@ test("a second concurrent render is told the renderer is busy, not that its scen
     await instance.stop();
   }
 });
+
+test("a context that cannot open a page is dropped, and the next render gets a fresh one", async () => {
+  const instance = await renderer();
+  try {
+    await instance.render(request());
+    const [broken] = instance.contexts;
+    broken.newPage = async () => {
+      throw new Error("Target page, context or browser has been closed");
+    };
+    await assert.rejects(instance.render(request()), /has been closed/);
+    assert.equal(instance.inUse.size, 0, "the failed render released its slot");
+    const again = await instance.render(request());
+    assert.equal(again.width, 160);
+    assert.ok(!instance.contexts.includes(broken), "the broken context left the pool");
+  } finally {
+    await instance.stop();
+  }
+});

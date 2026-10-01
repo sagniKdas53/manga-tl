@@ -413,7 +413,8 @@ CREATE TABLE public.page_render_jobs (
     created_at timestamp(6) with time zone DEFAULT now() NOT NULL,
     completed_at timestamp(6) with time zone,
     CONSTRAINT page_render_jobs_pkey PRIMARY KEY (job_id),
-    CONSTRAINT page_render_jobs_snapshot_fkey FOREIGN KEY (page_id, page_revision) REFERENCES public.page_scene_snapshots(page_id, revision) ON DELETE RESTRICT
+    -- CASCADE: deleting a page cascades to its snapshots, and its render jobs go with them.
+    CONSTRAINT page_render_jobs_snapshot_fkey FOREIGN KEY (page_id, page_revision) REFERENCES public.page_scene_snapshots(page_id, revision) ON DELETE CASCADE
 );
 
 ALTER TABLE ONLY public.pages
