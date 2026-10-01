@@ -151,6 +151,7 @@ type SelectedItemType =
   | (LayerElement & Partial<Omit<RenderItem, keyof LayerElement>>)
   | null;
 
+/** Saves one element; resolves to whether the server took it (a failure is reported here). */
 async function saveElementChanges(
   element: LayerElement,
   showAlert: boolean = true,
@@ -160,10 +161,13 @@ async function saveElementChanges(
     message: string,
     options?: { action?: { label: string; onClick: () => void } },
   ) => void,
-) {
+  // For saves started as the tab closes, which the browser would otherwise cancel.
+  keepalive: boolean = false,
+): Promise<boolean> {
   try {
     const res = await safeFetch(`/api/layer-elements/${element.id}`, {
       method: "PUT",
+      keepalive,
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
@@ -200,6 +204,7 @@ async function saveElementChanges(
     if (showAlert) {
       showToast("Element updated successfully!", "success");
     }
+    return true;
   } catch (err) {
     console.error(err);
     showError("Error updating element on server.", {
@@ -209,6 +214,7 @@ async function saveElementChanges(
           saveElementChanges(element, showAlert, token, showToast, showError),
       },
     });
+    return false;
   }
 }
 
@@ -592,41 +598,69 @@ export const Reader: React.FC<ReaderProps> = ({
    * Export and the reader without the render debounce and the worker queue.
    */
   const requestRenderNow = useCallback(
-    (pageId: string) =>
+    (pageId: string, keepalive: boolean = false) =>
       safeFetch(`/api/pages/${pageId}/render`, {
         method: "POST",
+        keepalive,
         headers: { Authorization: `Bearer ${user.token}` },
       }),
     [user.token],
   );
 
-  /** Saves every pending element edit, then renders the pages they belong to. */
-  const flushPendingSaves = useCallback(async (): Promise<void> => {
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-      autoSaveTimerRef.current = null;
-    }
-    const batch = [...pendingSavesRef.current.values()];
-    pendingSavesRef.current.clear();
-    if (batch.length === 0) return;
-    await Promise.all(
-      batch.map(({ element }) =>
-        saveElementChanges(element, false, user.token, showToast, showError),
-      ),
-    );
-    const saved = new Set(batch.map(({ element }) => element.id));
-    setDirtyElements((prev) => {
-      const next = new Set([...prev].filter((id) => !saved.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-    for (const pageId of new Set(batch.map((entry) => entry.pageId))) {
-      if (pageId) {
-        requestRenderNow(pageId).catch((err) =>
-          console.error("Render request failed for page", pageId, err),
-        );
+  /**
+   * Saves every pending element edit, then renders the pages they belong to. An edit whose save
+   * failed stays pending and dirty (unless a newer edit of it is already waiting), so the next
+   * flush tries it again and Export still sees unsaved work.
+   */
+  const flushPendingSaves = useCallback(
+    async (keepalive: boolean = false): Promise<void> => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
       }
-    }
-  }, [user.token, showToast, showError, requestRenderNow]);
+      const batch = [...pendingSavesRef.current.values()];
+      pendingSavesRef.current.clear();
+      if (batch.length === 0) return;
+      const results = await Promise.all(
+        batch.map(({ element }) =>
+          saveElementChanges(
+            element,
+            false,
+            user.token,
+            showToast,
+            showError,
+            keepalive,
+          ),
+        ),
+      );
+      const saved = new Set<string>();
+      batch.forEach((entry, index) => {
+        if (results[index]) {
+          saved.add(entry.element.id);
+        } else if (!pendingSavesRef.current.has(entry.element.id)) {
+          pendingSavesRef.current.set(entry.element.id, entry);
+        }
+      });
+      setDirtyElements((prev) => {
+        const next = new Set([...prev].filter((id) => !saved.has(id)));
+        return next.size === prev.size ? prev : next;
+      });
+      const savedPages = new Set(
+        batch
+          .filter((entry) => saved.has(entry.element.id))
+          .map((entry) => entry.pageId),
+      );
+      for (const pageId of savedPages) {
+        if (pageId) {
+          requestRenderNow(pageId, keepalive).catch((err) =>
+            console.error("Render request failed for page", pageId, err),
+          );
+        }
+      }
+    },
+    [user.token, showToast, showError, requestRenderNow],
+  );
+
   // The page-change and tab-close handlers call the newest flush through this, so they
   // fire on those events alone, not whenever a dependency of the flush changes identity.
   const flushPendingSavesRef = useRef(flushPendingSaves);
@@ -646,7 +680,7 @@ export const Reader: React.FC<ReaderProps> = ({
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (pendingSavesRef.current.size === 0) return;
-      void flushPendingSavesRef.current();
+      void flushPendingSavesRef.current(true);
       event.preventDefault();
       event.returnValue = "";
     };

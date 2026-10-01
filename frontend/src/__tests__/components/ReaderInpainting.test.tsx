@@ -474,6 +474,40 @@ describe("Reader Inpainting layer (tracker R7)", () => {
     );
   });
 
+  it("keeps an edit whose save failed pending, and saves it on the next flush", async () => {
+    const base = mockSafeFetch.getMockImplementation()!;
+    let puts = 0;
+    mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (/\/api\/layer-elements\/el-2$/.test(url) && init?.method === "PUT") {
+        puts += 1;
+        return Promise.resolve({
+          ok: puts > 1,
+          json: () => Promise.resolve({}),
+        });
+      }
+      return base(url, init);
+    });
+    await renderReader();
+    fireEvent.click(
+      document.querySelector(
+        '.svg-overlay polygon[points="300,400 400,400 400,460 300,460"]',
+      )!,
+    );
+    fireEvent.change(await screen.findByLabelText("Text Content"), {
+      target: { value: "Hey there" },
+    });
+
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    await waitFor(() => expect(puts).toBe(1));
+    expect(calls("POST", /\/api\/pages\/p1\/render$/)).toHaveLength(0);
+
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    await waitFor(() => expect(puts).toBe(2));
+    await waitFor(() =>
+      expect(calls("POST", /\/api\/pages\/p1\/render$/)).toHaveLength(1),
+    );
+  });
+
   it("always saves a patch's opacity, so Undo back to unset is opaque on the server too", async () => {
     const details = pageDetails();
     details.layers[1].elements[0] = {

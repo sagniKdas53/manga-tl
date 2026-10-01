@@ -35,6 +35,14 @@ pub enum RenderNow {
     Unavailable(String),
 }
 
+/// One renderer request may take this long.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// The lease this request holds on the job it claims: longer than waiting out a busy renderer
+/// plus one request, since nothing renews it. A shorter one (the worker's 120 s, which its
+/// heartbeat renews) could expire mid-render and let the stale sweep hand the job to a worker.
+const LEASE: Duration = Duration::from_secs(300);
+
 /// `(attempt, input_generation, lease_token, payload, image_id)` of a render job this request won.
 type ClaimedJob = (
     Option<i32>,
@@ -131,7 +139,7 @@ async fn render(state: &AppState, page_id: Uuid) -> Result<RenderNow, String> {
              RETURNING attempt, input_generation, lease_token, payload, image_id",
     )
     .bind(&job_id)
-    .bind(coordinator::JOB_LEASE_SECS as f64)
+    .bind(LEASE.as_secs_f64())
     .fetch_optional(&state.pool)
     .await
     .map_err(|e| e.to_string())?;
@@ -157,50 +165,45 @@ async fn render(state: &AppState, page_id: Uuid) -> Result<RenderNow, String> {
         .and_then(|raw| serde_json::from_str(raw).ok())
         .unwrap_or(Value::Null);
 
-    match draw(state, &page, &snapshot, image_id, &identity, &payload).await {
-        Ok(result) => {
-            let outcome = CALLBACK_IDENTITY
-                .scope(
-                    identity,
-                    coordinator::handle_render_callback(
-                        state,
-                        Some(&job_id),
-                        image_id,
-                        Some(page.id),
-                        result.diagnostics,
-                        result.layout,
-                        result.artifact,
-                    ),
-                )
-                .await?;
-            if outcome.artifact_current {
-                let _ = sqlx::query("UPDATE images SET last_rendered_at = now() WHERE id = $1")
-                    .bind(image_id)
-                    .execute(&state.pool)
-                    .await;
-            }
+    let outcome = match draw(state, &page, &snapshot, image_id, &identity, &payload).await {
+        Ok(result) => CALLBACK_IDENTITY
+            .scope(
+                identity,
+                coordinator::handle_render_callback(
+                    state,
+                    Some(&job_id),
+                    image_id,
+                    Some(page.id),
+                    result.diagnostics,
+                    result.layout,
+                    result.artifact,
+                ),
+            )
+            .await
+            // The callback's transaction rolled back, so the job is still ours and PROCESSING:
+            // a worker can redo it from the stored artifact or from scratch.
+            .map_err(DrawError::Unavailable),
+        Err(err) => Err(err),
+    };
+    match outcome {
+        Ok(outcome) if outcome.artifact_current => {
+            let _ = sqlx::query("UPDATE images SET last_rendered_at = now() WHERE id = $1")
+                .bind(image_id)
+                .execute(&state.pool)
+                .await;
             emit_job_update(state, &job_id, image_id).await;
             Ok(RenderNow::Current { revision })
         }
+        Ok(_) => {
+            // Applied to its own revision, but the page moved on (edited again) meanwhile; the
+            // newer revision renders on the next request or the debounce.
+            emit_job_update(state, &job_id, image_id).await;
+            Ok(RenderNow::Unavailable(
+                "the page changed while it was rendering".into(),
+            ))
+        }
         Err(DrawError::Unavailable(reason)) => {
-            // Not this scene's fault: hand the job back to the queue for a worker.
-            let _ = sqlx::query(
-                "UPDATE jobs SET status = 'PENDING', started_at = NULL, heartbeat_at = NULL, \
-                   lease_expires_at = NULL, updated_at = now() \
-                 WHERE id = $1 AND status = 'PROCESSING'",
-            )
-            .bind(&job_id)
-            .execute(&state.pool)
-            .await;
-            let _ = sqlx::query(
-                "UPDATE page_render_jobs SET status = 'queued' WHERE job_id = $1 AND status = 'running'",
-            )
-            .bind(&job_id)
-            .execute(&state.pool)
-            .await;
-            if let Some(raw) = payload.as_object().map(|_| payload.to_string()) {
-                coordinator::push_job_to_redis(state, "render", &raw).await;
-            }
+            hand_back(state, &job_id, &payload).await;
             emit_job_update(state, &job_id, image_id).await;
             Ok(RenderNow::Unavailable(reason))
         }
@@ -222,6 +225,29 @@ async fn render(state: &AppState, page_id: Uuid) -> Result<RenderNow, String> {
             emit_job_update(state, &job_id, image_id).await;
             Ok(RenderNow::Failed(reason))
         }
+    }
+}
+
+/// Not this scene's fault: give the job back to the queue for a worker. The queued copy of its
+/// payload may already have been dropped by the dispatcher while the job was PROCESSING, so it is
+/// pushed again; a duplicate is dropped or refused by the start compare-and-swap.
+async fn hand_back(state: &AppState, job_id: &str, payload: &Value) {
+    let _ = sqlx::query(
+        "UPDATE jobs SET status = 'PENDING', started_at = NULL, heartbeat_at = NULL, \
+           lease_expires_at = NULL, updated_at = now() \
+         WHERE id = $1 AND status = 'PROCESSING'",
+    )
+    .bind(job_id)
+    .execute(&state.pool)
+    .await;
+    let _ = sqlx::query(
+        "UPDATE page_render_jobs SET status = 'queued' WHERE job_id = $1 AND status = 'running'",
+    )
+    .bind(job_id)
+    .execute(&state.pool)
+    .await;
+    if payload.is_object() {
+        coordinator::push_job_to_redis(state, "render", &payload.to_string()).await;
     }
 }
 
@@ -531,7 +557,7 @@ async fn post_render(renderer_url: &str, request: &Value) -> Result<Value, DrawE
         let response = client
             .post(&url)
             .json(request)
-            .timeout(Duration::from_secs(180))
+            .timeout(REQUEST_TIMEOUT)
             .send()
             .await
             .map_err(|e| {
