@@ -166,10 +166,11 @@ pub async fn recover_stale_processing_jobs(state: &AppState) {
             .execute(&state.pool)
             .await;
         } else {
-            // Compare-and-swap on the attempt and lease this sweep observed. A worker that
-            // heartbeated between the SELECT above and this UPDATE has already moved the lease
-            // on, and this statement then matches nothing rather than yanking a live job back to
-            // PENDING underneath it.
+            // Compare-and-swap on the attempt, lease token and lease expiry this sweep observed.
+            // A heartbeat renews lease_expires_at, not the token: without the expiry in the
+            // compare, a worker that heartbeated between the SELECT above and this UPDATE was
+            // yanked back to PENDING underneath it and its result refused as stale. With it, the
+            // statement matches nothing and the live job is left alone.
             let lease_token = Uuid::new_v4().to_string();
             let payload = job
                 .payload
@@ -180,7 +181,8 @@ pub async fn recover_stale_processing_jobs(state: &AppState) {
                    payload=COALESCE($3,payload), lease_token=$4, lease_expires_at=NULL, \
                    heartbeat_at=NULL, callback_applied_at=NULL, updated_at=now() \
                  WHERE id=$1 AND status='PROCESSING' \
-                   AND attempt IS NOT DISTINCT FROM $5 AND lease_token IS NOT DISTINCT FROM $6",
+                   AND attempt IS NOT DISTINCT FROM $5 AND lease_token IS NOT DISTINCT FROM $6 \
+                   AND lease_expires_at IS NOT DISTINCT FROM $7",
             )
             .bind(&job.id)
             .bind(attempt)
@@ -188,6 +190,7 @@ pub async fn recover_stale_processing_jobs(state: &AppState) {
             .bind(&lease_token)
             .bind(job.attempt)
             .bind(job.lease_token.as_deref())
+            .bind(job.lease_expires_at)
             .execute(&state.pool)
             .await;
             if swapped.map(|res| res.rows_affected()).unwrap_or(0) == 0 {
