@@ -1186,6 +1186,45 @@ pub async fn get_page_rendered(
     response
 }
 
+/// POST /api/pages/{pageId}/render — ADMIN/TRANSLATOR. Renders the page's current scene now
+/// (`render_now`), so an edit reaches Export and the reader without the debounce and the worker
+/// queue. 200 `{status: "succeeded", revision}` once the current revision has its render; 409
+/// `{status: "failed", error}` when the render failed; 503 `{status: "pending", error}` when the
+/// renderer could not take it now (the job is back on the queue).
+pub async fn render_page_now(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(page_id): Path<Uuid>,
+) -> Response {
+    if user.role.eq_ignore_ascii_case("viewer") {
+        return error::access_denied("/api/pages/{pageId}/render");
+    }
+    if find_page(&state.pool, page_id).await.is_none() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match crate::render_now::render_page_now(&state, page_id).await {
+        crate::render_now::RenderNow::Current { revision } => {
+            Json(json!({ "status": "succeeded", "revision": revision })).into_response()
+        }
+        crate::render_now::RenderNow::Failed(error) => {
+            tracing::warn!("Render-now for page {page_id} failed: {error}");
+            (
+                StatusCode::CONFLICT,
+                Json(json!({ "status": "failed", "error": error })),
+            )
+                .into_response()
+        }
+        crate::render_now::RenderNow::Unavailable(error) => {
+            tracing::warn!("Render-now for page {page_id} handed back to the queue: {error}");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({ "status": "pending", "error": error })),
+            )
+                .into_response()
+        }
+    }
+}
+
 /// GET /api/pages/{pageId}/scene-assets/{sha256} — one cleanup patch or glyph mask of this page.
 ///
 /// Tracker R7: the editor draws the same patches the export does, and until now only the render
@@ -1374,6 +1413,12 @@ pub async fn delete_page(
     // follows it lands too. Renumbering the whole remainder rather than shifting the tail also
     // repairs a chapter that was already uneven, instead of carrying the unevenness forward.
     let mut tx = state.pool.begin().await.expect("page delete transaction");
+    crate::jobs::coordinator::drop_unfinished_page_jobs(
+        &mut tx,
+        crate::jobs::coordinator::DeletedPages::Page(page_id),
+    )
+    .await
+    .expect("page jobs delete");
     sqlx::query("DELETE FROM pages WHERE id = $1")
         .bind(page_id)
         .execute(&mut *tx)
@@ -2178,51 +2223,14 @@ async fn queue_region_cleanup(
     page_id: Uuid,
     region: &OcrRegion,
 ) -> Result<(), String> {
-    let (image_id, storage_path, hash, input_generation): (Uuid, String, Option<String>, i32) =
-        sqlx::query_as(
-            "SELECT i.id, i.storage_path, i.hash, p.input_generation FROM pages p \
-             JOIN images i ON i.id = p.image_id WHERE p.id = $1",
-        )
-        .bind(page_id)
-        .fetch_one(&state.pool)
-        .await
-        .map_err(|e| e.to_string())?;
-    // A queued job's link: it may wait behind a chapter backlog for longer than ten minutes.
-    let image_url = state
-        .storage
-        .presigned_job_url(&storage_path)
-        .await
-        .map_err(|err| format!("could not presign source for cleanup: {err}"))?;
-    let entries = vec![crate::jobs::coordinator::cleanup_region_entry(
-        input_generation,
-        region,
-    )];
-    let digest = hex::encode(Sha256::digest(
-        serde_json::to_string(&entries)
-            .unwrap_or_default()
-            .as_bytes(),
-    ));
-    let region_id = region.id.to_string();
-    crate::jobs::coordinator::enqueue_job_directly(
+    crate::jobs::coordinator::queue_region_cleanup_job(
         state,
-        "cleanup",
-        image_id,
-        Some(page_id),
-        None,
-        "high",
-        move |job| {
-            job.insert("imageUrl".into(), json!(image_url));
-            job.insert("sourceSha256".into(), json!(hash.unwrap_or_default()));
-            job.insert("cleanupRegions".into(), serde_json::Value::Array(entries));
-            job.insert("cleanupInputDigest".into(), json!(digest));
-            job.insert(
-                "followUp".into(),
-                json!({ "type": "region-redo-tl", "regionId": region_id }),
-            );
-        },
+        page_id,
+        std::slice::from_ref(region),
+        false,
+        json!({ "type": "region-redo-tl", "regionId": region.id.to_string() }),
     )
-    .await;
-    Ok(())
+    .await
 }
 
 /// Shows the region's translation elements that have text, on shown layers only (hidden layers are
@@ -2393,6 +2401,7 @@ pub fn router() -> Router<AppState> {
             axum::routing::patch(update_page_number),
         )
         .route("/pages/{pageId}/rendered", get(get_page_rendered))
+        .route("/pages/{pageId}/render", post(render_page_now))
         .route(
             "/pages/{pageId}/scene-assets/{sha256}",
             get(get_page_scene_asset),

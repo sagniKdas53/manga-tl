@@ -346,7 +346,10 @@ CREATE TABLE public.pages (
     -- Source/geometry generation for OCR/cleanup. This intentionally does not advance for
     -- ordinary scene/layout edits, which only affect scene_revision.
     input_generation integer DEFAULT 0 NOT NULL,
-    current_render_job_id character varying(255)
+    current_render_job_id character varying(255),
+    -- Last edit made by hand in the editor. Sticky: a page someone has worked on is not handed
+    -- back to machine QA, which could retranslate it.
+    hand_edited_at timestamp(6) with time zone
 );
 
 

@@ -57,6 +57,7 @@ ALTER TABLE public.ocr_regions ADD COLUMN IF NOT EXISTS cleanup_diagnostics json
 ALTER TABLE public.pages ADD COLUMN IF NOT EXISTS scene_revision integer DEFAULT 0 NOT NULL;
 ALTER TABLE public.pages ADD COLUMN IF NOT EXISTS input_generation integer DEFAULT 0 NOT NULL;
 ALTER TABLE public.pages ADD COLUMN IF NOT EXISTS current_render_job_id character varying(255);
+ALTER TABLE public.pages ADD COLUMN IF NOT EXISTS hand_edited_at timestamp(6) with time zone;
 
 CREATE TABLE IF NOT EXISTS public.page_scene_snapshots (
     page_id uuid NOT NULL,

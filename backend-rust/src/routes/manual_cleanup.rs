@@ -375,7 +375,7 @@ pub async fn apply_callback(
                 .map_err(|e| e.to_string())?
             {
                 Some(_) => {
-                    crate::page_freshness::advance_page_revision(&mut tx, page.id)
+                    crate::page_freshness::advance_page_revision_by_hand(&mut tx, page.id)
                         .await
                         .map_err(|e| e.to_string())?;
                     Ok(())

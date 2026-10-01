@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::auth::AuthUser;
 use crate::error;
 use crate::models::LayerElement;
-use crate::page_freshness::advance_page_revision;
+use crate::page_freshness::advance_page_revision_by_hand;
 use crate::routes::layers::{LayerElementInput, deny_viewer};
 use crate::state::AppState;
 
@@ -58,7 +58,7 @@ pub async fn delete_layer(
     match result {
         Ok(res) if res.rows_affected() > 0 => {
             let page_id = page_id.expect("deleted layer must have an owning page");
-            if let Err(err) = advance_page_revision(&mut tx, page_id).await {
+            if let Err(err) = advance_page_revision_by_hand(&mut tx, page_id).await {
                 tracing::error!("Could not advance page revision for deleted layer {id}: {err}");
                 let _ = tx.rollback().await;
                 return error::internal_error("/api/layers/{id}");
@@ -139,7 +139,7 @@ pub async fn update_layer(
         return error::internal_error("/api/layers/{id}");
     }
 
-    if let Err(err) = advance_page_revision(&mut tx, page_id).await {
+    if let Err(err) = advance_page_revision_by_hand(&mut tx, page_id).await {
         tracing::error!("Could not advance page revision for layer {id}: {err}");
         let _ = tx.rollback().await;
         return error::internal_error("/api/layers/{id}");
@@ -259,7 +259,7 @@ pub async fn create_layer_element(
     .await
     .expect("element insert");
 
-    if let Err(err) = advance_page_revision(&mut tx, page_id).await {
+    if let Err(err) = advance_page_revision_by_hand(&mut tx, page_id).await {
         tracing::error!("Could not advance page revision for layer {layer_id}: {err}");
         let _ = tx.rollback().await;
         return error::internal_error(instance);
@@ -304,7 +304,7 @@ pub async fn delete_layer_element(
         .await;
     match result {
         Ok(res) if res.rows_affected() > 0 => {
-            if let Err(err) = advance_page_revision(&mut tx, page_id).await {
+            if let Err(err) = advance_page_revision_by_hand(&mut tx, page_id).await {
                 tracing::error!("Could not advance page revision for layer element {id}: {err}");
                 let _ = tx.rollback().await;
                 return error::internal_error("/api/layer-elements/{id}");

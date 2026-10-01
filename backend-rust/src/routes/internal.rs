@@ -1057,6 +1057,23 @@ fn region_redo_follow_up(parent: &Job) -> Option<Uuid> {
         .and_then(|id| Uuid::parse_str(id).ok())
 }
 
+/// Whether a cleanup job was queued by `coordinator::queue_late_patches`: patches for regions QA
+/// kept, after the page was already translated and judged.
+fn is_late_patch(parent: &Job) -> bool {
+    parent
+        .payload
+        .as_deref()
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .and_then(|payload| {
+            payload
+                .get("followUp")
+                .and_then(|follow_up| follow_up.get("type"))
+                .and_then(Value::as_str)
+                .map(|kind| kind == coordinator::LATE_PATCH_FOLLOW_UP)
+        })
+        .unwrap_or(false)
+}
+
 async fn apply_cleanup_callback(
     state: &AppState,
     image_id: Uuid,
@@ -1093,6 +1110,7 @@ async fn apply_cleanup_callback(
     }
 
     let mut expected = dispatched_cleanup_regions(&parent);
+    let late_patch = is_late_patch(&parent);
     let mut problems: Vec<String> = Vec::new();
     // Regions whose cleanup columns this callback rewrote: the pass the Inpainting layer records.
     let mut settled: Vec<Uuid> = Vec::new();
@@ -1200,6 +1218,20 @@ async fn apply_cleanup_callback(
                     settled.push(region_id);
                 }
             }
+            // For a late patch, QA has already judged the region and kept it. Finding no
+            // lettering only means there is no patch to draw: the region keeps its verdict and its
+            // plate rather than being sent back to review, which would hide what QA kept.
+            "uncertain" if late_patch => {
+                sqlx::query(
+                    "UPDATE ocr_regions SET cleanup_diagnostics = $2 WHERE id = $1 AND page_id = $3",
+                )
+                .bind(region_id)
+                .bind(outcome.get("diagnostics").cloned())
+                .bind(page.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+            }
             // `uncertain` is a deterministic content finding, not an infrastructure failure:
             // retain the source pixels, make the review state visible, and continue the other
             // regions through translation.  It is deliberately distinct from QA's
@@ -1279,7 +1311,25 @@ async fn apply_cleanup_callback(
     // A failed cleanup withholds translation rather than translating a page whose Japanese is
     // still on it. The job is FAILED explicitly so it shows up as one, and the worker's bounded
     // retry (or a manual page redo) is what tries again.
-    let dispatch = if problems.is_empty() && region_follow_up.is_some() {
+    let dispatch = if late_patch {
+        // The page is translated and judged already: no translation follows. Whatever patches
+        // did land are drawn (the final-pass render after commit); a region that failed keeps
+        // its plate and is not tried again.
+        if !settled.is_empty() {
+            crate::page_freshness::advance_page_revision(&mut tx, page.id)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        if !problems.is_empty() {
+            tracing::warn!(
+                "Late cleanup for page {} left {} region(s) without a patch: {}",
+                page.id,
+                problems.len(),
+                problems.join("; ")
+            );
+        }
+        None
+    } else if problems.is_empty() && region_follow_up.is_some() {
         // The new patch changes what the page draws even before its translation lands.
         crate::page_freshness::advance_page_revision(&mut tx, page.id)
             .await
@@ -1319,6 +1369,10 @@ async fn apply_cleanup_callback(
         None
     };
     tx.commit().await.map_err(|e| e.to_string())?;
+
+    if late_patch && !settled.is_empty() {
+        coordinator::render_after_late_patch(state, image_id, page.id).await;
+    }
 
     if problems.is_empty()
         && let Some(region_id) = region_follow_up

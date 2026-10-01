@@ -674,14 +674,33 @@ pub async fn delete_series(
     if !user.role.eq_ignore_ascii_case("admin") {
         return error::access_denied(&instance);
     }
-    let result = sqlx::query("DELETE FROM series WHERE id = $1")
-        .bind(id)
-        .execute(&state.pool)
-        .await;
+    let result = delete_with_page_jobs(
+        &state.pool,
+        "DELETE FROM series WHERE id = $1",
+        id,
+        crate::jobs::coordinator::DeletedPages::Series(id),
+    )
+    .await;
     match result {
         Ok(res) if res.rows_affected() > 0 => StatusCode::OK.into_response(),
         _ => StatusCode::NOT_FOUND.into_response(),
     }
+}
+
+/// Runs `delete` (a series or chapter DELETE bound to `id`) together with the deletion of its
+/// pages' unfinished jobs, in one transaction. The pages go by cascade; their queued jobs would
+/// not (`drop_unfinished_page_jobs`).
+async fn delete_with_page_jobs(
+    pool: &sqlx::PgPool,
+    delete: &'static str,
+    id: Uuid,
+    pages: crate::jobs::coordinator::DeletedPages,
+) -> Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    crate::jobs::coordinator::drop_unfinished_page_jobs(&mut tx, pages).await?;
+    let result = sqlx::query(delete).bind(id).execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(result)
 }
 
 // ---------------------------------------------------------------------------
@@ -910,10 +929,13 @@ pub async fn delete_chapter(State(state): State<AppState>, Path(id): Path<Uuid>)
             .fetch_optional(&state.pool)
             .await
             .unwrap_or(None);
-    match sqlx::query("DELETE FROM chapters WHERE id = $1")
-        .bind(id)
-        .execute(&state.pool)
-        .await
+    match delete_with_page_jobs(
+        &state.pool,
+        "DELETE FROM chapters WHERE id = $1",
+        id,
+        crate::jobs::coordinator::DeletedPages::Chapter(id),
+    )
+    .await
     {
         // SeriesController.java:563-571 recalculates after a successful delete so
         // removing the covered chapter cannot leave a dangling cover image id.

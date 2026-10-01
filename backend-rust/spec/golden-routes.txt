@@ -55,6 +55,7 @@ DELETE  /api/pages/{pageId}  [pageId]
 GET     /api/pages/{pageId}  [pageId] 
 POST    /api/pages/{pageId}/layers  [pageId] body
 PATCH   /api/pages/{pageId}/number  [pageId] body
+POST    /api/pages/{pageId}/render  [pageId] 
 GET     /api/pages/{pageId}/rendered  [pageId] 
 GET     /api/pages/{pageId}/scene  [pageId] 
 PUT     /api/pages/{pageId}/scene  [pageId] body

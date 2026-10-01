@@ -112,6 +112,9 @@ pub struct Page {
     pub last_rendered_at: Option<DateTime<Utc>>,
     pub scene_revision: i32,
     pub input_generation: i32,
+    /// Last hand edit in the editor (`page_freshness::advance_page_revision_by_hand`).
+    #[serde(skip)]
+    pub hand_edited_at: Option<DateTime<Utc>>,
 }
 
 // ---------------------------------------------------------------- images

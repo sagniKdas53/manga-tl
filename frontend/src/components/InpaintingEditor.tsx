@@ -268,23 +268,23 @@ function InpaintingPanel({
         >
           <ToggleButton
             value="brush"
-            aria-label="Brush"
+            aria-label="Draw"
           >
             <BrushIcon
               fontSize="small"
               sx={{ mr: 0.75 }}
             />
-            Repaint
+            Draw
           </ToggleButton>
           <ToggleButton
             value="eraser"
-            aria-label="Eraser"
+            aria-label="Erase"
           >
             <AutoFixOffIcon
               fontSize="small"
               sx={{ mr: 0.75 }}
             />
-            Restore
+            Erase
           </ToggleButton>
           <ToggleButton
             value="pan"

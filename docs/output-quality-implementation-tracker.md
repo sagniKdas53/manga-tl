@@ -8,6 +8,8 @@ Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequ
 
 **Read [output-quality-r7-close-20261001.md](output-quality-r7-close-20261001.md) first.** The user's R7 review gave ten points. Four are fixed to close R7: the mask panel no longer pans the page, a Pan tool, the editor draws the export's text outline, and the outline colour is labelled as such. Then PRs #47 and #152 leave draft, CodeRabbit's findings are fixed, and both merge. Cleanup masks, one-balloon grouping, text style, layer merge and automatic angles follow in their own PRs.
 
+**2026-10-02: second review round** ([§ Second review round](output-quality-r7-close-20261001.md#second-review-round-2026-10-02)). Fixed before the merge: jobs of deleted pages, QA enforcing the SFX policy plus a one-time patch for a kept region with no cleanup, the editor's empty plate, the review-region highlight, the mask panel toggle, Draw/Erase labels, an immediate backend render for edited pages, a 30 s autosave, a page-level hand-edit mark, and CodeRabbit's second outside-diff comment. **Follow-up F** (Photoshop-style layers: add, group, merge down, merge visible, undo/redo) replaces the layer-merge follow-up.
+
 ## Status at a glance (2026-09-29 — R7 verdict pending; the plan after it)
 
 **Read [output-quality-next-session-20260929.md](output-quality-next-session-20260929.md) first.** It records the 2026-09-28 work (mask editor, restore, leftover-ink cleanup, 7-day job links, patch prefetch), the 400-page verdict run on chrome-box, and the order after R7: `AUDIT-R21` → `AUDIT-R23` → M7 (including M8's I06) → merge PRs #47 and #152.

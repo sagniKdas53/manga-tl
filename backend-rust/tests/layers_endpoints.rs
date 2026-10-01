@@ -424,6 +424,13 @@ async fn layer_and_element_lifecycle_with_gating() {
     assert_eq!(status, StatusCode::NOT_FOUND);
 
     // --- delete element then layer ---
+    // A delete is a hand edit too. It used to leave no mark, and deleting the one element saved
+    // by hand cleared the page's, so the next render queued machine QA over the user's work.
+    sqlx::query("UPDATE pages SET hand_edited_at = NULL WHERE id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .expect("clear hand-edit mark");
     let (status, _, _) = send(
         app.clone(),
         "DELETE",
@@ -439,6 +446,10 @@ async fn layer_and_element_lifecycle_with_gating() {
         .await
         .expect("element gone");
     assert_eq!(gone, 0);
+    assert!(
+        manga_backend::jobs::coordinator::page_hand_edited(&pool, page_id).await,
+        "deleting the hand-edited element leaves the page marked as hand-edited"
+    );
 
     let (status, _, _) = send(
         app.clone(),

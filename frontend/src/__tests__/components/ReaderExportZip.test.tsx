@@ -289,14 +289,42 @@ describe("Reader project ZIP export", () => {
     expect(paintedText).toBe("");
   });
 
-  it("reports a pending render instead of exporting something else", async () => {
-    mockSafeFetch.mockImplementation((url: string) => {
-      if (typeof url === "string" && url.endsWith("/rendered")) {
+  /** /rendered answers 409 until POST /render has run; POST /render answers `renderStatus`. */
+  function mockPendingRender(renderStatus: number) {
+    let rendered = false;
+    mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (
+        typeof url === "string" &&
+        url.endsWith("/render") &&
+        init?.method === "POST"
+      ) {
+        rendered = renderStatus === 200;
         return Promise.resolve({
-          ok: false,
-          status: 409,
-          json: () => Promise.resolve({ status: "pending", revision: 4 }),
+          ok: renderStatus === 200,
+          status: renderStatus,
+          json: () =>
+            Promise.resolve(
+              renderStatus === 200
+                ? { status: "succeeded", revision: 4 }
+                : { status: "pending", error: "the page renderer stayed busy" },
+            ),
         });
+      }
+      if (typeof url === "string" && url.endsWith("/rendered")) {
+        return Promise.resolve(
+          rendered
+            ? {
+                ok: true,
+                status: 200,
+                blob: () =>
+                  Promise.resolve(new Blob(["png"], { type: "image/png" })),
+              }
+            : {
+                ok: false,
+                status: 409,
+                json: () => Promise.resolve({ status: "pending", revision: 4 }),
+              },
+        );
       }
       if (typeof url === "string" && /\/api\/pages\/[^/]+$/.test(url)) {
         return Promise.resolve({
@@ -313,6 +341,9 @@ describe("Reader project ZIP export", () => {
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
     });
+  }
+
+  async function exportPng() {
     render(
       <Reader
         user={mockUser}
@@ -326,17 +357,30 @@ describe("Reader project ZIP export", () => {
     const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
     fireEvent.load(img);
     fireEvent.click(await screen.findByText("Export Page (PNG)"));
+  }
+
+  it("renders a page whose render is pending, then exports it", async () => {
+    // User review 2026-10-02: Export used to say "try again in a few seconds" while an edit
+    // waited for the render debounce and a worker. It now asks for the render and waits.
+    mockPendingRender(200);
+    await exportPng();
 
     await waitFor(() => {
-      expect(
-        mockSafeFetch.mock.calls.some((call) =>
-          String(call[0]).endsWith("/rendered"),
-        ),
-      ).toBe(true);
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
     });
+    const renderCall = mockSafeFetch.mock.calls.find((call) =>
+      String(call[0]).endsWith(`/api/pages/${mockPage.id}/render`),
+    );
+    expect(renderCall?.[1]).toMatchObject({ method: "POST" });
+  });
+
+  it("says so when the renderer cannot take the page now, and exports nothing else", async () => {
+    mockPendingRender(503);
+    await exportPng();
+
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
-        expect.stringMatching(/render is still pending/i),
+        expect.stringMatching(/renderer is busy/i),
         "error",
       );
     });

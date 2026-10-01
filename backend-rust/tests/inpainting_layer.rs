@@ -1215,3 +1215,233 @@ async fn a_manual_repaint_lands_on_a_new_top_inpainting_layer() {
         .await;
     cleanup_series(&pool, series_id).await;
 }
+
+/// A region QA kept without a cleanup patch -- typically a sound effect, which the pipeline's
+/// cleanup leaves alone -- was drawn on a flat plate. After QA, such regions get one cleanup of
+/// their own; it lands as patches, no translation follows, and the page re-renders as a final pass
+/// so QA is not queued again. A region is never sent twice.
+#[tokio::test]
+async fn regions_qa_kept_without_a_patch_get_one_late_cleanup() {
+    let Some((app, pool, state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    let (series_id, page_id, image_id, ocr, tl) = seed_page(&pool).await;
+    let kept_sfx = seed_region(
+        &pool,
+        page_id,
+        (ocr, tl),
+        1,
+        (10, 10, 40, 60),
+        "シュル",
+        "SLUR",
+        Some("passed"),
+    )
+    .await;
+    let patched = seed_region(
+        &pool,
+        page_id,
+        (ocr, tl),
+        2,
+        (60, 10, 40, 60),
+        "はい",
+        "Yes",
+        Some("passed"),
+    )
+    .await;
+    let rejected = seed_region(
+        &pool,
+        page_id,
+        (ocr, tl),
+        3,
+        (110, 10, 40, 60),
+        "ドン",
+        "BOOM",
+        Some("reject_sfx"),
+    )
+    .await;
+    let review = seed_region(
+        &pool,
+        page_id,
+        (ocr, tl),
+        4,
+        (10, 100, 40, 60),
+        "え",
+        "Eh",
+        Some("cleanup_review"),
+    )
+    .await;
+    let drawn_sfx = seed_region(
+        &pool,
+        page_id,
+        (ocr, tl),
+        5,
+        (60, 100, 40, 60),
+        "ゴゴ",
+        "RUMBLE",
+        Some("passed"),
+    )
+    .await;
+    sqlx::query("UPDATE ocr_regions SET region_type = 'sfx' WHERE id = ANY($1)")
+        .bind(vec![kept_sfx, rejected, drawn_sfx])
+        .execute(&pool)
+        .await
+        .unwrap();
+    give_patch(
+        &state,
+        page_id,
+        patched,
+        &sha('1'),
+        &sha('2'),
+        (60, 10, 40, 60),
+    )
+    .await;
+    record_pass(&state, page_id, &[patched]).await;
+
+    manga_backend::jobs::coordinator::queue_late_patches(&state, Some(page_id)).await;
+    manga_backend::jobs::coordinator::queue_late_patches(&state, Some(page_id)).await;
+    let jobs: Vec<(String, String)> =
+        sqlx::query_as("SELECT id, payload FROM jobs WHERE page_id = $1 AND type = 'cleanup'")
+            .bind(page_id)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(jobs.len(), 1, "one late cleanup, and only once");
+    let (job_id, payload) = &jobs[0];
+    let payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+    let entries = payload["cleanupRegions"].as_array().unwrap();
+    assert_eq!(
+        entries.len(),
+        2,
+        "only the kept regions without a patch: {entries:?}"
+    );
+    assert_eq!(entries[0]["regionId"], kept_sfx.to_string());
+    assert_eq!(entries[1]["regionId"], drawn_sfx.to_string());
+    assert_eq!(
+        entries[0]["policyAction"], "replace",
+        "an SFX is cleaned once QA keeps it"
+    );
+    assert_eq!(payload["followUp"]["type"], "late-patch");
+    let _ = review;
+
+    // The worker runs it.
+    sqlx::query("UPDATE jobs SET status = 'PROCESSING', started_at = now() WHERE id = $1")
+        .bind(job_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (attempt, generation, lease): (Option<i32>, i32, Option<String>) =
+        sqlx::query_as("SELECT attempt, input_generation, lease_token FROM jobs WHERE id = $1")
+            .bind(job_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let (patch, mask) = (sha('3'), sha('4'));
+    for digest in [&patch, &mask] {
+        state
+            .storage
+            .upload_bytes(
+                &manga_backend::page_scene_builder::scene_asset_path(page_id, digest),
+                b"png".to_vec(),
+                "image/png",
+            )
+            .await
+            .unwrap();
+    }
+    let body = serde_json::json!({
+        "jobId": job_id,
+        "imageId": image_id,
+        "pageId": page_id,
+        "cleanupInputDigest": payload["cleanupInputDigest"],
+        "regions": [{
+            "regionId": kept_sfx,
+            "inputDigest": entries[0]["inputDigest"],
+            "status": "complete",
+            "cleanupPatchAssetId": format!("patch-{patch}"),
+            "cleanupPatchSha256": patch,
+            "cleanupPatchByteLength": 3,
+            "cleanupMaskAssetId": format!("mask-{mask}"),
+            "cleanupMaskSha256": mask,
+            "cleanupMaskByteLength": 3,
+            "cleanupBounds": {"x": 10, "y": 10, "width": 40, "height": 60},
+            "diagnostics": ["telea"],
+        }, {
+            "regionId": drawn_sfx,
+            "inputDigest": entries[1]["inputDigest"],
+            "status": "uncertain",
+            "diagnostics": ["ctd:no-glyphs"],
+        }],
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/tlhub/api/internal/jobs/callback/cleanup")
+        .header("Content-Type", "application/json")
+        .header("X-Internal-Token", INTERNAL_TOKEN)
+        .header("X-Job-Id", job_id.as_str())
+        .header("X-Job-Attempt", attempt.unwrap_or(1).to_string())
+        .header("X-Input-Generation", generation.to_string())
+        .header("X-Lease-Token", lease.unwrap_or_default())
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    let (status, text) = finish(app.clone().oneshot(request).await.unwrap()).await;
+    assert_eq!(status, StatusCode::OK, "{text}");
+
+    let patched_now: Option<String> =
+        sqlx::query_scalar("SELECT cleanup_patch_asset_id FROM ocr_regions WHERE id = $1")
+            .bind(kept_sfx)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(patched_now.is_some(), "the kept SFX has its patch");
+    let verdict: Option<String> =
+        sqlx::query_scalar("SELECT qa_status FROM ocr_regions WHERE id = $1")
+            .bind(drawn_sfx)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        verdict.as_deref(),
+        Some("passed"),
+        "finding no lettering does not send a kept region back to review"
+    );
+    let translations: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE page_id = $1 AND type = 'translation'")
+            .bind(page_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        translations, 0,
+        "a late patch is not followed by a translation"
+    );
+    let render_payload: Option<String> = sqlx::query_scalar(
+        "SELECT payload FROM jobs WHERE page_id = $1 AND type = 'render' ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(page_id)
+    .fetch_optional(&pool)
+    .await
+    .unwrap();
+    let render_payload: serde_json::Value =
+        serde_json::from_str(&render_payload.expect("the page re-renders")).unwrap();
+    assert_eq!(
+        render_payload["finalPass"], true,
+        "the re-render does not queue QA"
+    );
+
+    manga_backend::jobs::coordinator::queue_late_patches(&state, Some(page_id)).await;
+    let cleanups: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE page_id = $1 AND type = 'cleanup'")
+            .bind(page_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(cleanups, 1, "nothing left to patch, nothing queued");
+
+    let _ = sqlx::query("DELETE FROM page_scene_snapshots WHERE page_id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await;
+    cleanup_series(&pool, series_id).await;
+}

@@ -26,6 +26,28 @@ pub async fn advance_page_revision(
     .await
 }
 
+/// [`advance_page_revision`] for an edit made by hand in the editor: it also stamps
+/// `pages.hand_edited_at`, which keeps machine QA off the page from then on.
+///
+/// The mark used to be "some element of the page has `is_manually_edited`", which only an
+/// element save set. Deleting an element, adding one, or showing, hiding or deleting a layer left
+/// a page looking untouched, and deleting the one edited element cleared it — so the next render
+/// queued a paid QA pass that could retranslate what the user had just fixed.
+pub async fn advance_page_revision_by_hand(
+    tx: &mut Transaction<'_, Postgres>,
+    page_id: Uuid,
+) -> Result<i32, sqlx::Error> {
+    sqlx::query_scalar(
+        "UPDATE pages \
+         SET last_edited_at = now(), hand_edited_at = now(), scene_revision = scene_revision + 1 \
+         WHERE id = $1 \
+         RETURNING scene_revision",
+    )
+    .bind(page_id)
+    .fetch_one(&mut **tx)
+    .await
+}
+
 /// Advances a page's **source/geometry generation** — the R3 fence that decides which pipeline
 /// attempts are still current.
 ///

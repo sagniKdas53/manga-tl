@@ -159,10 +159,19 @@ pub async fn recover_stale_processing_jobs(state: &AppState) {
             job.lease_expires_at
         );
         if attempt > max_attempts {
+            // The same compare-and-swap as the re-arm below: a heartbeat or a callback that
+            // landed after this sweep read the row must not be overwritten with FAILED.
             let _ = sqlx::query(
-                "UPDATE jobs SET status='FAILED', error='Max attempts exhausted after stale recovery', updated_at=now() WHERE id=$1",
+                "UPDATE jobs SET status='FAILED', error='Max attempts exhausted after stale recovery', \
+                   updated_at=now() \
+                 WHERE id=$1 AND status='PROCESSING' \
+                   AND attempt IS NOT DISTINCT FROM $2 AND lease_token IS NOT DISTINCT FROM $3 \
+                   AND lease_expires_at IS NOT DISTINCT FROM $4",
             )
             .bind(&job.id)
+            .bind(job.attempt)
+            .bind(job.lease_token.as_deref())
+            .bind(job.lease_expires_at)
             .execute(&state.pool)
             .await;
         } else {
@@ -245,8 +254,11 @@ pub async fn enqueue_current_snapshot_render(
         );
         return Ok(false);
     };
+    // A final-pass render is asked for by a QA callback, or by a late-patch cleanup
+    // (`coordinator::queue_late_patches`); either way a re-queued render must not queue QA.
     let intent: Option<serde_json::Value> = sqlx::query_scalar(
-        "SELECT payload::jsonb->'requiredRender' FROM jobs WHERE page_id=$1 AND type='qa' \
+        "SELECT payload::jsonb->'requiredRender' FROM jobs WHERE page_id=$1 \
+         AND type IN ('qa', 'cleanup') \
          AND payload::jsonb->'requiredRender'->>'pageRevision'=$2 \
          AND payload::jsonb->'requiredRender'->>'logicalSceneSha256'=$3 \
          ORDER BY created_at DESC LIMIT 1",
@@ -350,7 +362,7 @@ pub async fn enqueue_current_snapshot_render(
 /// Only the debounce sweep calls this. It declines when a render is already queued, running or
 /// done for this revision, and when a QA job is waiting on a render of it: those renders carry
 /// pipeline intent (final pass, completion) that a reused artifact would drop.
-async fn reuse_unchanged_render(
+pub(crate) async fn reuse_unchanged_render(
     state: &AppState,
     page: &crate::models::Page,
 ) -> Result<bool, String> {
@@ -753,6 +765,7 @@ pub async fn report_health(state: &AppState) {
 /// processing and skips anything no longer PENDING.
 pub async fn requeue_orphaned_pending_jobs(state: &AppState) {
     let Some(redis) = &state.redis else { return };
+    coordinator::drop_jobs_of_deleted_pages(&state.pool).await;
     // While paused, PENDING rows are *meant* to be off the queues — requeue_pending_jobs puts them
     // back on resume. An unreadable pause gate reads as paused, so a Redis wobble cannot make this
     // sweep flood the queues.

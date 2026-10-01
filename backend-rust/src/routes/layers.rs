@@ -234,7 +234,7 @@ pub async fn update_layer_element(
         .fetch_one(&mut *tx)
         .await
         .expect("element owning page");
-    crate::page_freshness::advance_page_revision(&mut tx, page_id)
+    crate::page_freshness::advance_page_revision_by_hand(&mut tx, page_id)
         .await
         .expect("page revision advance");
     tx.commit().await.expect("layer element transaction commit");
@@ -345,7 +345,7 @@ pub async fn create_page_layer(
 
     let mut tx = state.pool.begin().await.expect("page layer transaction");
     let layer = insert_layer(&mut tx, page_id, &payload).await;
-    crate::page_freshness::advance_page_revision(&mut tx, page_id)
+    crate::page_freshness::advance_page_revision_by_hand(&mut tx, page_id)
         .await
         .expect("page revision advance");
     tx.commit().await.expect("page layer transaction commit");
@@ -378,7 +378,7 @@ pub async fn create_image_layer(
 
     let mut tx = state.pool.begin().await.expect("image layer transaction");
     let layer = insert_layer(&mut tx, page_id, &payload).await;
-    crate::page_freshness::advance_page_revision(&mut tx, page_id)
+    crate::page_freshness::advance_page_revision_by_hand(&mut tx, page_id)
         .await
         .expect("page revision advance");
     tx.commit().await.expect("image layer transaction commit");

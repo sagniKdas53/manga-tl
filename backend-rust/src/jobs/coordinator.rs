@@ -1128,12 +1128,34 @@ pub async fn push_job_to_redis(state: &AppState, job_type: &str, payload: &str) 
     }
 }
 
+/// Deletes the unfinished jobs of pages that no longer exist, left by deletes from before
+/// [`drop_unfinished_page_jobs`]. Their worker aborts on the missing image and cannot fail a job
+/// that never started, so re-pushing them would only repeat that on every resume.
+pub async fn drop_jobs_of_deleted_pages(pool: &PgPool) {
+    match sqlx::query(
+        "DELETE FROM jobs j WHERE j.status <> 'COMPLETED' AND j.page_id IS NOT NULL \
+         AND NOT EXISTS (SELECT 1 FROM pages p WHERE p.id = j.page_id)",
+    )
+    .execute(pool)
+    .await
+    {
+        Ok(done) if done.rows_affected() > 0 => tracing::info!(
+            "Dropped {} unfinished jobs whose page was deleted",
+            done.rows_affected()
+        ),
+        Ok(_) => {}
+        Err(err) => tracing::warn!("Could not drop jobs of deleted pages: {err}"),
+    }
+}
+
 /// Re-pushes every PENDING job after wiping the queues (startup / resume).
 pub async fn requeue_pending_jobs(state: &AppState) {
     let Some(redis) = &state.redis else { return };
     for key in HEAVY_QUEUES.into_iter().chain(LIGHT_QUEUES) {
         let _ = redis.delete(key).await;
     }
+
+    drop_jobs_of_deleted_pages(&state.pool).await;
 
     let pending: Vec<Job> =
         sqlx::query_as("SELECT * FROM jobs WHERE status = 'PENDING' ORDER BY created_at ASC")
@@ -1149,6 +1171,44 @@ pub async fn requeue_pending_jobs(state: &AppState) {
             push_job_to_redis(state, &job.job_type, payload).await;
         }
     }
+}
+
+/// The pages a delete is about to remove, for [`drop_unfinished_page_jobs`].
+pub enum DeletedPages {
+    Page(Uuid),
+    Chapter(Uuid),
+    Series(Uuid),
+}
+
+/// Deletes the unfinished jobs of pages that are about to be deleted, inside the caller's
+/// transaction. `jobs.page_id` has no foreign key, so a delete used to leave them behind: a page
+/// uploaded by accident and deleted at once kept its panel-detection job PENDING, the worker found
+/// no image and aborted, and the job was sent again on every queue resume. With the row gone the
+/// dispatcher drops its queued payload, and a worker still running one is refused (409) on its
+/// next status report and stops. Finished jobs stay as history.
+pub async fn drop_unfinished_page_jobs(
+    conn: &mut sqlx::PgConnection,
+    pages: DeletedPages,
+) -> Result<u64, sqlx::Error> {
+    let (sql, id) = match pages {
+        DeletedPages::Page(id) => (
+            "DELETE FROM jobs WHERE page_id = $1 AND status <> 'COMPLETED'",
+            id,
+        ),
+        DeletedPages::Chapter(id) => (
+            "DELETE FROM jobs WHERE status <> 'COMPLETED' \
+             AND page_id IN (SELECT id FROM pages WHERE chapter_id = $1)",
+            id,
+        ),
+        DeletedPages::Series(id) => (
+            "DELETE FROM jobs WHERE status <> 'COMPLETED' \
+             AND page_id IN (SELECT p.id FROM pages p JOIN chapters c ON c.id = p.chapter_id \
+             WHERE c.series_id = $1)",
+            id,
+        ),
+    };
+    let result = sqlx::query(sql).bind(id).execute(conn).await?;
+    Ok(result.rows_affected())
 }
 
 /// Rewrites the `attempt` field of a stored payload; returns the original on failure.
@@ -1815,6 +1875,11 @@ pub fn cleanup_region_entry(input_generation: i32, region: &OcrRegion) -> Value 
     } else {
         "replace"
     };
+    cleanup_region_entry_with(input_generation, region, action)
+}
+
+/// [`cleanup_region_entry`] with the policy action given rather than derived from the region type.
+pub fn cleanup_region_entry_with(input_generation: i32, region: &OcrRegion, action: &str) -> Value {
     let digest_input = format!(
         "{input_generation}:{}:{}:{}:{}:{}:{action}",
         region.id, region.bbox_x, region.bbox_y, region.bbox_w, region.bbox_h
@@ -1829,6 +1894,128 @@ pub fn cleanup_region_entry(input_generation: i32, region: &OcrRegion) -> Value 
         "ocrText": region.text,
         "inputDigest": hex::encode(Sha256::digest(digest_input.as_bytes())),
     })
+}
+
+/// Queue one cleanup job for `regions` of a page. `replace` forces the `replace` action, which an
+/// SFX region otherwise does not get; `follow_up` says what the callback does once the patches land
+/// (`apply_cleanup_callback`).
+pub async fn queue_region_cleanup_job(
+    state: &AppState,
+    page_id: Uuid,
+    regions: &[OcrRegion],
+    replace: bool,
+    follow_up: Value,
+) -> Result<(), String> {
+    let (image_id, storage_path, hash, input_generation): (Uuid, String, Option<String>, i32) =
+        sqlx::query_as(
+            "SELECT i.id, i.storage_path, i.hash, p.input_generation FROM pages p \
+             JOIN images i ON i.id = p.image_id WHERE p.id = $1",
+        )
+        .bind(page_id)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    // A queued job's link: it may wait behind a chapter backlog for longer than ten minutes.
+    let image_url = state
+        .storage
+        .presigned_job_url(&storage_path)
+        .await
+        .map_err(|err| format!("could not presign source for cleanup: {err}"))?;
+    let entries: Vec<Value> = regions
+        .iter()
+        .map(|region| {
+            if replace {
+                cleanup_region_entry_with(input_generation, region, "replace")
+            } else {
+                cleanup_region_entry(input_generation, region)
+            }
+        })
+        .collect();
+    let digest = hex::encode(Sha256::digest(
+        serde_json::to_string(&entries)
+            .unwrap_or_default()
+            .as_bytes(),
+    ));
+    enqueue_job_directly(
+        state,
+        "cleanup",
+        image_id,
+        Some(page_id),
+        None,
+        "high",
+        move |job| {
+            job.insert("imageUrl".into(), json!(image_url));
+            job.insert("sourceSha256".into(), json!(hash.unwrap_or_default()));
+            job.insert("cleanupRegions".into(), Value::Array(entries));
+            job.insert("cleanupInputDigest".into(), json!(digest));
+            job.insert("followUp".into(), follow_up);
+        },
+    )
+    .await;
+    Ok(())
+}
+
+/// The `followUp.type` of a cleanup queued by [`queue_late_patches`].
+pub const LATE_PATCH_FOLLOW_UP: &str = "late-patch";
+
+/// Give a patch to every region QA kept on the page that has none.
+///
+/// Sound effects are left out of the pipeline's cleanup (they are meant to stay as drawn), and a
+/// region can reach QA without a patch in other ways. When QA nevertheless keeps one -- its English
+/// is shown -- the page drew that English on a flat plate, the white box. This queues one cleanup
+/// for those regions, with the `replace` action. When it lands, the page re-renders as a final pass,
+/// which never queues QA, so the two cannot loop. Each region gets this once: a region already
+/// named by an earlier late-patch job is not tried again, whatever that job's outcome. A region in
+/// `cleanup_review` (cleanup found no lettering) is shown over its source by design and is skipped.
+pub async fn queue_late_patches(state: &AppState, page_id: Option<Uuid>) {
+    let Some(page_id) = page_id else { return };
+    let regions: Vec<OcrRegion> = match sqlx::query_as(
+        "SELECT r.* FROM ocr_regions r WHERE r.page_id = $1 \
+           AND r.cleanup_patch_asset_id IS NULL \
+           AND COALESCE(r.qa_status, '') NOT IN ('rejected', 'reject_sfx', 'cleanup_review') \
+           AND NOT COALESCE(r.translation_failed, FALSE) \
+           AND EXISTS (SELECT 1 FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
+                       WHERE e.region_id = r.id AND l.visible AND e.visible \
+                         AND LOWER(l.type) IN ('translation', 'sfx') \
+                         AND COALESCE(TRIM(e.text), '') <> '') \
+           AND NOT EXISTS (SELECT 1 FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
+                           WHERE e.region_id = r.id AND LOWER(l.type) = 'inpainting' \
+                             AND e.cleanup_ref IS NOT NULL) \
+           AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.page_id = r.page_id AND j.type = 'cleanup' \
+                           AND (j.payload::jsonb) -> 'followUp' ->> 'type' = $2 \
+                           AND (j.payload::jsonb) -> 'followUp' -> 'regionIds' ? r.id::text) \
+         ORDER BY r.bbox_y, r.bbox_x",
+    )
+    .bind(page_id)
+    .bind(LATE_PATCH_FOLLOW_UP)
+    .fetch_all(&state.pool)
+    .await
+    {
+        Ok(regions) => regions,
+        Err(err) => {
+            tracing::error!("Could not look for kept regions without a patch on {page_id}: {err}");
+            return;
+        }
+    };
+    if regions.is_empty() {
+        return;
+    }
+    let ids: Vec<String> = regions.iter().map(|region| region.id.to_string()).collect();
+    tracing::info!(
+        "QA kept {} region(s) on page {page_id} with no cleanup patch; queuing one cleanup for them",
+        ids.len()
+    );
+    if let Err(err) = queue_region_cleanup_job(
+        state,
+        page_id,
+        &regions,
+        true,
+        json!({ "type": LATE_PATCH_FOLLOW_UP, "regionIds": ids }),
+    )
+    .await
+    {
+        tracing::error!("Could not queue cleanup for kept regions on {page_id}: {err}");
+    }
 }
 
 /// Whether this page's series translates into its own source language, in which case the pipeline
@@ -2917,6 +3104,12 @@ async fn enqueue_final_pass_render(
     .await;
 }
 
+/// Re-render a page after its late patches (`queue_late_patches`) landed, as a final pass so it
+/// does not queue QA again. It claims nothing: the QA callback already finished the pipeline.
+pub async fn render_after_late_patch(state: &AppState, image_id: Uuid, page_id: Uuid) {
+    enqueue_final_pass_render(state, image_id, Some(page_id), false).await;
+}
+
 /// `(is_final_pass, completes_pipeline)` for a render job, read from its stored payload.
 ///
 /// Read from the job row rather than threaded through the callback, because the worker's render
@@ -3031,6 +3224,21 @@ pub async fn verify_job_artifact(
         return Err("render artifact bytes do not match the callback digest/length".into());
     }
     Ok(bytes)
+}
+
+/// Whether a page has been worked on by hand: its sticky `hand_edited_at`
+/// (`page_freshness::advance_page_revision_by_hand`), or, for pages edited before that column,
+/// an element saved by hand. Such a page is not handed back to machine QA.
+pub async fn page_hand_edited(pool: &PgPool, page_id: Uuid) -> bool {
+    sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM pages WHERE id = $1 AND hand_edited_at IS NOT NULL) \
+         OR EXISTS (SELECT 1 FROM layer_elements WHERE is_manually_edited = TRUE \
+                    AND layer_id IN (SELECT id FROM layers WHERE page_id = $1))",
+    )
+    .bind(page_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(false)
 }
 
 pub async fn handle_render_callback(
@@ -3174,14 +3382,7 @@ pub async fn handle_render_callback(
 
     let mut manual_changes_done = false;
     for page in &pages {
-        let count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM layer_elements WHERE is_manually_edited = TRUE AND layer_id IN (SELECT id FROM layers WHERE page_id = $1)",
-        )
-        .bind(page.id)
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or(0);
-        if count > 0 {
+        if page_hand_edited(&state.pool, page.id).await {
             manual_changes_done = true;
             break;
         }
@@ -4677,6 +4878,7 @@ pub async fn handle_qa_callback(
         if qa_changed_the_page {
             enqueue_final_pass_render(state, image_id, qa_page_id, false).await;
         }
+        queue_late_patches(state, qa_page_id).await;
         if let Some(redis) = &state.redis {
             if let Some(page_id) = qa_page_id {
                 let _ = redis.delete(&format!("page:qa:retries:{page_id}")).await;
@@ -4776,6 +4978,7 @@ pub async fn handle_qa_callback(
         if qa_changed_the_page {
             enqueue_final_pass_render(state, image_id, qa_page_id, !exhausted).await;
         }
+        queue_late_patches(state, qa_page_id).await;
         if let Some(redis) = &state.redis {
             let _ = redis.delete(&qa_retry_key(image_id, qa_page_id)).await;
             let _ = redis.delete(&format!("pipeline:trace:{image_id}")).await;

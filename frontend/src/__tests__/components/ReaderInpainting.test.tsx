@@ -391,6 +391,89 @@ describe("Reader Inpainting layer (tracker R7)", () => {
     expect(plates).toEqual(["300,400 400,400 400,460 300,460"]);
   });
 
+  it("draws nothing for a region whose translation QA emptied, as the export does", async () => {
+    // User review 2026-10-02 (page 12): QA emptied an SFX's text, and the editor still drew the
+    // region's plate, a blank white box on the art. The export already skipped it.
+    const base = mockSafeFetch.getMockImplementation()!;
+    mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (/\/api\/pages\/[^/]+$/.test(url)) {
+        const details = pageDetails();
+        details.layers[0].elements[1] = {
+          ...details.layers[0].elements[1],
+          text: "",
+        };
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(details),
+        });
+      }
+      return base(url, init);
+    });
+    await renderReader();
+    expect(document.querySelectorAll(".svg-overlay polygon")).toHaveLength(0);
+  });
+
+  it("outlines a review region clicked on the page with Show debug off", async () => {
+    // User review 2026-10-02 (page 16): with the debug boxes off there was nothing to click, and
+    // a region opened from the Issues list was not shown on the page.
+    const base = mockSafeFetch.getMockImplementation()!;
+    mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (/\/api\/pages\/[^/]+$/.test(url)) {
+        const details = pageDetails();
+        Object.assign(details.ocrRegions[1], { qaStatus: "failed" });
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(details),
+        });
+      }
+      return base(url, init);
+    });
+    try {
+      localStorage.setItem("manga_show_ocr", "false");
+      localStorage.setItem("manga_clean_view", "false");
+      await renderReader();
+      expect(document.querySelector("[data-review-selected]")).toBeNull();
+      const hit = document.querySelector('[data-review-region="r2"]')!;
+      expect(hit.getAttribute("fill")).toBe("transparent");
+      fireEvent.click(hit);
+      await waitFor(() =>
+        expect(
+          document.querySelector('[data-review-selected="r2"]'),
+        ).not.toBeNull(),
+      );
+    } finally {
+      localStorage.removeItem("manga_show_ocr");
+      localStorage.removeItem("manga_clean_view");
+    }
+  });
+
+  it("saves an edit when asked or after 30 s idle, not 1.5 s later, then renders the page", async () => {
+    // User review 2026-10-02: each change was saved 1.5 s after it, so one session advanced a
+    // page's revision twenty times, and the render waited for the debounce and a worker.
+    await renderReader();
+    fireEvent.click(
+      document.querySelector(
+        '.svg-overlay polygon[points="300,400 400,400 400,460 300,460"]',
+      )!,
+    );
+    const field = await screen.findByLabelText("Text Content");
+    fireEvent.change(field, { target: { value: "Hey there" } });
+    await new Promise((resolve) => setTimeout(resolve, 1700));
+    expect(calls("PUT", /\/api\/layer-elements\/el-2$/)).toHaveLength(0);
+
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    await waitFor(() =>
+      expect(calls("PUT", /\/api\/layer-elements\/el-2$/)).toHaveLength(1),
+    );
+    const [, init] = calls("PUT", /\/api\/layer-elements\/el-2$/)[0];
+    expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
+      text: "Hey there",
+    });
+    await waitFor(() =>
+      expect(calls("POST", /\/api\/pages\/p1\/render$/)).toHaveLength(1),
+    );
+  });
+
   it("always saves a patch's opacity, so Undo back to unset is opaque on the server too", async () => {
     const details = pageDetails();
     details.layers[1].elements[0] = {
@@ -827,7 +910,7 @@ describe("Mask editor (inpainting view)", () => {
     await waitFor(() => expect(apply).toBeDisabled());
 
     // The eraser over unpainted page is a restore mark, sent as its own job.
-    fireEvent.click(within(panel).getByRole("button", { name: "Eraser" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Erase" }));
     drag(400, 420);
     await waitFor(() => expect(apply).not.toBeDisabled());
     await act(async () => {
@@ -850,6 +933,24 @@ describe("Mask editor (inpainting view)", () => {
 
   // CodeRabbit on #152: Apply posts the repaint, then the restore. When only the restore fails,
   // a retry used to queue the repaint a second time, landing a duplicate Inpainting layer.
+  it("follows the sidebar toggle, and keeps the marks while hidden", async () => {
+    // User review 2026-10-02: the panel stayed when the inspector was toggled off.
+    await renderReader();
+    await act(async () => {
+      fireEvent.click(screen.getByText("Inpainting"));
+    });
+    await screen.findByRole("toolbar", { name: "Inpainting tools" });
+    expect(screen.getByRole("button", { name: "Draw" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Erase" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Hide Inspector" }));
+    await waitFor(() =>
+      expect(screen.queryByTestId("inpainting-panel-host")).toBeNull(),
+    );
+    expect(screen.getByTestId("inpainting-canvas")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show Inspector" }));
+    await screen.findByRole("toolbar", { name: "Inpainting tools" });
+  });
+
   it("retries only the restore when the repaint was queued and the restore failed", async () => {
     await renderReader();
     const overlay = document.querySelector(".svg-overlay")!;
@@ -902,7 +1003,7 @@ describe("Mask editor (inpainting view)", () => {
       fireEvent.pointerUp(canvas, { clientX: toX, clientY: 300, pointerId: 1 });
     };
     stroke(100, 120); // repaint
-    fireEvent.click(within(panel).getByRole("button", { name: "Eraser" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Erase" }));
     stroke(400, 420); // restore
     const apply = within(panel).getByRole("button", { name: "Apply" });
     await waitFor(() => expect(apply).not.toBeDisabled());

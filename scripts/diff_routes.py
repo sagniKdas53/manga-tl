@@ -62,6 +62,7 @@ PORTED = {
     # AUDIT-F26: the render's own thumbnail, so the page grid can show pipeline output.
     "GET /api/images/{imageId}/thumbnail/rendered",
     "GET /api/pages/{pageId}/rendered",
+    "POST /api/pages/{pageId}/render",
     "GET /api/pages/{pageId}/scene",
     "PUT /api/pages/{pageId}/scene",
     "GET /api/pages/{pageId}/scene-assets/{sha256}",

@@ -1055,6 +1055,97 @@ async fn delete_page_takes_its_render_ledger_with_it() {
     order_cleanup(&pool, NS, TITLE).await;
 }
 
+/// Seeds one job of `status` for `page_id` and returns its id.
+async fn seed_page_job(pool: &sqlx::PgPool, page_id: uuid::Uuid, status: &str) -> String {
+    let job_id = format!("e2e-job-{}", uuid::Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, page_id, created_at, updated_at) \
+         VALUES ($1, 'panel-detection', $2, $3, now(), now())",
+    )
+    .bind(&job_id)
+    .bind(status)
+    .bind(page_id)
+    .execute(pool)
+    .await
+    .expect("seed job");
+    job_id
+}
+
+async fn job_exists(pool: &sqlx::PgPool, job_id: &str) -> bool {
+    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM jobs WHERE id = $1)")
+        .bind(job_id)
+        .fetch_one(pool)
+        .await
+        .expect("job lookup")
+}
+
+/// A page uploaded by mistake and deleted at once kept its PENDING jobs; the worker found no
+/// image, its FAILED report was refused, and the job was sent again on every resume.
+#[tokio::test]
+async fn deleting_a_page_or_chapter_drops_their_unfinished_jobs() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    const NS: &str = "__pgdeljobs-e2e";
+    const TITLE: &str = "PageOrder Delete Jobs Probe";
+    let token = order_probe(&pool, NS, TITLE).await;
+    let (chapter_id, page_ids) = chapter_with_pages(&app, &pool, &token, TITLE, 2).await;
+    let first = uuid::Uuid::parse_str(&page_ids[0]).expect("page uuid");
+    let second = uuid::Uuid::parse_str(&page_ids[1]).expect("page uuid");
+    let pending = seed_page_job(&pool, first, "PENDING").await;
+    let paused = seed_page_job(&pool, first, "PAUSED").await;
+    let finished = seed_page_job(&pool, first, "COMPLETED").await;
+    let other_page = seed_page_job(&pool, second, "PENDING").await;
+
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "DELETE",
+        &format!("/tlhub/api/pages/{}", page_ids[0]),
+        &token,
+        String::new(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(
+        !job_exists(&pool, &pending).await,
+        "a PENDING job goes with its page"
+    );
+    assert!(
+        !job_exists(&pool, &paused).await,
+        "a PAUSED job goes with its page"
+    );
+    assert!(
+        job_exists(&pool, &finished).await,
+        "finished jobs stay as history"
+    );
+    assert!(
+        job_exists(&pool, &other_page).await,
+        "another page's job is untouched"
+    );
+
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "DELETE",
+        &format!("/tlhub/api/series/chapters/{chapter_id}"),
+        &token,
+        String::new(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(
+        !job_exists(&pool, &other_page).await,
+        "deleting the chapter drops its pages' queued jobs"
+    );
+
+    sqlx::query("DELETE FROM jobs WHERE id = $1")
+        .bind(&finished)
+        .execute(&pool)
+        .await
+        .expect("job cleanup");
+    order_cleanup(&pool, NS, TITLE).await;
+}
+
 #[tokio::test]
 async fn page_number_can_still_reach_the_last_slot_after_a_delete() {
     let Some((app, pool)) = app().await else {

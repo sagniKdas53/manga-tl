@@ -864,6 +864,23 @@ export interface paths {
         patch: operations["updatePageNumber"];
         trace?: never;
     };
+    "/api/pages/{pageId}/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Render the page's current scene now, through the same pinned browser renderer the pipeline uses, so a hand edit reaches Export, the reader and the chapter ZIP without waiting for the render debounce and a worker. Returns once the current revision has its render. A page that is hand-edited queues no QA pass off this render. */
+        post: operations["renderPageNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pages/{pageId}/rendered": {
         parameters: {
             query?: never;
@@ -3318,6 +3335,73 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    renderPageNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current revision has its render */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int32 */
+                        revision: number;
+                        /** @enum {string} */
+                        status: "succeeded";
+                    };
+                };
+            };
+            /** @description Viewers cannot render */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such page */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The render failed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        /** @enum {string} */
+                        status: "failed";
+                    };
+                };
+            };
+            /** @description The renderer could not take it now; the render is back on the queue */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        /** @enum {string} */
+                        status: "pending";
+                    };
                 };
             };
         };

@@ -521,14 +521,8 @@ async fn build_chapter_meta(
                     .unwrap_or(false);
                 page_meta["manualQaNeeded"] = json!(manual_qa_needed);
 
-                let manual_changes_done: bool = sqlx::query_scalar(
-                    "SELECT COUNT(*) > 0 FROM layer_elements \
-                     WHERE is_manually_edited = TRUE AND layer_id IN (SELECT id FROM layers WHERE page_id = $1)",
-                )
-                .bind(page.id)
-                .fetch_one(&state.pool)
-                .await
-                .unwrap_or(false);
+                let manual_changes_done =
+                    crate::jobs::coordinator::page_hand_edited(&state.pool, page.id).await;
                 let needs_re_render = manual_changes_done
                     && page
                         .last_edited_at

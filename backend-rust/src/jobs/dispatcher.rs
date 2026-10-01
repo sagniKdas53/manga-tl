@@ -238,6 +238,15 @@ impl Dispatcher {
                     .and_then(|v| v.get("jobId").and_then(|j| j.as_str()).map(str::to_string))
                     .unwrap_or_else(|| "unknown".into());
 
+                // A payload outlives its row when the job was deleted (its page was deleted, or
+                // the job was removed in the queue manager) or stopped being PENDING (paused,
+                // failed). Sending it anyway made a worker start work nobody wants; for a deleted
+                // page it aborted, and the payload came back on every resume.
+                if !job_still_pending(&self.state.pool, &job_id).await {
+                    tracing::info!("Dropping queued payload of job {job_id}: no longer PENDING");
+                    continue;
+                }
+
                 // AUDIT-W13: a context-injecting chapter translates strictly in page order.
                 // Re-pushed to the BACK and this queue's drain stopped for the cycle — the same
                 // shape as the undispatchable case below, and for the same reason (AUDIT-P3).
@@ -387,6 +396,26 @@ impl Capacity {
             self.active_heavy < self.max_heavy && self.active_total < self.max_total
         } else {
             self.active_light < self.max_light && self.active_total < self.max_total
+        }
+    }
+}
+
+/// Whether a popped payload's job row still exists and is PENDING. A payload without a readable
+/// id, or a database error, counts as pending: dropping work on a hiccup would lose it.
+async fn job_still_pending(pool: &sqlx::PgPool, job_id: &str) -> bool {
+    if job_id == "unknown" {
+        return true;
+    }
+    match sqlx::query_scalar::<_, String>("SELECT status FROM jobs WHERE id = $1")
+        .bind(job_id)
+        .fetch_optional(pool)
+        .await
+    {
+        Ok(Some(status)) => status == "PENDING",
+        Ok(None) => false,
+        Err(err) => {
+            tracing::debug!("Could not read job {job_id} before dispatch: {err}");
+            true
         }
     }
 }

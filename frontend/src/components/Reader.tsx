@@ -137,6 +137,9 @@ interface RenderItem {
   isLayerElement?: boolean;
 }
 
+/** How long the page must be left alone before pending element edits are saved. */
+const AUTOSAVE_IDLE_MS = 30_000;
+
 /**
  * One undo/redo step: the element's state to restore. Tracker R7: `op: "delete"` marks a deleted
  * patch — on the undo stack, undoing re-creates it; on the redo stack, redoing deletes it again.
@@ -575,15 +578,80 @@ export const Reader: React.FC<ReaderProps> = ({
   const { showToast, showError } = useToast();
 
   const [dirtyElements, setDirtyElements] = useState<Set<string>>(new Set());
-  const autoSaveTimersRef = useRef<
-    Record<string, ReturnType<typeof setTimeout>>
-  >({});
+  // Element edits wait here, newest copy per element, until the page has been left alone for
+  // AUTOSAVE_IDLE_MS, or the user saves, exports, turns the page or closes the tab. Each save
+  // used to go out 1.5 s after the edit, so one editing session advanced a page's revision twenty
+  // times (user review, 2026-10-02).
+  const pendingSavesRef = useRef<
+    Map<string, { element: LayerElement; pageId: string | null }>
+  >(new Map());
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * Ask the backend to render the page now (`POST /pages/{id}/render`), so a saved edit reaches
+   * Export and the reader without the render debounce and the worker queue.
+   */
+  const requestRenderNow = useCallback(
+    (pageId: string) =>
+      safeFetch(`/api/pages/${pageId}/render`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${user.token}` },
+      }),
+    [user.token],
+  );
+
+  /** Saves every pending element edit, then renders the pages they belong to. */
+  const flushPendingSaves = useCallback(async (): Promise<void> => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    const batch = [...pendingSavesRef.current.values()];
+    pendingSavesRef.current.clear();
+    if (batch.length === 0) return;
+    await Promise.all(
+      batch.map(({ element }) =>
+        saveElementChanges(element, false, user.token, showToast, showError),
+      ),
+    );
+    const saved = new Set(batch.map(({ element }) => element.id));
+    setDirtyElements((prev) => {
+      const next = new Set([...prev].filter((id) => !saved.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+    for (const pageId of new Set(batch.map((entry) => entry.pageId))) {
+      if (pageId) {
+        requestRenderNow(pageId).catch((err) =>
+          console.error("Render request failed for page", pageId, err),
+        );
+      }
+    }
+  }, [user.token, showToast, showError, requestRenderNow]);
+  // The page-change and tab-close handlers call the newest flush through this, so they
+  // fire on those events alone, not whenever a dependency of the flush changes identity.
+  const flushPendingSavesRef = useRef(flushPendingSaves);
   useEffect(() => {
-    const timers = autoSaveTimersRef.current;
+    flushPendingSavesRef.current = flushPendingSaves;
+  }, [flushPendingSaves]);
+
+  // Turning the page or leaving the reader saves what is pending.
+  const openPageId = selectedPage?.id;
+  useEffect(() => {
     return () => {
-      Object.values(timers).forEach(clearTimeout);
+      void flushPendingSavesRef.current();
     };
+  }, [openPageId]);
+
+  // Closing the tab with edits still waiting asks first, and starts saving them.
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (pendingSavesRef.current.size === 0) return;
+      void flushPendingSavesRef.current();
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
 
   // Listen for job_update events and drop the cache for whichever page the job touched.
@@ -644,23 +712,32 @@ export const Reader: React.FC<ReaderProps> = ({
       prefetchQueue.current.delete(page.id);
       cacheEpochRef.current += 1;
 
-      Promise.resolve().then(() => {
+      // A render changes no layer, and on the open page it is usually the user's own edit coming
+      // back: reloading for it threw away the selection and anything not yet saved.
+      const reloadOpenPage = isOpenPage && data.type !== "render";
+      const refresh = () => {
         setCacheEpoch(cacheEpochRef.current);
         // Only the open page is re-read on screen; a background page is simply dropped from the
         // cache, so the next navigation or prefetch pass picks up the new layers.
-        if (isOpenPage) {
+        if (reloadOpenPage) {
           setLoadedImageId(null);
         }
-      });
+      };
+      // Pending edits are saved before the page is re-read, or the reload would drop them.
+      if (reloadOpenPage && pendingSavesRef.current.size > 0) {
+        void flushPendingSaves().then(refresh);
+      } else {
+        Promise.resolve().then(refresh);
+      }
 
-      if (isOpenPage) {
+      if (reloadOpenPage) {
         console.log(
           `SSE event: Reloading page layers due to ${data.type} job completion`,
         );
         showToast("New layers available — refreshed", "success");
       }
     });
-  }, [subscribe, selectedPage, pages, showToast]);
+  }, [subscribe, selectedPage, pages, showToast, flushPendingSaves]);
 
   // Window title synchronization
   useEffect(() => {
@@ -1338,10 +1415,7 @@ export const Reader: React.FC<ReaderProps> = ({
   const handleSaveElementChanges = useCallback(
     async (element: LayerElement, showAlert: boolean = true) => {
       const id = element.id;
-      if (autoSaveTimersRef.current[id]) {
-        clearTimeout(autoSaveTimersRef.current[id]);
-        delete autoSaveTimersRef.current[id];
-      }
+      pendingSavesRef.current.delete(id);
       await saveElementChanges(
         element,
         showAlert,
@@ -1355,8 +1429,13 @@ export const Reader: React.FC<ReaderProps> = ({
         next.delete(id);
         return next;
       });
+      if (selectedPage) {
+        requestRenderNow(selectedPage.id).catch((err) =>
+          console.error("Render request failed", err),
+        );
+      }
     },
-    [user.token, showToast, showError],
+    [user.token, showToast, showError, selectedPage, requestRenderNow],
   );
 
   const triggerAutoSave = useCallback(
@@ -1368,66 +1447,19 @@ export const Reader: React.FC<ReaderProps> = ({
         next.add(id);
         return next;
       });
-
-      if (autoSaveTimersRef.current[id]) {
-        clearTimeout(autoSaveTimersRef.current[id]);
-      }
-
-      autoSaveTimersRef.current[id] = setTimeout(async () => {
-        try {
-          await saveElementChanges(
-            element,
-            false,
-            user.token,
-            showToast,
-            showError,
-          );
-          setDirtyElements((prev) => {
-            if (!prev.has(id)) return prev;
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-          });
-        } catch (err) {
-          console.error("Auto-save failed for element:", id, err);
-        } finally {
-          delete autoSaveTimersRef.current[id];
-        }
-      }, 1500);
+      pendingSavesRef.current.set(id, {
+        element,
+        pageId: selectedPage?.id ?? null,
+      });
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = setTimeout(() => {
+        void flushPendingSaves();
+      }, AUTOSAVE_IDLE_MS);
     },
-    [user.token, showToast, showError],
+    [selectedPage, flushPendingSaves],
   );
 
-  const saveAllPendingChanges = useCallback(async (): Promise<void> => {
-    const pendingIds = Object.keys(autoSaveTimersRef.current);
-    if (pendingIds.length === 0) return;
-
-    const elementsToSave: LayerElement[] = [];
-    layers.forEach((l) => {
-      l.elements.forEach((el) => {
-        if (pendingIds.includes(el.id)) {
-          elementsToSave.push(el);
-        }
-      });
-    });
-
-    const promises = elementsToSave.map(async (el) => {
-      const id = el.id;
-      if (autoSaveTimersRef.current[id]) {
-        clearTimeout(autoSaveTimersRef.current[id]);
-        delete autoSaveTimersRef.current[id];
-      }
-      try {
-        await saveElementChanges(el, false, user.token, showToast, showError);
-      } catch (err) {
-        console.error("Failed to save pending changes for element", id, err);
-        throw err;
-      }
-    });
-
-    await Promise.all(promises);
-    setDirtyElements(new Set());
-  }, [layers, user.token, showToast, showError]);
+  const saveAllPendingChanges = flushPendingSaves;
 
   /** Tracker R7: deletes a patch element, as one undoable step. */
   const deletePatchElement = useCallback(
@@ -1666,6 +1698,12 @@ export const Reader: React.FC<ReaderProps> = ({
   // Key Down Listener for undo/redo and layer reordering
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Save now, from anywhere, the inspector's fields included.
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void flushPendingSaves();
+        return;
+      }
       const target = e.target as HTMLElement;
       if (
         target.tagName === "INPUT" ||
@@ -1690,7 +1728,13 @@ export const Reader: React.FC<ReaderProps> = ({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleUndo, handleRedo, activeLayerId, handleMoveLayer]);
+  }, [
+    handleUndo,
+    handleRedo,
+    activeLayerId,
+    handleMoveLayer,
+    flushPendingSaves,
+  ]);
 
   /**
    * Show or hide one element by identity, without it having to be the selected one.
@@ -2848,11 +2892,32 @@ export const Reader: React.FC<ReaderProps> = ({
     // docs/output-quality-architecture-decisions.md §1a. A page whose current revision has no
     // finished render is reported as such rather than exported from something else.
     const doExport = async () => {
-      const res = await safeFetch(`/api/pages/${selectedPage.id}/rendered`, {
-        // Bypass artifacts cached by older servers at this stable current-render URL.
-        cache: "no-store",
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
+      const fetchRendered = () =>
+        safeFetch(`/api/pages/${selectedPage.id}/rendered`, {
+          // Bypass artifacts cached by older servers at this stable current-render URL.
+          cache: "no-store",
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+      let res = await fetchRendered();
+      if (res.status === 409) {
+        // Not rendered yet (or its render failed): render it now and wait, rather than telling
+        // the user to come back later.
+        const rendered = await requestRenderNow(selectedPage.id);
+        if (rendered.ok) {
+          res = await fetchRendered();
+        } else {
+          const body = (await rendered.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          showToast(
+            rendered.status === 503
+              ? "The renderer is busy; the page will be ready in a few seconds."
+              : `This page could not be rendered: ${body.error ?? "unknown error"}`,
+            "error",
+          );
+          return;
+        }
+      }
       if (res.status === 409) {
         const body = (await res.json().catch(() => ({}))) as {
           status?: string;
@@ -2913,7 +2978,14 @@ export const Reader: React.FC<ReaderProps> = ({
     } else {
       runExport();
     }
-  }, [selectedPage, user, dirtyElements, saveAllPendingChanges, showToast]);
+  }, [
+    selectedPage,
+    user,
+    dirtyElements,
+    saveAllPendingChanges,
+    showToast,
+    requestRenderNow,
+  ]);
 
   const handleExportZip = useCallback(async () => {
     if (!selectedPage || !imgRef.current) return;
@@ -4244,6 +4316,52 @@ export const Reader: React.FC<ReaderProps> = ({
                     );
                   })}
 
+                {/* Review regions with "Show debug" off: no mark on the page (user decision,
+                    2026-09-30), but a click on one still opens it, and the one open in the
+                    inspector is outlined. Under the text layers, so clicking English still
+                    selects the element. */}
+                {!showOcr && !cleanScanlationView && !inpaintingView && (
+                  <g data-testid="review-hit-areas">
+                    {issues.map(({ region }) => (
+                      <rect
+                        key={`review-hit-${region.id}`}
+                        data-review-region={region.id}
+                        x={region.bboxX}
+                        y={region.bboxY}
+                        width={region.bboxW}
+                        height={region.bboxH}
+                        fill="transparent"
+                        style={{
+                          cursor: "pointer",
+                          pointerEvents:
+                            interactionMode !== "none" ? "none" : "all",
+                        }}
+                        onClick={() => selectRegionForReview(region)}
+                      />
+                    ))}
+                    {selectedRegionId &&
+                      (() => {
+                        const region = allRegionsById.get(selectedRegionId);
+                        return region ? (
+                          <rect
+                            data-review-selected={region.id}
+                            x={region.bboxX}
+                            y={region.bboxY}
+                            width={region.bboxW}
+                            height={region.bboxH}
+                            className="svg-ocr-box"
+                            style={{
+                              fill: "var(--primary-glow-selected)",
+                              stroke: "var(--primary)",
+                              strokeWidth: 2.5,
+                              pointerEvents: "none",
+                            }}
+                          />
+                        ) : null;
+                      })()}
+                  </g>
+                )}
+
                 {sortedLayers.map((lData) => {
                   const hasTranslation = layers.some(
                     (ld) => ld.layer.type === "translation",
@@ -4316,7 +4434,10 @@ export const Reader: React.FC<ReaderProps> = ({
                     // the patch is hidden or deleted the source shows instead.
                     // Region-less text (manual, or imported) is never plated either: the
                     // export draws it as manual text over the page. Only an "Add Mask" element
-                    // (no text) keeps its editor-only plate.
+                    // (no text) keeps its editor-only plate. A region's element with no text
+                    // (QA emptied it) draws nothing, as in the export: it used to leave a
+                    // blank white box on the page.
+                    const hasText = Boolean((element.text || "").trim());
                     const isMaskEnabled =
                       (cleanScanlationView || element.wordWrap) &&
                       !regionHasPatch(
@@ -4324,7 +4445,7 @@ export const Reader: React.FC<ReaderProps> = ({
                           ? allRegionsById.get(element.regionId)
                           : null,
                       ) &&
-                      !(!element.regionId && (element.text || "").trim());
+                      (element.regionId ? hasText : !hasText);
 
                     return (
                       <g
@@ -4893,9 +5014,10 @@ export const Reader: React.FC<ReaderProps> = ({
           </div>
         </div>
 
-        {/* Right Sidebar (Property Inspector); the mask editor's panel takes its place. Shown
-            even when the sidebar is toggled off: the view has no other way to Apply or leave. */}
-        {inpaintingView && (
+        {/* Right Sidebar (Property Inspector); the mask editor's panel takes its place and
+            follows the same toggle (user review, 2026-10-02). The navbar toggle that hides it
+            brings it back, with Apply and Done; marks drawn meanwhile are kept. */}
+        {inpaintingView && showRightSidebar && (
           <div
             ref={setInpaintingPanelHost}
             data-testid="inpainting-panel-host"

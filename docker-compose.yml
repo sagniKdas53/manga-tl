@@ -186,6 +186,8 @@ services:
       - WORKER_URLS=${WORKER_URLS:-http://worker:8000}
       - WORKER_POLL_MS=${WORKER_POLL_MS:-2000}
       - RENDER_DEBOUNCE_SECONDS=${RENDER_DEBOUNCE_SECONDS:-30}
+      # Editor edits and Export render through it directly (render_now.rs), not the worker queue.
+      - PAGE_RENDERER_URL=${PAGE_RENDERER_URL:-http://page-renderer:8090}
       - WORKER_API_SECRET_FILE=/run/secrets/worker_api_secret
       - USE_REMOTE_ML=${USE_REMOTE_ML:-false}
       - REMOTE_ML_URL=${REMOTE_ML_URL:-http://worker:8000}
