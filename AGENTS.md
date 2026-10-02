@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **manga-library** (14088 symbols, 23784 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **manga-library** (14672 symbols, 25421 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -44,7 +44,7 @@ This project is indexed by GitNexus as **manga-library** (14088 symbols, 23784 r
 
 ## The worker is a separate index
 
-`worker/` is a git submodule and is indexed as its own repo, **`manga-tl-worker`** (975 symbols, 1825 relationships, 79 execution flows).
+`worker/` is a git submodule and is indexed as its own repo, **`manga-tl-worker`** (2191 symbols, 4491 relationships, 186 execution flows).
 
 - **`detect_changes()` on `manga-library` cannot see inside `worker/`.** It runs `git diff` in this repo, which sees the submodule as a pointer — it returns `changed_count: 0` for a commit that rewrote worker modules. For worker changes run `detect_changes({repo: "manga-tl-worker"})`.
 - Passing `worktree: "<path>/worker"` does **not** work — it is rejected as "not a worktree of repo manga-library".

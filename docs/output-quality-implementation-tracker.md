@@ -2,7 +2,71 @@
 
 Start with the current checkpoint below and the [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md). The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
 
-Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25-ocr-threshold-added-2026-09-26). Read the summary and [current next-session handoff](output-quality-next-session-20260929.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section, and the [plan for 2026-10-03](#plan-for-2026-10-03-user-2026-10-02-late) comes first. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25-ocr-threshold-added-2026-09-26). Read the summary and [current next-session handoff](output-quality-next-session-20260929.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+
+## Plan for 2026-10-03 (user, 2026-10-02 late)
+
+Decided by the user tonight:
+- **No re-renders.** Old pages keep their pre-R7 images.
+- **Admin rights.** The admin-only question is replaced by a flag (item 2 below).
+- **Production deploy.** The deploy runs on the test stack's data.
+- **Order.** Low-hanging items first, then free corpus space, then get ready for typesetting. The
+  corpus is rebuilt only after this whole tracker is done.
+
+Each item says whether it makes output better or is upkeep.
+
+**Morning: low-hanging items**
+1. **Finish the production deploy (upkeep).** Prod is already backed up to
+   `~/Documents/docker-composes/manga-tl-backups/prod-pre-r7-20261002/` on chrome-box. That folder
+   holds `data.tar` (20,688 entries, checked against the live folder), `.env`, `secrets/`, the
+   compose file, the git head and the staged edit.
+   - What's left: copy the test stack's volumes into prod's `data/` (prod's own data moves to
+     `data/old-3`, nothing is deleted), take the test stack's DB and MinIO passwords, put the three
+     ONNX models where prod's worker reads them, and pull `main`.
+   - The user runs this. Agent auto mode blocks changes to production.
+2. **Self-hosted admin flag (upkeep, new item I).** This is a self-hosted app, so one setting
+   should let every signed-in user do every admin task: delete things, change settings, see health.
+   - Proposal: resolve it once, in the auth extractor. With the flag on, every authenticated user
+     is treated as `admin`, and `/api/auth/me` reports it, so the frontend's admin UI
+     (`NavBar.tsx`) follows with no further changes.
+   - The role checks are spread over `routes/page.rs`, `settings.rs`, `health.rs`, `series.rs`,
+     `manual_cleanup.rs`, `auth.rs` and `layers.rs`. This way none of them change.
+   - Default on in the shipped compose files. Tests cover both settings.
+3. **G1: fonts before the first fit (output).** The editor waits for the page's fonts before it
+   fits text, and fits again when `document.fonts` finishes loading. This fixes ch. 6 p. 1 wrapping
+   to eight lines in the editor and six in the export. Frontend only.
+4. **G3 and G4 (output, matching).**
+   - G3: pipeline elements marked elliptical wrap in the ellipse in the editor but in the rectangle
+     in the export.
+   - G4: the export ZIP still writes a text element's polygon as a "fallback plate", and an import
+     turns it into a patch.
+5. **H1 and H2 (upkeep).**
+   - H1: validate `PUT /pages/{id}/scene` against the full JSON Schema.
+   - H2: fence a manual repaint's callback on a digest of the patches under it.
+   - Both are review leftovers with no visible effect today. Do them if the morning has room.
+6. **Housekeeping on the copied data (upkeep).** The test data brings along the throwaway user
+   `bunny-import-c68d0f@example.invalid`, which owns the SpaceBunny images. Reassign
+   `images.created_by` to the user's account, then delete the throwaway. Also delete the laptop
+   throwaway account.
+
+**Midday: free corpus space (upkeep, about 17 GB).** Phase 0 and Phase 1.1–1.2 of the corpus-v2 plan
+(`corpus/docs/CORPUS_V2_PLAN.md`, in the private corpus repo).
+- Phase 0: write the baseline inventory and tag `v1-baseline`.
+- Phase 1.1–1.2: remove the two merged worktrees under `corpus/.claude/worktrees/` (16.4 GB) and
+  the `torii/images/` copies (896 files, about 0.6 GB).
+- MEGA sync is paused first. The agent prepares a hash-checked list and the user runs the deletes.
+
+**Afternoon: get ready for typesetting (output).** Write the C + G packet; no code yet.
+- C: split `background_color` into an outline colour and a plate colour (migration, golden OpenAPI
+  hand-edit, frontend types).
+- Measure the Torii contrast halo from the 270 bundles (`strokeColor`, `lineWidth` against font
+  size). This costs nothing.
+- G2: `maskPolygon` in the page-scene contract.
+- Choose the test pages: ch. 6 p. 1, the six fixtures, and masked and elliptical elements.
+- Scope M7's single text renderer.
+
+**After the tracker is done:** the rest of corpus-v2 (asset store, identity screening, splits,
+orphan recovery), then M9.
 
 ## Status at a glance (2026-10-02, night — R7 merged)
 
