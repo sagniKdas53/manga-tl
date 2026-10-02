@@ -119,17 +119,21 @@ function InpaintingCanvas({ editor }: { editor: InpaintingEditorState }) {
     };
   };
 
-  // The brush outline follows the pointer without a React render per move.
+  // The brush outline follows the pointer without a React render per move. The ring sits inside
+  // the reader's zoom transform, so it is placed in the host's own (unzoomed) CSS pixels: screen
+  // pixels there are scaled again, and at 220 % the ring drifted away from where the paint landed.
   const moveCursor = (e: React.PointerEvent<HTMLElement>) => {
     const ring = cursor.current;
     if (!ring) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const size = (brushSize * rect.width) / Math.max(1, width);
+    const host = e.currentTarget;
+    const rect = host.getBoundingClientRect();
+    const zoom = host.offsetWidth > 0 ? rect.width / host.offsetWidth : 1;
+    const size = (brushSize * (rect.width / zoom)) / Math.max(1, width);
     ring.style.display = "block";
     ring.style.width = `${size}px`;
     ring.style.height = `${size}px`;
-    ring.style.left = `${e.clientX - rect.left - size / 2}px`;
-    ring.style.top = `${e.clientY - rect.top - size / 2}px`;
+    ring.style.left = `${(e.clientX - rect.left) / zoom - size / 2}px`;
+    ring.style.top = `${(e.clientY - rect.top) / zoom - size / 2}px`;
   };
 
   const finish = () => {

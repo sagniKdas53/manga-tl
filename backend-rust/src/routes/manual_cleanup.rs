@@ -7,7 +7,8 @@
 //!
 //! The job's queue is first among the heavy queues, so a repaint does not wait behind a chapter's
 //! pipeline. The patch element is marked manually edited, so the re-render it causes queues no
-//! paid QA pass.
+//! paid QA pass; the callback renders the page straight away (`render_now`), as an element save
+//! does.
 
 use axum::Json;
 use axum::extract::{Path, State};
@@ -412,8 +413,26 @@ pub async fn apply_callback(
             )
             .await;
     }
-    if let Err(problem) = applied {
-        tracing::warn!("Manual repaint for page {} failed: {problem}", page.id);
+    match applied {
+        Err(problem) => {
+            tracing::warn!("Manual repaint for page {} failed: {problem}", page.id);
+        }
+        // The repaint lands long after the editor's request returned, so the editor cannot ask for
+        // the render the way an element save does; until now it waited for Export (user review,
+        // 2026-10-02). Spawned, so the worker's callback is answered without waiting on Chromium.
+        Ok(()) => {
+            let state = state.clone();
+            let page_id = page.id;
+            tokio::spawn(async move {
+                match crate::render_now::render_page_now(&state, page_id).await {
+                    crate::render_now::RenderNow::Current { .. } => {}
+                    crate::render_now::RenderNow::Failed(error)
+                    | crate::render_now::RenderNow::Unavailable(error) => {
+                        tracing::warn!("Render after the repaint of page {page_id}: {error}");
+                    }
+                }
+            });
+        }
     }
     Ok(())
 }

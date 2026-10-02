@@ -1488,6 +1488,18 @@ export const Reader: React.FC<ReaderProps> = ({
     [user.token, showToast, showError, selectedPage, requestRenderNow],
   );
 
+  /**
+   * Renders the open page after a hand edit that is not an element save: deleting or restoring a
+   * patch, adding or deleting an element, showing, hiding or deleting a layer. Element saves
+   * render when they flush; these used to wait for Export (user review, 2026-10-02).
+   */
+  const renderCurrentPage = useCallback(() => {
+    if (!selectedPage) return;
+    requestRenderNow(selectedPage.id).catch((err) =>
+      console.error("Render request failed", err),
+    );
+  }, [selectedPage, requestRenderNow]);
+
   const triggerAutoSave = useCallback(
     (element: LayerElement) => {
       const id = element.id;
@@ -1529,9 +1541,10 @@ export const Reader: React.FC<ReaderProps> = ({
         })),
       );
       setSelectedItem((prev) => (prev?.id === element.id ? null : prev));
+      renderCurrentPage();
       return true;
     },
-    [user.token, showToast],
+    [user.token, showToast, renderCurrentPage],
   );
 
   /** Re-creates a deleted patch from its snapshot; every stacked step for it follows the new id. */
@@ -1573,9 +1586,10 @@ export const Reader: React.FC<ReaderProps> = ({
             : l,
         ),
       );
+      renderCurrentPage();
       return restored;
     },
-    [user.token, showToast],
+    [user.token, showToast, renderCurrentPage],
   );
 
   const handleUndo = useCallback(async () => {
@@ -2486,6 +2500,7 @@ export const Reader: React.FC<ReaderProps> = ({
       );
 
       setSelectedItem(elementWithFlag);
+      renderCurrentPage();
     } catch (err) {
       console.error(err);
       alert("Error creating layer element.");
@@ -2622,6 +2637,7 @@ export const Reader: React.FC<ReaderProps> = ({
               })),
             );
             setSelectedItem(null);
+            renderCurrentPage();
             showToast("Element deleted successfully", "success");
           } else if (res.status === 403) {
             showToast(
@@ -2714,7 +2730,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
     // Persist to backend
     try {
-      await safeFetch(`/api/layers/${layerId}`, {
+      const res = await safeFetch(`/api/layers/${layerId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -2725,6 +2741,7 @@ export const Reader: React.FC<ReaderProps> = ({
       if (isRedoOverlay(layerData.layer)) {
         refreshAfterOverlayChange();
       }
+      if (res.ok) renderCurrentPage();
     } catch (err) {
       console.error("Failed to persist layer visibility toggle:", err);
     }
@@ -2754,6 +2771,7 @@ export const Reader: React.FC<ReaderProps> = ({
             if (deleted && isRedoOverlay(deleted.layer)) {
               refreshAfterOverlayChange();
             }
+            renderCurrentPage();
             showToast("Layer deleted successfully", "success");
           } else if (res.status === 403) {
             showToast(

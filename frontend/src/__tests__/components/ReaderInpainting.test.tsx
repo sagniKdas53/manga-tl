@@ -530,6 +530,28 @@ describe("Reader Inpainting layer (tracker R7)", () => {
     );
   });
 
+  it("renders the page after a layer is hidden or a patch deleted, not only on Export", async () => {
+    // User review 2026-10-02: only element saves asked for a render; mask changes waited for Export.
+    await renderReader();
+    fireEvent.click(screen.getAllByRole("button", { name: "Hide layer" })[0]);
+    await waitFor(() =>
+      expect(calls("POST", /\/api\/pages\/p1\/render$/)).toHaveLength(1),
+    );
+
+    fireEvent.click(
+      document.querySelector('[data-cleanup-id="cleanup-patch-el"]')!,
+    );
+    fireEvent.click(await screen.findByText("Delete patch"));
+    await waitFor(() =>
+      expect(calls("DELETE", /\/api\/layer-elements\/patch-el$/)).toHaveLength(
+        1,
+      ),
+    );
+    await waitFor(() =>
+      expect(calls("POST", /\/api\/pages\/p1\/render$/)).toHaveLength(2),
+    );
+  });
+
   it("keeps an edit whose save failed pending, and saves it on the next flush", async () => {
     const base = mockSafeFetch.getMockImplementation()!;
     let puts = 0;
@@ -930,6 +952,44 @@ describe("Mask editor (inpainting view)", () => {
     );
     await waitFor(() => expect(overlay.textContent).toContain("Hello"));
     expect(screen.queryByTestId("inpainting-canvas")).toBeNull();
+  });
+
+  it("keeps the brush ring on the pointer, and the paint under it, when the page is zoomed", async () => {
+    // User review 2026-10-02: at 220 % the ring sat zoom× further from the page's corner than the
+    // pointer, so the paint landed up and left of where the user aimed.
+    await renderReader();
+    await act(async () => {
+      fireEvent.click(screen.getByText("Inpainting"));
+    });
+    await screen.findByRole("toolbar", { name: "Inpainting tools" });
+    const canvas = screen.getByTestId("inpainting-canvas");
+    // Zoomed 2×: 1200 CSS pixels wide on its own, 2400 on screen.
+    Object.defineProperty(canvas, "offsetWidth", { value: 1200 });
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      left: 100,
+      top: 50,
+      width: 2400,
+      height: 3200,
+      right: 2500,
+      bottom: 3250,
+      x: 100,
+      y: 50,
+      toJSON: () => ({}),
+    });
+    fireEvent.pointerMove(canvas, { clientX: 500, clientY: 850, pointerId: 1 });
+    const ring = canvas.querySelector<HTMLDivElement>(
+      "div[style*='border-radius']",
+    )!;
+    const size = parseFloat(ring.style.width);
+    // Page pixel (200, 400) is CSS pixel (200, 400) inside the zoomed box.
+    expect(parseFloat(ring.style.left) + size / 2).toBeCloseTo(200);
+    expect(parseFloat(ring.style.top) + size / 2).toBeCloseTo(400);
+
+    fireEvent.pointerDown(canvas, { clientX: 500, clientY: 850, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 500, clientY: 850, pointerId: 1 });
+    expect(marksOf(screen.getByTestId("inpainting-paint")).has("200,400")).toBe(
+      true,
+    );
   });
 
   it("puts its tools in the sidebar's place, never pans while painting, and restores what the eraser marks", async () => {

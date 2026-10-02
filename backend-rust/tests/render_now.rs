@@ -308,6 +308,94 @@ async fn an_edited_page_renders_in_the_request_and_queues_no_qa() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 
+    // A mask repaint lands: the page renders again without anyone asking (user review,
+    // 2026-10-02 — it used to wait for Export).
+    let (patch, mask) = (
+        hex::encode(Sha256::digest(b"patch")),
+        hex::encode(Sha256::digest(b"mask")),
+    );
+    for (digest, bytes) in [(&patch, b"patch".to_vec()), (&mask, b"mask".to_vec())] {
+        state
+            .storage
+            .upload_bytes(
+                &manga_backend::page_scene_builder::scene_asset_path(page_id, digest),
+                bytes,
+                "image/png",
+            )
+            .await
+            .unwrap();
+    }
+    let job_id = Uuid::new_v4().to_string();
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, image_id, page_id, attempt, max_attempts, payload, \
+           input_generation, lease_token, created_at, updated_at) \
+         VALUES ($1, 'manual-cleanup', 'PROCESSING', $2, $3, 1, 3, '{}', \
+           (SELECT input_generation FROM pages WHERE id = $3), 'lease-m', now(), now())",
+    )
+    .bind(&job_id)
+    .bind(image_id)
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("manual job");
+    let input_generation: i32 =
+        sqlx::query_scalar("SELECT input_generation FROM jobs WHERE id = $1")
+            .bind(&job_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let callback = json!({
+        "jobId": job_id, "imageId": image_id, "pageId": page_id, "status": "complete",
+        "cleanupPatchSha256": patch, "cleanupPatchByteLength": 5,
+        "cleanupMaskSha256": mask, "cleanupMaskByteLength": 4,
+        "cleanupGeneratorSha256": "0".repeat(64),
+        "cleanupBounds": { "x": 30, "y": 40, "width": 16, "height": 12 },
+        "diagnostics": ["manual repaint: aot (mode=auto)"],
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/tlhub/api/internal/jobs/callback/manual-cleanup")
+        .header("Content-Type", "application/json")
+        .header("X-Internal-Token", "test-internal-token")
+        .header("X-Job-Id", &job_id)
+        .header("X-Job-Attempt", "1")
+        .header("X-Input-Generation", input_generation.to_string())
+        .header("X-Lease-Token", "lease-m")
+        .body(Body::from(callback.to_string()))
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    // Its revision is the page's current one (taking the snapshot may advance it again).
+    let rendered_current = || async {
+        sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS (SELECT 1 FROM page_render_jobs l JOIN pages p ON p.id = l.page_id \
+               WHERE l.page_id = $1 AND l.page_revision = p.scene_revision \
+                 AND l.page_revision > 1 AND l.status = 'succeeded')",
+        )
+        .bind(page_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while !rendered_current().await {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the repaint never reached a render"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    let sent = last.lock().unwrap().clone();
+    assert_eq!(
+        sent["scene"]["cleanupAssets"][0]["href"],
+        format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(b"patch")
+        ),
+        "the render draws the new patch"
+    );
+
     for statement in [
         "DELETE FROM jobs WHERE page_id = $1",
         "DELETE FROM pages WHERE id = $1",
