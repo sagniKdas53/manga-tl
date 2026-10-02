@@ -205,7 +205,13 @@ describe("contract rule 8: the editor's typography", () => {
       {
         objectId: "text-page-30",
         text: "Which one do\n you think it'll \nbe today?",
-        transform: { x: 3559, y: 538, width: 1004, height: 1402, rotationDegrees: 0 },
+        transform: {
+          x: 3559,
+          y: 538,
+          width: 1004,
+          height: 1402,
+          rotationDegrees: 0,
+        },
         writingMode: "horizontal-tb",
         alignment: "center",
         style: {
@@ -244,10 +250,13 @@ describe("contract rule 8: the editor's typography", () => {
 
   it("sets italic on the glyphs and in the measuring font", () => {
     const fonts: string[] = [];
-    const scene = resolvePageScene(page30({ fontStyle: "italic" }), (font, text) => {
-      fonts.push(font);
-      return measureText(font, text);
-    });
+    const scene = resolvePageScene(
+      page30({ fontStyle: "italic" }),
+      (font, text) => {
+        fonts.push(font);
+        return measureText(font, text);
+      },
+    );
     expect(fonts.every((font) => font.includes("italic"))).toBe(true);
     expect(renderPageSceneSvg(scene)).toContain('font-style="italic"');
   });
@@ -263,7 +272,10 @@ describe("contract rule 8: the editor's typography", () => {
           ...page30({}).textObjects[0],
           text,
           transform: box,
-          style: { ...page30({}).textObjects[0].style, ...(shape ? { shape } : {}) },
+          style: {
+            ...page30({}).textObjects[0].style,
+            ...(shape ? { shape } : {}),
+          },
         },
       ],
     });
@@ -271,7 +283,9 @@ describe("contract rule 8: the editor's typography", () => {
       Math.max(...scene.objects[0].lineBoxes.map((line) => line.width));
     const rectangle = resolvePageScene(input(), measureText);
     const ellipse = resolvePageScene(input("elliptical"), measureText);
-    expect(ellipse.objects[0].lineBoxes).not.toEqual(rectangle.objects[0].lineBoxes);
+    expect(ellipse.objects[0].lineBoxes).not.toEqual(
+      rectangle.objects[0].lineBoxes,
+    );
     expect(widest(ellipse) / ellipse.objects[0].fontSize).toBeLessThanOrEqual(
       widest(rectangle) / rectangle.objects[0].fontSize,
     );
