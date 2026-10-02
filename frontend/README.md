@@ -29,7 +29,7 @@ Web application for Manga Library, providing the interactive manga reader, canva
 
 ### Requirements
 
-- Node.js 20.19+ or 22.12+ (Vite 8 engine requirement)
+- Node.js 22.12+ (Vitest 5 needs it; Vite 8 alone would also run on 20.19+). CI uses Node 24.
 - Running backend instance (default `http://localhost:8080`)
 
 ### Running Locally
