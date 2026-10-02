@@ -31,9 +31,64 @@ pub struct ProviderData {
     pub capabilities: Vec<String>,
 }
 
+/// A model ID typed in by the owner rather than picked from the worker-published catalog: a
+/// stealth or brand-new model worth trying before it is curated. Valid for exactly its provider
+/// and task, and kept apart from `inner` so a catalog reload does not drop it.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CustomModel {
+    pub provider: String,
+    pub task: String,
+    pub id: String,
+}
+
+/// The catalog's task keys a custom model may be registered for.
+pub const CUSTOM_MODEL_TASKS: &[&str] = &["ocr", "tl", "qaLLM", "qaVLM"];
+
+impl CustomModel {
+    /// Trimmed, provider lowercased; `None` for a blank or orphan-marked ID, an unknown task, or
+    /// the local provider (its models are det+rec pairs baked into the worker image).
+    pub fn normalized(&self) -> Option<CustomModel> {
+        let provider = self.provider.trim().to_lowercase();
+        let task = CUSTOM_MODEL_TASKS
+            .iter()
+            .find(|t| t.eq_ignore_ascii_case(self.task.trim()))?;
+        let id = self.id.trim();
+        if provider.is_empty() || provider == "local" || id.is_empty() || id.contains("[ORPHANED]")
+        {
+            return None;
+        }
+        Some(CustomModel {
+            provider,
+            task: (*task).to_string(),
+            id: id.to_string(),
+        })
+    }
+
+    fn matches(&self, provider: &str, task: &str, id: &str) -> bool {
+        self.provider == provider.trim().to_lowercase()
+            && self.task == task
+            && self.id.eq_ignore_ascii_case(id.trim())
+    }
+}
+
+/// Normalizes a list and drops duplicates, keeping the first spelling.
+pub fn normalize_custom_models(models: &[CustomModel]) -> Vec<CustomModel> {
+    let mut out: Vec<CustomModel> = Vec::new();
+    for model in models.iter().filter_map(CustomModel::normalized) {
+        if !out
+            .iter()
+            .any(|m| m.matches(&model.provider, &model.task, &model.id))
+        {
+            out.push(model);
+        }
+    }
+    out
+}
+
 #[derive(Default)]
 pub struct ProviderConfigCache {
     inner: RwLock<HashMap<String, ProviderData>>,
+    custom: RwLock<Vec<CustomModel>>,
 }
 
 impl ProviderConfigCache {
@@ -154,6 +209,23 @@ impl ProviderConfigCache {
         self.inner.read().expect("provider cache poisoned").clone()
     }
 
+    /// Replaces the owner's custom model IDs (System Settings `customModels`).
+    pub fn set_custom_models(&self, models: Vec<CustomModel>) {
+        *self.custom.write().expect("provider cache poisoned") = normalize_custom_models(&models);
+    }
+
+    pub fn custom_models(&self) -> Vec<CustomModel> {
+        self.custom.read().expect("provider cache poisoned").clone()
+    }
+
+    fn is_custom_model(&self, provider: &str, model: &str, task: &str) -> bool {
+        self.custom
+            .read()
+            .expect("provider cache poisoned")
+            .iter()
+            .any(|m| m.matches(provider, task, model))
+    }
+
     /// Providers offering `task`, sorted by priority ascending.
     pub fn get_providers_for_task(&self, task: &str) -> Vec<String> {
         let map = self.snapshot();
@@ -206,6 +278,32 @@ impl ProviderConfigCache {
             }
             out.insert(name, serde_json::Value::Object(tasks));
         }
+        // Custom IDs join their provider's list for the task, flagged, after the curated ones.
+        // A provider the catalog does not publish gets none: nothing could run them.
+        for custom in self.custom_models() {
+            let Some(serde_json::Value::Object(tasks)) = out.get_mut(&custom.provider) else {
+                continue;
+            };
+            let list = tasks
+                .entry(custom.task.clone())
+                .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+            let Some(list) = list.as_array_mut() else {
+                continue;
+            };
+            let listed = list.iter().any(|m| {
+                m.get("id")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|id| id.eq_ignore_ascii_case(&custom.id))
+            });
+            if !listed {
+                list.push(serde_json::json!({
+                    "id": custom.id,
+                    "name": custom.id,
+                    "free": custom.id.ends_with(":free"),
+                    "custom": true
+                }));
+            }
+        }
         serde_json::Value::Object(out)
     }
 
@@ -224,6 +322,9 @@ impl ProviderConfigCache {
         };
         if model.trim().is_empty() || model.contains("[ORPHANED]") {
             // Provider valid; the model will resolve to its default anyway.
+            return true;
+        }
+        if self.is_custom_model(&key, model, task) {
             return true;
         }
         data.models
@@ -322,6 +423,55 @@ mod tests {
             "deepseek/deepseek-v4-pro",
             "tl"
         ));
+    }
+
+    #[test]
+    fn a_custom_model_is_valid_for_its_provider_and_task_only_and_survives_a_reload() {
+        let cache = cache_from(CATALOG_JSON);
+        cache.set_custom_models(vec![
+            CustomModel {
+                provider: " OpenRouter ".into(),
+                task: "tl".into(),
+                id: " stealth/space-bunny-alpha ".into(),
+            },
+            // Dropped: local models are baked into the worker, and blank or orphaned IDs.
+            CustomModel {
+                provider: "local".into(),
+                task: "ocr".into(),
+                id: "x".into(),
+            },
+            CustomModel {
+                provider: "openrouter".into(),
+                task: "qaLLM".into(),
+                id: "  ".into(),
+            },
+            CustomModel {
+                provider: "openrouter".into(),
+                task: "tl".into(),
+                id: "Stealth/Space-Bunny-Alpha".into(),
+            },
+        ]);
+        assert_eq!(
+            cache.custom_models().len(),
+            1,
+            "normalized and deduplicated"
+        );
+        assert!(cache.is_valid_provider_model("openrouter", "stealth/space-bunny-alpha", "tl"));
+        assert!(!cache.is_valid_provider_model("openrouter", "stealth/space-bunny-alpha", "qaLLM"));
+        assert!(!cache.is_valid_provider_model("gemini", "stealth/space-bunny-alpha", "tl"));
+
+        let tl = cache.get_provider_models_map()["openrouter"]["tl"].clone();
+        let entry = tl
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["id"] == "stealth/space-bunny-alpha")
+            .expect("custom entry listed");
+        assert_eq!(entry["custom"], true);
+
+        // A catalog reload replaces `inner` only.
+        *cache.inner.write().unwrap() = ProviderConfigCache::parse(CATALOG_JSON).unwrap();
+        assert!(cache.is_valid_provider_model("openrouter", "stealth/space-bunny-alpha", "tl"));
     }
 
     #[test]

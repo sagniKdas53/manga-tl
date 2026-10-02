@@ -1,0 +1,12 @@
+{
+  "base_fixture": "inpainting-edits-valid.json",
+  "cases": [
+    {"name": "ownerless-cleanup-without-manual-object", "operations": [{"op": "remove", "path": "/objects/3"}]},
+    {"name": "opacity-above-one", "operations": [{"op": "replace", "path": "/cleanup_artifacts/1/opacity", "value": 1.5}]},
+    {"name": "opacity-negative", "operations": [{"op": "replace", "path": "/cleanup_artifacts/0/opacity", "value": -0.1}]},
+    {"name": "automatic-text-cites-ownerless-cleanup", "operations": [{"op": "replace", "path": "/objects/0/cleanup_ids", "value": ["cleanup-kept"]}]},
+    {"name": "font-size-zero", "operations": [{"op": "replace", "path": "/objects/0/style/font_size", "value": 0}]},
+    {"name": "font-style-oblique", "operations": [{"op": "replace", "path": "/objects/0/style/font_style", "value": "oblique"}]},
+    {"name": "shape-polygon", "operations": [{"op": "replace", "path": "/objects/0/style/shape", "value": "polygon"}]}
+  ]
+}

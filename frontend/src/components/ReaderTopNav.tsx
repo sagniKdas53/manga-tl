@@ -4,6 +4,8 @@ import IconButton from "@mui/material/IconButton";
 import Box from "@mui/material/Box";
 import Tooltip from "@mui/material/Tooltip";
 import MenuOpenIcon from "@mui/icons-material/MenuOpen";
+import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
+import ButtonBase from "@mui/material/ButtonBase";
 
 interface ReaderTopNavProps {
   title: string;
@@ -18,6 +20,10 @@ interface ReaderTopNavProps {
   onToggleRightSidebar: () => void;
   leftSidebarOpen?: boolean;
   rightSidebarOpen?: boolean;
+  /** Regions on this page that still need a person to look at them. */
+  reviewCount?: number;
+  /** Jump to the next region needing review. */
+  onReviewClick?: () => void;
 }
 
 const navButtonSx = (active?: boolean) => ({
@@ -40,6 +46,8 @@ export default function ReaderTopNav({
   onToggleRightSidebar,
   leftSidebarOpen,
   rightSidebarOpen,
+  reviewCount = 0,
+  onReviewClick,
 }: ReaderTopNavProps) {
   return (
     <Box
@@ -156,7 +164,39 @@ export default function ReaderTopNav({
         )}
       </Box>
 
-      <Box sx={{ flex: "0 0 auto" }}>
+      <Box
+        sx={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 1 }}
+      >
+        {reviewCount > 0 && (
+          <Tooltip title="Show the next region that needs a look">
+            <ButtonBase
+              onClick={onReviewClick}
+              aria-label={`${reviewCount} region${reviewCount === 1 ? "" : "s"} to review`}
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+                px: 1,
+                py: 0.25,
+                borderRadius: "999px",
+                fontSize: "12px",
+                fontWeight: 600,
+                color: "var(--warning)",
+                border: "1px solid var(--warning)",
+                backgroundColor:
+                  "color-mix(in srgb, var(--warning) 12%, transparent)",
+                transition: "background-color 0.15s ease",
+                "&:hover": {
+                  backgroundColor:
+                    "color-mix(in srgb, var(--warning) 22%, transparent)",
+                },
+              }}
+            >
+              <WarningAmberRoundedIcon sx={{ fontSize: 15 }} />
+              {reviewCount} to review
+            </ButtonBase>
+          </Tooltip>
+        )}
         <Tooltip title={rightSidebarOpen ? "Hide Inspector" : "Show Inspector"}>
           <IconButton
             size="small"

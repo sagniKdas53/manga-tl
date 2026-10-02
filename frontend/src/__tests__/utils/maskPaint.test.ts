@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { paintLayerMask } from "../../utils/maskPaint";
-import type { LayerElement, OcrRegion } from "../../types";
+import type { LayerElement } from "../../types";
 
 /**
  * The overlap rule for erasure masks.
@@ -149,13 +149,32 @@ describe("paintLayerMask", () => {
     expect(calls.map((c) => c.style)).toEqual(["#bbbbbb"]);
   });
 
-  it("falls back to the element box when there is no polygon", () => {
+  it("falls back to the element box when a manual element has no polygon", () => {
     const { calls } = run([
       element({ boxShape: "rectangular", backgroundColor: "#cccccc" }),
       element({ boxShape: "elliptical", backgroundColor: "#dddddd" }),
     ]);
     expect(calls.map((c) => c.kind)).toEqual(["fillRect", "fill"]);
     expect(calls.every((c) => c.op === "destination-over")).toBe(true);
+  });
+
+  // Tracker R2: the worker returns no mask for free-standing text on artwork -- no container,
+  // no flat ground -- and the text goes over the source. Painting the box instead would be the
+  // plate the worker refused, in the widened free-text rectangle at that.
+  it("paints nothing for a pipeline element with no polygon", () => {
+    const { calls } = run([
+      element({
+        regionId: "r1",
+        boxShape: "rectangular",
+        backgroundColor: "#cccccc",
+      }),
+      element({
+        regionId: "r2",
+        boxShape: "elliptical",
+        backgroundColor: "#dddddd",
+      }),
+    ]);
+    expect(calls).toHaveLength(0);
   });
 
   // An element with no text must not erase: the mask would wipe the artwork and put nothing
@@ -173,29 +192,17 @@ describe("paintLayerMask", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("turns the box fill with the element but leaves the polygon alone (AUDIT-R5)", () => {
+  it("leaves the polygon alone whatever the element's rotation (AUDIT-R5)", () => {
     // `rotation` is the angle of the *box*, which is stored unrotated. A maskPolygon is the
-    // opposite: already in absolute page coordinates with the angle baked in. Turning both would
-    // double-rotate the plate; turning neither is what laid a straight white rectangle across
-    // artwork beside every rotated caption.
-    const region = {
-      id: "r1",
-      bboxW: 40,
-      bboxH: 40,
-      bubbleW: 40,
-      bubbleH: 40,
-    } as unknown as OcrRegion;
+    // opposite: already in absolute page coordinates with the angle baked in. Since tracker R2
+    // the polygon is the whole plate for pipeline text -- the box fill that used to follow it
+    // for free-standing text is gone -- so there is exactly one fill, and it is not turned.
     const { ctx, calls } = recordingCtx();
-    paintLayerMask(
-      ctx as unknown as CanvasRenderingContext2D,
-      [element({ regionId: "r1", maskPolygon: square(0), rotation: 30 })],
-      new Map([["r1", region]]),
-    );
-
-    expect(calls.map((c) => [c.kind, c.rotation])).toEqual([
-      ["fill", 0], // the polygon: page-space, never turned again
-      ["fillRect", 30], // the box: stored unrotated, so it turns here
+    paintLayerMask(ctx as unknown as CanvasRenderingContext2D, [
+      element({ regionId: "r1", maskPolygon: square(0), rotation: 30 }),
     ]);
+
+    expect(calls.map((c) => [c.kind, c.rotation])).toEqual([["fill", 0]]);
   });
 
   it("turns a box-only element too, with no polygon in play", () => {

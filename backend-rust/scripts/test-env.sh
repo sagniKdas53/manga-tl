@@ -62,7 +62,7 @@ cmd_run() {
   export SPRING_DATASOURCE_PASSWORD=testdbpass
   export REDIS_TEST_ADDR="127.0.0.1:${REDIS_PORT}"
   export MINIO_TEST_ENDPOINT="http://127.0.0.1:${MINIO_PORT}"
-  export JOBS_E2E_DATABASE_URL="postgres://postgres:testdbpass@127.0.0.1:${DB_PORT}/manga_library_jobs_e2e"
+  export JOBS_E2E_DATABASE_URL="jdbc:postgresql://127.0.0.1:${DB_PORT}/manga_library_jobs_e2e"
   cd "${SCRIPT_DIR}/.."
   if [ "$#" -eq 0 ]; then
     exec bash -c 'cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test'

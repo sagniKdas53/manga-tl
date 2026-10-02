@@ -284,9 +284,11 @@ pub async fn handle_duplicate_image_cloning(
         return;
     }
 
-    // Prefer same chapter (2), then same series (1), then anything (0); ties break on id.
+    // Prefer a page whose cleanup ran (a clone of a clone may have none, and copying it would leave
+    // the Japanese on the page), then same chapter (2), same series (1), anything (0); ties break
+    // on id.
     #[derive(PartialEq, Eq, PartialOrd, Ord)]
-    struct Affinity(i32, Uuid);
+    struct Affinity(bool, i32, Uuid);
     let target_series: Option<Uuid> =
         sqlx::query_scalar("SELECT series_id FROM chapters WHERE id = $1")
             .bind(target_chapter.id)
@@ -317,10 +319,17 @@ pub async fn handle_duplicate_image_cloning(
                 .await
                 .ok()
                 .flatten();
+        let has_cleanup: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM ocr_regions WHERE page_id=$1 AND cleanup_patch_sha256 IS NOT NULL)",
+        )
+        .bind(p.id)
+        .fetch_one(&state.pool)
+        .await
+        .unwrap_or(false);
         let affinity = match (&chapter_of_page, target_series) {
-            (Some(ch), _) if ch.id == target_chapter.id => Affinity(2, p.id),
-            (Some(ch), Some(series)) if ch.series_id == series => Affinity(1, p.id),
-            _ => Affinity(0, p.id),
+            (Some(ch), _) if ch.id == target_chapter.id => Affinity(has_cleanup, 2, p.id),
+            (Some(ch), Some(series)) if ch.series_id == series => Affinity(has_cleanup, 1, p.id),
+            _ => Affinity(has_cleanup, 0, p.id),
         };
         candidates.push((affinity, p));
     }
@@ -359,6 +368,18 @@ pub async fn handle_duplicate_image_cloning(
     }
 
     let region_map = clone_ocr_data(&state.pool, source_page.id, new_page_id).await;
+    // Before translation: both paths below render, and the render must draw the cleaned page.
+    if let Err(err) = clone_cleanup_data(
+        &state.pool,
+        &state.storage,
+        source_page.id,
+        new_page_id,
+        &region_map,
+    )
+    .await
+    {
+        tracing::error!("Cloned page {new_page_id} could not copy its cleanup: {err}");
+    }
 
     let tl_matches = same(&source_config.tl_provider, &target_config.tl_provider)
         && same(&source_config.tl_model, &target_config.tl_model)
@@ -367,14 +388,19 @@ pub async fn handle_duplicate_image_cloning(
 
     if tl_matches {
         clone_translation_data(&state.pool, source_page.id, new_page_id, &region_map).await;
-        crate::jobs::coordinator::trigger_page_redo(
-            state,
-            new_page_id,
-            "render",
-            Some(target_chapter.id),
-        )
-        .await
-        .ok();
+        // AUDIT-B24: a render needs the page's scene snapshot, and a bare `render` job (the pre-R1
+        // shape) was refused by the worker three times. Marking the page edited hands it to the
+        // debounced render, which snapshots what was just cloned and renders that — the same
+        // path an editor edit takes.
+        let dirtied = async {
+            let mut tx = state.pool.begin().await?;
+            crate::page_freshness::advance_page_revision(&mut tx, new_page_id).await?;
+            tx.commit().await
+        }
+        .await;
+        if let Err(err) = dirtied {
+            tracing::error!("Cloned page {new_page_id} could not be marked for rendering: {err}");
+        }
     } else {
         crate::jobs::coordinator::trigger_page_redo(
             state,
@@ -387,7 +413,7 @@ pub async fn handle_duplicate_image_cloning(
     }
 }
 
-/// CloneOcrData: copies regions (clearing TL/QA fields) and the newest VISIBLE OCR layer.
+/// CloneOcrData: copies regions (clearing TL/QA fields) and the newest complete OCR layer.
 pub async fn clone_ocr_data(
     pool: &PgPool,
     source_page_id: Uuid,
@@ -400,10 +426,10 @@ pub async fn clone_ocr_data(
         .fetch_all(pool)
         .await
         .unwrap_or_default();
-    let Some(source_ocr_layer) = source_layers
-        .iter()
-        .filter(|l| l.layer_type.eq_ignore_ascii_case("ocr") && l.visible.unwrap_or(false))
-        .max_by_key(|l| l.z_order)
+    // Not filtered to visible: OCR layers are created hidden (2026-09-28), so "visible" no longer
+    // marks the current pass. Older passes sit lower; region-redo overlays are skipped.
+    let Some(source_ocr_layer) =
+        crate::jobs::coordinator::latest_complete_layer(&source_layers, "ocr")
     else {
         return region_map;
     };
@@ -473,7 +499,7 @@ pub async fn clone_ocr_data(
     .bind(cloned_layer_id)
     .bind(&source_ocr_layer.layer_type)
     .bind(&source_ocr_layer.target_language)
-    .bind(source_ocr_layer.visible)
+    .bind(false)
     .bind(source_ocr_layer.z_order)
     .bind(&source_ocr_layer.metadata_json)
     .bind(target_page_id)
@@ -497,6 +523,98 @@ pub async fn clone_ocr_data(
     }
 
     region_map
+}
+
+/// Copies the source regions' cleanup (patch, mask, bounds) onto their cloned regions and records
+/// it as the new page's Inpainting layer. Returns how many regions got a patch.
+///
+/// The storage objects are copied too: scene assets live under each page's own prefix
+/// (`scene_asset_path`) and the scene builder skips a patch whose files are not there. Without this
+/// a page whose image had already been processed skipped cleanup altogether and was translated
+/// with the Japanese still on it (2026-09-28, 13 pages of one chapter).
+pub async fn clone_cleanup_data(
+    pool: &PgPool,
+    storage: &crate::minio::MinioService,
+    source_page_id: Uuid,
+    target_page_id: Uuid,
+    region_map: &HashMap<Uuid, Uuid>,
+) -> Result<usize, String> {
+    use crate::page_scene_builder::scene_asset_path;
+
+    let source_regions: Vec<OcrRegion> = sqlx::query_as(
+        "SELECT * FROM ocr_regions WHERE page_id = $1 \
+         AND cleanup_patch_sha256 IS NOT NULL AND cleanup_mask_sha256 IS NOT NULL",
+    )
+    .bind(source_page_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let mut copied: Vec<(Uuid, &OcrRegion)> = Vec::new();
+    'regions: for region in &source_regions {
+        let Some(target_region_id) = region_map.get(&region.id) else {
+            continue;
+        };
+        let (Some(patch), Some(mask)) = (
+            region.cleanup_patch_sha256.as_deref(),
+            region.cleanup_mask_sha256.as_deref(),
+        ) else {
+            continue;
+        };
+        for sha in [patch, mask] {
+            let target_path = scene_asset_path(target_page_id, sha);
+            if storage.exists(&target_path).await {
+                continue;
+            }
+            let source_path = scene_asset_path(source_page_id, sha);
+            let Some(bytes) = storage.download_bytes(&source_path).await else {
+                tracing::warn!(
+                    "Cleanup asset {source_path} is missing; region {} is cloned without its patch",
+                    region.id
+                );
+                continue 'regions;
+            };
+            storage
+                .upload_bytes(&target_path, bytes, "image/png")
+                .await
+                .map_err(|e| format!("could not copy {source_path} to {target_path}: {e}"))?;
+        }
+        copied.push((*target_region_id, region));
+    }
+    if copied.is_empty() {
+        return Ok(0);
+    }
+
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    for (target_region_id, source) in &copied {
+        sqlx::query(
+            "UPDATE ocr_regions SET cleanup_mask_asset_id = $2, cleanup_mask_sha256 = $3, \
+               cleanup_mask_byte_length = $4, cleanup_patch_asset_id = $5, \
+               cleanup_patch_sha256 = $6, cleanup_patch_byte_length = $7, \
+               cleanup_bounds = $8, cleanup_generator_sha256 = $9, cleanup_diagnostics = $10 \
+             WHERE id = $1 AND page_id = $11",
+        )
+        .bind(target_region_id)
+        .bind(&source.cleanup_mask_asset_id)
+        .bind(&source.cleanup_mask_sha256)
+        .bind(source.cleanup_mask_byte_length)
+        .bind(&source.cleanup_patch_asset_id)
+        .bind(&source.cleanup_patch_sha256)
+        .bind(source.cleanup_patch_byte_length)
+        .bind(&source.cleanup_bounds)
+        .bind(&source.cleanup_generator_sha256)
+        .bind(&source.cleanup_diagnostics)
+        .bind(target_page_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+    let region_ids: Vec<Uuid> = copied.iter().map(|(id, _)| *id).collect();
+    crate::inpainting::record_cleanup_pass(&mut tx, target_page_id, &region_ids)
+        .await
+        .map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(copied.len())
 }
 
 /// CloneTranslationData: copy TL/QA region fields, then the TL layer + its elements.

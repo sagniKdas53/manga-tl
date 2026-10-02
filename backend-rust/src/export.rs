@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::models::{Chapter, Image, JobCost, Layer, LayerElement, Page};
+use crate::page_scene::{CurrentRenderArtifact, current_render_artifact};
 use crate::state::AppState;
 
 /// Port of ChapterExportService.buildAndUploadExport — runs as a background task after
@@ -141,38 +142,46 @@ async fn try_build(
             zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
         for page in &pages {
-            let image: Image = sqlx::query_as("SELECT * FROM images WHERE id = $1")
-                .bind(page.image_id)
-                .fetch_one(&state.pool)
-                .await
-                .map_err(|e| ExportFailure {
-                    message: format!("image lookup failed: {e}"),
-                })?;
-            let filename = if image.filename.trim().is_empty() {
-                format!("page_{}.png", page.page_number)
-            } else {
-                image.filename.clone()
+            let artifact = match current_render_artifact(&state.pool, page.id).await {
+                Ok(CurrentRenderArtifact::Ready(artifact)) => artifact,
+                Ok(CurrentRenderArtifact::Pending { revision }) => {
+                    return Err(ExportFailure {
+                        message: format!(
+                            "page {} revision {revision} has no current rendered artifact",
+                            page.page_number
+                        ),
+                    });
+                }
+                Ok(CurrentRenderArtifact::Failed { revision }) => {
+                    return Err(ExportFailure {
+                        message: format!(
+                            "page {} revision {revision} render failed; retry before export",
+                            page.page_number
+                        ),
+                    });
+                }
+                Err(err) => {
+                    return Err(ExportFailure {
+                        message: format!(
+                            "could not resolve render artifact for page {}: {err}",
+                            page.page_number
+                        ),
+                    });
+                }
             };
-
-            // Prefer the rendered variant; fall back to the original upload.
-            let bytes = match state
-                .storage
-                .download_bytes(&format!("rendered/{}.png", image.id))
-                .await
-            {
-                Some(bytes) => Some(bytes),
-                None => state.storage.download_bytes(&image.storage_path).await,
+            let artifact_path = artifact
+                .rendered_png_storage_path
+                .expect("ready artifact always has a storage path");
+            let Some(bytes) = state.storage.download_bytes(&artifact_path).await else {
+                return Err(ExportFailure {
+                    message: format!(
+                        "immutable render artifact for page {} is missing from storage",
+                        page.page_number
+                    ),
+                });
             };
-            let Some(bytes) = bytes else {
-                tracing::error!(
-                    "Failed to download original/rendered image for page {}",
-                    page.id
-                );
-                continue;
-            };
-
-            let ext = filename.rsplit('.').next().unwrap_or("png").to_string();
-            let entry_name = format!("{:03}.{}", page.page_number, ext);
+            // Every entry is the rendered PNG, whatever the upload's format was.
+            let entry_name = format!("{:03}.png", page.page_number);
             writer
                 .start_file(entry_name, options)
                 .map_err(|e| ExportFailure {
@@ -245,14 +254,27 @@ async fn build_chapter_meta(
             image.filename.clone()
         };
 
-        let has_rendered = state
-            .storage
-            .file_exists(&format!("rendered/{}.png", page.id))
-            .await
-            || state
-                .storage
-                .file_exists(&format!("rendered/{}.png", image.id))
-                .await;
+        let (has_rendered, render_status, render_revision, rendered_png_sha256) =
+            match current_render_artifact(&state.pool, page.id).await {
+                Ok(CurrentRenderArtifact::Ready(artifact)) => (
+                    true,
+                    "ready",
+                    artifact.page_revision,
+                    artifact.rendered_png_sha256,
+                ),
+                Ok(CurrentRenderArtifact::Pending { revision }) => {
+                    (false, "pending", revision, None)
+                }
+                Ok(CurrentRenderArtifact::Failed { revision }) => (false, "failed", revision, None),
+                Err(err) => {
+                    return Err(ExportFailure {
+                        message: format!(
+                            "could not resolve render artifact for page {}: {err}",
+                            page.page_number
+                        ),
+                    });
+                }
+            };
 
         let layers: Vec<Layer> =
             sqlx::query_as("SELECT * FROM layers WHERE page_id = $1 ORDER BY z_order ASC")
@@ -425,6 +447,9 @@ async fn build_chapter_meta(
             "imageId": image.id.to_string(),
             "originalFilename": filename,
             "hasRendered": has_rendered,
+            "renderStatus": render_status,
+            "renderRevision": render_revision,
+            "renderedPngSha256": rendered_png_sha256,
             "layerCount": layers.len(),
             "layers": layers_meta_list,
             "modelsUsed": models_used.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<BTreeMap<String, Value>>(),
@@ -483,14 +508,8 @@ async fn build_chapter_meta(
                     .unwrap_or(false);
                 page_meta["manualQaNeeded"] = json!(manual_qa_needed);
 
-                let manual_changes_done: bool = sqlx::query_scalar(
-                    "SELECT COUNT(*) > 0 FROM layer_elements \
-                     WHERE is_manually_edited = TRUE AND layer_id IN (SELECT id FROM layers WHERE page_id = $1)",
-                )
-                .bind(page.id)
-                .fetch_one(&state.pool)
-                .await
-                .unwrap_or(false);
+                let manual_changes_done =
+                    crate::jobs::coordinator::page_hand_edited(&state.pool, page.id).await;
                 let needs_re_render = manual_changes_done
                     && page
                         .last_edited_at

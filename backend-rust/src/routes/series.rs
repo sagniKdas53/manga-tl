@@ -57,6 +57,8 @@ pub struct SeriesDto {
     pub qaVlmModel: Option<String>,
     pub qaMode: Option<String>,
     pub routingStrategy: Option<String>,
+    pub cleanupMode: Option<String>,
+    pub ocrMergeThreshold: Option<f64>,
     pub useFallbackModels: Option<bool>,
     pub resolvedUseFallbackModels: bool,
     pub createdAt: chrono::DateTime<chrono::Utc>,
@@ -98,6 +100,8 @@ pub struct ChapterDto {
     pub qaVlmModel: Option<String>,
     pub qaMode: Option<String>,
     pub routingStrategy: Option<String>,
+    pub cleanupMode: Option<String>,
+    pub ocrMergeThreshold: Option<f64>,
     pub useContextMemory: Option<bool>,
     pub useFallbackModels: Option<bool>,
     pub resolvedUseFallbackModels: bool,
@@ -117,6 +121,21 @@ pub struct PagedResponse<T> {
     pub size: i64,
     pub totalElements: i64,
     pub totalPages: i64,
+}
+
+/// A cleanup-mode override: one of [`crate::settings::CLEANUP_MODES`], or NULL (inherit). An
+/// unknown value is stored as NULL rather than handed to the worker to guess at.
+fn cleanup_mode_setting(value: &Option<String>) -> Option<String> {
+    resolve_setting(value)
+        .map(|v| v.trim().to_ascii_lowercase())
+        .filter(|v| crate::settings::CLEANUP_MODES.contains(&v.as_str()))
+}
+
+/// A grouping-threshold override, clamped like the global one, or NULL (inherit).
+fn merge_threshold_setting(value: Option<f64>) -> Option<f64> {
+    value
+        .filter(|v| v.is_finite())
+        .map(crate::settings::ocr_merge_threshold)
 }
 
 /// Java SeriesController.resolveSetting: placeholder values become NULL on write.
@@ -150,6 +169,8 @@ fn to_series_dto(state: &AppState, s: &Series, resolved_use_fallback: bool) -> S
         qaVlmModel: s.qa_vlm_model.clone(),
         qaMode: s.qa_mode.clone(),
         routingStrategy: s.routing_strategy.clone(),
+        cleanupMode: s.cleanup_mode.clone(),
+        ocrMergeThreshold: s.ocr_merge_threshold,
         useFallbackModels: s.use_fallback_models,
         resolvedUseFallbackModels: resolved_use_fallback,
         createdAt: s.created_at,
@@ -289,6 +310,8 @@ async fn to_chapter_dto(
         qaVlmModel: chapter.qa_vlm_model.clone(),
         qaMode: chapter.qa_mode.clone(),
         routingStrategy: chapter.routing_strategy.clone(),
+        cleanupMode: chapter.cleanup_mode.clone(),
+        ocrMergeThreshold: chapter.ocr_merge_threshold,
         useContextMemory: chapter.use_context_memory.into(),
         useFallbackModels: chapter.use_fallback_models,
         resolvedUseFallbackModels: resolved_use_fallback,
@@ -351,6 +374,10 @@ pub struct SeriesInput {
     #[serde(default)]
     pub routingStrategy: Option<String>,
     #[serde(default)]
+    pub cleanupMode: Option<String>,
+    #[serde(default)]
+    pub ocrMergeThreshold: Option<f64>,
+    #[serde(default)]
     pub useFallbackModels: Option<bool>,
 }
 
@@ -379,6 +406,10 @@ pub struct ChapterInput {
     pub qaMode: Option<String>,
     #[serde(default)]
     pub routingStrategy: Option<String>,
+    #[serde(default)]
+    pub cleanupMode: Option<String>,
+    #[serde(default)]
+    pub ocrMergeThreshold: Option<f64>,
     #[serde(default)]
     pub useContextMemory: Option<bool>,
     #[serde(default)]
@@ -469,9 +500,9 @@ pub async fn create_series(
         "INSERT INTO series (id, created_at, updated_at, title, original_language, \
          source_language, target_language, reading_direction, ocr_provider, ocr_model, \
          tl_provider, tl_model, qa_provider, qa_llm_model, qa_vlm_model, qa_mode, \
-         routing_strategy, use_fallback_models, created_by) \
+         routing_strategy, use_fallback_models, created_by, cleanup_mode, ocr_merge_threshold) \
          VALUES ($1, now(), now(), $2, $3, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, \
-                 $14, $15, $16) RETURNING *",
+                 $14, $15, $16, $17, $18) RETURNING *",
     )
     .bind(Uuid::new_v4())
     .bind(dto.title.clone())
@@ -489,6 +520,8 @@ pub async fn create_series(
     .bind(resolve_setting(&dto.routingStrategy))
     .bind(dto.useFallbackModels)
     .bind(user.id)
+    .bind(cleanup_mode_setting(&dto.cleanupMode))
+    .bind(merge_threshold_setting(dto.ocrMergeThreshold))
     .fetch_one(&state.pool)
     .await
     .expect("series insert");
@@ -593,8 +626,8 @@ pub async fn update_series(
          target_language = $4, reading_direction = $5, ocr_provider = $6, ocr_model = $7, \
          tl_provider = $8, tl_model = $9, qa_provider = $10, qa_llm_model = $11, \
          qa_vlm_model = $12, qa_mode = $13, routing_strategy = $14, \
-         use_fallback_models = $15, updated_at = now() \
-         WHERE id = $1 RETURNING *",
+         use_fallback_models = $15, cleanup_mode = $16, ocr_merge_threshold = $17, \
+         updated_at = now() WHERE id = $1 RETURNING *",
     )
     .bind(id)
     .bind(dto.title.clone())
@@ -611,6 +644,8 @@ pub async fn update_series(
     .bind(resolve_setting(&dto.qaMode))
     .bind(resolve_setting(&dto.routingStrategy))
     .bind(dto.useFallbackModels)
+    .bind(cleanup_mode_setting(&dto.cleanupMode))
+    .bind(merge_threshold_setting(dto.ocrMergeThreshold))
     .fetch_optional(&state.pool)
     .await
     .unwrap_or(None);
@@ -639,14 +674,33 @@ pub async fn delete_series(
     if !user.role.eq_ignore_ascii_case("admin") {
         return error::access_denied(&instance);
     }
-    let result = sqlx::query("DELETE FROM series WHERE id = $1")
-        .bind(id)
-        .execute(&state.pool)
-        .await;
+    let result = delete_with_page_jobs(
+        &state.pool,
+        "DELETE FROM series WHERE id = $1",
+        id,
+        crate::jobs::coordinator::DeletedPages::Series(id),
+    )
+    .await;
     match result {
         Ok(res) if res.rows_affected() > 0 => StatusCode::OK.into_response(),
         _ => StatusCode::NOT_FOUND.into_response(),
     }
+}
+
+/// Runs `delete` (a series or chapter DELETE bound to `id`) together with the deletion of its
+/// pages' unfinished jobs, in one transaction. The pages go by cascade; their queued jobs would
+/// not (`drop_unfinished_page_jobs`).
+async fn delete_with_page_jobs(
+    pool: &sqlx::PgPool,
+    delete: &'static str,
+    id: Uuid,
+    pages: crate::jobs::coordinator::DeletedPages,
+) -> Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    crate::jobs::coordinator::drop_unfinished_page_jobs(&mut tx, pages).await?;
+    let result = sqlx::query(delete).bind(id).execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(result)
 }
 
 // ---------------------------------------------------------------------------
@@ -715,8 +769,9 @@ pub async fn create_chapter(
     let chapter: Chapter = sqlx::query_as(
         "INSERT INTO chapters (id, created_at, updated_at, series_id, chapter_number, title, \
          ocr_provider, ocr_model, tl_provider, tl_model, qa_provider, qa_llm_model, \
-         qa_vlm_model, qa_mode, routing_strategy, use_context_memory, use_fallback_models) \
-         VALUES ($1, now(), now(), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) \
+         qa_vlm_model, qa_mode, routing_strategy, use_context_memory, use_fallback_models, cleanup_mode, \
+         ocr_merge_threshold) \
+         VALUES ($1, now(), now(), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) \
          RETURNING *",
     )
     .bind(Uuid::new_v4())
@@ -735,6 +790,8 @@ pub async fn create_chapter(
     // create: absent means TRUE (Java: dto.useContextMemory() == null || dto.useContextMemory())
     .bind(dto.useContextMemory.unwrap_or(true))
     .bind(dto.useFallbackModels)
+    .bind(cleanup_mode_setting(&dto.cleanupMode))
+    .bind(merge_threshold_setting(dto.ocrMergeThreshold))
     .fetch_one(&state.pool)
     .await
     .expect("chapter insert");
@@ -836,7 +893,7 @@ pub async fn update_chapter(
          ocr_model = $5, tl_provider = $6, tl_model = $7, qa_provider = $8, \
          qa_llm_model = $9, qa_vlm_model = $10, qa_mode = $11, routing_strategy = $12, \
          use_fallback_models = $13, use_context_memory = COALESCE($14, use_context_memory), \
-         updated_at = now() WHERE id = $1 RETURNING *",
+         cleanup_mode = $15, ocr_merge_threshold = $16, updated_at = now() WHERE id = $1 RETURNING *",
     )
     .bind(id)
     .bind(dto.title.clone())
@@ -852,6 +909,8 @@ pub async fn update_chapter(
     .bind(resolve_setting(&dto.routingStrategy))
     .bind(dto.useFallbackModels)
     .bind(dto.useContextMemory)
+    .bind(cleanup_mode_setting(&dto.cleanupMode))
+    .bind(merge_threshold_setting(dto.ocrMergeThreshold))
     .fetch_one(&state.pool)
     .await
     .expect("chapter update");
@@ -870,10 +929,13 @@ pub async fn delete_chapter(State(state): State<AppState>, Path(id): Path<Uuid>)
             .fetch_optional(&state.pool)
             .await
             .unwrap_or(None);
-    match sqlx::query("DELETE FROM chapters WHERE id = $1")
-        .bind(id)
-        .execute(&state.pool)
-        .await
+    match delete_with_page_jobs(
+        &state.pool,
+        "DELETE FROM chapters WHERE id = $1",
+        id,
+        crate::jobs::coordinator::DeletedPages::Chapter(id),
+    )
+    .await
     {
         // SeriesController.java:563-571 recalculates after a successful delete so
         // removing the covered chapter cannot leave a dangling cover image id.
@@ -949,6 +1011,8 @@ struct ImportFields {
     qa_vlm_model: Option<String>,
     qa_mode: Option<String>,
     routing_strategy: Option<String>,
+    cleanup_mode: Option<String>,
+    ocr_merge_threshold: Option<f64>,
     use_fallback_models: Option<bool>,
     file: Option<(String, Vec<u8>)>,
 }
@@ -973,6 +1037,8 @@ pub async fn import_chapter(
         qa_vlm_model: None,
         qa_mode: None,
         routing_strategy: None,
+        cleanup_mode: None,
+        ocr_merge_threshold: None,
         use_fallback_models: None,
         file: None,
     };
@@ -1027,6 +1093,11 @@ pub async fn import_chapter(
             "qaVlmModel" => fields.qa_vlm_model = read_text(field).await,
             "qaMode" => fields.qa_mode = read_text(field).await,
             "routingStrategy" => fields.routing_strategy = read_text(field).await,
+            "cleanupMode" => fields.cleanup_mode = read_text(field).await,
+            "ocrMergeThreshold" => {
+                fields.ocr_merge_threshold =
+                    read_text(field).await.and_then(|v| v.trim().parse().ok());
+            }
             _ => {}
         }
     }
@@ -1102,8 +1173,9 @@ pub async fn import_chapter(
     let result = sqlx::query(
         "INSERT INTO chapters (id, chapter_number, title, created_at, updated_at, \
          ocr_provider, ocr_model, tl_provider, tl_model, qa_provider, qa_llm_model, qa_vlm_model, qa_mode, \
-         routing_strategy, use_fallback_models, use_context_memory, series_id) \
-         VALUES ($1,$2,$3,now(),now(),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,TRUE,$14)",
+         routing_strategy, use_fallback_models, use_context_memory, series_id, cleanup_mode, \
+         ocr_merge_threshold) \
+         VALUES ($1,$2,$3,now(),now(),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,TRUE,$14,$15,$16)",
     )
     .bind(chapter_id)
     .bind(chapter_number)
@@ -1119,6 +1191,8 @@ pub async fn import_chapter(
     .bind(resolve_setting(&fields.routing_strategy))
     .bind(fields.use_fallback_models)
     .bind(series_id)
+    .bind(cleanup_mode_setting(&fields.cleanup_mode))
+    .bind(merge_threshold_setting(fields.ocr_merge_threshold))
     .execute(&state.pool)
     .await;
 

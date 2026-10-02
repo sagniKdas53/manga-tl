@@ -21,7 +21,7 @@ use manga_backend::state::AppState;
 
 const SECRET: &str = "test-secret-long-enough-for-hmac-signing-1234567890";
 const CATALOG_KEY: &str = "system:providers:config";
-const SETTING_KEYS: [&str; 12] = [
+const SETTING_KEYS: [&str; 17] = [
     "ocrProvider",
     "ocrModel",
     "tlProvider",
@@ -32,8 +32,13 @@ const SETTING_KEYS: [&str; 12] = [
     "qaMode",
     "routingStrategy",
     "useFallbackModels",
-    "textBoxPaddingPx",
+    "textBoxPaddingPercent",
+    "textBoxPaddingMaxPx",
     "textBoxSafetyPercent",
+    "cleanupMode",
+    "textBoxPaddingMinPx",
+    "ocrMergeThreshold",
+    "customModels",
 ];
 
 fn db_config_from_env() -> Option<DatabaseConfig> {
@@ -113,13 +118,14 @@ async fn app() -> Option<(
     ))
 }
 
-async fn probe_user(pool: &sqlx::PgPool, jwt: &JwtUtils) -> String {
+async fn probe_user(pool: &sqlx::PgPool, jwt: &JwtUtils, role: &str) -> String {
     let email = format!("__settings-e2e-{}@example.invalid", Uuid::new_v4());
     sqlx::query(
         "INSERT INTO users (id, created_at, display_name, email, password_hash, role) \
-         VALUES (uuid_generate_v4(), now(), 'Probe', $1, 'x', 'viewer')",
+         VALUES (uuid_generate_v4(), now(), 'Probe', $1, 'x', $2)",
     )
     .bind(&email)
+    .bind(role)
     .execute(pool)
     .await
     .expect("probe user insert");
@@ -190,7 +196,63 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     let _ = sqlx::query("DELETE FROM users WHERE email LIKE '__settings-e2e-%'")
         .execute(&pool)
         .await;
-    let token = probe_user(&pool, &jwt).await;
+    let token = probe_user(&pool, &jwt, "admin").await;
+    // A viewer reads the settings but changes neither them nor the custom models.
+    let viewer = probe_user(&pool, &jwt, "viewer").await;
+    for uri in ["/tlhub/api/settings", "/tlhub/api/settings/custom-models"] {
+        let (status, _, _) = send(
+            app.clone(),
+            "PUT",
+            uri,
+            Some(&viewer),
+            Some("[]".to_string()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{uri}");
+    }
+    let series_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO series (id, created_at, updated_at, title, reading_direction, original_language) \
+         VALUES ($1, now(), now(), $2, 'rightToLeft', 'ja')",
+    )
+    .bind(series_id)
+    .bind(format!("__settings-e2e-{series_id}"))
+    .execute(&pool)
+    .await
+    .expect("geometry series");
+    let chapter_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO chapters (id, chapter_number, created_at, updated_at, use_context_memory, series_id) \
+         VALUES ($1, 1, now(), now(), TRUE, $2)",
+    )
+    .bind(chapter_id)
+    .bind(series_id)
+    .execute(&pool)
+    .await
+    .expect("geometry chapter");
+    let image_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO images (id, created_at, filename, storage_path, hash, width, height) \
+         VALUES ($1, now(), 'geometry.png', $2, $3, 64, 64)",
+    )
+    .bind(image_id)
+    .bind(format!("originals/settings-{image_id}.png"))
+    .bind(format!("settings-{image_id}"))
+    .execute(&pool)
+    .await
+    .expect("geometry image");
+    for page_number in [1, 2] {
+        sqlx::query(
+            "INSERT INTO pages (id, page_number, chapter_id, image_id) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(Uuid::new_v4())
+        .bind(page_number)
+        .bind(chapter_id)
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .expect("geometry page");
+    }
 
     // --- unauthenticated GET is the security 403 Boot shape ---
     let (status, ctype, _) = send(app.clone(), "GET", "/tlhub/api/settings", None, None).await;
@@ -294,8 +356,12 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     // Note `put_body` above is already exactly that legacy shape -- it names neither field.
     let mut configured = put_body.clone();
     let obj = configured.as_object_mut().unwrap();
-    obj.insert("textBoxPaddingPx".to_string(), serde_json::json!(12));
+    obj.insert("textBoxPaddingPercent".to_string(), serde_json::json!(0));
+    obj.insert("textBoxPaddingMaxPx".to_string(), serde_json::json!(12));
     obj.insert("textBoxSafetyPercent".to_string(), serde_json::json!(80));
+    obj.insert("cleanupMode".to_string(), serde_json::json!("TELEA"));
+    obj.insert("textBoxPaddingMinPx".to_string(), serde_json::json!(3));
+    obj.insert("ocrMergeThreshold".to_string(), serde_json::json!(0.8));
     let (status, _, echoed) = send(
         app.clone(),
         "PUT",
@@ -305,9 +371,26 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(echoed["textBoxPaddingPx"], 12);
+    assert_eq!(echoed["textBoxPaddingPercent"], 0, "zero turns padding off");
+    assert_eq!(echoed["textBoxPaddingMaxPx"], 12);
     assert_eq!(echoed["textBoxSafetyPercent"], 80);
+    assert_eq!(echoed["cleanupMode"], "telea", "stored normalised");
+    assert_eq!(echoed["textBoxPaddingMinPx"], 3);
+    assert_eq!(echoed["ocrMergeThreshold"], 0.8);
 
+    // A geometry change applies to renders from now on. It used to bump every page in the
+    // library, which queued a render and a paid QA pass for each (650 pages on 2026-09-30).
+    let untouched_pages: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pages WHERE chapter_id = $1 AND scene_revision = 0",
+    )
+    .bind(chapter_id)
+    .fetch_one(&pool)
+    .await
+    .expect("geometry revisions");
+    assert_eq!(
+        untouched_pages, 2,
+        "a geometry change re-renders nothing already done"
+    );
     // The stale tab now saves an unrelated model setting.
     let mut legacy = put_body.clone();
     legacy.as_object_mut().unwrap().insert(
@@ -326,16 +409,34 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     // What it did send lands...
     assert_eq!(echoed["ocrModel"], "__e2e-ocr-model-2__");
     // ...and what it has never heard of survives, rather than resetting to 4/95.
-    assert_eq!(echoed["textBoxPaddingPx"], 12);
+    assert_eq!(echoed["textBoxPaddingPercent"], 0);
+    assert_eq!(echoed["textBoxPaddingMaxPx"], 12);
     assert_eq!(echoed["textBoxSafetyPercent"], 80);
+    assert_eq!(echoed["cleanupMode"], "telea");
+    assert_eq!(echoed["textBoxPaddingMinPx"], 3);
+    assert_eq!(
+        echoed["ocrMergeThreshold"], 0.8,
+        "the threshold survives a legacy PUT"
+    );
     let padding: String = sqlx::query_scalar(
-        "SELECT setting_value FROM system_settings WHERE setting_key = 'textBoxPaddingPx'",
+        "SELECT setting_value FROM system_settings WHERE setting_key = 'textBoxPaddingMaxPx'",
     )
     .fetch_one(&pool)
     .await
     .expect("padding row survives a legacy PUT");
     assert_eq!(padding, "12");
 
+    let revisions_after_legacy_put: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pages WHERE chapter_id = $1 AND scene_revision = 0",
+    )
+    .bind(chapter_id)
+    .fetch_one(&pool)
+    .await
+    .expect("unchanged geometry revisions");
+    assert_eq!(
+        revisions_after_legacy_put, 2,
+        "a model change applies to jobs from now on; it re-renders nothing"
+    );
     // --- validate with an EMPTY catalog is permissive: {"orphaned":[]} ---
     redis.delete(CATALOG_KEY).await.expect("del catalog");
     state.providers.reload(&redis).await;
@@ -443,6 +544,83 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
             .any(|e| e["entityId"] == chapter_id.to_string() && e["field"] == "tlModel"),
         "served model must not be flagged; got {orphaned:?}"
     );
+
+    // --- a custom model ID is valid once registered ---
+    sqlx::query("UPDATE chapters SET tl_model = 'stealth/space-bunny-alpha' WHERE id = $1")
+        .bind(chapter_id)
+        .execute(&pool)
+        .await
+        .expect("custom tl override");
+    let flagged = |body: &serde_json::Value| {
+        body["orphaned"].as_array().is_some_and(|list| {
+            list.iter()
+                .any(|e| e["entityId"] == chapter_id.to_string() && e["field"] == "tlModel")
+        })
+    };
+    let (_, _, body) = send(
+        app.clone(),
+        "GET",
+        "/tlhub/api/settings/validate",
+        Some(&token),
+        None,
+    )
+    .await;
+    assert!(flagged(&body), "an unregistered ID is still flagged");
+    let (status, _, registered) = send(
+        app.clone(),
+        "PUT",
+        "/tlhub/api/settings/custom-models",
+        Some(&token),
+        Some(
+            r#"[{"provider":"OpenRouter","task":"tl","id":" stealth/space-bunny-alpha "},
+                {"provider":"local","task":"ocr","id":"nope"}]"#
+                .to_string(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        registered,
+        serde_json::json!([{"provider":"openrouter","task":"tl","id":"stealth/space-bunny-alpha"}]),
+        "normalized, local dropped"
+    );
+    let (_, _, body) = send(
+        app.clone(),
+        "GET",
+        "/tlhub/api/settings/validate",
+        Some(&token),
+        None,
+    )
+    .await;
+    assert!(
+        !flagged(&body),
+        "a registered custom ID is valid; got {body:?}"
+    );
+    let (_, _, settings) = send(
+        app.clone(),
+        "GET",
+        "/tlhub/api/settings",
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(settings["customModels"], registered);
+    assert!(
+        settings["providerModelsMap"]["openrouter"]["tl"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["id"] == "stealth/space-bunny-alpha" && m["custom"] == true),
+        "listed for the picker; got {settings:?}"
+    );
+    let stored: String = sqlx::query_scalar(
+        "SELECT setting_value FROM system_settings WHERE setting_key = 'customModels'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("custom models persisted");
+    assert!(stored.contains("stealth/space-bunny-alpha"));
+    state.providers.set_custom_models(Vec::new());
 
     // --- restore shared state ---
     let _ = sqlx::query(

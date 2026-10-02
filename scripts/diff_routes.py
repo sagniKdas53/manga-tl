@@ -62,6 +62,11 @@ PORTED = {
     # AUDIT-F26: the render's own thumbnail, so the page grid can show pipeline output.
     "GET /api/images/{imageId}/thumbnail/rendered",
     "GET /api/pages/{pageId}/rendered",
+    "POST /api/pages/{pageId}/render",
+    "GET /api/pages/{pageId}/scene",
+    "PUT /api/pages/{pageId}/scene",
+    "GET /api/pages/{pageId}/scene-assets/{sha256}",
+    "POST /api/pages/{pageId}/manual-cleanup",
     "PATCH /api/ocr-regions/{id}",
     # layers + settings + jobs (Phase 2 completion)
     "PUT /api/layer-elements/{id}",
@@ -75,6 +80,7 @@ PORTED = {
     "GET /api/settings",
     "PUT /api/settings",
     "GET /api/settings/validate",
+    "PUT /api/settings/custom-models",
     # notifications/realtime (Phase 3 begins)
     "GET /api/notifications/stream",
     "POST /api/notifications/ticket",
@@ -83,6 +89,8 @@ PORTED = {
     "HEAD /api/internal/images/{imageId}",
     "POST /api/internal/images/{imageId}/qa-hybrid-prepare",
     "POST /api/internal/jobs/callback/layout",
+    "POST /api/internal/jobs/callback/cleanup",
+    "POST /api/internal/jobs/callback/manual-cleanup",
     "POST /api/internal/jobs/callback/ocr",
     "POST /api/internal/jobs/callback/panel",
     "POST /api/internal/jobs/callback/qa",
@@ -94,6 +102,8 @@ PORTED = {
     "POST /api/internal/ocr-regions/{id}/callback",
     "POST /api/images/{imageId}/redo",
     "POST /api/ocr-regions/{id}/redo",
+    "POST /api/ocr-regions/{id}/review",
+    "POST /api/pages/{pageId}/regions/merge",
     # import/export (Phase 3 completion)
     "POST /api/series/{seriesId}/chapters/import",
     "POST /api/chapters/{chapterId}/import-project",

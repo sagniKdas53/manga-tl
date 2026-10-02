@@ -17,6 +17,7 @@ pub mod internal;
 pub mod jobs;
 pub mod layers;
 pub mod layers_ops;
+pub mod manual_cleanup;
 pub mod notifications;
 pub mod page;
 pub mod series;

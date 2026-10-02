@@ -881,3 +881,103 @@ async fn a_pending_job_that_never_reached_redis_is_put_back_on_its_queue() {
         .is_some()
     {}
 }
+
+/// A page uploaded by mistake and deleted at once left its jobs behind. A payload whose row is
+/// gone, or no longer PENDING, is dropped instead of being sent to a worker; and the sweep deletes
+/// unfinished jobs whose page no longer exists, so a resume does not push them again.
+#[tokio::test]
+async fn work_for_deleted_pages_is_dropped_not_dispatched() {
+    let _guard = SERIAL.lock().await;
+    let mock = MockState::default();
+    *mock.capabilities_body.lock().unwrap() = json!({
+        "max_concurrent_jobs": 4,
+        "active_jobs": 0,
+        "max_heavy_slots": 2,
+        "active_heavy_jobs": 0,
+        "max_light_slots": 2,
+        "active_light_jobs": 0,
+    });
+    *mock.responses.lock().unwrap() = [("*".to_string(), 202u16)].into_iter().collect();
+    let mock_url = mock_server(mock.clone()).await;
+    let Some((pool, redis, state)) = app_with_mock(&mock_url).await else {
+        eprintln!("skipping: JOBS_E2E_DATABASE_URL/REDIS_TEST_ADDR not set");
+        return;
+    };
+    redis.set_queue_paused(false).await.expect("resume");
+    while redis
+        .pop_from_queue("queue:panel-detection")
+        .await
+        .unwrap_or(None)
+        .is_some()
+    {}
+
+    // A payload whose row was deleted, and one whose row was paused in the queue manager.
+    seed_job(&redis, &pool, "__deleted-paused", "queue:panel-detection").await;
+    sqlx::query("UPDATE jobs SET status = 'PAUSED' WHERE id = '__deleted-paused'")
+        .execute(&pool)
+        .await
+        .expect("pause row");
+    let _ = sqlx::query("DELETE FROM jobs WHERE id = '__deleted-gone'")
+        .execute(&pool)
+        .await;
+    for id in ["__deleted-gone", "__deleted-paused"] {
+        redis
+            .push_to_queue("queue:panel-detection", &json!({ "jobId": id }).to_string())
+            .await
+            .expect("push");
+    }
+    Dispatcher::new(state.clone()).run_cycle().await;
+    assert_eq!(
+        submits_of(&mock, "__deleted-gone"),
+        0,
+        "a job with no row is not sent"
+    );
+    assert_eq!(
+        submits_of(&mock, "__deleted-paused"),
+        0,
+        "a paused job is not sent"
+    );
+    assert_eq!(
+        redis
+            .queue_size("queue:panel-detection")
+            .await
+            .unwrap_or(-1),
+        0,
+        "both payloads are dropped, not re-queued"
+    );
+
+    // An unfinished job whose page no longer exists is deleted by the sweep; a finished one stays.
+    let missing_page = Uuid::new_v4();
+    for (id, status) in [
+        ("__deleted-page-pending", "PENDING"),
+        ("__deleted-page-done", "COMPLETED"),
+    ] {
+        let _ = sqlx::query("DELETE FROM jobs WHERE id = $1")
+            .bind(id)
+            .execute(&pool)
+            .await;
+        sqlx::query(
+            "INSERT INTO jobs (id, type, status, page_id, payload, started_at, created_at, updated_at) \
+             VALUES ($1, 'panel-detection', $2, $3, $4, now(), now(), now())",
+        )
+        .bind(id)
+        .bind(status)
+        .bind(missing_page)
+        .bind(json!({ "jobId": id }).to_string())
+        .execute(&pool)
+        .await
+        .expect("seed job of a deleted page");
+    }
+    manga_backend::jobs::recovery::requeue_orphaned_pending_jobs(&state).await;
+    let left: Vec<String> =
+        sqlx::query_scalar("SELECT id FROM jobs WHERE page_id = $1 ORDER BY id")
+            .bind(missing_page)
+            .fetch_all(&pool)
+            .await
+            .expect("jobs of the deleted page");
+    assert_eq!(left, vec!["__deleted-page-done".to_string()]);
+
+    let _ = sqlx::query("DELETE FROM jobs WHERE id IN ('__deleted-paused', '__deleted-page-done')")
+        .execute(&pool)
+        .await;
+}

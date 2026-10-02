@@ -71,14 +71,10 @@ export function hasDetectedBubble(region: OcrRegion): boolean {
  *
  * @param ctx  2D context of a **fresh transparent** canvas sized to the page.
  * @param elements  the layer's elements, in paint order (earlier wins on overlap).
- * @param regionsById  the page's OCR regions, so free-floating text can have its box erased as
- *   well as its mask. Omit and every element is treated as balloon text, which is the old
- *   behaviour: mask only.
  */
 export function paintLayerMask(
   ctx: CanvasRenderingContext2D,
   elements: LayerElement[],
-  regionsById?: Map<string, OcrRegion>,
 ): void {
   const previousOp = ctx.globalCompositeOperation;
   // Every fill below lands behind what is already on the canvas, so the first element to
@@ -132,27 +128,20 @@ export function paintLayerMask(
       ctx.fill();
       ctx.restore();
 
-      // Erase the box too when there is no balloon.
-      //
-      // The mask covers the source text and the box is where the English goes. Inside a balloon
-      // the box is an inset of the bubble the mask fills, so it needs nothing more. For
-      // free-floating text the box is `free_text_box`'s padded -- and for a very narrow column,
-      // widened -- rectangle, and the difference between the two was being drawn onto bare
-      // artwork. Filling both costs nothing where they overlap.
-      //
-      // The box turns with the element (AUDIT-R5) while the polygon above does not: the polygon is
-      // page-space and already carries the rotation, the box is stored unrotated. Filling this one
-      // axis-aligned next to a turned mask is what put a straight white rectangle across artwork
-      // on every rotated caption.
-      const region = el.regionId ? regionsById?.get(el.regionId) : undefined;
-      if (region && !hasDetectedBubble(region)) {
-        withBoxRotation(ctx, el, width, height, () => {
-          ctx.fillStyle = el.backgroundColor || "#ffffff";
-          ctx.fillRect(el.x, el.y, width, height);
-        });
-      }
+      // Tracker R2: the polygon is the whole plate. Until 2026-09-19 free-floating text (no
+      // detected balloon) also had its *box* filled -- `free_text_box`'s padded and, for a narrow
+      // column, widened rectangle -- "because the difference between the two was landing on
+      // artwork". That difference is artwork, and filling it was the flat slab beside every
+      // caption. The worker now returns the bbox rectangle as the mask when the ground is flat
+      // and no mask at all when it is not, so there is nothing for the box to add.
+    } else if (el.regionId) {
+      // A pipeline element with no polygon is free-standing text on artwork (tracker R2): the
+      // worker found no container and no flat ground, so nothing is erased and the text goes
+      // over the source. Falling back to the box here would paint the plate the worker refused.
+      continue;
     } else {
-      // No polygon: fall back to the element's box, turned to the element's angle.
+      // A manual element with no polygon: the box is the plate the user drew, turned to the
+      // element's angle.
       withBoxRotation(ctx, el, width, height, () => {
         ctx.fillStyle = el.backgroundColor || "#ffffff";
         if (el.boxShape === "elliptical") {

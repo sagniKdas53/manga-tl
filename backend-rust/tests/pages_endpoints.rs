@@ -192,6 +192,44 @@ async fn upload_stream_delete_lifecycle() {
     let again: serde_json::Value = serde_json::from_str(&response.2).unwrap();
     assert_eq!(again["status"], "already_exists", "{}", response.2);
 
+    // --- the same bytes into a new slot reuse the processed page (AUDIT-B24) ---
+    // Once the first page has been through OCR, a second upload of its bytes clones its layers
+    // onto a new page. That page is left for the debounced render to snapshot and draw; a bare
+    // render job, which the worker cannot run, is never queued.
+    sqlx::query(
+        "INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) \
+         VALUES (uuid_generate_v4(), 'ocr', TRUE, 1, '{}'::jsonb, $1::uuid, now())",
+    )
+    .bind(&page_id)
+    .execute(&pool)
+    .await
+    .expect("processed source page");
+    let body = multipart_body(&chapter_id, 2, "probe.png", &probe_png);
+    let response = send_multipart(app.clone(), "/tlhub/api/images", &token, body).await;
+    assert_eq!(response.0, StatusCode::OK, "{}", response.2);
+    let cloned: serde_json::Value = serde_json::from_str(&response.2).unwrap();
+    let cloned_page = cloned["pageId"].as_str().unwrap().to_string();
+    assert_ne!(cloned_page, page_id);
+    let (bare_renders, dirty): (i64, bool) = sqlx::query_as(
+        "SELECT (SELECT COUNT(*) FROM jobs WHERE page_id = $1::uuid AND type = 'render'), \
+                (SELECT last_edited_at IS NOT NULL FROM pages WHERE id = $1::uuid)",
+    )
+    .bind(&cloned_page)
+    .fetch_one(&pool)
+    .await
+    .expect("cloned page state");
+    assert_eq!(bare_renders, 0, "no render job without a scene");
+    assert!(dirty, "the cloned page waits for the debounced render");
+    let response = send_json(
+        app.clone(),
+        "DELETE",
+        &format!("/tlhub/api/pages/{cloned_page}"),
+        &token,
+        String::new(),
+    )
+    .await;
+    assert!(response.0.is_success(), "{}", response.2);
+
     // --- list pages ---
     let response = send_get(
         app.clone(),
@@ -231,14 +269,18 @@ async fn upload_stream_delete_lifecycle() {
     assert_eq!(response.0, StatusCode::OK);
     assert_eq!(response.3 as usize, probe_png.len());
 
-    // --- rendered absent -> 404 (nothing rendered yet) ---
+    // --- rendered absent -> explicit pending state, never a mutable/original fallback ---
     let response = send_get(
         app.clone(),
         &format!("/tlhub/api/pages/{page_id}/rendered"),
         &token,
     )
     .await;
-    assert_eq!(response.0, StatusCode::NOT_FOUND);
+    assert_eq!(response.0, StatusCode::CONFLICT);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&response.2).unwrap()["status"],
+        "pending"
+    );
 
     // --- rich page payload keys ---
     let response = send_get(app.clone(), &format!("/tlhub/api/pages/{page_id}"), &token).await;
@@ -354,6 +396,33 @@ fn json_field(body: &str, field: &str) -> String {
 /// under test, which surfaced or hid depending on how the rest of the file happened to be timed.
 async fn cleanup(pool: &sqlx::PgPool, ns: &str) {
     sqlx::query(
+        "UPDATE pages SET current_render_job_id = NULL \
+         WHERE chapter_id IN ( \
+             SELECT c.id FROM chapters c \
+             JOIN series s ON s.id = c.series_id \
+             JOIN users u ON u.id = s.created_by \
+             WHERE u.email LIKE $1 || '-%' \
+         )",
+    )
+    .bind(ns)
+    .execute(pool)
+    .await
+    .expect("clear render pointers");
+    sqlx::query(
+        "DELETE FROM page_render_jobs WHERE page_id IN ( \
+             SELECT p.id FROM pages p \
+             JOIN chapters c ON c.id = p.chapter_id \
+             JOIN series s ON s.id = c.series_id \
+             JOIN users u ON u.id = s.created_by \
+             WHERE u.email LIKE $1 || '-%' \
+         )",
+    )
+    .bind(ns)
+    .execute(pool)
+    .await
+    .expect("render ledger cleanup");
+
+    sqlx::query(
         "DELETE FROM series WHERE created_by IN (SELECT id FROM users WHERE email LIKE $1 || '-%')",
     )
     .bind(ns)
@@ -433,9 +502,9 @@ async fn rendered_output_reaches_the_page_grid() {
     let response = send_multipart(app.clone(), "/tlhub/api/images", &token, body).await;
     let uploaded: serde_json::Value = serde_json::from_str(&response.2).unwrap();
     let page_id = uploaded["pageId"].as_str().unwrap().to_string();
-    let image_id = uploaded["imageId"].as_str().unwrap().to_string();
+    let _image_id = uploaded["imageId"].as_str().unwrap().to_string();
 
-    // --- nothing rendered yet: the grid has no render to show, and says so ---
+    // --- nothing rendered yet: the grid exposes an explicit current-revision pending state ---
     let list_pages = |app: Router, token: String, chapter_id: String| async move {
         let response = send_get(
             app,
@@ -448,126 +517,108 @@ async fn rendered_output_reaches_the_page_grid() {
     };
 
     let before = list_pages(app.clone(), token.clone(), chapter_id.clone()).await;
-    assert!(
-        before["content"][0]["lastRenderedAt"].is_null(),
-        "an unrendered page must not claim a render: {}",
-        before["content"][0]
-    );
-    assert!(
-        before["content"][0]["renderedThumbnailUrl"].is_null(),
-        "no rendered thumbnail before a render: {}",
-        before["content"][0]
+    assert_eq!(before["content"][0]["renderStatus"], "pending");
+    assert_eq!(before["content"][0]["renderRevision"], 0);
+    assert!(before["content"][0]["lastRenderedAt"].is_null());
+    assert!(before["content"][0]["renderedUrl"].is_null());
+    let response = send_get(
+        app.clone(),
+        &format!("/tlhub/api/pages/{page_id}/rendered"),
+        &token,
+    )
+    .await;
+    assert_eq!(response.0, StatusCode::CONFLICT);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&response.2).unwrap()["status"],
+        "pending"
     );
 
-    // --- the pipeline renders the page: object in MinIO, last_rendered_at stamped ---
+    // --- a succeeded ledger points the current scene at immutable artifact bytes ---
     let storage = MinioService::new(&minio_config_from_env().expect("minio env"));
     let rendered = image::RgbaImage::from_fn(64, 64, |_, _| image::Rgba([10, 200, 90, 255]));
     let mut cursor = std::io::Cursor::new(Vec::new());
     rendered
         .write_to(&mut cursor, image::ImageFormat::Png)
         .unwrap();
+    let rendered_bytes = cursor.into_inner();
+    let page_uuid = Uuid::parse_str(&page_id).unwrap();
+    let logical_sha = "b".repeat(64);
+    let png_sha = "c".repeat(64);
+    let artifact_path = format!("rendered/revisions/{page_id}/0/{logical_sha}/{png_sha}.png");
     storage
-        .upload_bytes(
-            &format!("rendered/{image_id}.png"),
-            cursor.into_inner(),
-            "image/png",
-        )
+        .upload_bytes(&artifact_path, rendered_bytes.clone(), "image/png")
         .await
-        .expect("stage rendered object");
-    sqlx::query("UPDATE pages SET last_rendered_at = now() WHERE id = $1")
-        .bind(Uuid::parse_str(&page_id).unwrap())
-        .execute(&pool)
-        .await
-        .expect("stamp last_rendered_at");
+        .expect("stage immutable rendered object");
+    let render_job_id = format!("__page-grid-render-{}", Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO page_scene_snapshots \
+         (page_id, revision, contract_version, source_sha256, logical_scene_sha256, scene_json) \
+         VALUES ($1, 0, 'page-scene/v1', repeat('a', 64), $2, '{}'::jsonb)",
+    )
+    .bind(page_uuid)
+    .bind(&logical_sha)
+    .execute(&pool)
+    .await
+    .expect("current immutable scene");
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, image_id, created_at, updated_at) \
+         VALUES ($1, 'render', 'COMPLETED', $2, now(), now())",
+    )
+    .bind(&render_job_id)
+    .bind(Uuid::parse_str(&_image_id).unwrap())
+    .execute(&pool)
+    .await
+    .expect("render job row");
 
-    // --- the same re-fetch the AUDIT-F19 watcher performs now returns different JSON ---
+    sqlx::query(
+        "INSERT INTO page_render_jobs \
+         (job_id, page_id, page_revision, logical_scene_sha256, rendered_png_sha256, \
+          rendered_png_storage_path, status, diagnostics_json, completed_at) \
+         VALUES ($1, $2, 0, $3, $4, $5, 'succeeded', '[]'::jsonb, now())",
+    )
+    .bind(&render_job_id)
+    .bind(page_uuid)
+    .bind(&logical_sha)
+    .bind(&png_sha)
+    .bind(&artifact_path)
+    .execute(&pool)
+    .await
+    .expect("immutable render ledger");
+    sqlx::query(
+        "UPDATE pages SET current_render_job_id = $1, last_rendered_at = now() WHERE id = $2",
+    )
+    .bind(&render_job_id)
+    .bind(page_uuid)
+    .execute(&pool)
+    .await
+    .expect("select current artifact");
+
     let after = list_pages(app.clone(), token.clone(), chapter_id.clone()).await;
-    assert!(
-        !after["content"][0]["lastRenderedAt"].is_null(),
-        "the refetch must surface the render: {}",
-        after["content"][0]
-    );
-    let rendered_url = after["content"][0]["renderedThumbnailUrl"]
+    assert_eq!(after["content"][0]["renderStatus"], "ready");
+    assert_eq!(after["content"][0]["renderRevision"], 0);
+    assert!(!after["content"][0]["lastRenderedAt"].is_null());
+    let rendered_url = after["content"][0]["renderedUrl"]
         .as_str()
-        .expect("rendered thumbnail url")
+        .expect("immutable rendered URL")
         .to_string();
     assert!(
-        rendered_url.contains("/thumbnail/rendered?v="),
-        "the url must carry a cache key, got {rendered_url}"
+        rendered_url.contains(&format!("/pages/{page_id}/rendered?revision=0")),
+        "the URL identifies its page revision, got {rendered_url}"
     );
-    assert_ne!(
-        before["content"][0], after["content"][0],
-        "AUDIT-F26: if the DTO is identical across a render the grid cannot update"
-    );
-
-    // And this is the reviewer's claim itself, kept as an assertion rather than a comment: on the
-    // fields the DTO carried *before* this fix, the two responses are byte-identical. Re-fetching
-    // could not have changed a single prop or image `src`, which is why AUDIT-F19's refresh fired
-    // correctly and still left the grid untranslated. If someone later drops the new fields, the
-    // assertion above fails and this one explains what was lost.
-    let legacy_only = |page: &serde_json::Value| {
-        serde_json::json!({
-            "id": page["id"],
-            "pageNumber": page["pageNumber"],
-            "imageId": page["imageId"],
-            "chapterId": page["chapterId"],
-            "filename": page["filename"],
-            "url": page["url"],
-            "thumbnailUrl": page["thumbnailUrl"],
-        })
-    };
-    assert_eq!(
-        legacy_only(&before["content"][0]),
-        legacy_only(&after["content"][0]),
-        "the pre-F26 fields cannot express a render — that was the whole defect"
-    );
-
-    // --- and it serves a real WebP, generated on demand for pages rendered before this existed ---
-    let response = send_get(
-        app.clone(),
-        &format!("/tlhub/api/images/{image_id}/thumbnail/rendered"),
-        &token,
-    )
-    .await;
-    assert_eq!(response.0, StatusCode::OK, "{}", response.2);
-    assert_eq!(response.1, "image/webp");
-    assert!(response.3 > 100, "rendered thumbnail must have real bytes");
-
-    // --- it is the *render*, not the original ---
-    //
-    // Both fixtures are 64x64 solid colours, so they encode to the same *number* of bytes; only
-    // the pixels distinguish them. The original is red, the staged render is green, and the whole
-    // point of AUDIT-F26 is that the grid stops showing the former once the latter exists.
-    let stored = storage
-        .download_bytes(&format!("thumbnails/rendered/{image_id}.webp"))
-        .await
-        .expect("rendered thumbnail object");
-    let decoded = image::load_from_memory(&stored)
-        .expect("rendered thumbnail decodes")
-        .to_rgba8();
-    let pixel = decoded
-        .get_pixel(decoded.width() / 2, decoded.height() / 2)
-        .0;
     assert!(
-        pixel[1] > pixel[0] && pixel[1] > pixel[2],
-        "the thumbnail must carry the render's pixels (green), got {pixel:?}"
+        after["content"][0]["renderedThumbnailUrl"].is_null(),
+        "the grid must not call an image-level mutable thumbnail current"
     );
+    assert_ne!(before["content"][0], after["content"][0]);
 
-    let original_stored = storage
-        .download_bytes(&format!("thumbnails/{image_id}.webp"))
-        .await
-        .expect("original thumbnail object");
-    assert_ne!(
-        stored, original_stored,
-        "the rendered thumbnail must not be a copy of the original's"
-    );
+    // The page endpoint streams the immutable bytes selected by the ledger, not the mutable
+    // rendered/{imageId}.png staging object.
+    let response = send_get(app.clone(), &rendered_url, &token).await;
+    assert_eq!(response.0, StatusCode::OK, "{}", response.2);
+    assert_eq!(response.1, "image/png");
+    assert_eq!(response.3, rendered_bytes.len());
 
-    storage
-        .delete_quietly(&format!("rendered/{image_id}.png"))
-        .await;
-    storage
-        .delete_quietly(&format!("thumbnails/rendered/{image_id}.webp"))
-        .await;
+    storage.delete_quietly(&artifact_path).await;
     cleanup(&pool, NS).await;
 }
 
@@ -934,6 +985,167 @@ async fn delete_page_closes_the_gap_in_page_numbers() {
     order_cleanup(&pool, NS, TITLE).await;
 }
 
+// CodeRabbit on #152: deleting a page cascades to its scene snapshots, and a render job's ledger
+// row referenced its snapshot with ON DELETE RESTRICT -- so deleting any page that had ever been
+// rendered failed (the route's expect turned that into a 500).
+#[tokio::test]
+async fn delete_page_takes_its_render_ledger_with_it() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    const NS: &str = "__pgdelrender-e2e";
+    const TITLE: &str = "PageOrder Delete Rendered Probe";
+    let token = order_probe(&pool, NS, TITLE).await;
+    let (_chapter_id, page_ids) = chapter_with_pages(&app, &pool, &token, TITLE, 2).await;
+    let page_id = uuid::Uuid::parse_str(&page_ids[0]).expect("page uuid");
+    let job_id = format!("e2e-render-{}", uuid::Uuid::new_v4());
+    let digest = "a".repeat(64);
+    sqlx::query(
+        "INSERT INTO page_scene_snapshots (page_id, revision, contract_version, source_sha256, \
+         logical_scene_sha256, scene_json) VALUES ($1, 0, 'page-scene/v1', $2, $2, '{}'::jsonb)",
+    )
+    .bind(page_id)
+    .bind(&digest)
+    .execute(&pool)
+    .await
+    .expect("seed snapshot");
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, page_id, created_at, updated_at) \
+         VALUES ($1, 'render', 'COMPLETED', $2, now(), now())",
+    )
+    .bind(&job_id)
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("seed render job");
+    sqlx::query(
+        "INSERT INTO page_render_jobs (job_id, page_id, page_revision, logical_scene_sha256, status) \
+         VALUES ($1, $2, 0, $3, 'succeeded')",
+    )
+    .bind(&job_id)
+    .bind(page_id)
+    .bind(&digest)
+    .execute(&pool)
+    .await
+    .expect("seed render ledger");
+
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "DELETE",
+        &format!("/tlhub/api/pages/{}", page_ids[0]),
+        &token,
+        String::new(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let ledger: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM page_render_jobs WHERE page_id = $1")
+            .bind(page_id)
+            .fetch_one(&pool)
+            .await
+            .expect("ledger count");
+    assert_eq!(ledger, 0, "the render ledger went with its page");
+
+    sqlx::query("DELETE FROM jobs WHERE id = $1")
+        .bind(&job_id)
+        .execute(&pool)
+        .await
+        .expect("render job cleanup");
+    order_cleanup(&pool, NS, TITLE).await;
+}
+
+/// Seeds one job of `status` for `page_id` and returns its id.
+async fn seed_page_job(pool: &sqlx::PgPool, page_id: uuid::Uuid, status: &str) -> String {
+    let job_id = format!("e2e-job-{}", uuid::Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO jobs (id, type, status, page_id, created_at, updated_at) \
+         VALUES ($1, 'panel-detection', $2, $3, now(), now())",
+    )
+    .bind(&job_id)
+    .bind(status)
+    .bind(page_id)
+    .execute(pool)
+    .await
+    .expect("seed job");
+    job_id
+}
+
+async fn job_exists(pool: &sqlx::PgPool, job_id: &str) -> bool {
+    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM jobs WHERE id = $1)")
+        .bind(job_id)
+        .fetch_one(pool)
+        .await
+        .expect("job lookup")
+}
+
+/// A page uploaded by mistake and deleted at once kept its PENDING jobs; the worker found no
+/// image, its FAILED report was refused, and the job was sent again on every resume.
+#[tokio::test]
+async fn deleting_a_page_or_chapter_drops_their_unfinished_jobs() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    const NS: &str = "__pgdeljobs-e2e";
+    const TITLE: &str = "PageOrder Delete Jobs Probe";
+    let token = order_probe(&pool, NS, TITLE).await;
+    let (chapter_id, page_ids) = chapter_with_pages(&app, &pool, &token, TITLE, 2).await;
+    let first = uuid::Uuid::parse_str(&page_ids[0]).expect("page uuid");
+    let second = uuid::Uuid::parse_str(&page_ids[1]).expect("page uuid");
+    let pending = seed_page_job(&pool, first, "PENDING").await;
+    let paused = seed_page_job(&pool, first, "PAUSED").await;
+    let finished = seed_page_job(&pool, first, "COMPLETED").await;
+    let other_page = seed_page_job(&pool, second, "PENDING").await;
+
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "DELETE",
+        &format!("/tlhub/api/pages/{}", page_ids[0]),
+        &token,
+        String::new(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(
+        !job_exists(&pool, &pending).await,
+        "a PENDING job goes with its page"
+    );
+    assert!(
+        !job_exists(&pool, &paused).await,
+        "a PAUSED job goes with its page"
+    );
+    assert!(
+        job_exists(&pool, &finished).await,
+        "finished jobs stay as history"
+    );
+    assert!(
+        job_exists(&pool, &other_page).await,
+        "another page's job is untouched"
+    );
+
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "DELETE",
+        &format!("/tlhub/api/series/chapters/{chapter_id}"),
+        &token,
+        String::new(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(
+        !job_exists(&pool, &other_page).await,
+        "deleting the chapter drops its pages' queued jobs"
+    );
+
+    sqlx::query("DELETE FROM jobs WHERE id = $1")
+        .bind(&finished)
+        .execute(&pool)
+        .await
+        .expect("job cleanup");
+    order_cleanup(&pool, NS, TITLE).await;
+}
+
 #[tokio::test]
 async fn page_number_can_still_reach_the_last_slot_after_a_delete() {
     let Some((app, pool)) = app().await else {
@@ -1257,4 +1469,284 @@ async fn reorder_rejects_a_list_that_is_not_a_permutation() {
     }
 
     order_cleanup(&pool, NS, TITLE).await;
+}
+
+/// B05: the live API must retain the exact new-format logical scene, including fractional
+/// geometry and signed rotation, while binding it to the database page/source identity.
+#[tokio::test]
+async fn page_scene_api_round_trips_the_new_format_contract() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    const NS: &str = "__page-scene-api";
+    cleanup(&pool, NS).await;
+    let token = probe_user(
+        &pool,
+        &manga_backend::jwt::JwtUtils::new(SECRET.into(), 3_600_000),
+        NS,
+    )
+    .await;
+    let (_, _, body, _) = send_json(
+        app.clone(),
+        "POST",
+        "/tlhub/api/series",
+        &token,
+        r#"{"title":"Page Scene API Probe","readingDirection":"rightToLeft"}"#.to_string(),
+    )
+    .await;
+    let series_id = json_field(&body, "id");
+    let (_, _, body, _) = send_json(
+        app.clone(),
+        "POST",
+        &format!("/tlhub/api/series/{series_id}/chapters"),
+        &token,
+        r#"{"chapterNumber":1}"#.to_string(),
+    )
+    .await;
+    let chapter_id = json_field(&body, "id");
+    let (_, _, body, _) = send_multipart(
+        app.clone(),
+        "/tlhub/api/images",
+        &token,
+        multipart_body(
+            &chapter_id,
+            1,
+            "page-scene.png",
+            &seeded_png(Uuid::new_v4().as_u128() as u32),
+        ),
+    )
+    .await;
+    let uploaded: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let page_id = uploaded["pageId"].as_str().unwrap();
+    let image_id = Uuid::parse_str(uploaded["imageId"].as_str().unwrap()).unwrap();
+    let source_sha256: String = sqlx::query_scalar("SELECT hash FROM images WHERE id = $1")
+        .bind(image_id)
+        .fetch_one(&pool)
+        .await
+        .expect("page source hash");
+
+    let mut scene: serde_json::Value = serde_json::from_str(include_str!(
+        "../../contracts/fixtures/page-scene-v1/logical-valid.json"
+    ))
+    .unwrap();
+    scene["page"]["page_id"] = serde_json::json!(page_id);
+    scene["page"]["revision"] = serde_json::json!(1);
+    scene["page"]["source"]["sha256"] = serde_json::json!(source_sha256);
+    scene["cleanup_artifacts"][0]["source_sha256"] = scene["page"]["source"]["sha256"].clone();
+
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "PUT",
+        &format!("/tlhub/api/pages/{page_id}/scene"),
+        &token,
+        scene.to_string(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let saved: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(saved, scene);
+    assert_eq!(
+        saved["objects"][0]["transform"]["rotation_degrees"],
+        serde_json::json!(12.5),
+        "the API must not coerce signed fractional geometry"
+    );
+
+    let (status, _, body, _) = send_get(
+        app.clone(),
+        &format!("/tlhub/api/pages/{page_id}/scene"),
+        &token,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&body).unwrap(),
+        scene
+    );
+
+    let owner_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM page_scene_owners WHERE page_id = $1 AND revision = 1",
+    )
+    .bind(Uuid::parse_str(page_id).unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let asset_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM page_scene_assets WHERE page_id = $1 AND revision = 1",
+    )
+    .bind(Uuid::parse_str(page_id).unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        owner_count,
+        scene["owners"].as_array().unwrap().len() as i64
+    );
+    assert_eq!(
+        asset_count,
+        scene["assets"].as_array().unwrap().len() as i64
+    );
+
+    let mut different_scene = scene.clone();
+    different_scene["objects"][0]["text"] = serde_json::json!("Changed");
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "PUT",
+        &format!("/tlhub/api/pages/{page_id}/scene"),
+        &token,
+        different_scene.to_string(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+
+    let mut legacy_scene = scene;
+    legacy_scene["contract_version"] = serde_json::json!("page-scene/v0");
+    let (status, _, body, _) = send_json(
+        app,
+        "PUT",
+        &format!("/tlhub/api/pages/{page_id}/scene"),
+        &token,
+        legacy_scene.to_string(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    cleanup(&pool, NS).await;
+}
+
+/// Tracker R7 step 1: the editor reads a page's cleanup patches through an authenticated route.
+/// Covers auth, the page scoping (another page's sha is a 404), a malformed sha, the content type
+/// and the immutable cache header.
+#[tokio::test]
+async fn scene_asset_route_serves_only_this_pages_assets_to_signed_in_users() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    const NS: &str = "__page-e2e-scene-asset";
+    cleanup(&pool, NS).await;
+    let token = probe_user(
+        &pool,
+        &manga_backend::jwt::JwtUtils::new(SECRET.into(), 3_600_000),
+        NS,
+    )
+    .await;
+
+    let response = send_json(
+        app.clone(),
+        "POST",
+        "/tlhub/api/series",
+        &token,
+        r#"{"title":"R7 asset probe","readingDirection":"rightToLeft"}"#.to_string(),
+    )
+    .await;
+    assert_eq!(response.0, StatusCode::OK);
+    let series_id = json_field(&response.2, "id");
+    let response = send_json(
+        app.clone(),
+        "POST",
+        &format!("/tlhub/api/series/{series_id}/chapters"),
+        &token,
+        r#"{"chapterNumber":1}"#.to_string(),
+    )
+    .await;
+    assert_eq!(response.0, StatusCode::OK);
+    let chapter_id = json_field(&response.2, "id");
+    let mut page_ids = Vec::new();
+    for number in 1..=2 {
+        let body = multipart_body(
+            &chapter_id,
+            number,
+            &format!("r7-{number}.png"),
+            &seeded_png(Uuid::new_v4().as_u128() as u32),
+        );
+        let response = send_multipart(app.clone(), "/tlhub/api/images", &token, body).await;
+        let uploaded: serde_json::Value = serde_json::from_str(&response.2).unwrap();
+        page_ids.push(uploaded["pageId"].as_str().unwrap().to_string());
+    }
+    let (page_a, page_b) = (&page_ids[0], &page_ids[1]);
+
+    // A patch the worker would have uploaded for page A.
+    let patch = seeded_png(Uuid::new_v4().as_u128() as u32);
+    let sha = {
+        use sha2::Digest;
+        hex::encode(sha2::Sha256::digest(&patch))
+    };
+    let storage = MinioService::new(&minio_config_from_env().expect("minio env"));
+    storage
+        .upload_bytes(
+            &manga_backend::page_scene_builder::scene_asset_path(page_a.parse().unwrap(), &sha),
+            patch.clone(),
+            "image/png",
+        )
+        .await
+        .expect("stage patch");
+
+    let uri = format!("/tlhub/api/pages/{page_a}/scene-assets/{sha}");
+    let response = app
+        .clone()
+        .oneshot(Request::get(&uri).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::FORBIDDEN,
+        "no token, no bytes"
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get(&uri)
+                .header("Authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "image/png");
+    let cache = response.headers()["cache-control"]
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache.contains("immutable") && cache.contains("private"),
+        "{cache}"
+    );
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(&body[..], &patch[..], "the stored bytes, unchanged");
+
+    let (status, _, _, _) = send_get(
+        app.clone(),
+        &format!("/tlhub/api/pages/{page_b}/scene-assets/{sha}"),
+        &token,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::NOT_FOUND,
+        "page A's patch is not page B's"
+    );
+
+    for bad in [
+        "not-a-sha",
+        &sha.to_uppercase(),
+        &format!("..%2F{}", &sha[3..]),
+    ] {
+        let (status, _, _, _) = send_get(
+            app.clone(),
+            &format!("/tlhub/api/pages/{page_a}/scene-assets/{bad}"),
+            &token,
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{bad}");
+    }
+    let (status, _, _, _) = send_get(
+        app,
+        &format!("/tlhub/api/pages/{}/scene-assets/{sha}", Uuid::new_v4()),
+        &token,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "unknown page");
+    cleanup(&pool, NS).await;
 }

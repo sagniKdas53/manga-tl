@@ -44,7 +44,7 @@ services:
       retries: 20
 
   minio:
-    image: minio/minio
+    image: purevert/minio:backup
     container_name: manga-test-minio
     command: server /data
     environment:
@@ -55,7 +55,7 @@ services:
     tmpfs:
       - /data
     healthcheck:
-      test: [ "CMD-SHELL", "mc ready local || exit 1" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
       interval: 3s
       timeout: 3s
       retries: 20

@@ -2959,3 +2959,153 @@ standing warning about `React.lazy` artefacts applies more broadly than to lazy 
 grep found that `CreateChapterDialog` has a **second** call site in `ChapterGallery.tsx` that the
 graph did not surface. That second site is where the fifth bug (upload numbering) was found. Cross-
 check a zero with grep before trusting it.
+
+## 2026-09-25 — issues closed in the R3 triage
+
+Moved from `docs/issues.md` with their closing evidence. Checked against the tree at `5d451ad` plus that day's uncommitted changes; see the commit that moved them.
+
+#### `AUDIT-B15` (high): The debounced re-render is one-shot and can lose an edit permanently
+
+- **Correction, 2026-09-02.** This was first filed as "no edit anywhere enqueues a render job". That
+  is **wrong** — I missed the sweeper. `recovery::process_pending_renders`
+  (`backend-rust/src/jobs/recovery.rs:145-197`) runs every 5s (`jobs/mod.rs:34-40`), finds pages
+  with `last_edited_at` older than 10s whose `last_rendered_at` predates the edit, and enqueues a
+  render redo. `touch_page` is called from all six mutating layer routes. The link exists.
+- **What is actually wrong with it.** The sweeper stamps `last_rendered_at = now()` at *enqueue*
+  time (`recovery.rs:187`), not when the render lands, and it gates that on
+  `trigger_page_redo(...).is_ok()` — which is not a real check, because `trigger_page_redo` returns
+  `Ok(())` unconditionally after calling `enqueue_job_directly`, and `enqueue_job_directly` swallows
+  its own insert failure with a `tracing::error!` and returns `()`.
+
+  So the stamp says "rendered" the moment the job is *asked for*. If that job is then lost — the
+  insert failed, the queue was cleared, the worker was down long enough for the row to exhaust its
+  attempts — the page's `last_rendered_at` is already newer than its `last_edited_at`, the sweeper's
+  own predicate excludes it forever, and that edit never renders again. There is no retry, because
+  the only trigger is the predicate that was just falsified.
+- **Why this is a plausible reading of the report** ("changes to the canvas are not synced to the
+  rendered output like ever"): the failure is sticky. One lost render per page is enough to make the
+  feature look permanently broken for that page, and editing more does not recover it — a *new*
+  edit does re-arm the predicate, so the symptom is intermittent rather than total, which is exactly
+  how it would be described.
+- **Next Step:** stamp `last_rendered_at` from the render callback only — it already does this
+  (`internal.rs:1157-1161` for the image, `coordinator.rs:2077-2082` for the page) — and give the
+  sweeper a separate "render requested at" marker so it debounces without claiming completion.
+  Make `trigger_page_redo` propagate the enqueue failure rather than returning `Ok(())` regardless.
+- **Confirmed in the PR #115–#138 review.** This is not only a plausible explanation: an enqueue
+  insert or Redis push failure is swallowed, and a worker failure after the timestamp update leaves
+  the same permanently false predicate. The remediation must be guarded by failures at each of
+  those points, not only by a successful-render test.
+- **Closed 2026-09-25 on the current tree.** The sweeper no longer stamps anything: `pages.last_rendered_at` is set only by the render callback for the current artifact, so a render that is lost leaves the page dirty and the next sweep asks again. `backend-rust/tests/jobs_endpoints.rs::recovery_reset_stale_and_debounced_render` covers the failure half (a FAILED render suppresses re-triggering for five minutes, then the page renders again) and an edit landing during a queued render keeping its newer revision. The narrower remainder — a `page_render_jobs` row stuck `queued`/`running` dedupes re-enqueue — belongs to job lease recovery (R3 Packet 2, `AUDIT-B25`), not to this sweeper. Same day: renders now also wait while OCR/cleanup/translation/region redos are in flight on the page (`RENDER_BLOCKING_JOBS`, `recovery.rs`), and the debounce is `RENDER_DEBOUNCE_SECONDS` (default 30).
+
+#### `AUDIT-B16` (low): Region-redo layer provenance
+
+- **Locations:** `backend-rust/src/jobs/coordinator.rs:2425-2503` (`create_region_redo_overlay`).
+- **Problem:** The report says a translation region redo "doesn't make a new layer", but the attached
+  screenshot shows a `Translation (region redo)` layer with 1 element sitting above an 11-element
+  `Translation` layer — i.e. the layer *is* created. The likely real complaint is that the redo
+  result does not become what the page shows or exports, which would make it indistinguishable from
+  "no new layer" at the reader.
+- **Next Step:** needs a repro before any code change. Capture the layer list, the element's
+  `visible`/`region_id`, and what `/rendered` returns, on one page where this happens.
+- **Evidence from the R2 run (2026-09-19):** `handle_translation_callback` inserts a new
+  translation layer on *every* pass (`coordinator.rs`, the `INSERT INTO layers` after the
+  `is_redo` block) and hides the previous ones on a redo; sample177 finished with three translation
+  layers, two hidden, after two QA retries. So "a redo makes no new layer" is not reproducible —
+  a redo always makes one — and R1's note that a retry "updates the existing layer" describes only
+  the per-element update within a layer. No pixel effect; the hidden layers are not in the scene.
+- **Closed 2026-09-25.** The layer was always made; the real symptom was that the redo never reached the export. `region_callback` now advances the page revision in the same transaction as the overlay (`routes/internal.rs`, commit `a6011e0`), so the debounced render picks the new reading up. `tests/region_review.rs::merged_fragments_are_cleaned_and_translated_as_one_block` asserts the overlay text is what the visible layers show and that the revision moved.
+
+#### `AUDIT-B19` (low): JWT signing failure reported as successful login
+
+- **Locations:** `backend-rust/src/routes/auth.rs:298` (register), `:326` (login), `:346` (refresh).
+- **Problem:** `let token = state.jwt.generate_token(&user.email).unwrap_or_default();`
+  `generate_token` returns `Result`. On `Err`, `unwrap_or_default()` yields an empty string `""`, and all
+  three endpoints answer `200 OK` with `token: ""`. An empty token fails subsequent decode, so while not
+  an auth bypass, it produces silent session failure on the client with 401s rather than a legible error.
+- **Fix:** Map `Err` to a 500 error response at all three sites.
+- **Fixed 2026-09-25.** `routes/auth.rs` `signed_token`/`signing_failed`: register, login and refresh log the signing error and answer 500 "Could not create a session token". No test forces a signing failure (HS256 with a configured secret does not fail in practice); the change is visible at the three call sites.
+
+#### `AUDIT-B24` (medium): A re-uploaded image is deduplicated onto a processed one and gets a render job it cannot run
+
+- **Seen:** R2 six-fixture run, 2026-09-19 07:06 (`R2.md`, stack notes). The harness was relaunched
+  on a database that already held a processed `sample177`; the second upload of the same bytes
+  came back with the *same* `imageId` (`c14a56b7…`), a new page, no OCR job, and a bare `render`
+  job for the new page, which the worker rejected three times with `render job carries no
+  logicalScene` — the new page has no regions, no layers and no snapshot to build one from. The
+  harness then reported "pipeline stopped with 1 failed job".
+- **Where:** `routes/page.rs:486` finds the image by hash and calls
+  `clone::handle_duplicate_image_cloning` (`clone.rs:267`), which clones the source page's OCR
+  regions and translation layers to the new page and then calls
+  `trigger_page_redo(new_page, "render")` — `enqueue_job_directly` of a bare `render`, the
+  pre-R1 job shape. Since R1 a render job needs the page's snapshot (`snapshot_pipeline_scene` →
+  `enqueue_snapshot_render`); nothing here writes one, so the worker refuses the job. (On the R2
+  run the clone also found no source page in the same chapter/series — the six run in one
+  chapter each — so it may have queued the render with nothing copied at all; either way the
+  outcome is the same.)
+- **Fix:** in the `tl_matches` branch, replace `trigger_page_redo(…, "render")` with a
+  transaction that runs `snapshot_pipeline_scene` for the new page and then
+  `enqueue_snapshot_render`; if the snapshot cannot be built (no regions were cloned), fall
+  through to the `"translation"` branch or start OCR. Never queue a `render` for a page without a
+  snapshot — `recovery.rs`'s poller already follows that rule.
+- **Schedule:** R5 (provider/job hygiene). Until then, quality runs must never re-upload a sample
+  on the same database (noted in the R2 controls runbook).
+- **Fixed 2026-09-25.** `clone::handle_duplicate_image_cloning` no longer queues a bare `render`; it advances the cloned page's revision, and the debounced render snapshots what was cloned and renders it — the path an editor edit takes. `tests/pages_endpoints.rs::upload_stream_delete_lifecycle` uploads the same bytes into a second slot after the first page has an OCR layer and asserts no render job and a dirty page.
+
+#### `AUDIT-R20` (high): A balloon is emitted as one region per column
+
+- **Report (2026-09-19, R2 short list — [`R2.md`](quality-checkpoints/R2.md#short-list)):** on the
+  first conventional-balloon pages measured live (`sample7` ja, `sample197` ko, `sample641` zh),
+  region counts are 1.3–1.9× the August exports. `sample641`'s five-column balloon became five
+  regions, each translated on its own (*"I still" / "can't believe this" / "is homemade!" / …*)
+  and each set in a 30–41 px column at 8–33 px; `sample7` has five such balloons (18 regions),
+  `sample197` three. Crop: [`compare/sample641-balloon.png`](quality-runs/r2-20260919-shortlist/compare/sample641-balloon.png).
+- **Root cause, from the persisted `ownerDecision` on every region:** F04's live owner veto
+  (`worker/src/worker/handlers/ocr.py` `owner_aware_grouping_context` — *"a rejected decision can
+  only split a component"*) applies F01's rule (`services/owner_assignment.py`
+  `assign_captured_owners`): a multi-fragment owner needs every fragment's quad with all four
+  corners inside one validated detector container (`_containing_container`, `:276`). Line
+  continuity passes (`lc=vertical, gap 0`); the decline is `incomplete-validated-container`
+  (some columns outside the polygon: sample641 `bubble_3` → `[None, 'bubble-3', 'bubble-3', 'bubble-3', 'bubble-3']`;
+  sample7 `bubble_4` → `[None, None, 'bubble-4', None]`) or `missing-validated-container` (none
+  found at all). The detector's container is frequently column-sized (sample641 `bubble_3`:
+  72×176 for a 150 px-wide balloon). When the decision is `unknown` the whole group falls to
+  singletons; the only partial-merge path is exactly two members with one outsider (`:142`).
+  August's `merge_regions` had no veto and merged the balloon. The six fixtures could not show
+  it: their text is free-standing (`direct_text`, mostly single fragments).
+- **Not the R2 area gate** (`OCR_COMPONENT_MAX_AREA_FRACTION`): no group came near 25 %.
+- **Where it lands:** the same detector-container family as `AUDIT-R10`. Options are (a) a
+  container test that tolerates a column crossing the polygon edge (containment by centre or by
+  ≥ N % of quad area, not all four corners), (b) merging the members that *are* inside one
+  container and leaving only the outsiders as singletons, (c) fixing the container itself (why
+  YOLO/contour returns a column-sized box for a full balloon). Any of them changes what R3's
+  region-masked gate and the 24 controls measure, so the order relative to R3 is the user's call.
+- **Fixed in code 2026-09-19 (R6, worker `1c62e13`).** The user chose R6 before R3. It was (a), and
+  the "column-sized container" was a misreading: the persisted 72×176 polygon is the *post-split*
+  local crop (`containerResolution = resolved-local-split`), and the real YOLO container is the
+  full balloon. The mechanism is that a balloon is an ellipse and a column is a rectangle — the
+  outer columns' corners are past the curve on every multi-line balloon, so all-four-corners
+  failed exactly the balloons that hold sentences. `_containing_container` now needs ≥ 0.75 of the
+  quad's area inside one container (measured floor on the three pages: 0.875 for every fragment
+  that belongs). Details, the 42-fragment table and the gate runbook in
+  [R6.md](quality-checkpoints/R6.md). Stays open until the live gate runs.
+- **Closed 2026-09-19 — live gate passed** ([R6 § Gate result](quality-checkpoints/R6.md#gate-result--2026-09-19)): every multi-column balloon Torii sets as one box is one region on `sample7`/`sample197`/`sample641`, zero `incomplete-validated-container`. A different veto still splits some balloons (line continuity on OCR-split columns); that is filed separately as `AUDIT-R21`.
+
+#### `AUDIT-B28` (medium): A busy renderer failed renders instead of making them wait
+
+- **Seen:** Queue Manager, Tests › Ch.4 page 30: a RENDER FAILED, attempt 3/3, "page renderer
+  rejected the scene (400): renderer context capacity is exhausted". It was QA's final re-render,
+  and it burned three attempts in 7 s (04:31:33–04:31:40 UTC). The sweeper re-rendered the page
+  five minutes later, so the page was fine, but the FAILED row stayed. The dev history held 14 of
+  these.
+- **Cause:** `page-renderer` holds one browser context (UR02, by design). A second render or QA
+  pass arriving meanwhile got `RendererError` → HTTP 400, the same answer as a malformed scene, and
+  the worker's attempts had no backoff.
+- **Fixed 2026-09-25:** `RendererBusyError` → 503 + `Retry-After: 2`
+  (`services/page-renderer/src/{renderer,server}.mjs`). The worker's `_post_render`
+  (`page_scene_renderer.py`) waits and resends inside the job, with doubling backoff to 10 s and
+  jitter, up to `RENDER_BUSY_WAIT_SECONDS` (300). It spends no attempt; the heartbeat keeps the lease.
+  A 400 is still final. The new renderer test also exposed a race: `acquireContext` checked the cap,
+  awaited `newContext()`, then recorded the context, so two renders arriving together at a cold
+  start both made a context (past UR02's one-context memory limit). Contexts being created now count
+  against the cap. Tests: renderer `a second concurrent render is told the renderer is busy`;
+  worker `test_a_busy_renderer_is_waited_for_not_failed`, `…past_the_deadline…`, `test_a_bad_scene_is_not_retried`.

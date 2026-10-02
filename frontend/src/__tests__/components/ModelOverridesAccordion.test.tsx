@@ -1,11 +1,17 @@
 import { useState } from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import ModelOverridesAccordion, {
   type ModelOverridesValue,
   type InheritedModelSettings,
 } from "../../components/ModelOverridesAccordion";
-import type { SystemSettingsDto } from "../../types";
+import type { CustomModel, SystemSettingsDto } from "../../types";
+import { registerCustomModel } from "../../utils/customModels";
+
+vi.mock("../../utils/customModels", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../utils/customModels")>()),
+  registerCustomModel: vi.fn(async (entry: CustomModel) => [entry]),
+}));
 
 const settings = {
   ocrProvider: "openrouter",
@@ -36,6 +42,8 @@ const emptyValue: ModelOverridesValue = {
   qaVlmModel: "",
   qaMode: "",
   routingStrategy: "",
+  cleanupMode: "",
+  ocrMergeThreshold: null,
   useFallbackModels: null,
 };
 
@@ -78,7 +86,7 @@ describe("ModelOverridesAccordion", () => {
   it("renders the summary with overridden/inherited counts", () => {
     render(<Harness inherited={{}} />);
     expect(screen.getByText("Model Overrides (Optional)")).toBeInTheDocument();
-    expect(screen.getByText("0 overridden, 10 inherited")).toBeInTheDocument();
+    expect(screen.getByText("0 overridden, 12 inherited")).toBeInTheDocument();
   });
 
   it("shows the inherited value for non-overridden selects", () => {
@@ -132,14 +140,14 @@ describe("ModelOverridesAccordion", () => {
 
     // Override applied: shows the overridden value, chip counts it, X appears
     expect(getFallbackSelect().textContent).toBe("Disabled");
-    expect(screen.getByText("1 overridden, 9 inherited")).toBeInTheDocument();
+    expect(screen.getByText("1 overridden, 11 inherited")).toBeInTheDocument();
     const clearBtns = document.querySelectorAll('[data-testid="CloseIcon"]');
     expect(clearBtns.length).toBe(1);
 
     // Clearing reverts to displaying the inherited value
     fireEvent.click(clearBtns[0]);
     expect(getFallbackSelect().textContent).toBe("Enabled");
-    expect(screen.getByText("0 overridden, 10 inherited")).toBeInTheDocument();
+    expect(screen.getByText("0 overridden, 12 inherited")).toBeInTheDocument();
     expect(document.querySelectorAll('[data-testid="CloseIcon"]').length).toBe(
       0,
     );
@@ -154,7 +162,7 @@ describe("ModelOverridesAccordion", () => {
     );
     expect(getFallbackSelect().textContent).toBe("Enabled");
     // Still counts as overridden because the value is explicitly set
-    expect(screen.getByText("1 overridden, 9 inherited")).toBeInTheDocument();
+    expect(screen.getByText("1 overridden, 11 inherited")).toBeInTheDocument();
     expect(document.querySelectorAll('[data-testid="CloseIcon"]').length).toBe(
       1,
     );
@@ -237,5 +245,59 @@ describe("ModelOverridesAccordion", () => {
     expect(
       screen.getByRole("option", { name: "Free model · Free" }),
     ).toBeInTheDocument();
+  });
+
+  it("puts the OCR grouping threshold third, inherits it, and counts an override", () => {
+    render(
+      <Harness
+        inherited={{ ocrMergeThreshold: 0.5 }}
+        initialValue={{}}
+      />,
+    );
+    const field = screen.getByLabelText("OCR Grouping Threshold");
+    expect(field).toHaveValue(0.5);
+
+    // Third in the grid, right after the two OCR fields it tunes.
+    const labels = Array.from(document.querySelectorAll("label")).map(
+      (l) => l.textContent,
+    );
+    expect(labels.slice(0, 3)).toEqual([
+      "OCR Provider",
+      "OCR VLM Model",
+      "OCR Grouping Threshold",
+    ]);
+
+    fireEvent.change(field, { target: { value: "0.9" } });
+    expect(field).toHaveValue(0.9);
+    expect(screen.getByText("1 overridden, 11 inherited")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Clear OCR Grouping Threshold override",
+      }),
+    );
+    expect(field).toHaveValue(0.5);
+  });
+
+  it("takes a custom model ID, registers it, and selects it", async () => {
+    render(<Harness inherited={{ tlProvider: "openrouter" }} />);
+
+    fireEvent.mouseDown(getSelectByLabel("TL LLM Model"));
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Custom model ID…" }),
+    );
+    fireEvent.change(await screen.findByLabelText("Model ID"), {
+      target: { value: " stealth/space-bunny-alpha " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Use model" }));
+
+    await waitFor(() =>
+      expect(getSelectByLabel("TL LLM Model").textContent).toBe(
+        "stealth/space-bunny-alpha · Custom · price unknown",
+      ),
+    );
+    expect(registerCustomModel).toHaveBeenCalledWith(
+      { provider: "openrouter", task: "tl", id: "stealth/space-bunny-alpha" },
+      undefined,
+    );
   });
 });

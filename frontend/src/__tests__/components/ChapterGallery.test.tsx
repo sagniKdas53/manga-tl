@@ -233,6 +233,8 @@ describe("ChapterGallery Component", () => {
           qaVlmModel: null,
           qaMode: null,
           routingStrategy: null,
+          cleanupMode: null,
+          ocrMergeThreshold: null,
           useFallbackModels: null,
         }),
       });

@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useMemo,
-} from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type {
   User,
@@ -30,11 +24,33 @@ import {
   ensureFontsLoaded,
 } from "../utils/fitText";
 import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
-import { hasDetectedBubble, paintLayerMask } from "../utils/maskPaint";
+import { paintLayerMask } from "../utils/maskPaint";
+import { elementFit } from "../utils/elementFit";
+import { STROKE_WIDTH_RATIO } from "@manga-library/page-scene";
 import {
-  DEFAULT_TEXT_BOX_INSET,
+  CLEANUP_PRESERVE_ASPECT_RATIO,
+  isInpaintingLayer,
+  isPatchElement,
+  fetchSceneAsset,
+  paintedPatches,
+  loadSceneAssetUrl,
+  regionHasPatch,
+  isUnpatchedSoundEffect,
+  usePatchImageUrls,
+} from "../utils/inpainting";
+import type { MergePreview } from "./ReaderIssues";
+import InpaintingSession, { type PatchListItem } from "./InpaintingEditor";
+import {
+  regionIssues,
+  translationElementByRegion,
+  type IssueAction,
+  type RegionIssue,
+} from "../utils/regionIssues";
+import {
+  DEFAULT_TEXT_BOX_GEOMETRY,
+  insetForBox,
   textFitBox,
-  type TextBoxInset,
+  type TextBoxGeometry,
 } from "../utils/textFitBox";
 import { usePersistedState } from "../hooks/usePersistedState";
 import ConfirmModal from "./ConfirmModal";
@@ -122,11 +138,21 @@ interface RenderItem {
   isLayerElement?: boolean;
 }
 
+/** How long the page must be left alone before pending element edits are saved. */
+const AUTOSAVE_IDLE_MS = 30_000;
+
+/**
+ * One undo/redo step: the element's state to restore. Tracker R7: `op: "delete"` marks a deleted
+ * patch — on the undo stack, undoing re-creates it; on the redo stack, redoing deletes it again.
+ */
+type UndoEntry = LayerElement & { op?: "delete" };
+
 type SelectedItemType =
   | (RenderItem & Partial<Omit<LayerElement, keyof RenderItem>>)
   | (LayerElement & Partial<Omit<RenderItem, keyof LayerElement>>)
   | null;
 
+/** Saves one element; resolves to whether the server took it (a failure is reported here). */
 async function saveElementChanges(
   element: LayerElement,
   showAlert: boolean = true,
@@ -136,10 +162,13 @@ async function saveElementChanges(
     message: string,
     options?: { action?: { label: string; onClick: () => void } },
   ) => void,
-) {
+  // For saves started as the tab closes, which the browser would otherwise cancel.
+  keepalive: boolean = false,
+): Promise<boolean> {
   try {
     const res = await safeFetch(`/api/layer-elements/${element.id}`, {
       method: "PUT",
+      keepalive,
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
@@ -163,6 +192,9 @@ async function saveElementChanges(
         fontStyle: element.fontStyle || "normal",
         boxShape: element.boxShape,
         maskPolygon: element.maskPolygon,
+        // Always sent for a patch: the server keeps a value it is not given, so omitting an
+        // opacity that went back to "unset" (opaque) by Undo would leave the export faded.
+        ...(element.cleanupRef ? { opacity: element.opacity ?? 1 } : {}),
       }),
     });
 
@@ -173,6 +205,7 @@ async function saveElementChanges(
     if (showAlert) {
       showToast("Element updated successfully!", "success");
     }
+    return true;
   } catch (err) {
     console.error(err);
     showError("Error updating element on server.", {
@@ -182,6 +215,7 @@ async function saveElementChanges(
           saveElementChanges(element, showAlert, token, showToast, showError),
       },
     });
+    return false;
   }
 }
 
@@ -314,12 +348,6 @@ export const Reader: React.FC<ReaderProps> = ({
   // Reader States
   const [panels, setPanels] = useState<Panel[]>([]);
   const [ocrRegions, setOcrRegions] = useState<OcrRegion[]>([]);
-  // Erasure needs to know which regions have no balloon, so their text box can be
-  // erased alongside their mask; see `paintLayerMask`.
-  const regionsById = useMemo(
-    () => new Map(ocrRegions.map((r) => [r.id, r])),
-    [ocrRegions],
-  );
   const [imageDims, setImageDims] = useState({ w: 800, h: 1200 });
   // True once the server has told us the original size, which makes the displayed image's
   // naturalWidth irrelevant. Kept in a ref because handleImgLoad reads it outside React's flow.
@@ -408,11 +436,11 @@ export const Reader: React.FC<ReaderProps> = ({
   const cacheEpochRef = useRef(0);
   const [cacheEpoch, setCacheEpoch] = useState(0);
 
-  // AUDIT-F16: the fitted rectangle's inset, from global settings rather than a literal. Starts at
-  // the value the pipeline has always used, so the reader is never briefly fitting to a different
-  // box than the export while the request is in flight.
-  const [textBoxInset, setTextBoxInset] = useState<TextBoxInset>(
-    DEFAULT_TEXT_BOX_INSET,
+  // AUDIT-F16: the fitted rectangle's inset, from global settings rather than a literal: padding
+  // as a percentage of each box (capped at a max px) and a safety share. Starts at the default
+  // the export uses, so the reader never briefly fits to a different box while this loads.
+  const [textBoxGeometry, setTextBoxGeometry] = useState<TextBoxGeometry>(
+    DEFAULT_TEXT_BOX_GEOMETRY,
   );
   useEffect(() => {
     let cancelled = false;
@@ -422,13 +450,14 @@ export const Reader: React.FC<ReaderProps> = ({
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled || !data) return;
-        setTextBoxInset({
-          paddingPx: Number(
-            data.textBoxPaddingPx ?? DEFAULT_TEXT_BOX_INSET.paddingPx,
+        const d = DEFAULT_TEXT_BOX_GEOMETRY;
+        setTextBoxGeometry({
+          paddingPercent: Number(
+            data.textBoxPaddingPercent ?? d.paddingPercent,
           ),
-          safetyPercent: Number(
-            data.textBoxSafetyPercent ?? DEFAULT_TEXT_BOX_INSET.safetyPercent,
-          ),
+          paddingMinPx: Number(data.textBoxPaddingMinPx ?? d.paddingMinPx),
+          paddingMaxPx: Number(data.textBoxPaddingMaxPx ?? d.paddingMaxPx),
+          safetyPercent: Number(data.textBoxSafetyPercent ?? d.safetyPercent),
         });
       })
       .catch(() => {
@@ -449,6 +478,17 @@ export const Reader: React.FC<ReaderProps> = ({
     { layer: Layer; elements: LayerElement[] }[]
   >([]);
   const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
+  // The mask editor: text and OCR hidden, patch masks tinted, a brush over the page. Held as the
+  // page it was opened on, so moving to another page closes it.
+  const [inpaintingPageId, setInpaintingPageId] = useState<string | null>(null);
+  // Where the editor's two halves mount: over the page image, and in the right sidebar's slot.
+  const [inpaintingCanvasHost, setInpaintingCanvasHost] =
+    useState<HTMLDivElement | null>(null);
+  const [inpaintingPanelHost, setInpaintingPanelHost] =
+    useState<HTMLDivElement | null>(null);
+  const [highlightedPatchId, setHighlightedPatchId] = useState<string | null>(
+    null,
+  );
   const [cleanScanlationView, setCleanScanlationView] = usePersistedState(
     "manga_clean_view",
     false,
@@ -456,8 +496,8 @@ export const Reader: React.FC<ReaderProps> = ({
   const [manuallyShownOcrLayers, setManuallyShownOcrLayers] = useState<
     Set<string>
   >(new Set());
-  const [undoStack, setUndoStack] = useState<LayerElement[]>([]);
-  const [redoStack, setRedoStack] = useState<LayerElement[]>([]);
+  const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<UndoEntry[]>([]);
 
   // Conversation and Layout enhancements
   const [groupByConversation, setGroupByConversation] = usePersistedState(
@@ -490,7 +530,7 @@ export const Reader: React.FC<ReaderProps> = ({
   const dragStart = useRef({ x: 0, y: 0 });
   const [draggedElement, setDraggedElement] = useState<{
     id: string;
-    type: "move";
+    type: "move" | "resize";
     startX: number;
     startY: number;
     startElX: number;
@@ -545,15 +585,123 @@ export const Reader: React.FC<ReaderProps> = ({
   const { showToast, showError } = useToast();
 
   const [dirtyElements, setDirtyElements] = useState<Set<string>>(new Set());
-  const autoSaveTimersRef = useRef<
-    Record<string, ReturnType<typeof setTimeout>>
-  >({});
+  // Element edits wait here, newest copy per element, until the page has been left alone for
+  // AUTOSAVE_IDLE_MS, or the user saves, exports, turns the page or closes the tab. Each save
+  // used to go out 1.5 s after the edit, so one editing session advanced a page's revision twenty
+  // times (user review, 2026-10-02).
+  const pendingSavesRef = useRef<
+    Map<string, { element: LayerElement; pageId: string | null }>
+  >(new Map());
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * Ask the backend to render the page now (`POST /pages/{id}/render`), so a saved edit reaches
+   * Export and the reader without the render debounce and the worker queue.
+   */
+  const requestRenderNow = useCallback(
+    (pageId: string, keepalive: boolean = false) =>
+      safeFetch(`/api/pages/${pageId}/render`, {
+        method: "POST",
+        keepalive,
+        headers: { Authorization: `Bearer ${user.token}` },
+      }),
+    [user.token],
+  );
+
+  /**
+   * Saves every pending element edit, then renders the pages they belong to. An edit whose save
+   * failed stays pending and dirty (unless a newer edit of it is already waiting), so the next
+   * flush tries it again and Export still sees unsaved work.
+   */
+  const flushPendingSaves = useCallback(
+    async (keepalive: boolean = false): Promise<void> => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+      const batch = [...pendingSavesRef.current.values()];
+      pendingSavesRef.current.clear();
+      if (batch.length === 0) return;
+      const results = await Promise.all(
+        batch.map(({ element }) =>
+          saveElementChanges(
+            element,
+            false,
+            user.token,
+            showToast,
+            showError,
+            keepalive,
+          ),
+        ),
+      );
+      const saved = new Set<string>();
+      batch.forEach((entry, index) => {
+        if (results[index]) {
+          saved.add(entry.element.id);
+        } else if (!pendingSavesRef.current.has(entry.element.id)) {
+          pendingSavesRef.current.set(entry.element.id, entry);
+        }
+      });
+      setDirtyElements((prev) => {
+        const next = new Set([...prev].filter((id) => !saved.has(id)));
+        return next.size === prev.size ? prev : next;
+      });
+      const savedPages = new Set(
+        batch
+          .filter((entry) => saved.has(entry.element.id))
+          .map((entry) => entry.pageId),
+      );
+      for (const pageId of savedPages) {
+        if (pageId) {
+          requestRenderNow(pageId, keepalive).catch((err) =>
+            console.error("Render request failed for page", pageId, err),
+          );
+        }
+      }
+    },
+    [user.token, showToast, showError, requestRenderNow],
+  );
+
+  // The page-change and tab-close handlers call the newest flush through this, so they
+  // fire on those events alone, not whenever a dependency of the flush changes identity.
+  const flushPendingSavesRef = useRef(flushPendingSaves);
   useEffect(() => {
-    const timers = autoSaveTimersRef.current;
+    flushPendingSavesRef.current = flushPendingSaves;
+  }, [flushPendingSaves]);
+
+  // Turning the page or leaving the reader saves what is pending.
+  const openPageId = selectedPage?.id;
+  useEffect(() => {
     return () => {
-      Object.values(timers).forEach(clearTimeout);
+      void flushPendingSavesRef.current();
     };
+  }, [openPageId]);
+
+  // Deselecting an element -- the inspector's Deselect, a click elsewhere, or picking another --
+  // saves its pending edits there and then, like Ctrl+S (user review, 2026-10-02: on page 30 the
+  // edits sat unsaved after Deselect until Export asked about them).
+  const selectedId = selectedItem?.id;
+  useEffect(() => {
+    if (!selectedId) return;
+    // The map itself is never replaced, only its entries.
+    const pending = pendingSavesRef.current;
+    return () => {
+      if (pending.has(selectedId)) {
+        void flushPendingSavesRef.current();
+      }
+    };
+  }, [selectedId]);
+
+  // Closing the tab with edits still waiting asks first, and starts saving them.
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (pendingSavesRef.current.size === 0) return;
+      void flushPendingSavesRef.current(true);
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
 
   // Listen for job_update events and drop the cache for whichever page the job touched.
@@ -614,23 +762,32 @@ export const Reader: React.FC<ReaderProps> = ({
       prefetchQueue.current.delete(page.id);
       cacheEpochRef.current += 1;
 
-      Promise.resolve().then(() => {
+      // A render changes no layer, and on the open page it is usually the user's own edit coming
+      // back: reloading for it threw away the selection and anything not yet saved.
+      const reloadOpenPage = isOpenPage && data.type !== "render";
+      const refresh = () => {
         setCacheEpoch(cacheEpochRef.current);
         // Only the open page is re-read on screen; a background page is simply dropped from the
         // cache, so the next navigation or prefetch pass picks up the new layers.
-        if (isOpenPage) {
+        if (reloadOpenPage) {
           setLoadedImageId(null);
         }
-      });
+      };
+      // Pending edits are saved before the page is re-read, or the reload would drop them.
+      if (reloadOpenPage && pendingSavesRef.current.size > 0) {
+        void flushPendingSaves().then(refresh);
+      } else {
+        Promise.resolve().then(refresh);
+      }
 
-      if (isOpenPage) {
+      if (reloadOpenPage) {
         console.log(
           `SSE event: Reloading page layers due to ${data.type} job completion`,
         );
         showToast("New layers available — refreshed", "success");
       }
     });
-  }, [subscribe, selectedPage, pages, showToast]);
+  }, [subscribe, selectedPage, pages, showToast, flushPendingSaves]);
 
   // Window title synchronization
   useEffect(() => {
@@ -708,20 +865,48 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // Image ref for export
   const imgRef = useRef<HTMLImageElement>(null);
+  // The page's on-screen width before zoom, so canvas markers can be sized in screen pixels: a
+  // badge drawn in image pixels shrinks to a speck on a 2500px scan.
+  const [displayWidth, setDisplayWidth] = useState(0);
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => setDisplayWidth(img.clientWidth));
+    observer.observe(img);
+    return () => observer.disconnect();
+  }, [pageImageSrc]);
+  /** Image pixels per screen pixel, so overlay badges keep one on-screen size at any zoom. */
+  const screenPx = displayWidth > 0 ? imageDims.w / (displayWidth * zoom) : 1;
 
   // Popover States
   const [activeRegion, setActiveRegion] = useState<OcrRegion | null>(null);
   const [isRedoingRegionOcr, setIsRedoingRegionOcr] = useState(false);
   const [isRedoingRegionTl, setIsRedoingRegionTl] = useState(false);
 
-  const visibleOcrRegionIds = React.useMemo(() => {
+  // The current OCR pass's regions: the newest full OCR layer plus the region-redo overlays above
+  // it. Not read from visibility: OCR layers are created hidden (2026-09-28) so their text is not
+  // painted over the cleaned page, and the eye only decides that.
+  const currentOcrRegionIds = React.useMemo(() => {
+    const ocrLayers = layers.filter((lData) => lData.layer.type === "ocr");
+    const newestPass = ocrLayers
+      .filter(
+        (lData) =>
+          (lData.layer.metadataJson as { overlay?: boolean } | undefined)
+            ?.overlay !== true,
+      )
+      .reduce<number | null>(
+        (newest, lData) =>
+          newest === null || lData.layer.zOrder > newest
+            ? lData.layer.zOrder
+            : newest,
+        null,
+      );
     const ids = new Set<string>();
-    layers.forEach((lData) => {
-      if (lData.layer.type === "ocr" && lData.layer.visible) {
-        lData.elements.forEach((el) => {
-          if (el.regionId) ids.add(el.regionId);
-        });
-      }
+    ocrLayers.forEach((lData) => {
+      if (newestPass !== null && lData.layer.zOrder < newestPass) return;
+      lData.elements.forEach((el) => {
+        if (el.regionId) ids.add(el.regionId);
+      });
     });
     return ids;
   }, [layers]);
@@ -729,20 +914,93 @@ export const Reader: React.FC<ReaderProps> = ({
   const filteredOcrRegions = React.useMemo(() => {
     const hasOcrLayer = layers.some((lData) => lData.layer.type === "ocr");
     if (!hasOcrLayer) return ocrRegions;
-    return ocrRegions.filter((r) => visibleOcrRegionIds.has(r.id));
-  }, [ocrRegions, layers, visibleOcrRegionIds]);
+    return ocrRegions.filter((r) => currentOcrRegionIds.has(r.id));
+  }, [ocrRegions, layers, currentOcrRegionIds]);
 
   const filteredConversations = React.useMemo(() => {
     const hasOcrLayer = layers.some((lData) => lData.layer.type === "ocr");
     if (!hasOcrLayer) return conversations;
     return conversations.filter((conv) =>
-      conv.regions.some((cr) => visibleOcrRegionIds.has(cr.regionId)),
+      conv.regions.some((cr) => currentOcrRegionIds.has(cr.regionId)),
     );
-  }, [conversations, layers, visibleOcrRegionIds]);
+  }, [conversations, layers, currentOcrRegionIds]);
 
   const sortedLayers = React.useMemo(() => {
     return [...layers].sort((a, b) => a.layer.zOrder - b.layer.zOrder);
   }, [layers]);
+
+  // Tracker R7: the page's cleanup patches, in the export's paint order, drawn between the page
+  // image and every text layer. All regions, not the OCR-layer filter: a patch does not depend on
+  // which OCR boxes are showing.
+  const patches = React.useMemo(
+    () => paintedPatches(layers, ocrRegions),
+    [layers, ocrRegions],
+  );
+  const inpaintingView =
+    inpaintingPageId !== null && inpaintingPageId === selectedPage?.id;
+  const allRegionsById = React.useMemo(
+    () => new Map(ocrRegions.map((region) => [region.id, region])),
+    [ocrRegions],
+  );
+  // The mask editor's patch list: topmost first, as the layer list reads.
+  const patchListItems = React.useMemo<PatchListItem[]>(() => {
+    const inpaintingLayers = sortedLayers.filter(({ layer }) =>
+      isInpaintingLayer(layer),
+    );
+    const layerNumber = new Map(
+      inpaintingLayers.map(({ layer }, i) => [layer.id, i + 1]),
+    );
+    return [...patches].reverse().map(({ element, width, height }) => {
+      const region = element.regionId
+        ? allRegionsById.get(element.regionId)
+        : undefined;
+      const text = region
+        ? (region.translatedText || region.text || "").replace(/\s+/g, " ")
+        : "";
+      return {
+        id: element.id,
+        label: region ? text || "Region patch" : "Hand-marked patch",
+        detail: `Inpainting ${layerNumber.get(element.layerId) ?? "?"} · ${Math.round(width)}×${Math.round(height)}`,
+      };
+    });
+  }, [patches, sortedLayers, allRegionsById]);
+  const patchUrls = usePatchImageUrls(
+    selectedPage?.id,
+    user.token,
+    patches.map((patch) => patch.patchSha256),
+  );
+  // The overlay (patches and text) waits for the page's patches, so the English is never drawn
+  // over un-erased Japanese; after a second it shows anyway, with whatever has arrived.
+  const [patchWaitOverFor, setPatchWaitOverFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isImageLoaded || !selectedPage) return;
+    const pageId = selectedPage.id;
+    const timer = window.setTimeout(() => setPatchWaitOverFor(pageId), 1000);
+    return () => window.clearTimeout(timer);
+  }, [isImageLoaded, selectedPage]);
+  const patchesSettled =
+    patchWaitOverFor === selectedPage?.id ||
+    patches.every((patch) => patchUrls[patch.patchSha256]);
+  // Only fetched in the mask editor, which tints each patch's mask where it sits.
+  const maskUrls = usePatchImageUrls(
+    selectedPage?.id,
+    user.token,
+    inpaintingView
+      ? patches.flatMap((patch) =>
+          patch.element.cleanupRef ? [patch.element.cleanupRef.maskSha256] : [],
+        )
+      : [],
+  );
+  const handleInpaintingLayerClick = (layerId: string) =>
+    setInpaintingPageId(
+      inpaintingView && activeLayerId === layerId
+        ? null
+        : (selectedPage?.id ?? null),
+    );
+  const selectedPatch =
+    selectedItem?.isLayerElement && isPatchElement(selectedItem as LayerElement)
+      ? (selectedItem as LayerElement)
+      : null;
 
   // Compute union bounding box for conversations
   const conversationsWithRegions = React.useMemo(() => {
@@ -786,6 +1044,158 @@ export const Reader: React.FC<ReaderProps> = ({
   }, [filteredConversations, filteredOcrRegions, groupByConversation]);
 
   // Unified list of renderable items (conversations or standalone regions)
+  // Everything on the page a person still has to look at, in reading order: uncertain cleanup,
+  // QA flags, failed or missing translations, and text that does not fit its box. Rejected and
+  // SFX regions are settled and never counted. Only while a translation layer is shown: a page
+  // mid-pipeline, or one whose translation the user has hidden, would otherwise list every region
+  // as "not translated".
+  const issueElements = React.useMemo(
+    () => translationElementByRegion(layers),
+    [layers],
+  );
+  const overflowingElementIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const { layer, elements } of layers) {
+      if (layer.type !== "translation" || layer.visible !== true) continue;
+      for (const element of elements) {
+        if (
+          element.visible === true &&
+          (element.text || "").trim() &&
+          elementFit(element, textBoxGeometry).overflow
+        ) {
+          ids.add(element.id);
+        }
+      }
+    }
+    return ids;
+  }, [layers, textBoxGeometry]);
+  const issues = React.useMemo(
+    () =>
+      layers.some(
+        (l) => l.layer.type === "translation" && l.layer.visible === true,
+      )
+        ? regionIssues(ocrRegions, issueElements, overflowingElementIds)
+        : [],
+    [layers, ocrRegions, issueElements, overflowingElementIds],
+  );
+
+  const selectRegionForReview = useCallback(
+    (r: OcrRegion) => {
+      setSelectedItem({
+        id: `region-${r.id}`,
+        isConversation: false,
+        regions: [r],
+        bboxX: r.bboxX,
+        bboxY: r.bboxY,
+        bboxW: r.bboxW,
+        bboxH: r.bboxH,
+        approved: r.approved === true,
+        sceneType: "speech",
+        originalRegion: r,
+      });
+      setActiveRegion(r);
+      setShowRightSidebar(true);
+    },
+    [setShowRightSidebar],
+  );
+
+  const selectedRegionId =
+    typeof selectedItem?.id === "string" &&
+    selectedItem.id.startsWith("region-")
+      ? selectedItem.id.slice("region-".length)
+      : null;
+
+  /** Step through the issues from the one open in the inspector (or from the start). */
+  const handleStepIssue = useCallback(
+    (delta: -1 | 1) => {
+      if (issues.length === 0) return;
+      const current = issues.findIndex((i) => i.region.id === selectedRegionId);
+      const next =
+        current < 0
+          ? delta > 0
+            ? 0
+            : issues.length - 1
+          : (current + delta + issues.length) % issues.length;
+      selectRegionForReview(issues[next].region);
+    },
+    [issues, selectedRegionId, selectRegionForReview],
+  );
+  const handleReviewNext = useCallback(
+    () => handleStepIssue(1),
+    [handleStepIssue],
+  );
+  const handleSelectIssue = useCallback(
+    (issue: RegionIssue) => selectRegionForReview(issue.region),
+    [selectRegionForReview],
+  );
+
+  // Merge mode: pick the fragments that form one text block, on the page or in the sidebar list.
+  const [mergeMode, setMergeMode] = useState(false);
+  const [mergeSelection, setMergeSelection] = useState<string[]>([]);
+  const [isMerging, setIsMerging] = useState(false);
+  const handleToggleMergeMode = useCallback(() => {
+    setMergeMode((on) => !on);
+    setMergeSelection([]);
+    setSelectedItem(null);
+    setShowRightSidebar(true);
+  }, [setShowRightSidebar]);
+  const handleToggleMergeRegion = useCallback((regionId: string) => {
+    setMergeSelection((prev) =>
+      prev.includes(regionId)
+        ? prev.filter((id) => id !== regionId)
+        : [...prev, regionId],
+    );
+  }, []);
+  // The order a merge will read the picked pieces in comes from the backend's dry run, the same
+  // code that merges, so what is shown is what will happen. Asked again whenever the pick changes.
+  const [fetchedPreview, setFetchedPreview] = useState<MergePreview | null>(
+    null,
+  );
+  const mergePageId = selectedPage?.id;
+  const wantsPreview = mergeMode && !!mergePageId && mergeSelection.length >= 2;
+  useEffect(() => {
+    if (!wantsPreview) return;
+    let stale = false;
+    const timer = window.setTimeout(() => {
+      void safeFetch(`/api/pages/${mergePageId}/regions/merge`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ regionIds: mergeSelection, dryRun: true }),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((body: { order?: string[]; text?: string } | null) => {
+          if (stale) return;
+          setFetchedPreview(
+            body?.order ? { order: body.order, text: body.text ?? "" } : null,
+          );
+        })
+        .catch(() => {
+          if (!stale) setFetchedPreview(null);
+        });
+    }, 200);
+    return () => {
+      stale = true;
+      window.clearTimeout(timer);
+    };
+  }, [wantsPreview, mergePageId, mergeSelection, user.token]);
+  // Only a preview of exactly the current pick counts; an older answer is not this pick's order.
+  const mergePreview =
+    wantsPreview &&
+    fetchedPreview &&
+    fetchedPreview.order.length === mergeSelection.length &&
+    fetchedPreview.order.every((id) => mergeSelection.includes(id))
+      ? fetchedPreview
+      : null;
+  // Picked piece → its place in the reading order (1-based), for the numbers on the page.
+  const mergePosition = React.useMemo(() => {
+    const positions = new Map<string, number>();
+    mergePreview?.order.forEach((id, i) => positions.set(id, i + 1));
+    return positions;
+  }, [mergePreview]);
+
   const renderItems = React.useMemo(() => {
     if (!groupByConversation || filteredConversations.length === 0) {
       return filteredOcrRegions.map((r) => ({
@@ -968,11 +1378,24 @@ export const Reader: React.FC<ReaderProps> = ({
           (p) => p.id !== currentPageId,
         );
 
+        // A nearby page's cleanup patches are warmed with its details: they are what makes the
+        // page look translated, and fetching them only once the page is on screen showed the
+        // English over un-erased Japanese for up to a second (measured 2026-09-28).
+        const warmPatches = (pageId: string, data: PageDetails) => {
+          for (const patch of paintedPatches(data.layers, data.ocrRegions)) {
+            void loadSceneAssetUrl(
+              pageId,
+              patch.patchSha256,
+              user.token,
+              "low",
+            );
+          }
+        };
         pagesToPrefetch.forEach((p) => {
-          if (
-            !pageDetailsCache.current.has(p.id) &&
-            !prefetchQueue.current.has(p.id)
-          ) {
+          const cached = pageDetailsCache.current.get(p.id);
+          if (cached) {
+            warmPatches(p.id, cached);
+          } else if (!prefetchQueue.current.has(p.id)) {
             prefetchQueue.current.add(p.id);
 
             // Prefetch details (must use the PAGE id, not the image id).
@@ -981,6 +1404,7 @@ export const Reader: React.FC<ReaderProps> = ({
             // refetch. Leaving successful ids queued would permanently block re-prefetching a
             // page after the LRU evicts it.
             fetchPageDetails(p.id)
+              .then((data) => warmPatches(p.id, data))
               .catch((e) => {
                 console.error("Prefetch error", e);
               })
@@ -1041,10 +1465,7 @@ export const Reader: React.FC<ReaderProps> = ({
   const handleSaveElementChanges = useCallback(
     async (element: LayerElement, showAlert: boolean = true) => {
       const id = element.id;
-      if (autoSaveTimersRef.current[id]) {
-        clearTimeout(autoSaveTimersRef.current[id]);
-        delete autoSaveTimersRef.current[id];
-      }
+      pendingSavesRef.current.delete(id);
       await saveElementChanges(
         element,
         showAlert,
@@ -1058,9 +1479,26 @@ export const Reader: React.FC<ReaderProps> = ({
         next.delete(id);
         return next;
       });
+      if (selectedPage) {
+        requestRenderNow(selectedPage.id).catch((err) =>
+          console.error("Render request failed", err),
+        );
+      }
     },
-    [user.token, showToast, showError],
+    [user.token, showToast, showError, selectedPage, requestRenderNow],
   );
+
+  /**
+   * Renders the open page after a hand edit that is not an element save: deleting or restoring a
+   * patch, adding or deleting an element, showing, hiding or deleting a layer. Element saves
+   * render when they flush; these used to wait for Export (user review, 2026-10-02).
+   */
+  const renderCurrentPage = useCallback(() => {
+    if (!selectedPage) return;
+    requestRenderNow(selectedPage.id).catch((err) =>
+      console.error("Render request failed", err),
+    );
+  }, [selectedPage, requestRenderNow]);
 
   const triggerAutoSave = useCallback(
     (element: LayerElement) => {
@@ -1071,72 +1509,108 @@ export const Reader: React.FC<ReaderProps> = ({
         next.add(id);
         return next;
       });
-
-      if (autoSaveTimersRef.current[id]) {
-        clearTimeout(autoSaveTimersRef.current[id]);
-      }
-
-      autoSaveTimersRef.current[id] = setTimeout(async () => {
-        try {
-          await saveElementChanges(
-            element,
-            false,
-            user.token,
-            showToast,
-            showError,
-          );
-          setDirtyElements((prev) => {
-            if (!prev.has(id)) return prev;
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-          });
-        } catch (err) {
-          console.error("Auto-save failed for element:", id, err);
-        } finally {
-          delete autoSaveTimersRef.current[id];
-        }
-      }, 1500);
+      pendingSavesRef.current.set(id, {
+        element,
+        pageId: selectedPage?.id ?? null,
+      });
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = setTimeout(() => {
+        void flushPendingSaves();
+      }, AUTOSAVE_IDLE_MS);
     },
-    [user.token, showToast, showError],
+    [selectedPage, flushPendingSaves],
   );
 
-  const saveAllPendingChanges = useCallback(async (): Promise<void> => {
-    const pendingIds = Object.keys(autoSaveTimersRef.current);
-    if (pendingIds.length === 0) return;
+  const saveAllPendingChanges = flushPendingSaves;
 
-    const elementsToSave: LayerElement[] = [];
-    layers.forEach((l) => {
-      l.elements.forEach((el) => {
-        if (pendingIds.includes(el.id)) {
-          elementsToSave.push(el);
-        }
+  /** Tracker R7: deletes a patch element, as one undoable step. */
+  const deletePatchElement = useCallback(
+    async (element: LayerElement): Promise<boolean> => {
+      const res = await safeFetch(`/api/layer-elements/${element.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${user.token}` },
       });
-    });
-
-    const promises = elementsToSave.map(async (el) => {
-      const id = el.id;
-      if (autoSaveTimersRef.current[id]) {
-        clearTimeout(autoSaveTimersRef.current[id]);
-        delete autoSaveTimersRef.current[id];
+      if (!res.ok) {
+        showToast("Could not delete the patch.", "error");
+        return false;
       }
-      try {
-        await saveElementChanges(el, false, user.token, showToast, showError);
-      } catch (err) {
-        console.error("Failed to save pending changes for element", id, err);
-        throw err;
-      }
-    });
+      setLayers((prevLayers) =>
+        prevLayers.map((l) => ({
+          ...l,
+          elements: l.elements.filter((el) => el.id !== element.id),
+        })),
+      );
+      setSelectedItem((prev) => (prev?.id === element.id ? null : prev));
+      renderCurrentPage();
+      return true;
+    },
+    [user.token, showToast, renderCurrentPage],
+  );
 
-    await Promise.all(promises);
-    setDirtyElements(new Set());
-  }, [layers, user.token, showToast, showError]);
+  /** Re-creates a deleted patch from its snapshot; every stacked step for it follows the new id. */
+  const restorePatchElement = useCallback(
+    async (snapshot: LayerElement): Promise<LayerElement | null> => {
+      const res = await safeFetch(`/api/layers/${snapshot.layerId}/elements`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
+        },
+        body: JSON.stringify({
+          x: snapshot.x,
+          y: snapshot.y,
+          maxWidth: snapshot.maxWidth,
+          maxHeight: snapshot.maxHeight,
+          rotation: 0,
+          visible: snapshot.visible === true,
+          opacity: snapshot.opacity ?? undefined,
+          regionId: snapshot.regionId ?? undefined,
+          cleanupRef: snapshot.cleanupRef,
+        }),
+      });
+      if (!res.ok) {
+        showToast("Could not restore the patch.", "error");
+        return null;
+      }
+      const restored = (await res.json()) as LayerElement;
+      const remap = (entries: UndoEntry[]) =>
+        entries.map((entry) =>
+          entry.id === snapshot.id ? { ...entry, id: restored.id } : entry,
+        );
+      setUndoStack(remap);
+      setRedoStack(remap);
+      setLayers((prevLayers) =>
+        prevLayers.map((l) =>
+          l.layer.id === restored.layerId
+            ? { ...l, elements: [...l.elements, restored] }
+            : l,
+        ),
+      );
+      renderCurrentPage();
+      return restored;
+    },
+    [user.token, showToast, renderCurrentPage],
+  );
 
   const handleUndo = useCallback(async () => {
     if (undoStack.length === 0) return;
     const previous = undoStack.at(-1);
     if (!previous) return;
     setUndoStack((prev) => prev.slice(0, -1));
+    if (previous.op === "delete") {
+      // A failed restore (an error reply, or the request throwing) puts the step back, so the
+      // patch the toast promised Undo would bring back still can be.
+      const restored = await restorePatchElement(previous).catch(() => {
+        showToast("Could not restore the patch.", "error");
+        return null;
+      });
+      if (restored) {
+        setRedoStack((prev) => [...prev, { ...restored, op: "delete" }]);
+      } else {
+        setUndoStack((prev) => [...prev, previous]);
+      }
+      return;
+    }
 
     let currentElement: LayerElement | undefined;
     setLayers((prevLayers) => {
@@ -1176,13 +1650,19 @@ export const Reader: React.FC<ReaderProps> = ({
     );
 
     await handleSaveElementChanges(previous, false);
-  }, [undoStack, handleSaveElementChanges]);
+  }, [undoStack, handleSaveElementChanges, restorePatchElement, showToast]);
 
   const handleRedo = useCallback(async () => {
     if (redoStack.length === 0) return;
     const next = redoStack.at(-1);
     if (!next) return;
     setRedoStack((prev) => prev.slice(0, -1));
+    if (next.op === "delete") {
+      if (await deletePatchElement(next)) {
+        setUndoStack((prev) => [...prev, { ...next, op: "delete" }]);
+      }
+      return;
+    }
 
     let currentElement: LayerElement | undefined;
     setLayers((prevLayers) => {
@@ -1220,7 +1700,7 @@ export const Reader: React.FC<ReaderProps> = ({
     );
 
     await handleSaveElementChanges(next, false);
-  }, [redoStack, handleSaveElementChanges]);
+  }, [redoStack, handleSaveElementChanges, deletePatchElement]);
 
   const handleMoveLayer = useCallback(
     async (layerId: string, direction: "up" | "down") => {
@@ -1282,6 +1762,12 @@ export const Reader: React.FC<ReaderProps> = ({
   // Key Down Listener for undo/redo and layer reordering
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Save now, from anywhere, the inspector's fields included.
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void flushPendingSaves();
+        return;
+      }
       const target = e.target as HTMLElement;
       if (
         target.tagName === "INPUT" ||
@@ -1306,7 +1792,13 @@ export const Reader: React.FC<ReaderProps> = ({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleUndo, handleRedo, activeLayerId, handleMoveLayer]);
+  }, [
+    handleUndo,
+    handleRedo,
+    activeLayerId,
+    handleMoveLayer,
+    flushPendingSaves,
+  ]);
 
   /**
    * Show or hide one element by identity, without it having to be the selected one.
@@ -1369,6 +1861,7 @@ export const Reader: React.FC<ReaderProps> = ({
   const handleElementDragStart = (
     e: React.PointerEvent,
     element: LayerElement,
+    type: "move" | "resize" = "move",
   ) => {
     e.stopPropagation();
     e.preventDefault();
@@ -1391,7 +1884,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
     setDraggedElement({
       id: element.id,
-      type: "move",
+      type,
       startX: svgPoint.x,
       startY: svgPoint.y,
       startElX: element.x,
@@ -1418,6 +1911,36 @@ export const Reader: React.FC<ReaderProps> = ({
 
       const dx = svgPoint.x - draggedElement.startX;
       const dy = svgPoint.y - draggedElement.startY;
+
+      // Tracker R7: a patch resizes from its bottom-right corner, stretched to fill (as the
+      // export draws it), kept on the page and at least a few pixels big.
+      if (draggedElement.type === "resize") {
+        const maxWidth = Math.max(
+          4,
+          Math.min(
+            imageDims.w - draggedElement.startElX,
+            Math.round(draggedElement.startElW + dx),
+          ),
+        );
+        const maxHeight = Math.max(
+          4,
+          Math.min(
+            imageDims.h - draggedElement.startElY,
+            Math.round(draggedElement.startElH + dy),
+          ),
+        );
+        const resize = <T extends { id: string }>(el: T): T =>
+          el.id === draggedElement.id ? { ...el, maxWidth, maxHeight } : el;
+        setSelectedItem((prev) => (prev ? resize(prev) : prev));
+        setLayers((prevLayers) =>
+          prevLayers.map((l) =>
+            l.elements.some((el) => el.id === draggedElement.id)
+              ? { ...l, elements: l.elements.map(resize) }
+              : l,
+          ),
+        );
+        return;
+      }
 
       // Clamp position within image bounds
       const newX = Math.max(
@@ -1977,6 +2500,7 @@ export const Reader: React.FC<ReaderProps> = ({
       );
 
       setSelectedItem(elementWithFlag);
+      renderCurrentPage();
     } catch (err) {
       console.error(err);
       alert("Error creating layer element.");
@@ -2074,6 +2598,21 @@ export const Reader: React.FC<ReaderProps> = ({
   );
 
   const handleDeleteElement = async (elementId: string) => {
+    // Tracker R7: a patch delete is one undo step, so it needs no confirmation.
+    const patch = layers
+      .flatMap((l) => l.elements)
+      .find((el) => el.id === elementId && isPatchElement(el));
+    if (patch) {
+      if (await deletePatchElement(patch)) {
+        setUndoStack((prev) => [
+          ...prev.slice(-49),
+          { ...patch, op: "delete" },
+        ]);
+        setRedoStack([]);
+        showToast("Patch deleted. Undo brings it back.", "success");
+      }
+      return;
+    }
     setConfirmModal({
       isOpen: true,
       title: "Delete Element",
@@ -2098,6 +2637,7 @@ export const Reader: React.FC<ReaderProps> = ({
               })),
             );
             setSelectedItem(null);
+            renderCurrentPage();
             showToast("Element deleted successfully", "success");
           } else if (res.status === 403) {
             showToast(
@@ -2190,7 +2730,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
     // Persist to backend
     try {
-      await safeFetch(`/api/layers/${layerId}`, {
+      const res = await safeFetch(`/api/layers/${layerId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -2201,6 +2741,7 @@ export const Reader: React.FC<ReaderProps> = ({
       if (isRedoOverlay(layerData.layer)) {
         refreshAfterOverlayChange();
       }
+      if (res.ok) renderCurrentPage();
     } catch (err) {
       console.error("Failed to persist layer visibility toggle:", err);
     }
@@ -2230,6 +2771,7 @@ export const Reader: React.FC<ReaderProps> = ({
             if (deleted && isRedoOverlay(deleted.layer)) {
               refreshAfterOverlayChange();
             }
+            renderCurrentPage();
             showToast("Layer deleted successfully", "success");
           } else if (res.status === 403) {
             showToast(
@@ -2288,6 +2830,7 @@ export const Reader: React.FC<ReaderProps> = ({
           return `Translation (${l.targetLanguage?.toUpperCase() || "EN"})`;
         if (l.type === "sfx") return "SFX Layer";
         if (l.type === "ocr") return "OCR Layer";
+        if (isInpaintingLayer(l)) return "Inpainting";
         return `Layer (${l.type})`;
       };
       const originalName = getLayerName(sourceLayer);
@@ -2348,6 +2891,9 @@ export const Reader: React.FC<ReaderProps> = ({
               boxShape: el.boxShape,
               maskPolygon: el.maskPolygon,
               regionId: el.regionId,
+              // Tracker R7: a patch copy draws the same patch.
+              cleanupRef: el.cleanupRef ?? undefined,
+              opacity: el.opacity ?? undefined,
               // id intentionally omitted — fresh UUIDs, standalone copies
             }),
           },
@@ -2406,132 +2952,67 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // --- EXPORT HANDLERS ---
   const handleExportPng = useCallback(() => {
-    if (!selectedPage || !imgRef.current) return;
+    if (!selectedPage) return;
 
+    // Tracker R1 (2026-09-17): the exported PNG is the page's current immutable render artifact —
+    // the same pixels the browser renderer drew for QA — not a Canvas re-drawing of the layers.
+    // Until then this function was a third typography implementation; see
+    // docs/output-quality-architecture-decisions.md §1a. A page whose current revision has no
+    // finished render is reported as such rather than exported from something else.
     const doExport = async () => {
-      // Never `imgRef.current`: that element shows the lossy reading variant, so exporting from
-      // it would silently bake a re-encode into the output. Export always starts from /file.
-      const img = await loadOriginalImage(selectedPage.url, user.token);
-      const W = imageDims.w;
-      const H = imageDims.h;
-
-      const canvas = document.createElement("canvas");
-      canvas.width = W;
-      canvas.height = H;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      // Canvas fillText never triggers a web font load itself -- without this, an export run
-      // before the page's own DOM text has already loaded "Comic Neue" silently falls back to
-      // sans-serif (see ensureFontsLoaded).
-      await ensureFontsLoaded(sortedLayers.flatMap((l) => l.elements));
-
-      // Draw the base page image
-      ctx.drawImage(img, 0, 0, W, H);
-
-      // Draw visible layer elements
-      sortedLayers.forEach((lData) => {
-        if (!lData.layer.visible || !isExportableLayer(lData.layer)) return;
-        // Masks for the whole layer first, then text. Painting mask-then-text per element
-        // let a later element's mask paint over an earlier element's already-drawn
-        // translation -- measured on 39 % of exported pages, and on the worst of them a
-        // bubble's text was covered completely. The masks go onto their own transparent
-        // canvas because paintLayerMask composites with `destination-over`, which would
-        // otherwise put them behind the page artwork drawn above.
-        const layerMaskCanvas = document.createElement("canvas");
-        layerMaskCanvas.width = W;
-        layerMaskCanvas.height = H;
-        const layerMaskCtx = layerMaskCanvas.getContext("2d");
-        if (layerMaskCtx) {
-          paintLayerMask(layerMaskCtx, lData.elements, regionsById);
-          ctx.drawImage(layerMaskCanvas, 0, 0);
-        }
-
-        lData.elements.forEach((el) => {
-          if (!el.visible) return;
-          const width = el.maxWidth || 100;
-          const height = el.maxHeight || 100;
-
-          // AUDIT-R5: the angle applies to the glyphs whether or not the element has a mask
-          // polygon. The old `if (!el.maskPolygon)` guard skipped rotation in exactly the case
-          // where the user had rotated something — the rotation handle only exists in reshape
-          // mode, which requires a polygon — so the plate turned and the text stayed level.
-          ctx.save();
-          if (el.rotation) {
-            const cx = el.x + width / 2;
-            const cy = el.y + height / 2;
-            ctx.translate(cx, cy);
-            ctx.rotate((el.rotation * Math.PI) / 180);
-            ctx.translate(-cx, -cy);
-          }
-
-          // Draw text
-          let displayText = el.text || "";
-          if (el.boxShape === "elliptical") {
-            displayText = displayText.toUpperCase();
-          }
-
-          // AUDIT-R1: one definition of the fitted rectangle, shared with render.py.
-          const fitBox = textFitBox(
-            { x: el.x, y: el.y, width, height },
-            textBoxInset,
-          );
-          const fit = fitTextInBox(
-            displayText,
-            fitBox.width,
-            fitBox.height,
-            el.font || "Comic Neue",
-            el.size || 16,
-            el.boxShape === "elliptical" ? "elliptical" : "rectangular",
-            fitBox.x,
-            fitBox.y,
-            el.maskPolygon,
-            el.fontWeight || "bold",
-            el.fontStyle || "normal",
-          );
-          const fSize = fit.fontSize;
-          ctx.font = `${el.fontWeight || "bold"} ${el.fontStyle === "italic" ? "italic " : ""}${fSize}px "${el.font || "Comic Neue"}", sans-serif`;
-          ctx.fillStyle = el.textColor || "#000000";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          const lineH = fSize * 1.2;
-          const startY =
-            el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
-          fit.lines.forEach((line, i) => {
-            const lineCenterX =
-              fit.lineCenters && fit.lineCenters.at(i) !== undefined
-                ? (fit.lineCenters.at(i) ?? el.x + width / 2)
-                : el.x + width / 2;
-            ctx.fillText(
-              line,
-              clampLineCenter(
-                lineCenterX,
-                ctx.measureText(line).width,
-                el.x,
-                width,
-              ),
-              startY + i * lineH,
-            );
-          });
-
-          ctx.restore();
+      const fetchRendered = () =>
+        safeFetch(`/api/pages/${selectedPage.id}/rendered`, {
+          // Bypass artifacts cached by older servers at this stable current-render URL.
+          cache: "no-store",
+          headers: { Authorization: `Bearer ${user.token}` },
         });
-      });
-
-      // Trigger download
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `page-${selectedPage.pageNumber}-export.png`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }, "image/png");
+      let res = await fetchRendered();
+      if (res.status === 409) {
+        // Not rendered yet (or its render failed): render it now and wait, rather than telling
+        // the user to come back later.
+        const rendered = await requestRenderNow(selectedPage.id);
+        if (rendered.ok) {
+          res = await fetchRendered();
+        } else {
+          const body = (await rendered.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          showToast(
+            rendered.status === 503
+              ? "The renderer is busy; the page will be ready in a few seconds."
+              : `This page could not be rendered: ${body.error ?? "unknown error"}`,
+            "error",
+          );
+          return;
+        }
+      }
+      if (res.status === 409) {
+        const body = (await res.json().catch(() => ({}))) as {
+          status?: string;
+          revision?: number;
+        };
+        showToast(
+          body.status === "failed"
+            ? `The render for revision ${body.revision ?? "?"} failed; fix the page and it will re-render.`
+            : "This page's render is still pending; try again in a few seconds.",
+          "error",
+        );
+        return;
+      }
+      if (!res.ok) {
+        throw new Error(
+          `Rendered artifact request failed with status ${res.status}`,
+        );
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `page-${selectedPage.pageNumber}-export.png`;
+      a.click();
+      URL.revokeObjectURL(url);
     };
 
-    // doExport is async now that it fetches the original, and the call sites below are not
-    // awaited — without this a failed fetch would surface as an unhandled rejection.
     const runExport = () => {
       doExport().catch((err) => {
         console.error("Export failed:", err);
@@ -2568,37 +3049,11 @@ export const Reader: React.FC<ReaderProps> = ({
   }, [
     selectedPage,
     user,
-    imageDims,
-    // AUDIT-R1: an export must use the inset in force now, not the one captured when this
-    // callback was last built, or a settings change would apply to the reader and not the file.
-    textBoxInset,
-    regionsById,
-    sortedLayers,
     dirtyElements,
     saveAllPendingChanges,
+    showToast,
+    requestRenderNow,
   ]);
-
-  const handleExportRenderedPng = useCallback(async () => {
-    if (!selectedPage || !user?.token) return;
-    try {
-      const res = await safeFetch(`/api/pages/${selectedPage.id}/rendered`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-      if (!res.ok) throw new Error("Failed to export rendered PNG");
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `page-${selectedPage.pageNumber}-rendered.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("Export rendered PNG failed:", err);
-      // Optional: showError("Failed to export rendered PNG");
-    }
-  }, [selectedPage, user]);
 
   const handleExportZip = useCallback(async () => {
     if (!selectedPage || !imgRef.current) return;
@@ -2631,7 +3086,10 @@ export const Reader: React.FC<ReaderProps> = ({
       // `import_project` reads only that. These PNGs are the rasterised deliverable, and an OCR
       // layer has no business in one. See `isExportableLayer`.
       for (const lData of layers) {
-        if (!isExportableLayer(lData.layer)) continue;
+        // Tracker R7: an Inpainting layer has no mask or text raster; its patches travel as the
+        // content-addressed files below.
+        if (!isExportableLayer(lData.layer) || isInpaintingLayer(lData.layer))
+          continue;
         const layerId = lData.layer.id;
 
         // Draw mask for this specific layer
@@ -2640,7 +3098,7 @@ export const Reader: React.FC<ReaderProps> = ({
         maskCanvas.height = H;
         const maskCtx = maskCanvas.getContext("2d")!;
 
-        paintLayerMask(maskCtx, lData.elements, regionsById);
+        paintLayerMask(maskCtx, lData.elements);
 
         const maskBlob = await new Promise<Blob>((res) =>
           maskCanvas.toBlob((b) => res(b!), "image/png"),
@@ -2663,9 +3121,10 @@ export const Reader: React.FC<ReaderProps> = ({
           }
 
           // AUDIT-R1: one definition of the fitted rectangle, shared with render.py.
+          const rawBox = { x: el.x, y: el.y, width, height };
           const fitBox = textFitBox(
-            { x: el.x, y: el.y, width, height },
-            textBoxInset,
+            rawBox,
+            insetForBox(rawBox, textBoxGeometry),
           );
           const fit = fitTextInBox(
             displayText,
@@ -2722,6 +3181,24 @@ export const Reader: React.FC<ReaderProps> = ({
         zip.file(`layer-${layerId}-translation.png`, textBlob);
       }
 
+      // 3. Tracker R7 (R7-D3): every patch and mask an Inpainting element draws, hidden history
+      // included, as cleanup/<sha256>.png. The importer checks each name against its bytes.
+      const cleanupShas = new Set(
+        layers
+          .flatMap((l) => l.elements)
+          .flatMap((el) =>
+            el.cleanupRef
+              ? [el.cleanupRef.patchSha256, el.cleanupRef.maskSha256]
+              : [],
+          ),
+      );
+      for (const sha of cleanupShas) {
+        zip.file(
+          `cleanup/${sha}.png`,
+          await fetchSceneAsset(selectedPage.id, sha, user.token),
+        );
+      }
+
       // 4. project.json
       let totalCostVal = 0.0;
       let unpricedCalls = 0;
@@ -2733,7 +3210,9 @@ export const Reader: React.FC<ReaderProps> = ({
         unpricedCalls += unpriced;
       });
 
+      const paintedIds = new Set(patches.map((patch) => patch.element.id));
       const projectData = {
+        schemaVersion: 2,
         pageNumber: selectedPage.pageNumber,
         imageId: selectedPage.imageId,
         dimensions: { width: W, height: H },
@@ -2765,7 +3244,13 @@ export const Reader: React.FC<ReaderProps> = ({
               maxWidth: el.maxWidth,
               maxHeight: el.maxHeight,
               rotation: el.rotation,
-              visible: el.visible,
+              // Tracker R7: an imported page has no regions to ask, so the region's verdicts
+              // are baked in here. A patch on a shown layer is visible only if it is painted
+              // now (R7-D4); hidden layers are history and keep what they had.
+              visible:
+                el.cleanupRef && lData.layer.visible === true
+                  ? paintedIds.has(el.id)
+                  : el.visible,
               wordWrap: el.wordWrap,
               backgroundColor: el.backgroundColor,
               textColor: el.textColor,
@@ -2773,11 +3258,20 @@ export const Reader: React.FC<ReaderProps> = ({
               fontStyle: el.fontStyle || "normal",
               isManuallyEdited: el.isManuallyEdited || false,
               boxShape: el.boxShape || "rectangular",
-              maskPolygon: el.maskPolygon,
+              // A region with a patch never gets the flat plate, so its polygon means nothing
+              // outside this page. Whatever polygon a region's text keeps is its fallback plate,
+              // which the importer turns into a patch.
+              maskPolygon:
+                el.regionId && regionHasPatch(allRegionsById.get(el.regionId))
+                  ? null
+                  : el.maskPolygon,
               regionId: el.regionId,
               qaStatus: el.region?.qaStatus,
               qaScore: el.region?.qaScore,
               qaFeedback: el.region?.qaFeedback,
+              ...(el.cleanupRef
+                ? { cleanupRef: el.cleanupRef, opacity: el.opacity ?? null }
+                : {}),
             })),
           };
         }),
@@ -2834,9 +3328,10 @@ export const Reader: React.FC<ReaderProps> = ({
     imageDims,
     // AUDIT-R1: an export must use the inset in force now, not the one captured when this
     // callback was last built, or a settings change would apply to the reader and not the file.
-    textBoxInset,
-    regionsById,
+    textBoxGeometry,
     layers,
+    patches,
+    allRegionsById,
     dirtyElements,
     saveAllPendingChanges,
   ]);
@@ -2899,7 +3394,14 @@ export const Reader: React.FC<ReaderProps> = ({
   }, [curPageNum, navigateToPage]);
 
   // --- PANNING / DRAGGING WORKSPACE ---
+  // The mask editor's panel and its Select menu are React portals rendered from inside the canvas,
+  // so their events bubble to these handlers through the React tree although they sit outside the
+  // canvas in the DOM. Dragging the brush-size slider used to pan the page (2026-10-01).
+  const fromOutsideCanvas = (e: React.SyntheticEvent) =>
+    !e.currentTarget.contains(e.target as Node);
+
   const handleMouseDownCanvas = (e: React.MouseEvent) => {
+    if (fromOutsideCanvas(e)) return;
     if (interactionMode !== "none") return;
     if (e.button !== 0) return; // Only left click
     if (draggedElement) return;
@@ -2940,6 +3442,7 @@ export const Reader: React.FC<ReaderProps> = ({
   // --- TOUCH HANDLERS FOR TOUCH SCREENS ---
   const handleTouchStart = (e: React.TouchEvent) => {
     if (!isTouchScreen) return;
+    if (fromOutsideCanvas(e)) return;
 
     // Ignore touch if inside interactive components
     const target = e.target as HTMLElement;
@@ -3033,6 +3536,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
   const handleCanvasAreaClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isTouchScreen) return;
+    if (fromOutsideCanvas(e)) return;
     if (hasMoved.current) return; // Ignore clicks that were drags
 
     const target = e.target as HTMLElement;
@@ -3063,6 +3567,8 @@ export const Reader: React.FC<ReaderProps> = ({
   }, []);
 
   // --- BUBBLE/CONVERSATION UPDATES ---
+
+  const [isReviewingRegion, setIsReviewingRegion] = useState(false);
 
   const handleRedoRegion = async (
     r: OcrRegion,
@@ -3140,6 +3646,179 @@ export const Reader: React.FC<ReaderProps> = ({
       if (type === "ocr") setIsRedoingRegionOcr(false);
       else setIsRedoingRegionTl(false);
       showInfo("Redo Failed", "Failed to start redo job.", "error");
+    }
+  };
+
+  /** POST one of the review route's resolutions for a region. */
+  const postRegionReview = async (
+    r: OcrRegion,
+    action: "reject" | "accept" | "mask" | "delete",
+  ) => {
+    const res = await safeFetch(`/api/ocr-regions/${r.id}/review`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${user.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ action }),
+    });
+    if (!res.ok) throw new Error(`Review request failed (${res.status})`);
+  };
+
+  const REVIEW_ACTION_FAILED: Record<string, string> = {
+    reject: "Could Not Keep the Original",
+    accept: "Could Not Keep the Translation",
+    mask: "Could Not Add the Mask",
+    delete: "Could Not Delete",
+    fit: "Could Not Shrink the Text",
+  };
+
+  /** A quick resolution from the issues view. */
+  const handleRegionAction = async (
+    r: OcrRegion,
+    action: IssueAction,
+    element?: LayerElement,
+  ) => {
+    if (action === "redo-translation" || action === "redo-ocr") {
+      await handleRedoRegion(r, action === "redo-ocr" ? "ocr" : "translation");
+      return;
+    }
+    // The card opens its own editor for these.
+    if (action === "edit" || action === "edit-source") return;
+    setIsReviewingRegion(true);
+    try {
+      if (action === "fit") {
+        if (!element) return;
+        await saveElementChanges(
+          { ...element, autoSize: true },
+          false,
+          user.token,
+          showToast,
+          showError,
+        );
+      } else {
+        await postRegionReview(r, action);
+      }
+      // Settled: move on to the next issue rather than leaving an empty inspector.
+      const remaining = issues.filter((i) => i.region.id !== r.id);
+      if (action !== "fit" && remaining.length > 0) {
+        const after =
+          remaining.find(
+            (i) =>
+              (i.region.bubbleReadingOrder ?? 0) > (r.bubbleReadingOrder ?? 0),
+          ) ?? remaining[0];
+        selectRegionForReview(after.region);
+      } else if (action !== "fit") {
+        setSelectedItem(null);
+        setActiveRegion(null);
+      }
+      refreshAfterOverlayChange();
+    } catch (err) {
+      console.error("Review action failed:", err);
+      showInfo(
+        REVIEW_ACTION_FAILED[action] ?? "Could Not Update the Region",
+        "The region was left as it was. Please try again.",
+        "error",
+      );
+    } finally {
+      setIsReviewingRegion(false);
+    }
+  };
+
+  /** "Type translation": write the text into the region's row and clear its flag. */
+  const handleSaveIssueTranslation = async (
+    issue: RegionIssue,
+    text: string,
+  ) => {
+    if (!issue.element) {
+      showInfo(
+        "No Translation Row",
+        "This region has no translation row to write into yet. Redo its translation first.",
+        "error",
+      );
+      return;
+    }
+    setIsReviewingRegion(true);
+    try {
+      await saveElementChanges(
+        { ...issue.element, text, visible: true },
+        false,
+        user.token,
+        showToast,
+        showError,
+      );
+      await postRegionReview(issue.region, "accept");
+      refreshAfterOverlayChange();
+    } catch (err) {
+      console.error("Saving the typed translation failed:", err);
+      showInfo(
+        "Could Not Save the Translation",
+        "Your text was not saved. Please try again.",
+        "error",
+      );
+    } finally {
+      setIsReviewingRegion(false);
+    }
+  };
+
+  /** "Type source text": correct what OCR read, then translate the region again from it. */
+  const handleSaveSourceText = async (issue: RegionIssue, text: string) => {
+    setIsReviewingRegion(true);
+    try {
+      const res = await safeFetch(`/api/ocr-regions/${issue.region.id}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok)
+        throw new Error(`Saving the source text failed (${res.status})`);
+    } catch (err) {
+      console.error("Saving the source text failed:", err);
+      showInfo(
+        "Could Not Save the Source Text",
+        "The region was left as it was. Please try again.",
+        "error",
+      );
+      return;
+    } finally {
+      setIsReviewingRegion(false);
+    }
+    await handleRedoRegion({ ...issue.region, text }, "translation");
+  };
+
+  /** Merge the picked fragments into one block; it is cleaned and translated again as a whole. */
+  const handleConfirmMerge = async () => {
+    if (!selectedPage || mergeSelection.length < 2) return;
+    setIsMerging(true);
+    try {
+      const res = await safeFetch(
+        `/api/pages/${selectedPage.id}/regions/merge`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${user.token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ regionIds: mergeSelection }),
+        },
+      );
+      if (!res.ok) throw new Error(`Merge failed (${res.status})`);
+      setMergeMode(false);
+      setMergeSelection([]);
+      showToast("Merged — cleaning and translating the new block", "success");
+      refreshAfterOverlayChange();
+    } catch (err) {
+      console.error("Merge failed:", err);
+      showInfo(
+        "Could Not Merge",
+        "The regions were left as they were. Please try again.",
+        "error",
+      );
+    } finally {
+      setIsMerging(false);
     }
   };
 
@@ -3310,6 +3989,8 @@ export const Reader: React.FC<ReaderProps> = ({
         onToggleRightSidebar={() => setShowRightSidebar((prev) => !prev)}
         leftSidebarOpen={showLeftSidebar}
         rightSidebarOpen={showRightSidebar}
+        reviewCount={issues.length}
+        onReviewClick={handleReviewNext}
       />
 
       {/* Main Workspace split */}
@@ -3468,12 +4149,95 @@ export const Reader: React.FC<ReaderProps> = ({
                   // before the bytes do, which used to paint annotations over a blank page;
                   // this also still hides stale overlays while new page data loads.
                   visibility:
-                    isLoadingPageDetails || !isImageLoaded
+                    isLoadingPageDetails || !isImageLoaded || !patchesSettled
                       ? "hidden"
                       : "visible",
                 }}
               >
+                {/* Tracker R7: source → cleanup → text, as ContentScene paints the export. */}
+                <g data-scene-layer="cleanup">
+                  {patches.map((patch) =>
+                    patchUrls[patch.patchSha256] ? (
+                      <image
+                        key={patch.element.id}
+                        data-cleanup-id={`cleanup-${patch.element.id}`}
+                        href={patchUrls[patch.patchSha256]}
+                        x={patch.x}
+                        y={patch.y}
+                        width={patch.width}
+                        height={patch.height}
+                        preserveAspectRatio={CLEANUP_PRESERVE_ASPECT_RATIO}
+                        opacity={patch.opacity}
+                        onClick={(e) => {
+                          if (cleanScanlationView) return;
+                          e.stopPropagation();
+                          setSelectedItem({
+                            ...patch.element,
+                            isLayerElement: true,
+                          });
+                          setActiveLayerId(patch.element.layerId);
+                        }}
+                        style={{
+                          cursor: cleanScanlationView ? "default" : "pointer",
+                        }}
+                      />
+                    ) : null,
+                  )}
+                </g>
+
+                {inpaintingView && (
+                  <g
+                    data-scene-layer="mask-tints"
+                    pointerEvents="none"
+                  >
+                    <defs>
+                      <filter id="inpainting-mask-tint">
+                        {/* White mask -> translucent amber, so the patches read at a glance. */}
+                        <feColorMatrix
+                          type="matrix"
+                          values="0 0 0 0 1  0 0 0 0 0.6  0 0 0 0 0  0 0 0 0.35 0"
+                        />
+                      </filter>
+                    </defs>
+                    {patches.map((patch) => {
+                      const mask = patch.element.cleanupRef?.maskSha256;
+                      return mask && maskUrls[mask] ? (
+                        <image
+                          key={`tint-${patch.element.id}`}
+                          data-mask-tint={patch.element.id}
+                          href={maskUrls[mask]}
+                          x={patch.x}
+                          y={patch.y}
+                          width={patch.width}
+                          height={patch.height}
+                          preserveAspectRatio={CLEANUP_PRESERVE_ASPECT_RATIO}
+                          filter="url(#inpainting-mask-tint)"
+                        />
+                      ) : null;
+                    })}
+                    {patches
+                      .filter(
+                        (patch) => patch.element.id === highlightedPatchId,
+                      )
+                      .map((patch) => (
+                        <rect
+                          key={`highlight-${patch.element.id}`}
+                          data-patch-highlight={patch.element.id}
+                          x={patch.x}
+                          y={patch.y}
+                          width={patch.width}
+                          height={patch.height}
+                          fill="rgba(33,150,243,0.12)"
+                          stroke="var(--primary, #2196f3)"
+                          strokeWidth={3 * screenPx}
+                          strokeDasharray={`${8 * screenPx} ${5 * screenPx}`}
+                        />
+                      ))}
+                  </g>
+                )}
+
                 {showPanels &&
+                  !inpaintingView &&
                   !cleanScanlationView &&
                   panels.map((p) => (
                     <rect
@@ -3489,20 +4253,25 @@ export const Reader: React.FC<ReaderProps> = ({
 
                 {showOcr &&
                   !cleanScanlationView &&
+                  !inpaintingView &&
                   renderItems.map((item) => {
                     const isSelected = selectedItem?.id === item.id;
                     const isApproved = item.approved;
                     const qaStatus = item.regions.find(
-                      (r) =>
-                        r.qaStatus === "failed" ||
-                        r.qaStatus === "manual_review",
+                      (r) => r.qaStatus === "failed",
                     )
                       ? "failed"
-                      : item.regions.find((r) => r.qaStatus === "direct_fix")
-                        ? "direct_fix"
-                        : item.regions.find((r) => r.qaStatus === "passed")
-                          ? "passed"
-                          : null;
+                      : item.regions.find(
+                            (r) =>
+                              r.qaStatus === "cleanup_review" ||
+                              r.qaStatus === "manual_review",
+                          )
+                        ? "review"
+                        : item.regions.find((r) => r.qaStatus === "direct_fix")
+                          ? "direct_fix"
+                          : item.regions.find((r) => r.qaStatus === "passed")
+                            ? "passed"
+                            : null;
                     return (
                       <g
                         key={item.id}
@@ -3543,23 +4312,26 @@ export const Reader: React.FC<ReaderProps> = ({
                                 : "var(--primary)"
                               : qaStatus === "failed"
                                 ? "#ef4444"
-                                : qaStatus === "direct_fix"
-                                  ? "#f59e0b"
-                                  : isApproved
-                                    ? item.isConversation
-                                      ? "var(--conversation)"
-                                      : "var(--primary)"
-                                    : item.isConversation
-                                      ? "var(--conversation)"
-                                      : "var(--success)",
+                                : qaStatus === "review"
+                                  ? "var(--warning)"
+                                  : qaStatus === "direct_fix"
+                                    ? "#f59e0b"
+                                    : isApproved
+                                      ? item.isConversation
+                                        ? "var(--conversation)"
+                                        : "var(--primary)"
+                                      : item.isConversation
+                                        ? "var(--conversation)"
+                                        : "var(--success)",
                             strokeWidth:
                               isSelected || isApproved
                                 ? 2.5
-                                : qaStatus === "failed"
+                                : qaStatus === "failed" || qaStatus === "review"
                                   ? 2.5
                                   : 1.5,
                             strokeDasharray:
-                              !isSelected && qaStatus === "failed"
+                              !isSelected &&
+                              (qaStatus === "failed" || qaStatus === "review")
                                 ? "4 2"
                                 : undefined,
                           }}
@@ -3578,15 +4350,17 @@ export const Reader: React.FC<ReaderProps> = ({
                                   : "var(--primary)"
                                 : qaStatus === "failed"
                                   ? "#ef4444"
-                                  : qaStatus === "direct_fix"
-                                    ? "#f59e0b"
-                                    : isApproved
-                                      ? item.isConversation
-                                        ? "var(--conversation)"
-                                        : "var(--primary)"
-                                      : item.isConversation
-                                        ? "var(--conversation)"
-                                        : "var(--success)"
+                                  : qaStatus === "review"
+                                    ? "var(--warning)"
+                                    : qaStatus === "direct_fix"
+                                      ? "#f59e0b"
+                                      : isApproved
+                                        ? item.isConversation
+                                          ? "var(--conversation)"
+                                          : "var(--primary)"
+                                        : item.isConversation
+                                          ? "var(--conversation)"
+                                          : "var(--success)"
                             }
                           />
                           <text
@@ -3610,6 +4384,52 @@ export const Reader: React.FC<ReaderProps> = ({
                     );
                   })}
 
+                {/* Review regions with "Show debug" off: no mark on the page (user decision,
+                    2026-09-30), but a click on one still opens it, and the one open in the
+                    inspector is outlined. Under the text layers, so clicking English still
+                    selects the element. */}
+                {!showOcr && !cleanScanlationView && !inpaintingView && (
+                  <g data-testid="review-hit-areas">
+                    {issues.map(({ region }) => (
+                      <rect
+                        key={`review-hit-${region.id}`}
+                        data-review-region={region.id}
+                        x={region.bboxX}
+                        y={region.bboxY}
+                        width={region.bboxW}
+                        height={region.bboxH}
+                        fill="transparent"
+                        style={{
+                          cursor: "pointer",
+                          pointerEvents:
+                            interactionMode !== "none" ? "none" : "all",
+                        }}
+                        onClick={() => selectRegionForReview(region)}
+                      />
+                    ))}
+                    {selectedRegionId &&
+                      (() => {
+                        const region = allRegionsById.get(selectedRegionId);
+                        return region ? (
+                          <rect
+                            data-review-selected={region.id}
+                            x={region.bboxX}
+                            y={region.bboxY}
+                            width={region.bboxW}
+                            height={region.bboxH}
+                            className="svg-ocr-box"
+                            style={{
+                              fill: "var(--primary-glow-selected)",
+                              stroke: "var(--primary)",
+                              strokeWidth: 2.5,
+                              pointerEvents: "none",
+                            }}
+                          />
+                        ) : null;
+                      })()}
+                  </g>
+                )}
+
                 {sortedLayers.map((lData) => {
                   const hasTranslation = layers.some(
                     (ld) => ld.layer.type === "translation",
@@ -3619,9 +4439,26 @@ export const Reader: React.FC<ReaderProps> = ({
                     hasTranslation &&
                     lData.layer.type === "ocr" &&
                     !manuallyShownOcrLayers.has(lData.layer.id);
-                  if (!lData.layer.visible || isOcrHidden) return null;
+                  // Inpainting layers are painted above, under every text layer.
+                  if (
+                    inpaintingView ||
+                    !lData.layer.visible ||
+                    isOcrHidden ||
+                    isInpaintingLayer(lData.layer)
+                  )
+                    return null;
                   return lData.elements.map((element) => {
                     if (!element.visible) return null;
+                    if (
+                      lData.layer.type !== "ocr" &&
+                      isUnpatchedSoundEffect(
+                        element,
+                        element.regionId
+                          ? allRegionsById.get(element.regionId)
+                          : null,
+                      )
+                    )
+                      return null;
 
                     const isSelected =
                       selectedItem?.id === element.id &&
@@ -3636,65 +4473,55 @@ export const Reader: React.FC<ReaderProps> = ({
                       ? relatedRegion.qaStatus
                       : null;
 
-                    // Run text fitting
-                    let fontSize: number;
-                    let overflow: boolean;
-
-                    // AUDIT-R1: the live reader used the *raw* box here — no inset at all —
-                    // while the frontend's own exports insetted by 4px and render.py insetted by
-                    // 4px and then took 95%. Three rectangles, one of them on the screen the
-                    // typesetting was being judged on. Same rectangle as the export now.
-                    const svgFitBox = textFitBox(
-                      {
-                        x: element.x,
-                        y: element.y,
-                        width: element.maxWidth || 100,
-                        height: element.maxHeight || 100,
-                      },
-                      textBoxInset,
-                    );
+                    // Run text fitting. AUDIT-R1: the fit box is the element's box minus the
+                    // same inset every export uses; `elementFit` is shared with the issues list.
+                    const {
+                      box: svgFitBox,
+                      fit,
+                      fontSize,
+                      overflow,
+                    } = elementFit(element, textBoxGeometry);
                     // The preview's DOM box must be the rectangle the fitter was given, not a
                     // literal. `svgFitBox.x` is `element.x` plus the configured, clamped padding,
                     // so this is that padding after every guard textFitBox applies.
                     const previewPadding = svgFitBox.x - element.x;
-                    const fit = fitTextInBox(
-                      element.text || "",
-                      svgFitBox.width,
-                      svgFitBox.height,
-                      element.font || "Comic Neue",
-                      element.size || 16,
-                      element.boxShape === "elliptical"
-                        ? "elliptical"
-                        : "rectangular",
-                      svgFitBox.x,
-                      svgFitBox.y,
-                      element.maskPolygon,
-                      element.fontWeight || "bold",
-                      element.fontStyle || "normal",
-                    );
-
-                    if (element.autoSize) {
-                      fontSize = fit.fontSize;
-                      overflow = fit.overflow;
-                    } else {
-                      fontSize = element.size || 16;
-                      const totalHeight = fit.lines.length * fontSize * 1.2;
-                      overflow = totalHeight > (element.maxHeight || 100);
-                    }
-                    const textToRender = fit.lines.join("\\n");
+                    const textToRender = fit.lines.join("\n");
+                    // The export's halo (ContentScene): a stroke in the element's background colour,
+                    // drawn for every line before any fill, so no line's halo covers its neighbour.
+                    const outlineColour = element.backgroundColor?.trim();
+                    const textPasses: ("stroke" | "fill")[] = outlineColour
+                      ? ["stroke", "fill"]
+                      : ["fill"];
+                    const textPassStyle = (
+                      pass: "stroke" | "fill",
+                    ): React.CSSProperties =>
+                      pass === "fill"
+                        ? { color: element.textColor || "#000000" }
+                        : {
+                            color: "transparent",
+                            WebkitTextStroke: `${Math.max(1, fontSize * STROKE_WIDTH_RATIO)}px ${outlineColour}`,
+                          };
 
                     const width = element.maxWidth || 100;
                     const height = element.maxHeight || 100;
                     const cx = element.x + width / 2;
                     const cy = element.y + height / 2;
 
-                    // Support masking toggle via wordWrap field
+                    // Support masking toggle via wordWrap field. No region's text gets the
+                    // flat plate any more (user review, 2026-10-02: it was the "old type mask"):
+                    // a patch cleans under it, or the source shows. Region-less text is never
+                    // plated either: the export draws it as manual text over the page. Only an
+                    // "Add Mask" element (no region, no text) keeps its editor-only plate.
+                    const hasText = Boolean((element.text || "").trim());
                     const isMaskEnabled =
-                      cleanScanlationView || element.wordWrap;
+                      (cleanScanlationView || element.wordWrap) &&
+                      !element.regionId &&
+                      !hasText;
 
                     return (
                       <g
                         key={element.id}
+                        data-element-id={element.id}
                         // AUDIT-R5. Everything in this group except the mask polygon is expressed
                         // in the element's own unrotated box coordinates — the backdrop rect, the
                         // editor borders, the drag handle and the text — so the group turns as a
@@ -3734,23 +4561,10 @@ export const Reader: React.FC<ReaderProps> = ({
                                         }
                                         stroke="none"
                                       />
-                                      {/* No balloon: the mask covers the source column, the box
-                                          is where the English goes, and the difference was
-                                          landing on artwork. Same rule as paintLayerMask. */}
-                                      {relatedRegion &&
-                                        !hasDetectedBubble(relatedRegion) && (
-                                          <rect
-                                            x={element.x}
-                                            y={element.y}
-                                            width={width}
-                                            height={height}
-                                            fill={
-                                              element.backgroundColor ||
-                                              "#ffffff"
-                                            }
-                                            stroke="none"
-                                          />
-                                        )}
+                                      {/* Tracker R2: the polygon is the whole plate. The box
+                                          fill that used to follow it for free-standing text was
+                                          the flat slab on the artwork. Same rule as
+                                          paintLayerMask. */}
                                     </>
                                   );
                                 }
@@ -3759,7 +4573,8 @@ export const Reader: React.FC<ReaderProps> = ({
                               }
                               return null;
                             })()
-                          ) : element.boxShape === "elliptical" ? (
+                          ) : element.regionId ? null : element.boxShape === // R2: pipeline free text without a polygon gets no plate
+                            "elliptical" ? (
                             <ellipse
                               cx={cx}
                               cy={cy}
@@ -4007,60 +4822,76 @@ export const Reader: React.FC<ReaderProps> = ({
                                   height: "100%",
                                 }}
                               >
-                                {fit.lines.map((line, i) => {
-                                  const lineCenterX =
-                                    fit.lineCenters &&
-                                    fit.lineCenters.at(i) !== undefined
-                                      ? (fit.lineCenters.at(i) ??
-                                        element.x + width / 2)
-                                      : element.x + width / 2;
-                                  const lineH = fontSize * 1.2;
-                                  const startY =
-                                    element.y +
-                                    height / 2 -
-                                    ((fit.lines.length - 1) * lineH) / 2;
-                                  const lineY = startY + i * lineH;
+                                {textPasses.flatMap((pass) =>
+                                  fit.lines.map((line, i) => {
+                                    const lineCenterX =
+                                      fit.lineCenters &&
+                                      fit.lineCenters.at(i) !== undefined
+                                        ? (fit.lineCenters.at(i) ??
+                                          element.x + width / 2)
+                                        : element.x + width / 2;
+                                    const lineH = fontSize * 1.2;
+                                    const startY =
+                                      element.y +
+                                      height / 2 -
+                                      ((fit.lines.length - 1) * lineH) / 2;
+                                    const lineY = startY + i * lineH;
 
-                                  return (
-                                    <div
-                                      key={i}
-                                      style={{
-                                        position: "absolute",
-                                        left: `${lineCenterX - element.x - previewPadding}px`,
-                                        top: `${lineY - element.y - previewPadding}px`,
-                                        transform: "translate(-50%, -50%)",
-                                        fontFamily: `"${element.font || "Comic Neue"}", sans-serif`,
-                                        fontSize: `${fontSize}px`,
-                                        fontWeight:
-                                          element.fontWeight || "normal",
-                                        fontStyle:
-                                          element.fontStyle || "normal",
-                                        color: element.textColor || "#000000",
-                                        lineHeight: "1.2",
-                                        whiteSpace: "nowrap",
-                                      }}
-                                    >
-                                      {line}
-                                    </div>
-                                  );
-                                })}
+                                    return (
+                                      <div
+                                        key={`${pass}-${i}`}
+                                        data-text-pass={pass}
+                                        style={{
+                                          position: "absolute",
+                                          left: `${lineCenterX - element.x - previewPadding}px`,
+                                          top: `${lineY - element.y - previewPadding}px`,
+                                          transform: "translate(-50%, -50%)",
+                                          fontFamily: `"${element.font || "Comic Neue"}", sans-serif`,
+                                          fontSize: `${fontSize}px`,
+                                          fontWeight:
+                                            element.fontWeight || "normal",
+                                          fontStyle:
+                                            element.fontStyle || "normal",
+                                          lineHeight: "1.2",
+                                          whiteSpace: "nowrap",
+                                          ...textPassStyle(pass),
+                                        }}
+                                      >
+                                        {line}
+                                      </div>
+                                    );
+                                  }),
+                                )}
                               </div>
                             ) : (
                               <div
                                 style={{
-                                  fontFamily: `"${element.font || "Comic Neue"}", sans-serif`,
-                                  fontSize: `${fontSize}px`,
-                                  fontWeight: element.fontWeight || "normal",
-                                  fontStyle: element.fontStyle || "normal",
-                                  color: element.textColor || "#000000",
-                                  lineHeight: "1.2",
-                                  whiteSpace: "pre-wrap",
-                                  wordBreak: "break-word",
-                                  textAlign: "center",
+                                  display: "grid",
                                   width: "100%",
                                 }}
                               >
-                                {textToRender}
+                                {textPasses.map((pass) => (
+                                  <div
+                                    key={pass}
+                                    data-text-pass={pass}
+                                    style={{
+                                      gridArea: "1 / 1",
+                                      fontFamily: `"${element.font || "Comic Neue"}", sans-serif`,
+                                      fontSize: `${fontSize}px`,
+                                      fontWeight:
+                                        element.fontWeight || "normal",
+                                      fontStyle: element.fontStyle || "normal",
+                                      lineHeight: "1.2",
+                                      whiteSpace: "pre-wrap",
+                                      wordBreak: "break-word",
+                                      textAlign: "center",
+                                      width: "100%",
+                                      ...textPassStyle(pass),
+                                    }}
+                                  >
+                                    {textToRender}
+                                  </div>
+                                ))}
                               </div>
                             )}
                           </div>
@@ -4069,18 +4900,209 @@ export const Reader: React.FC<ReaderProps> = ({
                     );
                   });
                 })}
+
+                {/* Issues are shown by the debug boxes (Show debug colours a flagged region) and by
+                    the Issues list in the sidebar. The amber outlines that used to mark them with
+                    the boxes off were removed on 2026-09-30: with debug off the page is for
+                    reading, and Clean Scanlation drew them over the finished page. */}
+
+                {/* Merge mode: the path the picked pieces will be read along. */}
+                {mergeMode && mergePreview && mergePreview.order.length > 1 && (
+                  <polyline
+                    points={mergePreview.order
+                      .map((id) => ocrRegions.find((r) => r.id === id))
+                      .filter((r): r is OcrRegion => !!r)
+                      .map(
+                        (r) =>
+                          `${r.bboxX + r.bboxW / 2},${r.bboxY + r.bboxH / 2}`,
+                      )
+                      .join(" ")}
+                    style={{
+                      fill: "none",
+                      stroke: "var(--primary)",
+                      strokeWidth: 2,
+                      strokeDasharray: "2 3",
+                      strokeLinejoin: "round",
+                      vectorEffect: "non-scaling-stroke",
+                      pointerEvents: "none",
+                    }}
+                  />
+                )}
+                {/* Merge mode: every region is a target; picked ones fill in and are numbered in
+                    the order the merge will read them. */}
+                {mergeMode &&
+                  ocrRegions.map((r) => {
+                    const picked = mergeSelection.includes(r.id);
+                    const position = mergePosition.get(r.id);
+                    return (
+                      <g
+                        key={`merge-${r.id}`}
+                        onClick={() => handleToggleMergeRegion(r.id)}
+                        style={{ cursor: "pointer", pointerEvents: "auto" }}
+                      >
+                        <title>
+                          {picked
+                            ? "Remove from the block"
+                            : "Add to the block"}
+                        </title>
+                        <rect
+                          x={r.bboxX}
+                          y={r.bboxY}
+                          width={r.bboxW}
+                          height={r.bboxH}
+                          rx={4 * screenPx}
+                          style={{
+                            fill: picked
+                              ? "color-mix(in srgb, var(--primary) 28%, transparent)"
+                              : "color-mix(in srgb, var(--primary) 6%, transparent)",
+                            stroke: "var(--primary)",
+                            strokeWidth: picked ? 3 : 1.5,
+                            strokeDasharray: picked ? undefined : "5 4",
+                            vectorEffect: "non-scaling-stroke",
+                          }}
+                        />
+                        <circle
+                          cx={r.bboxX}
+                          cy={r.bboxY}
+                          r={11 * screenPx}
+                          fill={picked ? "var(--primary)" : "#ffffff"}
+                          stroke="var(--primary)"
+                          strokeWidth={1.5}
+                          style={{ vectorEffect: "non-scaling-stroke" }}
+                        />
+                        <text
+                          x={r.bboxX}
+                          y={r.bboxY}
+                          style={{
+                            textAnchor: "middle",
+                            dominantBaseline: "central",
+                            fontSize: `${12 * screenPx}px`,
+                            fontWeight: 700,
+                            fill: picked ? "#ffffff" : "var(--primary)",
+                            pointerEvents: "none",
+                          }}
+                        >
+                          {picked
+                            ? (position ?? "…")
+                            : r.bubbleReadingOrder || "?"}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                {/* Tracker R7: the selected patch's frame and handles, above the text so a patch
+                    under a text box can still be moved and resized. Editor chrome only. */}
+                {selectedPatch &&
+                  !cleanScanlationView &&
+                  selectedPatch.visible === true && (
+                    <g data-editor-handle="inpainting">
+                      <rect
+                        x={selectedPatch.x}
+                        y={selectedPatch.y}
+                        width={selectedPatch.maxWidth || 1}
+                        height={selectedPatch.maxHeight || 1}
+                        fill="white"
+                        fillOpacity={0}
+                        stroke="var(--primary)"
+                        strokeWidth={2 * screenPx}
+                        strokeDasharray={`${6 * screenPx} ${3 * screenPx}`}
+                        style={{
+                          cursor: "move",
+                          pointerEvents: "auto",
+                          touchAction: "none",
+                        }}
+                        onPointerDown={(e) =>
+                          handleElementDragStart(e, selectedPatch, "move")
+                        }
+                      />
+                      <rect
+                        aria-label="Resize patch"
+                        x={
+                          selectedPatch.x +
+                          (selectedPatch.maxWidth || 1) -
+                          6 * screenPx
+                        }
+                        y={
+                          selectedPatch.y +
+                          (selectedPatch.maxHeight || 1) -
+                          6 * screenPx
+                        }
+                        width={12 * screenPx}
+                        height={12 * screenPx}
+                        fill="var(--primary)"
+                        stroke="#ffffff"
+                        strokeWidth={1.5 * screenPx}
+                        style={{
+                          cursor: "nwse-resize",
+                          pointerEvents: "auto",
+                          touchAction: "none",
+                        }}
+                        onPointerDown={(e) =>
+                          handleElementDragStart(e, selectedPatch, "resize")
+                        }
+                      />
+                    </g>
+                  )}
               </svg>
+              {inpaintingView &&
+                selectedPage &&
+                isImageLoaded &&
+                imageDims.w > 0 &&
+                imageDims.h > 0 && (
+                  <>
+                    <div
+                      ref={setInpaintingCanvasHost}
+                      style={{ position: "absolute", inset: 0, zIndex: 3 }}
+                    />
+                    <InpaintingSession
+                      key={selectedPage.id}
+                      pageId={selectedPage.id}
+                      token={user.token}
+                      width={imageDims.w}
+                      height={imageDims.h}
+                      canvasHost={inpaintingCanvasHost}
+                      panelHost={inpaintingPanelHost}
+                      patches={patchListItems}
+                      highlightedPatchId={highlightedPatchId}
+                      onHighlightPatch={setHighlightedPatchId}
+                      onDone={() => setInpaintingPageId(null)}
+                      onQueued={(what) =>
+                        showToast(
+                          what === "restore"
+                            ? "Restore queued — the original comes back when it lands"
+                            : what === "both"
+                              ? "Repaint and restore queued — they appear when they land"
+                              : "Repaint queued — the new patch appears when it lands",
+                          "info",
+                        )
+                      }
+                      onError={(message) =>
+                        showToast(`Repaint failed: ${message}`, "error")
+                      }
+                    />
+                  </>
+                )}
             </div>
           </div>
         </div>
 
-        {/* Right Sidebar (Property Inspector) */}
-        {showRightSidebar && (
+        {/* Right Sidebar (Property Inspector); the mask editor's panel takes its place and
+            follows the same toggle (user review, 2026-10-02). The navbar toggle that hides it
+            brings it back, with Apply and Done; marks drawn meanwhile are kept. */}
+        {inpaintingView && showRightSidebar && (
+          <div
+            ref={setInpaintingPanelHost}
+            data-testid="inpainting-panel-host"
+            style={{ display: "contents" }}
+          />
+        )}
+        {showRightSidebar && !inpaintingView && (
           <ReaderRightSidebar
             selectedItem={selectedItem}
             setSelectedItem={setSelectedItem}
             activeLayerId={activeLayerId}
             setActiveLayerId={setActiveLayerId}
+            onInpaintingLayerClick={handleInpaintingLayerClick}
             sortedLayers={sortedLayers}
             layers={layers}
             manuallyShownOcrLayers={manuallyShownOcrLayers}
@@ -4098,7 +5120,6 @@ export const Reader: React.FC<ReaderProps> = ({
             handleRedoPageTranslation={handleRedoPageTranslation}
             isRedoingPageTranslation={isRedoingPageTranslation}
             handleExportPng={handleExportPng}
-            handleExportRenderedPng={handleExportRenderedPng}
             handleExportZip={handleExportZip}
             interactionMode={interactionMode}
             setInteractionMode={setInteractionMode}
@@ -4113,6 +5134,20 @@ export const Reader: React.FC<ReaderProps> = ({
             ocrRegions={ocrRegions}
             isRedoingRegionOcr={isRedoingRegionOcr}
             handleRedoRegion={handleRedoRegion}
+            issues={issues}
+            onSelectIssue={handleSelectIssue}
+            onStepIssue={handleStepIssue}
+            handleRegionAction={handleRegionAction}
+            handleSaveIssueTranslation={handleSaveIssueTranslation}
+            handleSaveSourceText={handleSaveSourceText}
+            isReviewingRegion={isReviewingRegion}
+            mergeMode={mergeMode}
+            mergeSelection={mergeSelection}
+            mergePreview={mergePreview}
+            onToggleMergeMode={handleToggleMergeMode}
+            onToggleMergeRegion={handleToggleMergeRegion}
+            onConfirmMerge={handleConfirmMerge}
+            isMerging={isMerging}
             isRedoingRegionTl={isRedoingRegionTl}
           />
         )}

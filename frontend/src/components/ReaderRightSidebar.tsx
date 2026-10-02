@@ -30,6 +30,20 @@ import { ColorPicker } from "./ColorPicker";
 import SidebarSection from "./SidebarSection";
 import type { SystemStyleObject, Theme } from "@mui/system";
 import type { Layer, LayerElement, OcrRegion } from "../types";
+import { inReadingOrder, regionRowStatus } from "../utils/regionReview";
+import { isInpaintingLayer, isPatchElement } from "../utils/inpainting";
+import PatchInspector from "./PatchInspector";
+import {
+  translationElementByRegion,
+  type IssueAction,
+  type RegionIssue,
+} from "../utils/regionIssues";
+import {
+  IssueCard,
+  IssueList,
+  MergePanel,
+  type MergePreview,
+} from "./ReaderIssues";
 
 // --- AUDIT-F2: static sx literals hoisted to module scope --------------------
 //
@@ -230,12 +244,6 @@ const exportButtonWithMarginSx = {
   "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
 } as const;
 
-const exportButtonSx = {
-  color: "var(--primary)",
-  borderColor: "var(--primary)",
-  "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
-} as const;
-
 const inspectorHeaderRowSx = {
   display: "flex",
   justifyContent: "space-between",
@@ -381,6 +389,57 @@ const MetaBadge: React.FC<{
   </Box>
 );
 
+/** A settled region (rejected in review or by QA): why, and the one thing left to do with it. */
+const RejectedRegionNote: React.FC<{
+  region: OcrRegion;
+  busy: boolean;
+  onDelete: (region: OcrRegion) => void;
+}> = ({ region, busy, onDelete }) => (
+  <Box
+    role="note"
+    sx={{
+      display: "flex",
+      flexDirection: "column",
+      gap: 0.75,
+      p: 1.25,
+      borderRadius: "8px",
+      border: "1px solid var(--border-color)",
+      backgroundColor: "var(--bg-input, rgba(0,0,0,0.04))",
+    }}
+  >
+    <Typography
+      component="span"
+      sx={{ fontSize: "13px", fontWeight: 700, color: "var(--text-muted)" }}
+    >
+      Rejected — the original is kept
+    </Typography>
+    {region.qaFeedback && (
+      <Typography
+        component="p"
+        sx={{
+          fontSize: "12px",
+          lineHeight: 1.45,
+          m: 0,
+          color: "var(--text-main)",
+        }}
+      >
+        {region.qaFeedback}
+      </Typography>
+    )}
+    <Box>
+      <Button
+        variant="text"
+        size="small"
+        disabled={busy}
+        onClick={() => onDelete(region)}
+        sx={{ color: "var(--error)", textTransform: "none", px: 0 }}
+      >
+        Delete region
+      </Button>
+    </Box>
+  </Box>
+);
+
 // Assuming types are defined here or imported
 // You may need to adjust types based on actual project structure
 export interface LayerData {
@@ -395,6 +454,8 @@ export interface ReaderRightSidebarProps {
   setSelectedItem: (item: any) => void;
   activeLayerId: string | null;
   setActiveLayerId: (id: string | null) => void;
+  /** Clicking an Inpainting layer's row opens (or, clicked again, closes) the mask editor. */
+  onInpaintingLayerClick?: (layerId: string) => void;
   sortedLayers: LayerData[];
   layers: LayerData[];
   manuallyShownOcrLayers: Set<string>;
@@ -412,7 +473,6 @@ export interface ReaderRightSidebarProps {
   handleRedoPageTranslation: () => void;
   isRedoingPageTranslation: boolean;
   handleExportPng: () => void;
-  handleExportRenderedPng: () => void;
   handleExportZip: () => void;
   interactionMode: string;
   setInteractionMode: React.Dispatch<
@@ -430,6 +490,26 @@ export interface ReaderRightSidebarProps {
   isRedoingRegionOcr: boolean;
   handleRedoRegion: (region: OcrRegion, type: "ocr" | "translation") => void;
   isRedoingRegionTl: boolean;
+  /** Regions needing a person, in reading order. */
+  issues: RegionIssue[];
+  onSelectIssue: (issue: RegionIssue) => void;
+  onStepIssue: (delta: -1 | 1) => void;
+  handleRegionAction: (
+    region: OcrRegion,
+    action: IssueAction,
+    element?: LayerElement,
+  ) => void;
+  handleSaveIssueTranslation: (issue: RegionIssue, text: string) => void;
+  handleSaveSourceText: (issue: RegionIssue, text: string) => void;
+  isReviewingRegion: boolean;
+  mergeMode: boolean;
+  mergeSelection: string[];
+  /** The backend's dry run for the current selection: reading order and joined text. */
+  mergePreview: MergePreview | null;
+  onToggleMergeMode: () => void;
+  onToggleMergeRegion: (regionId: string) => void;
+  onConfirmMerge: () => void;
+  isMerging: boolean;
 }
 
 const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
@@ -452,6 +532,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     setSelectedItem,
     activeLayerId,
     setActiveLayerId,
+    onInpaintingLayerClick,
     sortedLayers,
     handleMoveLayer,
     handleCreateTranslationLayer,
@@ -467,7 +548,6 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     handleRedoPageTranslation,
     isRedoingPageTranslation,
     handleExportPng,
-    handleExportRenderedPng,
     handleExportZip,
     interactionMode,
     setInteractionMode,
@@ -482,7 +562,32 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     isRedoingRegionOcr,
     handleRedoRegion,
     isRedoingRegionTl,
+    issues,
+    onSelectIssue,
+    onStepIssue,
+    handleRegionAction,
+    handleSaveIssueTranslation,
+    handleSaveSourceText,
+    isReviewingRegion,
+    mergeMode,
+    mergeSelection,
+    mergePreview,
+    onToggleMergeMode,
+    onToggleMergeRegion,
+    onConfirmMerge,
+    isMerging,
   } = props;
+
+  // The element drawing each region, for tools offered on any region (not only issues).
+  const drawnElementByRegion = React.useMemo(
+    () => translationElementByRegion(props.layers),
+    [props.layers],
+  );
+
+  const regionById = React.useMemo(
+    () => new Map(ocrRegions.map((r) => [r.id, r])),
+    [ocrRegions],
+  );
 
   return (
     <Grid className="reader-right-sidebar-nhentai">
@@ -497,6 +602,25 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               Select an OCR region or a text layer to inspect and edit details.
             </Typography>
           </Box>
+
+          {mergeMode && (
+            <MergePanel
+              regions={ocrRegions}
+              selected={mergeSelection}
+              busy={isMerging}
+              preview={mergePreview}
+              onToggle={onToggleMergeRegion}
+              onMerge={onConfirmMerge}
+              onCancel={onToggleMergeMode}
+            />
+          )}
+          {!mergeMode && (
+            <IssueList
+              issues={issues}
+              selectedRegionId={null}
+              onSelect={onSelectIssue}
+            />
+          )}
 
           {/* Translation Layers Section */}
           <SidebarSection
@@ -581,7 +705,12 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 return (
                   <React.Fragment key={lData.layer.id}>
                     <Box
-                      onClick={() => setActiveLayerId(lData.layer.id)}
+                      onClick={() => {
+                        setActiveLayerId(lData.layer.id);
+                        if (isInpaintingLayer(lData.layer)) {
+                          onInpaintingLayerClick?.(lData.layer.id);
+                        }
+                      }}
                       sx={[
                         layerRowBaseSx,
                         {
@@ -638,7 +767,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                                 ? "SFX Layer"
                                 : lData.layer.type === "ocr"
                                   ? "OCR Layer"
-                                  : `Layer (${lData.layer.type})`}
+                                  : isInpaintingLayer(lData.layer)
+                                    ? "Inpainting"
+                                    : `Layer (${lData.layer.type})`}
                         </Typography>
                         <Typography
                           component="span"
@@ -720,78 +851,127 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     </Box>
                     {isExpanded && (
                       <Box sx={elementListSx}>
-                        {lData.elements.map((element) => {
-                          // AUDIT-F25. This was `!== false`, which made a null-visible element
-                          // read as visible here while the canvas, the hidden-count above and the
-                          // worker's renderer all treated it as hidden. The row then offered
-                          // "Hide element" for something already invisible, wrote `false`, and the
-                          // first click changed nothing on screen. `=== true` is the same rule the
-                          // other three readers use.
-                          const elementVisible = element.visible === true;
-                          const isSelectedElement =
-                            selectedItem?.id === element.id &&
-                            selectedItem?.isLayerElement;
-                          const label =
-                            (element.text || "").trim() || "(no text)";
-                          return (
-                            <Box
-                              key={element.id}
-                              onClick={() => {
-                                setActiveLayerId(lData.layer.id);
-                                setSelectedItem({
-                                  ...element,
-                                  isLayerElement: true,
-                                });
-                              }}
-                              sx={[
-                                elementRowSx,
-                                {
-                                  opacity: elementVisible ? 1 : 0.55,
-                                  backgroundColor: isSelectedElement
-                                    ? "var(--primary-glow)"
-                                    : "transparent",
-                                },
-                              ]}
-                            >
-                              <Typography
-                                component="span"
-                                sx={elementLabelSx}
-                                title={label}
+                        {inReadingOrder(lData.elements, regionById).map(
+                          (element) => {
+                            // AUDIT-F25. This was `!== false`, which made a null-visible element
+                            // read as visible here while the canvas, the hidden-count above and the
+                            // worker's renderer all treated it as hidden. The row then offered
+                            // "Hide element" for something already invisible, wrote `false`, and the
+                            // first click changed nothing on screen. `=== true` is the same rule the
+                            // other three readers use.
+                            const elementVisible = element.visible === true;
+                            const isSelectedElement =
+                              selectedItem?.id === element.id &&
+                              selectedItem?.isLayerElement;
+                            const region = element.regionId
+                              ? regionById.get(element.regionId)
+                              : undefined;
+                            const rowStatus = regionRowStatus(region, element);
+                            const label = isPatchElement(element)
+                              ? `Patch${region ? ` · ${(region.text || "").trim()}` : " · no region"}`
+                              : (element.text || "").trim() ||
+                                (region?.text || "").trim() ||
+                                "(no text)";
+                            return (
+                              <Box
+                                key={element.id}
+                                onClick={() => {
+                                  setActiveLayerId(lData.layer.id);
+                                  setSelectedItem({
+                                    ...element,
+                                    isLayerElement: true,
+                                  });
+                                }}
+                                sx={[
+                                  elementRowSx,
+                                  {
+                                    opacity: elementVisible ? 1 : 0.55,
+                                    backgroundColor: isSelectedElement
+                                      ? "var(--primary-glow)"
+                                      : "transparent",
+                                  },
+                                ]}
                               >
-                                {label}
-                              </Typography>
-                              <Tooltip
-                                title={
-                                  elementVisible
-                                    ? "Hide element"
-                                    : "Show element"
-                                }
-                              >
-                                <IconButton
-                                  size="small"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleSetElementVisibility(
-                                      element,
-                                      !elementVisible,
-                                    );
-                                  }}
-                                  sx={{
-                                    color: elementVisible
-                                      ? "var(--primary)"
-                                      : "var(--text-dim, var(--text-muted))",
-                                  }}
+                                {region?.bubbleReadingOrder ? (
+                                  <Box
+                                    component="span"
+                                    sx={{
+                                      flex: "0 0 auto",
+                                      minWidth: "22px",
+                                      fontSize: "11px",
+                                      fontWeight: 700,
+                                      color: "var(--text-muted)",
+                                      fontVariantNumeric: "tabular-nums",
+                                    }}
+                                  >
+                                    #{region.bubbleReadingOrder}
+                                  </Box>
+                                ) : null}
+                                <Typography
+                                  component="span"
+                                  sx={elementLabelSx}
+                                  title={label}
                                 >
-                                  {elementVisible ? (
-                                    <VisibilityIcon fontSize="small" />
-                                  ) : (
-                                    <VisibilityOffIcon fontSize="small" />
-                                  )}
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
-                          );
-                        })}
+                                  {label}
+                                </Typography>
+                                {rowStatus && (
+                                  <Box
+                                    component="span"
+                                    title={region?.qaFeedback || undefined}
+                                    sx={{
+                                      flex: "0 0 auto",
+                                      px: 0.75,
+                                      borderRadius: "999px",
+                                      fontSize: "10px",
+                                      fontWeight: 700,
+                                      lineHeight: "16px",
+                                      color:
+                                        rowStatus.tone === "warning"
+                                          ? "var(--warning)"
+                                          : "var(--text-muted)",
+                                      border: `1px solid ${
+                                        rowStatus.tone === "warning"
+                                          ? "var(--warning)"
+                                          : "var(--border-color)"
+                                      }`,
+                                    }}
+                                  >
+                                    {rowStatus.label}
+                                  </Box>
+                                )}
+                                <Tooltip
+                                  title={
+                                    elementVisible
+                                      ? "Hide element"
+                                      : "Show element"
+                                  }
+                                >
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSetElementVisibility(
+                                        element,
+                                        !elementVisible,
+                                      );
+                                    }}
+                                    sx={{
+                                      color: elementVisible
+                                        ? "var(--primary)"
+                                        : "var(--text-dim, var(--text-muted))",
+                                    }}
+                                  >
+                                    {elementVisible ? (
+                                      <VisibilityIcon fontSize="small" />
+                                    ) : (
+                                      <VisibilityOffIcon fontSize="small" />
+                                    )}
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                            );
+                          },
+                        )}
                       </Box>
                     )}
                   </React.Fragment>
@@ -843,6 +1023,21 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               title="Sample color from screen to apply to selected element's background"
             >
               Color Dropper
+            </Button>
+            <Button
+              variant={mergeMode ? "contained" : "outlined"}
+              size="small"
+              fullWidth
+              sx={
+                mergeMode
+                  ? { mt: 1, boxShadow: "none" }
+                  : [colorDropperButtonSx, { mt: 1 }]
+              }
+              onClick={onToggleMergeMode}
+              disabled={ocrRegions.length < 2}
+              title="Join fragments that belong to one text block, then clean and translate them as one"
+            >
+              {mergeMode ? "Cancel merge" : "Merge regions"}
             </Button>
           </SidebarSection>
 
@@ -917,687 +1112,726 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             >
               Export Project (ZIP)
             </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FileDownloadIcon />}
-              onClick={handleExportRenderedPng}
-              fullWidth
-              sx={exportButtonSx}
-            >
-              Export Rendered PNG
-            </Button>
           </SidebarSection>
         </>
       )}
 
-      {selectedItem && selectedItem.isLayerElement && (
-        <Grid
-          className="ocr-detail-card"
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            gap: "12px",
-          }}
-        >
-          <Box sx={inspectorHeaderRowSx}>
-            <Box>
-              <Typography
-                variant="overline"
-                component="div"
-                sx={inspectorTitleSx}
-              >
-                Element Inspector
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={inspectorSubtitleSx}
-              >
-                {selectedItem.text !== undefined && selectedItem.text !== null
-                  ? "Text element"
-                  : "Mask element"}
-              </Typography>
-            </Box>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => setSelectedItem(null)}
-              sx={deselectButtonSx}
-            >
-              Deselect
-            </Button>
-          </Box>
+      {selectedItem &&
+        selectedItem.isLayerElement &&
+        isPatchElement(selectedItem as LayerElement) && (
+          <PatchInspector
+            key={selectedItem.id}
+            element={selectedItem as LayerElement}
+            region={
+              selectedItem.regionId
+                ? regionById.get(selectedItem.regionId)
+                : undefined
+            }
+            onUpdate={handleUpdateSelectedElement}
+            onSetVisibility={handleSetElementVisibility}
+            onDelete={handleDeleteElement}
+            onDeselect={() => setSelectedItem(null)}
+          />
+        )}
 
-          {/* Content */}
-          <SidebarSection title="Content">
-            <Grid
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "4px",
-              }}
-            >
-              <FieldLabel htmlFor="element-text-content">
-                Text Content
-              </FieldLabel>
-              <TextField
-                id="element-text-content"
-                multiline
-                minRows={3}
-                fullWidth
+      {selectedItem &&
+        selectedItem.isLayerElement &&
+        !isPatchElement(selectedItem as LayerElement) && (
+          <Grid
+            className="ocr-detail-card"
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+            }}
+          >
+            <Box sx={inspectorHeaderRowSx}>
+              <Box>
+                <Typography
+                  variant="overline"
+                  component="div"
+                  sx={inspectorTitleSx}
+                >
+                  Element Inspector
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={inspectorSubtitleSx}
+                >
+                  {selectedItem.text !== undefined && selectedItem.text !== null
+                    ? "Text element"
+                    : "Mask element"}
+                </Typography>
+              </Box>
+              <Button
                 variant="outlined"
                 size="small"
-                value={selectedItem.text || ""}
-                onChange={(e) =>
-                  handleUpdateSelectedElement({ text: e.target.value })
-                }
-                sx={textContentFieldSx}
-              />
-            </Grid>
+                onClick={() => setSelectedItem(null)}
+                sx={deselectButtonSx}
+              >
+                Deselect
+              </Button>
+            </Box>
 
-            {/* Manual Region Redo Section */}
-            {selectedItem.regionId && (
+            {/* Content */}
+            <SidebarSection title="Content">
+              <Grid
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                }}
+              >
+                <FieldLabel htmlFor="element-text-content">
+                  Text Content
+                </FieldLabel>
+                <TextField
+                  id="element-text-content"
+                  multiline
+                  minRows={3}
+                  fullWidth
+                  variant="outlined"
+                  size="small"
+                  value={selectedItem.text || ""}
+                  onChange={(e) =>
+                    handleUpdateSelectedElement({ text: e.target.value })
+                  }
+                  sx={textContentFieldSx}
+                />
+              </Grid>
+
+              {/* Manual Region Redo Section */}
+              {selectedItem.regionId && (
+                <Grid
+                  container
+                  spacing={1}
+                  sx={regionRedoGridSx}
+                >
+                  <Grid
+                    size={6}
+                    sx={regionRedoColSx}
+                  >
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      style={{
+                        justifyContent: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        padding: "8px 6px",
+                        height: "36px",
+                      }}
+                      disabled={
+                        isRedoingRegionOcr ||
+                        (selectedItem &&
+                          "layerType" in selectedItem &&
+                          (selectedItem.layerType === "translation" ||
+                            selectedItem.layerType === "tl"))
+                      }
+                      title={
+                        selectedItem &&
+                        "layerType" in selectedItem &&
+                        (selectedItem.layerType === "translation" ||
+                          selectedItem.layerType === "tl")
+                          ? "Select an OCR layer element to redo OCR"
+                          : undefined
+                      }
+                      onClick={() => {
+                        const actualRegion = ocrRegions.find(
+                          (r) => r.id === selectedItem.regionId,
+                        );
+                        if (actualRegion) handleRedoRegion(actualRegion, "ocr");
+                      }}
+                    >
+                      {isRedoingRegionOcr ? (
+                        <CircularProgress
+                          size={12}
+                          sx={redoSpinnerMarginSx}
+                        />
+                      ) : (
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                        >
+                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                        </svg>
+                      )}
+                      Redo OCR
+                    </Button>
+                  </Grid>
+
+                  <Grid
+                    size={6}
+                    sx={regionRedoColSx}
+                  >
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      style={{
+                        justifyContent: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        padding: "8px 6px",
+                        height: "36px",
+                      }}
+                      disabled={isRedoingRegionTl}
+                      onClick={() => {
+                        const actualRegion = ocrRegions.find(
+                          (r) => r.id === selectedItem.regionId,
+                        );
+                        if (actualRegion)
+                          handleRedoRegion(actualRegion, "translation");
+                      }}
+                    >
+                      {isRedoingRegionTl ? (
+                        <CircularProgress
+                          size={12}
+                          sx={redoSpinnerMarginSx}
+                        />
+                      ) : (
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                        >
+                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                        </svg>
+                      )}
+                      Redo TL
+                    </Button>
+                  </Grid>
+                </Grid>
+              )}
+            </SidebarSection>
+
+            {/* Position & Size */}
+            <SidebarSection title="Position & Size">
+              {/* Positioning Coordinates Row */}
               <Grid
                 container
                 spacing={1}
-                sx={regionRedoGridSx}
               >
                 <Grid
                   size={6}
-                  sx={regionRedoColSx}
+                  sx={fieldColumnSx}
                 >
-                  <Button
-                    fullWidth
-                    variant="outlined"
+                  <FieldLabel htmlFor="element-x">X Position</FieldLabel>
+                  <TextField
+                    id="element-x"
+                    type="number"
                     size="small"
-                    style={{
-                      justifyContent: "center",
-                      gap: "6px",
-                      fontSize: "12px",
-                      padding: "8px 6px",
-                      height: "36px",
-                    }}
-                    disabled={
-                      isRedoingRegionOcr ||
-                      (selectedItem &&
-                        "layerType" in selectedItem &&
-                        (selectedItem.layerType === "translation" ||
-                          selectedItem.layerType === "tl"))
+                    value={selectedItem.x}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        x: parseFloat(e.target.value) || 0,
+                      })
                     }
-                    title={
-                      selectedItem &&
-                      "layerType" in selectedItem &&
-                      (selectedItem.layerType === "translation" ||
-                        selectedItem.layerType === "tl")
-                        ? "Select an OCR layer element to redo OCR"
-                        : undefined
-                    }
-                    onClick={() => {
-                      const actualRegion = ocrRegions.find(
-                        (r) => r.id === selectedItem.regionId,
-                      );
-                      if (actualRegion) handleRedoRegion(actualRegion, "ocr");
-                    }}
-                  >
-                    {isRedoingRegionOcr ? (
-                      <CircularProgress
-                        size={12}
-                        sx={redoSpinnerMarginSx}
-                      />
-                    ) : (
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                      </svg>
-                    )}
-                    Redo OCR
-                  </Button>
+                    sx={numericFieldInputSx}
+                  />
                 </Grid>
-
                 <Grid
                   size={6}
-                  sx={regionRedoColSx}
+                  sx={fieldColumnSx}
                 >
-                  <Button
-                    fullWidth
-                    variant="outlined"
+                  <FieldLabel htmlFor="element-y">Y Position</FieldLabel>
+                  <TextField
+                    id="element-y"
+                    type="number"
                     size="small"
-                    style={{
-                      justifyContent: "center",
-                      gap: "6px",
-                      fontSize: "12px",
-                      padding: "8px 6px",
-                      height: "36px",
-                    }}
-                    disabled={isRedoingRegionTl}
-                    onClick={() => {
-                      const actualRegion = ocrRegions.find(
-                        (r) => r.id === selectedItem.regionId,
-                      );
-                      if (actualRegion)
-                        handleRedoRegion(actualRegion, "translation");
-                    }}
-                  >
-                    {isRedoingRegionTl ? (
-                      <CircularProgress
-                        size={12}
-                        sx={redoSpinnerMarginSx}
-                      />
-                    ) : (
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                      </svg>
-                    )}
-                    Redo TL
-                  </Button>
+                    value={selectedItem.y}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        y: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    sx={numericFieldInputSx}
+                  />
                 </Grid>
               </Grid>
-            )}
-          </SidebarSection>
 
-          {/* Position & Size */}
-          <SidebarSection title="Position & Size">
-            {/* Positioning Coordinates Row */}
-            <Grid
-              container
-              spacing={1}
-            >
+              {/* Dimensions Row */}
               <Grid
-                size={6}
-                sx={fieldColumnSx}
+                container
+                spacing={1}
               >
-                <FieldLabel htmlFor="element-x">X Position</FieldLabel>
-                <TextField
-                  id="element-x"
-                  type="number"
-                  size="small"
-                  value={selectedItem.x}
-                  onChange={(e) =>
-                    handleUpdateSelectedElement({
-                      x: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                  sx={numericFieldInputSx}
-                />
+                <Grid
+                  size={6}
+                  sx={fieldColumnSx}
+                >
+                  <FieldLabel htmlFor="element-max-width">Max Width</FieldLabel>
+                  <TextField
+                    id="element-max-width"
+                    type="number"
+                    size="small"
+                    value={selectedItem.maxWidth || 0}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        maxWidth: parseInt(e.target.value) || 0,
+                      })
+                    }
+                    sx={numericFieldInputSx}
+                  />
+                </Grid>
+                <Grid
+                  size={6}
+                  sx={fieldColumnSx}
+                >
+                  <FieldLabel htmlFor="element-max-height">
+                    Max Height
+                  </FieldLabel>
+                  <TextField
+                    id="element-max-height"
+                    type="number"
+                    size="small"
+                    value={selectedItem.maxHeight || 0}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        maxHeight: parseInt(e.target.value) || 0,
+                      })
+                    }
+                    sx={numericFieldInputSx}
+                  />
+                </Grid>
               </Grid>
-              <Grid
-                size={6}
-                sx={fieldColumnSx}
-              >
-                <FieldLabel htmlFor="element-y">Y Position</FieldLabel>
-                <TextField
-                  id="element-y"
-                  type="number"
-                  size="small"
-                  value={selectedItem.y}
-                  onChange={(e) =>
-                    handleUpdateSelectedElement({
-                      y: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                  sx={numericFieldInputSx}
-                />
-              </Grid>
-            </Grid>
 
-            {/* Dimensions Row */}
-            <Grid
-              container
-              spacing={1}
-            >
+              {/* Drag & Reshape Mode Buttons — contextually swap to Undo during active modes */}
               <Grid
-                size={6}
-                sx={fieldColumnSx}
+                style={{ display: "flex", flexDirection: "column", gap: "6px" }}
               >
-                <FieldLabel htmlFor="element-max-width">Max Width</FieldLabel>
-                <TextField
-                  id="element-max-width"
-                  type="number"
-                  size="small"
-                  value={selectedItem.maxWidth || 0}
-                  onChange={(e) =>
-                    handleUpdateSelectedElement({
-                      maxWidth: parseInt(e.target.value) || 0,
-                    })
-                  }
-                  sx={numericFieldInputSx}
-                />
-              </Grid>
-              <Grid
-                size={6}
-                sx={fieldColumnSx}
-              >
-                <FieldLabel htmlFor="element-max-height">Max Height</FieldLabel>
-                <TextField
-                  id="element-max-height"
-                  type="number"
-                  size="small"
-                  value={selectedItem.maxHeight || 0}
-                  onChange={(e) =>
-                    handleUpdateSelectedElement({
-                      maxHeight: parseInt(e.target.value) || 0,
-                    })
-                  }
-                  sx={numericFieldInputSx}
-                />
-              </Grid>
-            </Grid>
-
-            {/* Drag & Reshape Mode Buttons — contextually swap to Undo during active modes */}
-            <Grid
-              style={{ display: "flex", flexDirection: "column", gap: "6px" }}
-            >
-              <Grid style={{ display: "flex", gap: "6px" }}>
-                {/* LEFT BUTTON: Drag (idle) or Undo (while reshaping) */}
-                {interactionMode === "reshape" ? (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<UndoIcon />}
-                    style={{ flex: 1, fontSize: "12px" }}
-                    onClick={handleUndo}
-                    disabled={undoStack.length === 0}
-                    title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
-                  >
-                    Undo
-                  </Button>
-                ) : (
-                  <Button
-                    variant={
-                      interactionMode === "drag" ? "contained" : "outlined"
-                    }
-                    size="small"
-                    startIcon={<OpenWithIcon />}
-                    style={{ flex: 1, fontSize: "12px" }}
-                    onClick={() =>
-                      setInteractionMode((prev) =>
-                        prev === "drag" ? "none" : "drag",
-                      )
-                    }
-                    title="Drag the element to a new position on the image"
-                    sx={
-                      interactionMode === "drag" ? activeModeGlowSx : undefined
-                    }
-                  >
-                    {interactionMode === "drag" ? "Dragging…" : "Drag"}
-                  </Button>
-                )}
-
-                {/* RIGHT BUTTON: Reshape (idle) or Undo (while dragging) */}
-                {interactionMode === "drag" ? (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<UndoIcon />}
-                    style={{ flex: 1, fontSize: "12px" }}
-                    onClick={handleUndo}
-                    disabled={undoStack.length === 0}
-                    title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
-                  >
-                    Undo
-                  </Button>
-                ) : (
-                  <Button
-                    variant={
-                      interactionMode === "reshape" ? "contained" : "outlined"
-                    }
-                    size="small"
-                    startIcon={<CropIcon />}
-                    style={{ flex: 1, fontSize: "12px" }}
-                    onClick={() => {
-                      if (interactionMode === "reshape") {
-                        setInteractionMode("none");
-                      } else {
-                        handleEnterReshapeMode(selectedItem as LayerElement);
+                <Grid style={{ display: "flex", gap: "6px" }}>
+                  {/* LEFT BUTTON: Drag (idle) or Undo (while reshaping) */}
+                  {interactionMode === "reshape" ? (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<UndoIcon />}
+                      style={{ flex: 1, fontSize: "12px" }}
+                      onClick={handleUndo}
+                      disabled={undoStack.length === 0}
+                      title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
+                    >
+                      Undo
+                    </Button>
+                  ) : (
+                    <Button
+                      variant={
+                        interactionMode === "drag" ? "contained" : "outlined"
                       }
-                    }}
-                    title="Drag individual vertices to reshape the bubble polygon. Auto-generates polygon for rect/ellipse shapes."
-                    sx={
-                      interactionMode === "reshape"
-                        ? activeModeGlowSx
-                        : undefined
-                    }
+                      size="small"
+                      startIcon={<OpenWithIcon />}
+                      style={{ flex: 1, fontSize: "12px" }}
+                      onClick={() =>
+                        setInteractionMode((prev) =>
+                          prev === "drag" ? "none" : "drag",
+                        )
+                      }
+                      title="Drag the element to a new position on the image"
+                      sx={
+                        interactionMode === "drag"
+                          ? activeModeGlowSx
+                          : undefined
+                      }
+                    >
+                      {interactionMode === "drag" ? "Dragging…" : "Drag"}
+                    </Button>
+                  )}
+
+                  {/* RIGHT BUTTON: Reshape (idle) or Undo (while dragging) */}
+                  {interactionMode === "drag" ? (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<UndoIcon />}
+                      style={{ flex: 1, fontSize: "12px" }}
+                      onClick={handleUndo}
+                      disabled={undoStack.length === 0}
+                      title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
+                    >
+                      Undo
+                    </Button>
+                  ) : (
+                    <Button
+                      variant={
+                        interactionMode === "reshape" ? "contained" : "outlined"
+                      }
+                      size="small"
+                      startIcon={<CropIcon />}
+                      style={{ flex: 1, fontSize: "12px" }}
+                      onClick={() => {
+                        if (interactionMode === "reshape") {
+                          setInteractionMode("none");
+                        } else {
+                          handleEnterReshapeMode(selectedItem as LayerElement);
+                        }
+                      }}
+                      title="Drag individual vertices to reshape the bubble polygon. Auto-generates polygon for rect/ellipse shapes."
+                      sx={
+                        interactionMode === "reshape"
+                          ? activeModeGlowSx
+                          : undefined
+                      }
+                    >
+                      {interactionMode === "reshape" ? "Reshaping…" : "Reshape"}
+                    </Button>
+                  )}
+                </Grid>
+                {interactionMode !== "none" && (
+                  <Typography
+                    variant="caption"
+                    sx={interactionHintTextSx}
                   >
-                    {interactionMode === "reshape" ? "Reshaping…" : "Reshape"}
-                  </Button>
+                    {interactionMode === "drag"
+                      ? "Touch or drag the bubble on the page to move it."
+                      : "Drag a vertex to reshape, or the top handle to rotate."}
+                  </Typography>
                 )}
               </Grid>
-              {interactionMode !== "none" && (
-                <Typography
-                  variant="caption"
-                  sx={interactionHintTextSx}
-                >
-                  {interactionMode === "drag"
-                    ? "Touch or drag the bubble on the page to move it."
-                    : "Drag a vertex to reshape, or the top handle to rotate."}
-                </Typography>
-              )}
-            </Grid>
-          </SidebarSection>
+            </SidebarSection>
 
-          {/* Typography */}
-          <SidebarSection title="Typography">
-            {/* Font & Style settings */}
-            <Grid
-              container
-              spacing={1}
-            >
+            {/* Typography */}
+            <SidebarSection title="Typography">
+              {/* Font & Style settings */}
               <Grid
-                size={6}
-                sx={fieldColumnSx}
+                container
+                spacing={1}
               >
-                <FieldLabel id="element-font-family-label">
-                  Font Family
-                </FieldLabel>
+                <Grid
+                  size={6}
+                  sx={fieldColumnSx}
+                >
+                  <FieldLabel id="element-font-family-label">
+                    Font Family
+                  </FieldLabel>
+                  <Select
+                    labelId="element-font-family-label"
+                    size="small"
+                    value={selectedItem.font || "Comic Neue"}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({ font: e.target.value })
+                    }
+                    sx={selectFieldSx}
+                  >
+                    <MenuItem value="Comic Neue">Comic Neue</MenuItem>
+                    <MenuItem value="Bangers">Bangers</MenuItem>
+                    <MenuItem value="Luckiest Guy">Luckiest Guy</MenuItem>
+                    <MenuItem value="Arial">Arial</MenuItem>
+                    <MenuItem value="Courier New">Courier New</MenuItem>
+                  </Select>
+                </Grid>
+                <Grid
+                  size={6}
+                  sx={fieldColumnSx}
+                >
+                  <FieldLabel htmlFor="element-font-size">
+                    Font Size (pt)
+                  </FieldLabel>
+                  <TextField
+                    id="element-font-size"
+                    type="number"
+                    size="small"
+                    value={selectedItem.size || 16}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        size: parseFloat(e.target.value) || 12,
+                        autoSize: false,
+                      })
+                    }
+                    sx={numericFieldInputSx}
+                  />
+                </Grid>
+              </Grid>
+
+              {/* Font Weight & Style Row */}
+              <Grid
+                container
+                spacing={1}
+              >
+                <Grid
+                  size={6}
+                  sx={fieldColumnSx}
+                >
+                  <FieldLabel id="element-font-weight-label">
+                    Font Weight
+                  </FieldLabel>
+                  <Select
+                    labelId="element-font-weight-label"
+                    size="small"
+                    value={selectedItem.fontWeight || "normal"}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        fontWeight: e.target.value as string,
+                      })
+                    }
+                    sx={selectFieldSx}
+                  >
+                    <MenuItem value="normal">Normal</MenuItem>
+                    <MenuItem value="bold">Bold</MenuItem>
+                  </Select>
+                </Grid>
+                <Grid
+                  size={6}
+                  sx={fieldColumnSx}
+                >
+                  <FieldLabel id="element-font-style-label">
+                    Font Style
+                  </FieldLabel>
+                  <Select
+                    labelId="element-font-style-label"
+                    size="small"
+                    value={selectedItem.fontStyle || "normal"}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        fontStyle: e.target.value as string,
+                      })
+                    }
+                    sx={selectFieldSx}
+                  >
+                    <MenuItem value="normal">Normal</MenuItem>
+                    <MenuItem value="italic">Italic</MenuItem>
+                  </Select>
+                </Grid>
+              </Grid>
+            </SidebarSection>
+
+            {/* Appearance */}
+            <SidebarSection title="Appearance">
+              {/* Box Shape selection */}
+              <Grid
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                }}
+              >
+                <FieldLabel id="element-box-shape-label">Box Shape</FieldLabel>
                 <Select
-                  labelId="element-font-family-label"
+                  labelId="element-box-shape-label"
                   size="small"
-                  value={selectedItem.font || "Comic Neue"}
+                  value={selectedItem.boxShape || "rectangular"}
                   onChange={(e) =>
-                    handleUpdateSelectedElement({ font: e.target.value })
+                    handleUpdateSelectedElement({
+                      boxShape: e.target.value as string,
+                    })
                   }
                   sx={selectFieldSx}
                 >
-                  <MenuItem value="Comic Neue">Comic Neue</MenuItem>
-                  <MenuItem value="Bangers">Bangers</MenuItem>
-                  <MenuItem value="Luckiest Guy">Luckiest Guy</MenuItem>
-                  <MenuItem value="Arial">Arial</MenuItem>
-                  <MenuItem value="Courier New">Courier New</MenuItem>
+                  <MenuItem value="rectangular">Rectangular</MenuItem>
+                  <MenuItem value="elliptical">
+                    Elliptical (Contour-Based)
+                  </MenuItem>
                 </Select>
               </Grid>
+
+              {/* One stored colour, two uses (page_scene_builder.rs): the export always draws
+                  text with a halo in it, and a region with no cleanup patch gets a plain plate
+                  of it. A text element shows it as the outline; a text-less mask as its fill.
+                  Splitting it into two fields is a follow-up (2026-10-01). */}
+              {selectedItem.text !== undefined && selectedItem.text !== null ? (
+                <>
+                  <ColorPicker
+                    label="Outline Color"
+                    value={selectedItem.backgroundColor ?? ""}
+                    onChange={(val) =>
+                      handleUpdateSelectedElement({ backgroundColor: val })
+                    }
+                    onLaunchEyeDropper={() =>
+                      handleLaunchEyeDropper("backgroundColor")
+                    }
+                    allowTransparent={true}
+                  />
+                  <Typography
+                    variant="caption"
+                    component="p"
+                    sx={{ color: "var(--text-muted)", mt: -0.5, mb: 1 }}
+                  >
+                    Also fills the plain mask where this region has no cleanup
+                    patch. Transparent: no outline.
+                  </Typography>
+                </>
+              ) : (
+                selectedItem.wordWrap && (
+                  <ColorPicker
+                    label="Mask Color"
+                    value={selectedItem.backgroundColor ?? "#ffffff"}
+                    onChange={(val) =>
+                      handleUpdateSelectedElement({ backgroundColor: val })
+                    }
+                    onLaunchEyeDropper={() =>
+                      handleLaunchEyeDropper("backgroundColor")
+                    }
+                    allowTransparent={true}
+                  />
+                )
+              )}
+
+              {/* Text Color (only relevant if it is a text-bearing element) */}
+              {selectedItem.text !== undefined &&
+                selectedItem.text !== null && (
+                  <ColorPicker
+                    label="Text Color"
+                    value={
+                      selectedItem.textColor !== undefined &&
+                      selectedItem.textColor !== null
+                        ? selectedItem.textColor
+                        : "#000000"
+                    }
+                    onChange={(val) =>
+                      handleUpdateSelectedElement({ textColor: val })
+                    }
+                    onLaunchEyeDropper={() =>
+                      handleLaunchEyeDropper("textColor")
+                    }
+                    allowTransparent={false}
+                  />
+                )}
+
+              {/* Rotation Slider */}
               <Grid
-                size={6}
-                sx={fieldColumnSx}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                }}
               >
-                <FieldLabel htmlFor="element-font-size">
-                  Font Size (pt)
+                <FieldLabel id="element-rotation-label">
+                  Rotation ({selectedItem.rotation || 0}°)
                 </FieldLabel>
-                <TextField
-                  id="element-font-size"
-                  type="number"
+                <Slider
+                  aria-labelledby="element-rotation-label"
                   size="small"
-                  value={selectedItem.size || 16}
-                  onChange={(e) =>
+                  min={0}
+                  max={360}
+                  value={selectedItem.rotation || 0}
+                  onChange={(_, val) =>
                     handleUpdateSelectedElement({
-                      size: parseFloat(e.target.value) || 12,
-                      autoSize: false,
+                      rotation: val as number,
                     })
                   }
-                  sx={numericFieldInputSx}
+                  sx={rotationSliderSx}
                 />
               </Grid>
-            </Grid>
+            </SidebarSection>
 
-            {/* Font Weight & Style Row */}
-            <Grid
-              container
-              spacing={1}
-            >
+            {/* Behavior */}
+            <SidebarSection title="Behavior">
+              {/* Checkboxes Row */}
               <Grid
-                size={6}
-                sx={fieldColumnSx}
-              >
-                <FieldLabel id="element-font-weight-label">
-                  Font Weight
-                </FieldLabel>
-                <Select
-                  labelId="element-font-weight-label"
-                  size="small"
-                  value={selectedItem.fontWeight || "normal"}
-                  onChange={(e) =>
-                    handleUpdateSelectedElement({
-                      fontWeight: e.target.value as string,
-                    })
-                  }
-                  sx={selectFieldSx}
-                >
-                  <MenuItem value="normal">Normal</MenuItem>
-                  <MenuItem value="bold">Bold</MenuItem>
-                </Select>
-              </Grid>
-              <Grid
-                size={6}
-                sx={fieldColumnSx}
-              >
-                <FieldLabel id="element-font-style-label">
-                  Font Style
-                </FieldLabel>
-                <Select
-                  labelId="element-font-style-label"
-                  size="small"
-                  value={selectedItem.fontStyle || "normal"}
-                  onChange={(e) =>
-                    handleUpdateSelectedElement({
-                      fontStyle: e.target.value as string,
-                    })
-                  }
-                  sx={selectFieldSx}
-                >
-                  <MenuItem value="normal">Normal</MenuItem>
-                  <MenuItem value="italic">Italic</MenuItem>
-                </Select>
-              </Grid>
-            </Grid>
-          </SidebarSection>
-
-          {/* Appearance */}
-          <SidebarSection title="Appearance">
-            {/* Box Shape selection */}
-            <Grid
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "4px",
-              }}
-            >
-              <FieldLabel id="element-box-shape-label">Box Shape</FieldLabel>
-              <Select
-                labelId="element-box-shape-label"
-                size="small"
-                value={selectedItem.boxShape || "rectangular"}
-                onChange={(e) =>
-                  handleUpdateSelectedElement({
-                    boxShape: e.target.value as string,
-                  })
-                }
-                sx={selectFieldSx}
-              >
-                <MenuItem value="rectangular">Rectangular</MenuItem>
-                <MenuItem value="elliptical">
-                  Elliptical (Contour-Based)
-                </MenuItem>
-              </Select>
-            </Grid>
-
-            {/* Mask Background Color (only relevant if clean background mask is enabled) */}
-            {selectedItem.wordWrap && (
-              <ColorPicker
-                label="Mask Background Color"
-                value={
-                  selectedItem.backgroundColor !== undefined &&
-                  selectedItem.backgroundColor !== null
-                    ? selectedItem.backgroundColor
-                    : "#ffffff"
-                }
-                onChange={(val) =>
-                  handleUpdateSelectedElement({ backgroundColor: val })
-                }
-                onLaunchEyeDropper={() =>
-                  handleLaunchEyeDropper("backgroundColor")
-                }
-                allowTransparent={true}
-              />
-            )}
-
-            {/* Text Color (only relevant if it is a text-bearing element) */}
-            {selectedItem.text !== undefined && selectedItem.text !== null && (
-              <ColorPicker
-                label="Text Color"
-                value={
-                  selectedItem.textColor !== undefined &&
-                  selectedItem.textColor !== null
-                    ? selectedItem.textColor
-                    : "#000000"
-                }
-                onChange={(val) =>
-                  handleUpdateSelectedElement({ textColor: val })
-                }
-                onLaunchEyeDropper={() => handleLaunchEyeDropper("textColor")}
-                allowTransparent={false}
-              />
-            )}
-
-            {/* Rotation Slider */}
-            <Grid
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "4px",
-              }}
-            >
-              <FieldLabel id="element-rotation-label">
-                Rotation ({selectedItem.rotation || 0}°)
-              </FieldLabel>
-              <Slider
-                aria-labelledby="element-rotation-label"
-                size="small"
-                min={0}
-                max={360}
-                value={selectedItem.rotation || 0}
-                onChange={(_, val) =>
-                  handleUpdateSelectedElement({
-                    rotation: val as number,
-                  })
-                }
-                sx={rotationSliderSx}
-              />
-            </Grid>
-          </SidebarSection>
-
-          {/* Behavior */}
-          <SidebarSection title="Behavior">
-            {/* Checkboxes Row */}
-            <Grid
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-              }}
-            >
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={selectedItem.autoSize}
-                    onChange={(e) =>
-                      handleUpdateSelectedElement({
-                        autoSize: e.target.checked,
-                      })
-                    }
-                  />
-                }
-                slotProps={{ typography: { sx: { fontSize: "12px" } } }}
-                label="Auto-size text to fit bubble"
-              />
-
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={selectedItem.visible === true}
-                    onChange={(e) =>
-                      handleUpdateSelectedElement({
-                        visible: e.target.checked,
-                      })
-                    }
-                  />
-                }
-                slotProps={{ typography: { sx: { fontSize: "12px" } } }}
-                label="Visible"
-              />
-
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={selectedItem.wordWrap}
-                    onChange={(e) =>
-                      handleUpdateSelectedElement({
-                        wordWrap: e.target.checked,
-                      })
-                    }
-                  />
-                }
-                slotProps={{ typography: { sx: { fontSize: "12px" } } }}
-                label="Clean background mask"
-              />
-            </Grid>
-          </SidebarSection>
-
-          {/* Action Buttons */}
-          <Grid
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "6px",
-              marginTop: "4px",
-            }}
-          >
-            {dirtyElements.has(selectedItem.id) && (
-              <Box sx={unsavedChangesRowSx}>
-                <Box sx={unsavedChangesDotSx} />
-                Unsaved changes
-              </Box>
-            )}
-            <Grid style={{ display: "flex", gap: "8px" }}>
-              <Button
-                variant="contained"
-                color="primary"
-                size="small"
                 style={{
-                  flex: 1,
-                  padding: "8px",
-                  boxShadow: "none",
-                  border: dirtyElements.has(selectedItem.id)
-                    ? "1px solid var(--warning, #eab308)"
-                    : undefined,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
                 }}
-                onClick={() =>
-                  handleSaveElementChanges(selectedItem as LayerElement)
-                }
               >
-                Save
-              </Button>
-              <Button
-                variant="outlined"
-                color="error"
-                size="small"
-                style={{
-                  flex: 1,
-                  padding: "8px",
-                }}
-                onClick={() => handleDeleteElement(selectedItem.id)}
-              >
-                Delete
-              </Button>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={selectedItem.autoSize}
+                      onChange={(e) =>
+                        handleUpdateSelectedElement({
+                          autoSize: e.target.checked,
+                        })
+                      }
+                    />
+                  }
+                  slotProps={{ typography: { sx: { fontSize: "12px" } } }}
+                  label="Auto-size text to fit bubble"
+                />
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={selectedItem.visible === true}
+                      onChange={(e) =>
+                        handleUpdateSelectedElement({
+                          visible: e.target.checked,
+                        })
+                      }
+                    />
+                  }
+                  slotProps={{ typography: { sx: { fontSize: "12px" } } }}
+                  label="Visible"
+                />
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={selectedItem.wordWrap}
+                      onChange={(e) =>
+                        handleUpdateSelectedElement({
+                          wordWrap: e.target.checked,
+                        })
+                      }
+                    />
+                  }
+                  slotProps={{ typography: { sx: { fontSize: "12px" } } }}
+                  label="Clean background mask"
+                />
+              </Grid>
+            </SidebarSection>
+
+            {/* Action Buttons */}
+            <Grid
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                marginTop: "4px",
+              }}
+            >
+              {dirtyElements.has(selectedItem.id) && (
+                <Box sx={unsavedChangesRowSx}>
+                  <Box sx={unsavedChangesDotSx} />
+                  Unsaved changes
+                </Box>
+              )}
+              <Grid style={{ display: "flex", gap: "8px" }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="small"
+                  style={{
+                    flex: 1,
+                    padding: "8px",
+                    boxShadow: "none",
+                    border: dirtyElements.has(selectedItem.id)
+                      ? "1px solid var(--warning, #eab308)"
+                      : undefined,
+                  }}
+                  onClick={() =>
+                    handleSaveElementChanges(selectedItem as LayerElement)
+                  }
+                >
+                  Save
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  size="small"
+                  style={{
+                    flex: 1,
+                    padding: "8px",
+                  }}
+                  onClick={() => handleDeleteElement(selectedItem.id)}
+                >
+                  Delete
+                </Button>
+              </Grid>
             </Grid>
           </Grid>
-        </Grid>
-      )}
+        )}
 
       {selectedItem && !selectedItem.isLayerElement && (
         <Grid
@@ -1689,6 +1923,56 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             {selectedItem.bboxW}x{selectedItem.bboxH})
           </Grid>
 
+          {(selectedItem.regions as OcrRegion[]).map((r) => {
+            const index = issues.findIndex((i) => i.region.id === r.id);
+            if (index >= 0) {
+              return (
+                <IssueCard
+                  key={`issue-${r.id}`}
+                  issue={issues[index]}
+                  position={index + 1}
+                  total={issues.length}
+                  busy={isReviewingRegion}
+                  onAction={(issue, action) =>
+                    handleRegionAction(issue.region, action, issue.element)
+                  }
+                  onSaveTranslation={handleSaveIssueTranslation}
+                  onSaveSourceText={handleSaveSourceText}
+                  onStep={onStepIssue}
+                />
+              );
+            }
+            if (r.qaStatus === "rejected" || r.qaStatus === "reject_sfx") {
+              return (
+                <RejectedRegionNote
+                  key={`rejected-${r.id}`}
+                  region={r}
+                  busy={isReviewingRegion}
+                  onDelete={(region) => handleRegionAction(region, "delete")}
+                />
+              );
+            }
+            // Inpainting can leave lettering behind on a region nothing flagged; the plain mask
+            // is offered wherever there is a translation for the plate to sit under.
+            const drawn = drawnElementByRegion.get(r.id);
+            if (drawn?.visible === true && (drawn.text || "").trim()) {
+              return (
+                <Button
+                  key={`mask-${r.id}`}
+                  variant="outlined"
+                  size="small"
+                  disabled={isReviewingRegion}
+                  onClick={() => handleRegionAction(r, "mask", drawn)}
+                  title="Cover the original lettering with a plate of the bubble colour, in the editor and the export"
+                  sx={{ textTransform: "none", alignSelf: "flex-start" }}
+                >
+                  Cover with plain mask
+                </Button>
+              );
+            }
+            return null;
+          })}
+
           <Grid
             style={{
               overflowY: "auto",
@@ -1718,7 +2002,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     textTransform: "uppercase",
                   }}
                 >
-                  Region #{idx + 1} Original
+                  Region #{reg.bubbleReadingOrder ?? idx + 1} Original
                 </Grid>
                 <Grid
                   className="ocr-text-preview"
@@ -1738,7 +2022,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                         textTransform: "uppercase",
                       }}
                     >
-                      Region #{idx + 1} Translation
+                      Region #{reg.bubbleReadingOrder ?? idx + 1} Translation
                     </Grid>
                     <Grid
                       className="ocr-text-preview"

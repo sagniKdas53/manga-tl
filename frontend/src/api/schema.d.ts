@@ -316,6 +316,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/internal/jobs/callback/cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cleanupCallback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/jobs/callback/manual-cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The mask editor's repaint result: status complete or failed, and on success the patch and mask assets with their page bounds. Lands as a new top Inpainting layer. */
+        post: operations["manualCleanupCallback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/internal/jobs/callback/layout": {
         parameters: {
             query?: never;
@@ -736,6 +769,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ocr-regions/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Quick resolution for a region that needs a look. `reject` keeps the original (marks it rejected, hides its translations); `accept` keeps the translation (clears the flag, shows it); `mask` covers the region with a plain plate of its background colour, stored as its cleanup; `delete` removes the region and its elements. All refresh the page QA summary and advance its revision. */
+        post: operations["reviewOcrRegion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pages/{pageId}/scene": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a page scene */
+        get: operations["getPageScene"];
+        /** Save a page scene */
+        put: operations["putPageScene"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pages/{pageId}": {
         parameters: {
             query?: never;
@@ -796,6 +864,23 @@ export interface paths {
         patch: operations["updatePageNumber"];
         trace?: never;
     };
+    "/api/pages/{pageId}/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Render the page's current scene now, through the same pinned browser renderer the pipeline uses, so a hand edit reaches Export, the reader and the chapter ZIP without waiting for the render debounce and a worker. Returns once the current revision has its render. A page that is hand-edited queues no QA pass off this render. */
+        post: operations["renderPageNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pages/{pageId}/rendered": {
         parameters: {
             query?: never;
@@ -806,6 +891,57 @@ export interface paths {
         get: operations["getPageRenderedFile"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pages/{pageId}/scene-assets/{sha256}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One content-addressed cleanup asset (patch or glyph mask PNG) of this page. Requires a signed-in user. The bytes never change for a given sha256, so the response is cacheable as immutable. */
+        get: operations["getPageSceneAsset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pages/{pageId}/regions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Merge two or more OCR regions on the page into one text block. The region with the lowest reading number survives with the union box and the text joined in geometric reading order; the others are deleted (their elements on hidden history layers are detached, not deleted). One cleanup job is queued for the merged box and carries on into that region's translation only. With dryRun nothing is written and the response gives the reading order and joined text. */
+        post: operations["mergeOcrRegions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pages/{pageId}/manual-cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Queue a repaint of one hand-marked area of the page (the editor's inpainting view). The mark is tidied (small gaps closed, enclosed holes filled) and repainted on the page as the export draws it now, with the chosen method. The result arrives as one region-less patch on a new Inpainting layer above the page's others; its re-render queues no QA pass. Progress is reported through the usual job_update events. */
+        post: operations["queueManualCleanup"];
         delete?: never;
         options?: never;
         head?: never;
@@ -972,6 +1108,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/custom-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace the custom model IDs */
+        put: operations["putCustomModels"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -983,6 +1136,8 @@ export interface components {
         ChapterDto: {
             /** Format: double */
             chapterNumber?: number;
+            /** @description Cleanup reconstruction mode: auto, telea, aot or off (null inherits). */
+            cleanupMode?: string;
             coverImageUrl?: string;
             /** Format: date-time */
             createdAt?: string;
@@ -1010,6 +1165,41 @@ export interface components {
             updatedAt?: string;
             useContextMemory?: boolean;
             useFallbackModels?: boolean;
+            /**
+             * Format: double
+             * @description OCR grouping threshold: join fragments closer than this many characters, 0.05-3 (null inherits).
+             */
+            ocrMergeThreshold?: number;
+        };
+        CleanupCallbackDto: {
+            /** @description Echo of the digest of the dispatched region list. */
+            cleanupInputDigest?: string;
+            /** Format: uuid */
+            imageId?: string;
+            jobId?: string;
+            /** Format: uuid */
+            pageId?: string;
+            /** @description One outcome per dispatched region. A missing, repeated or foreign region fails the whole cleanup and withholds translation. */
+            regions?: components["schemas"]["CleanupRegionResultDto"][];
+        };
+        CleanupRegionResultDto: {
+            cleanupBounds?: Record<string, never> | null;
+            cleanupGeneratorSha256?: string | null;
+            cleanupMaskAssetId?: string | null;
+            /** Format: int64 */
+            cleanupMaskByteLength?: number | null;
+            cleanupMaskSha256?: string | null;
+            cleanupPatchAssetId?: string | null;
+            /** Format: int64 */
+            cleanupPatchByteLength?: number | null;
+            cleanupPatchSha256?: string | null;
+            diagnostics?: string[];
+            /** @description Echo of the digest this region was dispatched with. */
+            inputDigest?: string;
+            /** Format: uuid */
+            regionId?: string;
+            /** @enum {string} */
+            status?: "complete" | "degraded" | "excluded" | "failed" | "uncertain";
         };
         JsonNode: Record<string, never>;
         Layer: {
@@ -1036,6 +1226,10 @@ export interface components {
             autoSize?: boolean;
             backgroundColor?: string;
             boxShape?: string;
+            /** @description Inpainting elements only (tracker R7): the cleanup patch this element draws. Keys: patchSha256, patchByteLength, maskSha256, maskByteLength, generatorSha256, bounds, order. On create, both assets must already exist for the page; an update ignores it. */
+            cleanupRef?: {
+                [key: string]: unknown;
+            };
             /** Format: date-time */
             editedAt?: string;
             font?: string;
@@ -1053,6 +1247,11 @@ export interface components {
             maxHeight?: number;
             /** Format: int32 */
             maxWidth?: number;
+            /**
+             * Format: double
+             * @description Inpainting elements only (tracker R7): drawing opacity in [0, 1]; null is opaque.
+             */
+            opacity?: number;
             overflow?: boolean;
             qaFeedback?: string;
             /** Format: double */
@@ -1078,6 +1277,10 @@ export interface components {
             autoSize?: boolean;
             backgroundColor?: string;
             boxShape?: string;
+            /** @description Inpainting elements only (tracker R7): the cleanup patch this element draws. Keys: patchSha256, patchByteLength, maskSha256, maskByteLength, generatorSha256, bounds, order. On create, both assets must already exist for the page; an update ignores it. */
+            cleanupRef?: {
+                [key: string]: unknown;
+            };
             font?: string;
             fontStyle?: string;
             fontWeight?: string;
@@ -1086,6 +1289,11 @@ export interface components {
             maxHeight?: number;
             /** Format: int32 */
             maxWidth?: number;
+            /**
+             * Format: double
+             * @description Inpainting elements only (tracker R7): drawing opacity in [0, 1]; null is opaque.
+             */
+            opacity?: number;
             overflow?: boolean;
             /** Format: uuid */
             regionId?: string;
@@ -1181,6 +1389,46 @@ export interface components {
             /** Format: int32 */
             y?: number;
         };
+        /** @description New-format-only page-scene/v1 document. The server accepts only logical scenes on writes and validates the full authoritative contract. */
+        PageSceneDocument: {
+            assets: {
+                [key: string]: unknown;
+            }[];
+            cleanup_artifacts: {
+                [key: string]: unknown;
+            }[];
+            /** @enum {string} */
+            contract_version: "page-scene/v1";
+            fragments: {
+                [key: string]: unknown;
+            }[];
+            objects: {
+                [key: string]: unknown;
+            }[];
+            owners: {
+                [key: string]: unknown;
+            }[];
+            page: {
+                /** Format: uuid */
+                page_id: string;
+                /** Format: int32 */
+                revision: number;
+                source: {
+                    [key: string]: unknown;
+                };
+            };
+            policies: {
+                [key: string]: unknown;
+            }[];
+            provenance: {
+                [key: string]: unknown;
+            };
+            resolved_layout?: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            scene_kind: "logical" | "resolved";
+        };
         PageDto: {
             /** Format: uuid */
             chapterId?: string;
@@ -1193,7 +1441,12 @@ export interface components {
             lastRenderedAt?: string | null;
             /** Format: int32 */
             pageNumber?: number;
+            /** Format: int32 */
+            renderRevision?: number;
+            /** @enum {string} */
+            renderStatus?: "ready" | "pending" | "failed";
             renderedThumbnailUrl?: string | null;
+            renderedUrl?: string | null;
             thumbnailUrl?: string;
             url?: string;
         };
@@ -1280,6 +1533,8 @@ export interface components {
             vlmModel?: string;
         };
         SeriesDto: {
+            /** @description Cleanup reconstruction mode: auto, telea, aot or off (null inherits). */
+            cleanupMode?: string;
             coverImageUrl?: string;
             /** Format: date-time */
             createdAt?: string;
@@ -1303,6 +1558,11 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string;
             useFallbackModels?: boolean;
+            /**
+             * Format: double
+             * @description OCR grouping threshold: join fragments closer than this many characters, 0.05-3 (null inherits).
+             */
+            ocrMergeThreshold?: number;
         };
         SseEmitter: {
             /** Format: int64 */
@@ -1312,6 +1572,8 @@ export interface components {
         SystemSettingsDto: {
             activeOcrProviders?: string[];
             activeProviders?: string[];
+            /** @description Cleanup reconstruction mode: auto, telea, aot or off (null inherits). */
+            cleanupMode?: string;
             disableLocalLlm?: boolean;
             disableLocalOcr?: boolean;
             localOcrModel?: string;
@@ -1330,14 +1592,34 @@ export interface components {
             qaVlmModel?: string;
             qaVlmModelList?: string[];
             routingStrategy?: string;
-            /** Format: int32 */
-            textBoxPaddingPx?: number;
+            /**
+             * Format: int32
+             * @description Padding never exceeds this many px (0 turns padding off).
+             */
+            textBoxPaddingMaxPx?: number;
+            /**
+             * Format: int32
+             * @description Padding on each edge as a percentage of the box's shorter side (0 turns padding off).
+             */
+            textBoxPaddingPercent?: number;
             /** Format: int32 */
             textBoxSafetyPercent?: number;
             tlLlmModelList?: string[];
             tlModel?: string;
             tlProvider?: string;
             useFallbackModels?: boolean;
+            /**
+             * Format: double
+             * @description Global OCR grouping threshold, in characters of white space (0.05-3; default 0.35).
+             */
+            ocrMergeThreshold?: number;
+            /**
+             * Format: int32
+             * @description Padding is never less than this many px (0 = no floor; at most a quarter of the box).
+             */
+            textBoxPaddingMinPx?: number;
+            /** @description Model IDs typed in rather than picked from the catalog. Read-only on PUT /api/settings; replaced via PUT /api/settings/custom-models. */
+            customModels?: components["schemas"]["CustomModel"][];
         };
         UploadResponse: {
             /** Format: uuid */
@@ -1345,6 +1627,12 @@ export interface components {
             /** Format: uuid */
             pageId?: string;
             status?: string;
+        };
+        CustomModel: {
+            provider: string;
+            /** @description Catalog task key: ocr, tl, qaLLM or qaVLM. */
+            task: string;
+            id: string;
         };
     };
     responses: never;
@@ -1901,10 +2189,103 @@ export interface operations {
             };
         };
     };
+    cleanupCallback: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CleanupCallbackDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    manualCleanupCallback: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JsonNode"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
     layoutCallback: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1925,12 +2306,30 @@ export interface operations {
                     "*/*": Record<string, never>;
                 };
             };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     ocrCallback: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1949,12 +2348,30 @@ export interface operations {
                     "*/*": Record<string, never>;
                 };
             };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     panelCallback: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1973,12 +2390,30 @@ export interface operations {
                     "*/*": Record<string, never>;
                 };
             };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     qaCallback: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1997,6 +2432,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
                 };
             };
         };
@@ -2004,7 +2448,16 @@ export interface operations {
     qaReOcrCallback: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2025,12 +2478,30 @@ export interface operations {
                     "*/*": Record<string, never>;
                 };
             };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     renderCallback: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2051,12 +2522,30 @@ export interface operations {
                     "*/*": Record<string, never>;
                 };
             };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     translationCallback: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2075,6 +2564,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
                 };
             };
         };
@@ -2104,7 +2602,16 @@ export interface operations {
     updateJobStatus: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Job id of the attempt making this call. Must match the body's jobId. */
+                "X-Job-Id": string;
+                /** @description Attempt number of the job as the backend dispatched it. */
+                "X-Job-Attempt": number;
+                /** @description Page source/geometry generation the attempt was dispatched for. */
+                "X-Input-Generation": number;
+                /** @description Lease token issued with this attempt. A superseded token is answered 409. */
+                "X-Lease-Token": string;
+            };
             path: {
                 jobId: string;
             };
@@ -2125,6 +2632,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+            /** @description Not the current job attempt: superseded, already applied, or an illegal state transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
                 };
             };
         };
@@ -2569,6 +3085,138 @@ export interface operations {
             };
         };
     };
+    reviewOcrRegion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    action: "reject" | "accept" | "mask" | "delete";
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        action?: string;
+                        /** Format: uuid */
+                        pageId?: string;
+                        /** Format: uuid */
+                        regionId?: string;
+                    };
+                };
+            };
+            /** @description Unknown action */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Region not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The plain mask could not be built (no page size, or the box lies off the page) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getPageScene: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current immutable page scene */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageSceneDocument"];
+                };
+            };
+            /** @description Page scene not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    putPageScene: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageSceneDocument"];
+            };
+        };
+        responses: {
+            /** @description Page scene saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageSceneDocument"];
+                };
+            };
+            /** @description Invalid scene */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A different scene already exists for this revision */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getPage: {
         parameters: {
             query?: never;
@@ -2691,9 +3339,79 @@ export interface operations {
             };
         };
     };
-    getPageRenderedFile: {
+    renderPageNow: {
         parameters: {
             query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current revision has its render */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int32 */
+                        revision: number;
+                        /** @enum {string} */
+                        status: "succeeded";
+                    };
+                };
+            };
+            /** @description Viewers cannot render */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such page */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The render failed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        /** @enum {string} */
+                        status: "failed";
+                    };
+                };
+            };
+            /** @description The renderer could not take it now; the render is back on the queue */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        /** @enum {string} */
+                        status: "pending";
+                    };
+                };
+            };
+        };
+    };
+    getPageRenderedFile: {
+        parameters: {
+            query?: {
+                revision?: number;
+                sceneSha256?: string;
+            };
             header?: never;
             path: {
                 pageId: string;
@@ -2710,6 +3428,171 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["StreamingResponseBody"];
                 };
+            };
+            /** @description Current render is pending or failed, or the requested revision is superseded */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int32 */
+                        revision: number;
+                        /** @enum {string} */
+                        status: "pending" | "failed" | "superseded";
+                    };
+                };
+            };
+        };
+    };
+    getPageSceneAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+                sha256: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description Not signed in */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such page, or the page has no asset with this sha256 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mergeOcrRegions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Preview only: return the reading order and joined text, change nothing. */
+                    dryRun?: boolean;
+                    regionIds: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        dryRun?: boolean;
+                        merged?: number;
+                        /** @description Dry run: the region ids in the order they are read. */
+                        order?: string[];
+                        /** Format: uuid */
+                        pageId?: string;
+                        queued?: boolean;
+                        /** Format: uuid */
+                        regionId?: string;
+                        text?: string;
+                    };
+                };
+            };
+            /** @description Fewer than two regions named */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A region is not on this page */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    queueManualCleanup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Where the mask sits, in page pixels. Must lie inside the page. */
+                    bounds: {
+                        height: number;
+                        width: number;
+                        x: number;
+                        y: number;
+                    };
+                    /** @description #rrggbb; required when method is flat. */
+                    fillColor?: string;
+                    /** @description Base64 PNG, exactly bounds.width x bounds.height, whose alpha marks the area to repaint. A data:image/png;base64, prefix is accepted. */
+                    mask: string;
+                    /** @enum {string} */
+                    method: "auto" | "aot" | "telea" | "flat" | "restore";
+                };
+            };
+        };
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        maskSha256?: string;
+                        /** Format: uuid */
+                        pageId?: string;
+                        queued?: boolean;
+                    };
+                };
+            };
+            /** @description Unknown method, missing fill colour, or a mask that is not a PNG, does not match its bounds, marks nothing or lies outside the page */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such page */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -3031,7 +3914,9 @@ export interface operations {
                 qaVlmModel?: string;
                 qaMode?: string;
                 routingStrategy?: string;
+                cleanupMode?: string;
                 useFallbackModels?: boolean;
+                ocrMergeThreshold?: number;
             };
             header?: never;
             path: {
@@ -3121,6 +4006,30 @@ export interface operations {
                     "*/*": {
                         [key: string]: Record<string, never>;
                     };
+                };
+            };
+        };
+    };
+    putCustomModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomModel"][];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CustomModel"][];
                 };
             };
         };

@@ -64,6 +64,12 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   const [routingStrategy, setRoutingStrategy] = useState(
     editingSeries?.routingStrategy || "",
   );
+  const [cleanupMode, setCleanupMode] = useState(
+    editingSeries?.cleanupMode || "",
+  );
+  const [ocrMergeThreshold, setOcrMergeThreshold] = useState<number | null>(
+    editingSeries?.ocrMergeThreshold ?? null,
+  );
   const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
     editingSeries?.useFallbackModels ?? null,
   );
@@ -94,6 +100,8 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
       setQaVlmModel(editingSeries.qaVlmModel || "");
       setQaMode(editingSeries.qaMode || "");
       setRoutingStrategy(editingSeries.routingStrategy || "");
+      setCleanupMode(editingSeries.cleanupMode || "");
+      setOcrMergeThreshold(editingSeries.ocrMergeThreshold ?? null);
       setUseFallbackModels(editingSeries.useFallbackModels ?? null);
     } else {
       setTitle("");
@@ -109,6 +117,8 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
       setQaVlmModel("");
       setQaMode("");
       setRoutingStrategy("");
+      setCleanupMode("");
+      setOcrMergeThreshold(null);
       setUseFallbackModels(null);
     }
   } else if (!open && prevOpen) {
@@ -138,6 +148,8 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
     qaVlmModel,
     qaMode,
     routingStrategy,
+    cleanupMode,
+    ocrMergeThreshold,
     useFallbackModels,
   };
 
@@ -153,6 +165,8 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
     qaVlmModel: setQaVlmModel,
     qaMode: setQaMode,
     routingStrategy: setRoutingStrategy,
+    cleanupMode: setCleanupMode,
+    ocrMergeThreshold: setOcrMergeThreshold,
     useFallbackModels: setUseFallbackModels,
   };
 
@@ -190,6 +204,8 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
           qaVlmModel: qaVlmModel || null,
           qaMode: qaMode || null,
           routingStrategy: routingStrategy || null,
+          cleanupMode: cleanupMode || null,
+          ocrMergeThreshold,
           useFallbackModels: useFallbackModels,
         }),
       });
@@ -285,6 +301,7 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
         </FormControl>
 
         <ModelOverridesAccordion
+          token={user.token}
           expanded={showOverrides}
           onToggle={() => setShowOverrides(!showOverrides)}
           value={overridesValue}
@@ -300,6 +317,8 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
             qaLlmModel: settings?.qaLlmModel,
             qaVlmModel: settings?.qaVlmModel,
             routingStrategy: settings?.routingStrategy,
+            cleanupMode: settings?.cleanupMode,
+            ocrMergeThreshold: settings?.ocrMergeThreshold,
             useFallbackModels: settings?.useFallbackModels,
           }}
         />

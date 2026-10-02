@@ -170,7 +170,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo(
               onChange={props.setShowPanels}
             />
             <ToggleRow
-              label="OCR Boxes"
+              label="Show debug"
               checked={props.showOcr}
               onChange={props.setShowOcr}
             />

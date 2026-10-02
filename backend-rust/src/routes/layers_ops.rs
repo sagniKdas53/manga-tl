@@ -9,7 +9,8 @@ use uuid::Uuid;
 use crate::auth::AuthUser;
 use crate::error;
 use crate::models::LayerElement;
-use crate::routes::layers::{LayerElementInput, deny_viewer, touch_page};
+use crate::page_freshness::advance_page_revision_by_hand;
+use crate::routes::layers::{LayerElementInput, deny_viewer};
 use crate::state::AppState;
 
 /// DELETE /api/layers/{id}
@@ -33,6 +34,11 @@ pub async fn delete_layer(
             return error::internal_error("/api/layers/{id}");
         }
     };
+    let page_id: Option<Uuid> = sqlx::query_scalar("SELECT page_id FROM layers WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .unwrap_or(None);
     if let Err(err) = crate::jobs::coordinator::sync_superseded_elements(&mut tx, id, false).await {
         tracing::error!(
             "Could not restore what overlay {id} superseded, refusing to delete: {err}"
@@ -51,11 +57,16 @@ pub async fn delete_layer(
         .await;
     match result {
         Ok(res) if res.rows_affected() > 0 => {
+            let page_id = page_id.expect("deleted layer must have an owning page");
+            if let Err(err) = advance_page_revision_by_hand(&mut tx, page_id).await {
+                tracing::error!("Could not advance page revision for deleted layer {id}: {err}");
+                let _ = tx.rollback().await;
+                return error::internal_error("/api/layers/{id}");
+            }
             if let Err(err) = tx.commit().await {
                 tracing::error!("Could not commit deletion of layer {id}: {err}");
                 return error::internal_error("/api/layers/{id}");
             }
-            touch_page(&state.pool, id).await;
             StatusCode::OK.into_response()
         }
         _ => {
@@ -91,30 +102,29 @@ pub async fn update_layer(
         }
     };
 
-    let updated = sqlx::query(
+    let page_id = sqlx::query_scalar(
         "UPDATE layers SET \
            z_order = COALESCE($2, z_order), visible = COALESCE($3, visible) \
-         WHERE id = $1 RETURNING id, z_order, visible",
+         WHERE id = $1 RETURNING page_id",
     )
     .bind(id)
     .bind(z_order)
     .bind(visible)
-    .execute(&mut *tx)
+    .fetch_optional(&mut *tx)
     .await;
 
-    let updated = match updated {
-        Ok(updated) => updated,
+    let page_id = match page_id {
+        Ok(Some(page_id)) => page_id,
+        Ok(None) => {
+            let _ = tx.rollback().await;
+            return StatusCode::NOT_FOUND.into_response();
+        }
         Err(err) => {
             tracing::error!("Could not update layer {id}: {err}");
             let _ = tx.rollback().await;
             return error::internal_error("/api/layers/{id}");
         }
     };
-
-    if updated.rows_affected() == 0 {
-        let _ = tx.rollback().await;
-        return StatusCode::NOT_FOUND.into_response();
-    }
     // Toggling a redo overlay off restores the reading it replaced, and toggling it back on hides
     // that reading again — so the layer switch actually compares the two, which is what it looks
     // like it should do. The flag and the restore share the transaction: flipping `visible` while
@@ -129,11 +139,15 @@ pub async fn update_layer(
         return error::internal_error("/api/layers/{id}");
     }
 
+    if let Err(err) = advance_page_revision_by_hand(&mut tx, page_id).await {
+        tracing::error!("Could not advance page revision for layer {id}: {err}");
+        let _ = tx.rollback().await;
+        return error::internal_error("/api/layers/{id}");
+    }
     if let Err(err) = tx.commit().await {
         tracing::error!("Could not commit the update to layer {id}: {err}");
         return error::internal_error("/api/layers/{id}");
     }
-    touch_page(&state.pool, id).await;
     StatusCode::OK.into_response()
 }
 
@@ -152,21 +166,71 @@ pub async fn create_layer_element(
         Ok(json) => json,
         Err(_) => return error::unreadable_body(instance),
     };
-    let layer_exists: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM layers WHERE id = $1)")
+    let opacity = match dto.checked_opacity() {
+        Ok(opacity) => opacity,
+        Err(message) => return (StatusCode::BAD_REQUEST, message).into_response(),
+    };
+    let layer: Option<(Uuid, String)> =
+        sqlx::query_as("SELECT page_id, type FROM layers WHERE id = $1")
             .bind(layer_id)
-            .fetch_one(&state.pool)
+            .fetch_optional(&state.pool)
             .await
-            .unwrap_or(false);
-    if !layer_exists {
+            .unwrap_or(None);
+    let Some((layer_page_id, layer_type)) = layer else {
         return StatusCode::NOT_FOUND.into_response();
-    }
+    };
+    // Tracker R7: a patch may only name assets this page already holds, so an element can never
+    // make the renderer (or the asset route) reach into another page's storage.
+    let cleanup_ref = match dto.cleanupRef.as_ref() {
+        None => None,
+        Some(value) => {
+            if !layer_type.eq_ignore_ascii_case(crate::inpainting::LAYER_TYPE) {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    "cleanupRef is only allowed on an inpainting layer",
+                )
+                    .into_response();
+            }
+            let Some(reference) = crate::inpainting::CleanupRef::parse(Some(value)) else {
+                return (StatusCode::BAD_REQUEST, "cleanupRef is malformed").into_response();
+            };
+            for sha in [&reference.patch_sha256, &reference.mask_sha256] {
+                let path = crate::page_scene_builder::scene_asset_path(layer_page_id, sha);
+                if !state.storage.exists(&path).await {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        "cleanupRef names an asset this page does not have",
+                    )
+                        .into_response();
+                }
+            }
+            Some(serde_json::to_value(reference).expect("CleanupRef serializes"))
+        }
+    };
 
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(err) => {
+            tracing::error!(
+                "Could not open a transaction for layer element create {layer_id}: {err}"
+            );
+            return error::internal_error(instance);
+        }
+    };
+    let page_id: Option<Uuid> = sqlx::query_scalar("SELECT page_id FROM layers WHERE id = $1")
+        .bind(layer_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .unwrap_or(None);
+    let Some(page_id) = page_id else {
+        let _ = tx.rollback().await;
+        return StatusCode::NOT_FOUND.into_response();
+    };
     let element: LayerElement = sqlx::query_as(
         "INSERT INTO layer_elements (id, auto_size, background_color, box_shape, font, font_style, \
            font_weight, is_manually_edited, mask_polygon, max_height, max_width, overflow, rotation, \
-           size, text, text_color, visible, word_wrap, x, y, layer_id, region_id) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, $9, $10, false, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) \
+           size, text, text_color, visible, word_wrap, x, y, layer_id, region_id, cleanup_ref, opacity) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, $9, $10, false, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) \
          RETURNING *",
     )
     .bind(Uuid::new_v4())
@@ -189,11 +253,21 @@ pub async fn create_layer_element(
     .bind(dto.y.unwrap_or(100.0))
     .bind(layer_id)
     .bind(dto.regionId)
-    .fetch_one(&state.pool)
+    .bind(cleanup_ref)
+    .bind(opacity)
+    .fetch_one(&mut *tx)
     .await
     .expect("element insert");
 
-    touch_page(&state.pool, layer_id).await;
+    if let Err(err) = advance_page_revision_by_hand(&mut tx, page_id).await {
+        tracing::error!("Could not advance page revision for layer {layer_id}: {err}");
+        let _ = tx.rollback().await;
+        return error::internal_error(instance);
+    }
+    if let Err(err) = tx.commit().await {
+        tracing::error!("Could not commit layer element create {layer_id}: {err}");
+        return error::internal_error(instance);
+    }
     Json(element).into_response()
 }
 
@@ -206,22 +280,44 @@ pub async fn delete_layer_element(
     if let Some(denied) = deny_viewer(&user, "/api/layer-elements/{id}") {
         return denied;
     }
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(err) => {
+            tracing::error!("Could not open a transaction to delete layer element {id}: {err}");
+            return error::internal_error("/api/layer-elements/{id}");
+        }
+    };
+    let page_id: Option<Uuid> = sqlx::query_scalar(
+        "SELECT l.page_id FROM layers l JOIN layer_elements e ON e.layer_id = l.id WHERE e.id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .unwrap_or(None);
+    let Some(page_id) = page_id else {
+        let _ = tx.rollback().await;
+        return StatusCode::NOT_FOUND.into_response();
+    };
     let result = sqlx::query("DELETE FROM layer_elements WHERE id = $1")
         .bind(id)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await;
     match result {
         Ok(res) if res.rows_affected() > 0 => {
-            sqlx::query(
-                "UPDATE pages SET last_edited_at = now() WHERE id IN \
-                   (SELECT page_id FROM layers l JOIN layer_elements e ON e.layer_id = l.id WHERE e.id = $1)",
-            )
-            .bind(id)
-            .execute(&state.pool)
-            .await
-            .ok();
+            if let Err(err) = advance_page_revision_by_hand(&mut tx, page_id).await {
+                tracing::error!("Could not advance page revision for layer element {id}: {err}");
+                let _ = tx.rollback().await;
+                return error::internal_error("/api/layer-elements/{id}");
+            }
+            if let Err(err) = tx.commit().await {
+                tracing::error!("Could not commit deletion of layer element {id}: {err}");
+                return error::internal_error("/api/layer-elements/{id}");
+            }
             StatusCode::OK.into_response()
         }
-        _ => StatusCode::NOT_FOUND.into_response(),
+        _ => {
+            let _ = tx.rollback().await;
+            StatusCode::NOT_FOUND.into_response()
+        }
     }
 }

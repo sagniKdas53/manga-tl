@@ -205,6 +205,8 @@ describe("Dashboard Component", () => {
             qaVlmModel: null,
             qaMode: null,
             routingStrategy: null,
+            cleanupMode: null,
+            ocrMergeThreshold: null,
             useFallbackModels: null,
           }),
         });
@@ -273,6 +275,8 @@ describe("Dashboard Component", () => {
           qaVlmModel: null,
           qaMode: null,
           routingStrategy: null,
+          cleanupMode: null,
+          ocrMergeThreshold: null,
           useFallbackModels: null,
         }),
       });
@@ -697,6 +701,8 @@ describe("Dashboard Component", () => {
             qaVlmModel: null,
             qaMode: null,
             routingStrategy: null,
+            cleanupMode: null,
+            ocrMergeThreshold: null,
             useFallbackModels: null,
           }),
         });

@@ -1,0 +1,302 @@
+import { describe, expect, it } from "vitest";
+import {
+  renderPageSceneSvg,
+  resolvePageScene,
+  type PageSceneContentInput,
+} from "@manga-library/page-scene";
+
+const measureText = (font: string, text: string) => {
+  const fontSize = Number(/(\d+)px/.exec(font)?.[1] ?? 16);
+  return text.length * fontSize * 0.5;
+};
+
+function sceneInput(): PageSceneContentInput {
+  return {
+    source: { href: "source.png", width: 100, height: 100 },
+    cleanupAssets: [
+      {
+        cleanupId: "cleanup-dialogue",
+        href: "cleanup.png",
+        x: 10,
+        y: 10,
+        width: 40,
+        height: 20,
+        zIndex: 1,
+        visible: true,
+      },
+    ],
+    textObjects: [
+      {
+        objectId: "rotated-dialogue",
+        text: "Hello world",
+        transform: { x: 10, y: 10, width: 40, height: 20, rotationDegrees: 15 },
+        writingMode: "horizontal-tb",
+        alignment: "center",
+        style: {
+          fontFamily: "Test Font",
+          fill: "#111111",
+          stroke: "#ffffff",
+          weight: 700,
+          padding: 2,
+        },
+        visible: true,
+        zIndex: 2,
+      },
+      {
+        objectId: "visible-manual-blank",
+        text: "",
+        transform: { x: 70, y: 70, width: 10, height: 10, rotationDegrees: 0 },
+        writingMode: "horizontal-tb",
+        alignment: "start",
+        style: {
+          fontFamily: "Test Font",
+          fill: "#000000",
+          stroke: "",
+          weight: 400,
+          padding: 0,
+        },
+        visible: true,
+        zIndex: 3,
+      },
+      {
+        objectId: "off-page",
+        text: "Overflow",
+        transform: { x: 88, y: 88, width: 20, height: 20, rotationDegrees: 45 },
+        writingMode: "horizontal-tb",
+        alignment: "end",
+        style: {
+          fontFamily: "Test Font",
+          fill: "#000000",
+          stroke: "",
+          weight: 400,
+          padding: 0,
+        },
+        visible: true,
+        zIndex: 4,
+      },
+    ],
+  };
+}
+
+describe("page-scene content", () => {
+  it("resolves source-space lines and reports blank and clipping diagnostics", () => {
+    const scene = resolvePageScene(sceneInput(), measureText);
+
+    expect(
+      scene.objects.find((object) => object.objectId === "rotated-dialogue")
+        ?.lineBoxes,
+    ).not.toHaveLength(0);
+    expect(
+      scene.objects.find((object) => object.objectId === "visible-manual-blank")
+        ?.lineBoxes,
+    ).toEqual([]);
+    expect(scene.diagnostics).toEqual(
+      expect.arrayContaining([
+        { code: "empty-manual-text", objectId: "visible-manual-blank" },
+        { code: "object-clips-page", objectId: "off-page" },
+      ]),
+    );
+  });
+
+  it("renders cleanup before styled glyphs without editor or OCR overlays", () => {
+    const scene = resolvePageScene(sceneInput(), measureText);
+    const document = new DOMParser().parseFromString(
+      renderPageSceneSvg(scene),
+      "image/svg+xml",
+    );
+    const cleanup = document.querySelector('[data-scene-layer="cleanup"]');
+    const glyphs = document.querySelector('[data-scene-layer="glyphs"]');
+    const text = document.querySelector(
+      '[data-text-object-id="rotated-dialogue"] text',
+    );
+
+    expect(cleanup?.compareDocumentPosition(glyphs!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(
+      document
+        .querySelector('[data-cleanup-id="cleanup-dialogue"]')
+        ?.getAttribute("href"),
+    ).toBe("cleanup.png");
+    expect(text?.getAttribute("stroke")).toBe("#ffffff");
+    // Tracker R2 stroke rule (Torii): every line's halo is painted before any line's fill, with
+    // round joins and a width of 15-25 % of the resolved font px -- not 4 %.
+    const dialogue = document.querySelector(
+      '[data-text-object-id="rotated-dialogue"]',
+    );
+    const passes = [...(dialogue?.children ?? [])].map((pass) =>
+      pass.getAttribute("data-text-pass"),
+    );
+    expect(passes).toEqual(["stroke", "fill"]);
+    const strokeText = dialogue?.querySelector(
+      '[data-text-pass="stroke"] text',
+    );
+    const fillText = dialogue?.querySelector('[data-text-pass="fill"] text');
+    expect(strokeText?.getAttribute("fill")).toBe("none");
+    expect(strokeText?.getAttribute("stroke-linejoin")).toBe("round");
+    const fontSize = Number(strokeText?.getAttribute("font-size"));
+    const strokeWidth = Number(strokeText?.getAttribute("stroke-width"));
+    expect(strokeWidth).toBeGreaterThanOrEqual(fontSize * 0.15);
+    expect(strokeWidth).toBeLessThanOrEqual(fontSize * 0.25);
+    expect(fillText?.getAttribute("stroke")).toBe("none");
+    expect(fillText?.getAttribute("fill")).not.toBe("none");
+    // An object with no stroke colour gets no stroke pass at all.
+    const plain = document.querySelector(
+      '[data-text-object-id="off-page"] [data-text-pass="stroke"]',
+    );
+    expect(plain?.children.length ?? 0).toBe(0);
+    expect(
+      document
+        .querySelector('[data-text-object-id="rotated-dialogue"]')
+        ?.getAttribute("transform"),
+    ).toBe("rotate(15 30 20)");
+    expect(document.querySelector('[data-scene-layer="ocr"]')).toBeNull();
+    expect(document.querySelector("[data-editor-handle]")).toBeNull();
+  });
+});
+
+describe("cleanup patches as the editor leaves them (tracker R7)", () => {
+  const svgFor = (assets: PageSceneContentInput["cleanupAssets"]) =>
+    new DOMParser().parseFromString(
+      renderPageSceneSvg(
+        resolvePageScene(
+          { ...sceneInput(), cleanupAssets: assets },
+          measureText,
+        ),
+      ),
+      "image/svg+xml",
+    );
+  const base = sceneInput().cleanupAssets[0];
+
+  it("stretches a resized patch to its rect and leaves an opaque one without an opacity", () => {
+    const image = svgFor([{ ...base, width: 80, height: 10 }]).querySelector(
+      '[data-cleanup-id="cleanup-dialogue"]',
+    );
+    expect(image?.getAttribute("preserveAspectRatio")).toBe("none");
+    expect(image?.getAttribute("width")).toBe("80");
+    expect(image?.getAttribute("height")).toBe("10");
+    expect(image?.hasAttribute("opacity")).toBe(false);
+  });
+
+  it("carries a faded patch's opacity and paints overlapping patches in zIndex order", () => {
+    const document = svgFor([
+      { ...base, cleanupId: "upper", zIndex: 2, opacity: 0.4 },
+      { ...base, cleanupId: "lower", zIndex: 1, opacity: 1 },
+      { ...base, cleanupId: "hidden", zIndex: 3, visible: false },
+    ]);
+    const painted = [...document.querySelectorAll("[data-cleanup-id]")].map(
+      (image) => image.getAttribute("data-cleanup-id"),
+    );
+    expect(painted).toEqual(["lower", "upper"]);
+    expect(
+      document
+        .querySelector('[data-cleanup-id="upper"]')
+        ?.getAttribute("opacity"),
+    ).toBe("0.4");
+  });
+});
+
+describe("contract rule 8: the editor's typography", () => {
+  // Page 30 (2026-10-02): the user set 152 px with auto-size off; the export auto-fitted to 72.
+  const page30 = (style: Record<string, unknown>): PageSceneContentInput => ({
+    source: { href: "source.png", width: 4961, height: 7016 },
+    cleanupAssets: [],
+    textObjects: [
+      {
+        objectId: "text-page-30",
+        text: "Which one do\n you think it'll \nbe today?",
+        transform: {
+          x: 3559,
+          y: 538,
+          width: 1004,
+          height: 1402,
+          rotationDegrees: 0,
+        },
+        writingMode: "horizontal-tb",
+        alignment: "center",
+        style: {
+          fontFamily: "Test Font",
+          fill: "#000000",
+          stroke: "#e3e3e3",
+          weight: 700,
+          padding: 4,
+          ...style,
+        },
+        visible: true,
+        zIndex: 1,
+      },
+    ],
+  });
+
+  it("draws at the user's fixed size, not the auto-fit one", () => {
+    const fitted = resolvePageScene(page30({}), measureText);
+    const fixed = resolvePageScene(page30({ fontSize: 152 }), measureText);
+    expect(fitted.objects[0].fontSize).toBeLessThanOrEqual(72);
+    expect(fixed.objects[0].fontSize).toBe(152);
+    expect(fixed.objects[0].lineBoxes.map((line) => line.height)).toEqual(
+      fixed.objects[0].lineBoxes.map(() => 152 * 1.2),
+    );
+    expect(renderPageSceneSvg(fixed)).toContain('font-size="152"');
+  });
+
+  it("reports overflow when the fixed size cannot fit the box", () => {
+    const scene = resolvePageScene(page30({ fontSize: 900 }), measureText);
+    expect(scene.objects[0].fontSize).toBe(900);
+    expect(scene.diagnostics).toContainEqual({
+      code: "text-overflow",
+      objectId: "text-page-30",
+    });
+  });
+
+  it("sets italic on the glyphs and in the measuring font", () => {
+    const fonts: string[] = [];
+    const scene = resolvePageScene(
+      page30({ fontStyle: "italic" }),
+      (font, text) => {
+        fonts.push(font);
+        return measureText(font, text);
+      },
+    );
+    expect(fonts.every((font) => font.includes("italic"))).toBe(true);
+    expect(renderPageSceneSvg(scene)).toContain('font-style="italic"');
+  });
+
+  it("wraps an elliptical box inside its ellipse, which narrows the lines", () => {
+    const text = "word ".repeat(40).trim();
+    const box = { x: 0, y: 0, width: 400, height: 400, rotationDegrees: 0 };
+    const input = (shape?: "elliptical"): PageSceneContentInput => ({
+      source: { href: "s.png", width: 500, height: 500 },
+      cleanupAssets: [],
+      textObjects: [
+        {
+          ...page30({}).textObjects[0],
+          text,
+          transform: box,
+          style: {
+            ...page30({}).textObjects[0].style,
+            ...(shape ? { shape } : {}),
+          },
+        },
+      ],
+    });
+    const widest = (scene: ReturnType<typeof resolvePageScene>) =>
+      Math.max(...scene.objects[0].lineBoxes.map((line) => line.width));
+    const rectangle = resolvePageScene(input(), measureText);
+    const ellipse = resolvePageScene(input("elliptical"), measureText);
+    expect(ellipse.objects[0].lineBoxes).not.toEqual(
+      rectangle.objects[0].lineBoxes,
+    );
+    expect(widest(ellipse) / ellipse.objects[0].fontSize).toBeLessThanOrEqual(
+      widest(rectangle) / rectangle.objects[0].fontSize,
+    );
+  });
+
+  it("leaves a scene without the fields exactly as before", () => {
+    const before = resolvePageScene(page30({}), measureText);
+    const explicitDefaults = resolvePageScene(
+      page30({ fontStyle: "normal", shape: "rectangular" }),
+      measureText,
+    );
+    expect(explicitDefaults.objects).toEqual(before.objects);
+  });
+});

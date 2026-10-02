@@ -84,6 +84,25 @@ pub struct LayerElementInput {
     pub maskPolygon: Option<serde_json::Value>,
     #[serde(default)]
     pub regionId: Option<Uuid>,
+    /// Tracker R7: an Inpainting element's opacity, in [0, 1].
+    #[serde(default)]
+    pub opacity: Option<f64>,
+    /// Tracker R7: what an Inpainting element draws. Accepted only when creating an element on an
+    /// Inpainting layer (undoing a delete, importing a project); an update never changes it.
+    #[serde(default)]
+    pub cleanupRef: Option<serde_json::Value>,
+}
+
+impl LayerElementInput {
+    /// The opacity to store, or an error message for a value outside [0, 1].
+    pub fn checked_opacity(&self) -> Result<Option<f64>, &'static str> {
+        match self.opacity {
+            Some(value) if !(value.is_finite() && (0.0..=1.0).contains(&value)) => {
+                Err("opacity must be a number between 0 and 1")
+            }
+            other => Ok(other),
+        }
+    }
 }
 
 /// captureStateMap port.
@@ -97,18 +116,12 @@ fn capture_state(el: &LayerElement) -> serde_json::Value {
         "fontWeight": el.font_weight, "fontStyle": el.font_style, "boxShape": el.box_shape,
         "maskPolygon": el.mask_polygon.as_ref().map(|v| serde_json::Value::String(v.to_string())),
         "regionId": el.region_id.map(|r| r.to_string()),
+        "opacity": el.opacity,
     })
 }
 
-pub(crate) async fn touch_page(pool: &sqlx::PgPool, layer_id: Uuid) {
-    sqlx::query(
-        "UPDATE pages SET last_edited_at = now() WHERE id = (SELECT page_id FROM layers WHERE id = $1)",
-    )
-    .bind(layer_id)
-    .execute(pool)
-    .await
-    .expect("page touch");
-}
+// Page output freshness is advanced by the caller-owned mutation transaction via
+// `page_freshness::advance_page_revision`; never post-commit from this module.
 
 /// PUT /api/layer-elements/{id} — partial update + edit history when state changed.
 pub async fn update_layer_element(
@@ -125,6 +138,10 @@ pub async fn update_layer_element(
         Ok(json) => json,
         Err(_) => return error::unreadable_body(instance),
     };
+    let opacity = match dto.checked_opacity() {
+        Ok(opacity) => opacity,
+        Err(message) => return (StatusCode::BAD_REQUEST, message).into_response(),
+    };
 
     let Some(element) =
         sqlx::query_as::<_, LayerElement>("SELECT * FROM layer_elements WHERE id = $1")
@@ -138,6 +155,7 @@ pub async fn update_layer_element(
 
     let prev_json = serde_json::to_value(capture_state(&element)).expect("prev json");
 
+    let mut tx = state.pool.begin().await.expect("layer element transaction");
     let updated: LayerElement = sqlx::query_as(
         "UPDATE layer_elements SET \
            text = COALESCE($2, text), font = COALESCE($3, font), size = COALESCE($4, size), \
@@ -150,6 +168,7 @@ pub async fn update_layer_element(
            font_style = COALESCE($17, font_style), box_shape = COALESCE($18, box_shape), \
            mask_polygon = COALESCE($19, mask_polygon), \
            region_id = CASE WHEN $20::uuid IS NULL THEN region_id ELSE $20 END, \
+           opacity = COALESCE($21, opacity), \
            is_manually_edited = true, edited_at = now() \
          WHERE id = $1 RETURNING *",
     )
@@ -177,7 +196,8 @@ pub async fn update_layer_element(
             .and_then(crate::models::normalize_mask_polygon),
     )
     .bind(dto.regionId)
-    .fetch_one(&state.pool)
+    .bind(opacity)
+    .fetch_one(&mut *tx)
     .await
     .expect("layer element update");
 
@@ -192,7 +212,7 @@ pub async fn update_layer_element(
         .bind(&new_json)
         .bind(user.id)
         .bind(id)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await
         .expect("edit history insert");
 
@@ -205,11 +225,19 @@ pub async fn update_layer_element(
              WHERE id = (SELECT layer_id FROM layer_elements WHERE id = $1)",
         )
         .bind(id)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await
         .expect("layer metadata bump");
     }
-    touch_page(&state.pool, id).await;
+    let page_id: Uuid = sqlx::query_scalar("SELECT page_id FROM layers WHERE id = $1")
+        .bind(updated.layer_id)
+        .fetch_one(&mut *tx)
+        .await
+        .expect("element owning page");
+    crate::page_freshness::advance_page_revision_by_hand(&mut tx, page_id)
+        .await
+        .expect("page revision advance");
+    tx.commit().await.expect("layer element transaction commit");
 
     Json(updated).into_response()
 }
@@ -259,7 +287,11 @@ pub(crate) fn z_order_of(value: Option<&serde_json::Value>) -> Option<i32> {
     })
 }
 
-async fn insert_layer(pool: &sqlx::PgPool, page_id: Uuid, payload: &serde_json::Value) -> Layer {
+async fn insert_layer(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    page_id: Uuid,
+    payload: &serde_json::Value,
+) -> Layer {
     let layer_type = payload
         .get("type")
         .and_then(|v| v.as_str())
@@ -283,7 +315,7 @@ async fn insert_layer(pool: &sqlx::PgPool, page_id: Uuid, payload: &serde_json::
     .bind(visible)
     .bind(z_order)
     .bind(page_id)
-    .fetch_one(pool)
+    .fetch_one(&mut **tx)
     .await
     .expect("layer insert")
 }
@@ -311,8 +343,12 @@ pub async fn create_page_layer(
         return error::not_found(&format!("Page not found: {page_id}"), instance);
     }
 
-    let layer = insert_layer(&state.pool, page_id, &payload).await;
-    touch_page(&state.pool, layer.id).await;
+    let mut tx = state.pool.begin().await.expect("page layer transaction");
+    let layer = insert_layer(&mut tx, page_id, &payload).await;
+    crate::page_freshness::advance_page_revision_by_hand(&mut tx, page_id)
+        .await
+        .expect("page revision advance");
+    tx.commit().await.expect("page layer transaction commit");
     Json(layer).into_response()
 }
 
@@ -340,8 +376,12 @@ pub async fn create_image_layer(
         return error::not_found(&format!("No page found for image: {image_id}"), instance);
     };
 
-    let layer = insert_layer(&state.pool, page_id, &payload).await;
-    touch_page(&state.pool, layer.id).await;
+    let mut tx = state.pool.begin().await.expect("image layer transaction");
+    let layer = insert_layer(&mut tx, page_id, &payload).await;
+    crate::page_freshness::advance_page_revision_by_hand(&mut tx, page_id)
+        .await
+        .expect("page revision advance");
+    tx.commit().await.expect("image layer transaction commit");
     Json(layer).into_response()
 }
 

@@ -18,6 +18,12 @@ backend-rust/target
 !database/
 !scripts/diff_routes.py
 
+# --- Shared browser renderer ---
+!services/page-renderer/
+services/page-renderer/node_modules
+!packages/page-scene/
+packages/page-scene/dist
+
 # Never enter a build context, even via an allowed directory:
 **/*.log
 **/logs/

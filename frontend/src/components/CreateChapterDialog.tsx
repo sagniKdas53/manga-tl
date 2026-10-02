@@ -68,6 +68,12 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
   const [routingStrategy, setRoutingStrategy] = useState(
     editingChapter?.routingStrategy || "",
   );
+  const [cleanupMode, setCleanupMode] = useState(
+    editingChapter?.cleanupMode || "",
+  );
+  const [ocrMergeThreshold, setOcrMergeThreshold] = useState<number | null>(
+    editingChapter?.ocrMergeThreshold ?? null,
+  );
   const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
     editingChapter?.useFallbackModels ?? null,
   );
@@ -101,6 +107,8 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
       setQaVlmModel(editingChapter.qaVlmModel || "");
       setQaMode(editingChapter.qaMode || "");
       setRoutingStrategy(editingChapter.routingStrategy || "");
+      setCleanupMode(editingChapter.cleanupMode || "");
+      setOcrMergeThreshold(editingChapter.ocrMergeThreshold ?? null);
       setUseFallbackModels(editingChapter.useFallbackModels ?? null);
     } else {
       setNumber(defaultNum);
@@ -115,6 +123,8 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
       setQaVlmModel("");
       setQaMode("");
       setRoutingStrategy("");
+      setCleanupMode("");
+      setOcrMergeThreshold(null);
       setUseFallbackModels(null);
     }
   } else if (!open && prevOpen) {
@@ -182,6 +192,8 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
     qaVlmModel,
     qaMode,
     routingStrategy,
+    cleanupMode,
+    ocrMergeThreshold,
     useFallbackModels,
   };
 
@@ -197,6 +209,8 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
     qaVlmModel: setQaVlmModel,
     qaMode: setQaMode,
     routingStrategy: setRoutingStrategy,
+    cleanupMode: setCleanupMode,
+    ocrMergeThreshold: setOcrMergeThreshold,
     useFallbackModels: setUseFallbackModels,
   };
 
@@ -233,6 +247,8 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
           qaVlmModel: qaVlmModel || null,
           qaMode: qaMode || null,
           routingStrategy: routingStrategy || null,
+          cleanupMode: cleanupMode || null,
+          ocrMergeThreshold,
           useFallbackModels: useFallbackModels,
         }),
       });
@@ -299,6 +315,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
           sx={{ mt: 1 }}
         />
         <ModelOverridesAccordion
+          token={user.token}
           expanded={showOverrides}
           onToggle={() => setShowOverrides(!showOverrides)}
           value={overridesValue}
@@ -315,6 +332,9 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
             qaVlmModel: selectedSeries?.qaVlmModel || settings?.qaVlmModel,
             routingStrategy:
               selectedSeries?.routingStrategy || settings?.routingStrategy,
+            cleanupMode: selectedSeries?.cleanupMode || settings?.cleanupMode,
+            ocrMergeThreshold:
+              selectedSeries?.ocrMergeThreshold ?? settings?.ocrMergeThreshold,
             useFallbackModels:
               selectedSeries?.useFallbackModels ?? settings?.useFallbackModels,
           }}

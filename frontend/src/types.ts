@@ -23,6 +23,9 @@ export interface Series {
   qaVlmModel?: string;
   qaMode?: string;
   routingStrategy?: string;
+  cleanupMode?: string;
+  /** OCR grouping threshold override, in characters; null inherits. */
+  ocrMergeThreshold?: number | null;
   useFallbackModels?: boolean | null;
   resolvedUseFallbackModels?: boolean;
   createdAt?: string;
@@ -58,6 +61,9 @@ export interface Chapter {
   qaVlmModel?: string;
   qaMode?: string;
   routingStrategy?: string;
+  cleanupMode?: string;
+  /** OCR grouping threshold override, in characters; null inherits. */
+  ocrMergeThreshold?: number | null;
   useFallbackModels?: boolean | null;
   resolvedUseFallbackModels?: boolean;
   useContextMemory?: boolean;
@@ -119,7 +125,18 @@ export interface OcrRegion {
   bubbleW?: number | null;
   bubbleH?: number | null;
   backgroundColor?: string | null;
-  qaStatus?: "passed" | "failed" | "direct_fix" | "manual_review" | null;
+  qaStatus?:
+    | "passed"
+    | "failed"
+    | "direct_fix"
+    | "fixed"
+    | "reject_sfx"
+    | "manual_review"
+    | "cleanup_review"
+    | "rejected"
+    | null;
+  translationFailed?: boolean | null;
+  regionType?: string | null;
   qaScore?: number | null;
   qaFeedback?: string | null;
   bubbleId?: string | null;
@@ -129,6 +146,8 @@ export interface OcrRegion {
   safeTextY?: number | null;
   safeTextW?: number | null;
   safeTextH?: number | null;
+  /** Set when the region has a worker (or plain-plate) cleanup patch; see tracker R7. */
+  cleanupPatchSha256?: string | null;
 }
 
 export interface ConversationRegion {
@@ -144,7 +163,7 @@ export interface Conversation {
 
 export interface Layer {
   id: string;
-  type: string; // translation | ocr | notes | mask | sfx
+  type: string; // translation | ocr | notes | mask | sfx | inpainting
   targetLanguage?: string | null;
   // AUDIT-F25. Nullable in the database and `Option<bool>` in the model, so the API really can
   // send `null` and this used to lie about it. A null is *hidden*: that is what the canvas does,
@@ -187,6 +206,23 @@ export interface LayerElement {
   layerType?: string | null;
   layerVisible?: boolean | null;
   layerMetadata?: Record<string, unknown> | null;
+  /** Inpainting elements only (tracker R7): the cleanup patch this element draws. */
+  cleanupRef?: CleanupRef | null;
+  /** Inpainting elements only: drawing opacity in [0, 1]; null is opaque. */
+  opacity?: number | null;
+}
+
+/** What an Inpainting element draws: content-addressed assets under the page's scene-assets. */
+export interface CleanupRef {
+  patchSha256: string;
+  patchByteLength: number;
+  maskSha256: string;
+  maskByteLength: number;
+  generatorSha256: string;
+  /** The worker's bounds for the patch, where "reset" puts it back. */
+  bounds: { x: number; y: number; width: number; height: number };
+  /** Paint position within its layer. */
+  order: number;
 }
 
 export interface LayerEditHistory {
@@ -198,10 +234,19 @@ export interface LayerEditHistory {
   editedAt: string;
 }
 
+export interface CustomModel {
+  provider: string;
+  /** The catalog's task key: "ocr" | "tl" | "qaLLM" | "qaVLM". */
+  task: string;
+  id: string;
+}
+
 export interface ModelEntry {
   id: string;
   name: string;
   free?: boolean;
+  /** A model ID typed in by the owner rather than published in the catalog. */
+  custom?: boolean;
   pricing?: {
     currency?: string;
     promptPerMillion?: number;
@@ -239,8 +284,18 @@ export interface SystemSettingsDto {
   activeOcrProviders?: string[];
   providerModelsMap?: Record<string, Record<string, ModelEntry[]>>;
 
-  /** AUDIT-R1/F16: pixels trimmed from each edge of an element's box before text is fitted. */
-  textBoxPaddingPx?: number;
-  /** Percent of what remains that text may use; 95 leaves a 5% safety margin. */
+  /** AUDIT-R1/F16: inset on each edge, as a percentage of the box's shorter side (0 = none)… */
+  textBoxPaddingPercent?: number;
+  /** …raised to at least this many px (0 = no floor; at most a quarter of the box)… */
+  textBoxPaddingMinPx?: number;
+  /** …capped at this many px (0 = none). */
+  textBoxPaddingMaxPx?: number;
+  /** Percent of what remains that text may use (100 = all of it). */
   textBoxSafetyPercent?: number;
+  /** Global cleanup reconstruction mode; see `utils/cleanupModes`. */
+  cleanupMode?: string;
+  /** Global OCR grouping threshold, in characters of white space. */
+  ocrMergeThreshold?: number;
+  /** Model IDs typed in rather than picked; replaced via PUT /api/settings/custom-models. */
+  customModels?: CustomModel[];
 }

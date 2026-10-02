@@ -1,0 +1,7 @@
+# Heavy regenerable artifacts. Hashes are pinned in stage-manifest.json; sources live in corpus/.
+pages/**/project.zip
+pages/**/project/
+pages/**/source.*
+pages/**/ref-*
+logs/
+torii-logs/

@@ -45,7 +45,7 @@ pub async fn connect(config: &DatabaseConfig) -> Result<PgPool, sqlx::Error> {
 /// Percent-encoding rule used here: encode every byte that is not an unreserved URL
 /// character (ALPHA / DIGIT / `-` `.` `_` `~`). `%XX` hex form, uppercase digits,
 /// matching RFC 3986 and what `urlencoding::encode` produces.
-#[allow(dead_code)] // consumed by migration tooling in an upcoming slice
+#[allow(dead_code)] // no runtime caller; the tests below pin the encoding rule (LOCK-3: no migration runner)
 pub fn build_postgres_url(config: &DatabaseConfig) -> String {
     format!(
         "postgres://{}:{}@{}:{}/{}",

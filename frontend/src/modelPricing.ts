@@ -9,7 +9,8 @@ const formatPrice = (value: number) => {
 export const modelPriceLabel = (model: ModelEntry) => {
   const pricing = model.pricing;
   if (pricing?.note) return pricing.note;
-  if (model.free) return "Free";
+  if (model.free) return model.custom ? "Custom · Free" : "Free";
+  if (model.custom) return "Custom · price unknown";
 
   const parts: string[] = [];
   if (pricing?.promptPerMillion != null) {

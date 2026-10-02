@@ -2,6 +2,8 @@
 
 An automated manga scanlation translation and typesetting dashboard. It uses computer vision (OCR / layout analysis) and generative AI (LLMs and vision-language models) to detect, translate, and typeset speech bubbles. A full-featured visual editor is included for manual refinements.
 
+For the output-quality workstream, use the [implementation tracker](docs/output-quality-implementation-tracker.md). A fresh cloud development box can use the [isolated setup process](docs/dev-box-setup.md) to seed credentials, derive model defaults from the catalog and warm persistent OCR caches.
+
 ---
 
 ## Architecture & stack

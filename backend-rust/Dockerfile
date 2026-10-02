@@ -30,10 +30,12 @@ ARG VITE_BASE_PATH=/tlhub
 ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 WORKDIR /app
 
+COPY packages/page-scene/package*.json /packages/page-scene/
 COPY frontend/package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci
 
+COPY packages/page-scene/ /packages/page-scene/
 COPY frontend/ ./
 RUN npm run build
 
