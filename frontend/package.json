@@ -18,9 +18,9 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@manga-library/page-scene": "file:../packages/page-scene",
     "@mui/icons-material": "^9.4.0",
     "@mui/material": "^9.3.1",
-    "@manga-library/page-scene": "file:../packages/page-scene",
     "jszip": "^3.10.1",
     "openapi-fetch": "^0.17.0",
     "react": "^19.2.6",
@@ -36,8 +36,8 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^6.1.1",
-    "@vitest/coverage-v8": "^4.1.10",
-    "@vitest/ui": "^4.1.11",
+    "@vitest/coverage-v8": "^5.0.1",
+    "@vitest/ui": "^5.0.1",
     "esbuild": "^0.28.2",
     "eslint": "^10.9.1",
     "eslint-config-prettier": "^10.1.8",
@@ -50,7 +50,7 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.70.1",
     "vite": "^8.2.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.1"
   },
   "overrides": {
     "openapi-typescript": {
