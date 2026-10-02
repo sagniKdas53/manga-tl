@@ -172,6 +172,19 @@ ellipse when layout marked it elliptical; page-renderer still uses the rectangle
 export ZIP still writes a text element's polygon as a "fallback plate", which an import turns into
 a patch.
 
+## Fourth review round (2026-10-02, evening)
+
+The user tested the third round on chrome-box ("everything is rock solid") and found two mask
+editor bugs (videos `vokoscreenNG-2026-10-02_19-07-21.mkv`, `…_19-09-44.mkv`).
+
+| Report | Cause | Fix |
+| --- | --- | --- |
+| Zoomed in, the mask lands in the wrong place | The brush ring lives inside the reader's `scale(zoom)` transform but was placed in screen pixels, so it sat zoom× further from the page corner than the pointer. The paint went where the (hidden) pointer was, up and left of the ring. | Ring placed in the host's own CSS pixels (`moveCursor`). The stroke maths was already right. |
+| Updating masks doesn't render until Export | Page 114: five manual-cleanup jobs 19:12–19:15, no render between them. The callback only advanced the revision; renders came from the editor, and only element saves asked. | The manual-cleanup callback spawns `render_now` after it applies. Hiding/showing/deleting a layer, adding/deleting an element and deleting/restoring a patch now ask for a render too. |
+
+Both renders are QA-free (`hand_edited_at`). Backend 247 / frontend 472 tests green; each new
+test was seen failing without its fix.
+
 ## Follow-ups, in order of output value
 
 - **A — cleanup masks (worker).** (1) Close and fill the automatic mask as `tidy_mask` does for hand
