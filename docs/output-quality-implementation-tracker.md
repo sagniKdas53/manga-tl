@@ -2,7 +2,37 @@
 
 Start with the current checkpoint below and the [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md). The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
 
-Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. Next: the typesetting phase, starting with R7 (see the 2026-09-26 night section). [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25). Read the summary and [current next-session handoff](output-quality-next-session-20260929.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25). Read the summary and [current next-session handoff](output-quality-next-session-20260929.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+
+## Status at a glance (2026-10-02, night — R7 merged)
+
+**R7 is closed.** The user tested four review rounds on chrome-box, and PRs #47 (worker) and #152
+(parent) merged on 2026-10-02. The worker went in with a merge commit, so the parent's pin stays on
+worker `main`. The fourth round (zoomed brush ring, mask changes that waited for Export) and
+CodeRabbit's full review are in [§ Fourth review round](output-quality-r7-close-20261001.md#fourth-review-round-2026-10-02-evening).
+Dependabot: #154, #155, #157, #159–#163 (parent) and the worker's #48 merged. #153 and #156
+(vitest 5) are replaced by #164, which moves all three vitest packages together and frontend CI
+to Node 24.
+
+**Next, in order** (details in [the R7 close doc's follow-ups](output-quality-r7-close-20261001.md#follow-ups-in-order-of-output-value)):
+1. **A — cleanup masks** (white outline/glow blobs the automatic cleanup leaves; seen again on
+   page 31).
+2. **B — one balloon, one text unit** (`AUDIT-R21`).
+3. **C + G — typesetting, with editor and export matching one to one.** G collects what makes the
+   editor differ from the export today: fonts not loaded before the first fit, `maskPolygon`
+   missing from the scene, elliptical pipeline elements, and the export ZIP's fallback plate.
+4. **F — Photoshop-style layers.**
+5. **E — automatic angles** (`AUDIT-R23`).
+6. **M9** (validate, regenerate, promote) after these, as decided 2026-09-28.
+
+**Waiting on you:**
+- Production (`~/Documents/docker-composes/manga-tl` on chrome-box) still runs the pre-R7 build.
+  Deploying it needs your go-ahead.
+- Settings writes now refuse viewers; admins and translators keep them. Say if they should be
+  admin-only.
+- Pages rendered before 2026-10-02 keep their old images (plated SFX, auto-fit text) until
+  something re-renders them. A bulk re-render queues no QA only for hand-edited pages, so a
+  chapter-wide one costs money.
 
 ## Status at a glance (2026-10-01 — R7 closing; merge next)
 
