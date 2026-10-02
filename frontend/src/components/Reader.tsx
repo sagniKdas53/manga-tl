@@ -35,6 +35,7 @@ import {
   paintedPatches,
   loadSceneAssetUrl,
   regionHasPatch,
+  isUnpatchedSoundEffect,
   usePatchImageUrls,
 } from "../utils/inpainting";
 import type { MergePreview } from "./ReaderIssues";
@@ -675,6 +676,21 @@ export const Reader: React.FC<ReaderProps> = ({
       void flushPendingSavesRef.current();
     };
   }, [openPageId]);
+
+  // Deselecting an element -- the inspector's Deselect, a click elsewhere, or picking another --
+  // saves its pending edits there and then, like Ctrl+S (user review, 2026-10-02: on page 30 the
+  // edits sat unsaved after Deselect until Export asked about them).
+  const selectedId = selectedItem?.id;
+  useEffect(() => {
+    if (!selectedId) return;
+    // The map itself is never replaced, only its entries.
+    const pending = pendingSavesRef.current;
+    return () => {
+      if (pending.has(selectedId)) {
+        void flushPendingSavesRef.current();
+      }
+    };
+  }, [selectedId]);
 
   // Closing the tab with edits still waiting asks first, and starts saving them.
   useEffect(() => {
@@ -4415,6 +4431,16 @@ export const Reader: React.FC<ReaderProps> = ({
                     return null;
                   return lData.elements.map((element) => {
                     if (!element.visible) return null;
+                    if (
+                      lData.layer.type !== "ocr" &&
+                      isUnpatchedSoundEffect(
+                        element,
+                        element.regionId
+                          ? allRegionsById.get(element.regionId)
+                          : null,
+                      )
+                    )
+                      return null;
 
                     const isSelected =
                       selectedItem?.id === element.id &&
@@ -4463,27 +4489,21 @@ export const Reader: React.FC<ReaderProps> = ({
                     const cx = element.x + width / 2;
                     const cy = element.y + height / 2;
 
-                    // Support masking toggle via wordWrap field. Tracker R7: a region with a
-                    // worker patch never gets the flat plate; the patch replaces it, and when
-                    // the patch is hidden or deleted the source shows instead.
-                    // Region-less text (manual, or imported) is never plated either: the
-                    // export draws it as manual text over the page. Only an "Add Mask" element
-                    // (no text) keeps its editor-only plate. A region's element with no text
-                    // (QA emptied it) draws nothing, as in the export: it used to leave a
-                    // blank white box on the page.
+                    // Support masking toggle via wordWrap field. No region's text gets the
+                    // flat plate any more (user review, 2026-10-02: it was the "old type mask"):
+                    // a patch cleans under it, or the source shows. Region-less text is never
+                    // plated either: the export draws it as manual text over the page. Only an
+                    // "Add Mask" element (no region, no text) keeps its editor-only plate.
                     const hasText = Boolean((element.text || "").trim());
                     const isMaskEnabled =
                       (cleanScanlationView || element.wordWrap) &&
-                      !regionHasPatch(
-                        element.regionId
-                          ? allRegionsById.get(element.regionId)
-                          : null,
-                      ) &&
-                      (element.regionId ? hasText : !hasText);
+                      !element.regionId &&
+                      !hasText;
 
                     return (
                       <g
                         key={element.id}
+                        data-element-id={element.id}
                         // AUDIT-R5. Everything in this group except the mask polygon is expressed
                         // in the element's own unrotated box coordinates — the backdrop rect, the
                         // editor borders, the drag handle and the text — so the group turns as a

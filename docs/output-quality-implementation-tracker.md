@@ -10,6 +10,8 @@ Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequ
 
 **2026-10-02: second review round** ([§ Second review round](output-quality-r7-close-20261001.md#second-review-round-2026-10-02)). Fixed before the merge: jobs of deleted pages, QA enforcing the SFX policy plus a one-time patch for a kept region with no cleanup, the editor's empty plate, the review-region highlight, the mask panel toggle, Draw/Erase labels, an immediate backend render for edited pages, a 30 s autosave, a page-level hand-edit mark, and CodeRabbit's second outside-diff comment. **Follow-up F** (Photoshop-style layers: add, group, merge down, merge visible, undo/redo) replaces the layer-merge follow-up.
 
+**2026-10-02: third review round** ([§ Third review round](output-quality-r7-close-20261001.md#third-review-round-2026-10-02-afternoon)). The flat plate fallback is gone and an SFX without a patch is not drawn until QA keeps it; page-scene contract rule 8 carries the editor's font size, shape and italic to the export; Deselect saves. Manual AOT was measured per stroke, per stroke group and tiled on page 31: the existing single crop is best and stays.
+
 ## Status at a glance (2026-09-29 — R7 verdict pending; the plan after it)
 
 **Read [output-quality-next-session-20260929.md](output-quality-next-session-20260929.md) first.** It records the 2026-09-28 work (mask editor, restore, leftover-ink cleanup, 7-day job links, patch prefetch), the 400-page verdict run on chrome-box, and the order after R7: `AUDIT-R21` → `AUDIT-R23` → M7 (including M8's I06) → merge PRs #47 and #152.

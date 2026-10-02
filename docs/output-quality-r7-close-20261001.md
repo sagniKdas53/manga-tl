@@ -120,6 +120,58 @@ reorder and merge as one). Merged patches stay editable (decision of 2026-10-01)
 merge: patches with patches, text with text. Undo must work after a reload, so the server keeps a
 record of each merge. The model is how Photoshop handles layers.
 
+## Third review round (2026-10-02, afternoon)
+
+The user's evidence: page 21 export and screenshot, page 30 screenshot, export and layers ZIP, page
+31 export and layers ZIP, video `vokoscreenNG-2026-10-02_13-38-56.mkv`.
+
+| What the user saw | What it is | Decision |
+| --- | --- | --- |
+| "Old type masks" again (page 21: SQUELCH-POP on a peach box) | The export is the pre-QA render (`a9da14a9…` = page 21's revision 1, 08:01:06 UTC; QA's final pass came at 08:01:56). SFX are translated but excluded from cleanup, and the scene builder's fallback gave a region with no patch a flat plate in its sampled colour (`legacy_patch_and_mask`). QA then rejected both SFX. On the test stack all 130 plated regions were SFX. | User: show nothing until QA keeps it and its late patch lands. The plate fallback is removed. |
+| Edits don't stick (page 30) | They did save: rev 4's scene has the new text, and the export is that scene's render. But the scene contract had no font size, shape or italic, so page-renderer auto-fitted the line to ≤ 72 px while the editor drew 152. | User: carry size, shape and italic (contract rule 8). |
+| Deselect should not lose edits | Deselect kept the edits pending; Export's "Unsaved Changes" prompt saved them. | User: Deselect saves at once. |
+| AOT does not work for manual cleanup (page 31) | That page's only repaint ran **Telea** (the method selected in the editor; no AOT repaint has ever run on the test stack). AOT on the same mark, run in the test worker, works. It is soft because a 1934×2071 mark is shrunk to 1024 px. | User asked to test per-stroke and close-stroke groups. Measured below: the current single crop stays. |
+
+**Manual AOT, measured on page 31's mark** (test worker, OpenVINO, same underlay):
+
+| Variant | Time | Result |
+| --- | --- | --- |
+| One crop over the whole mark, shrunk to 1024 px (current) | 8.8 s | Cleanest: smooth wall, horse outline continued |
+| Per stroke (7 crops, each shrunk only if over 1024 px) | 15.4 s | Dark smears at the horse's edge |
+| Strokes within 48 px grouped (6 crops) | 17.1 s | Same smears, slightly fewer |
+| Strokes within 128 px grouped (4 crops) | 32.0 s | Close to current, a little darker |
+| Whole mark, full resolution in 1024 px tiles | 67.5 s | Worst: tall dark streaks along the strokes |
+
+AOT is trained on small holes. Each smaller crop gives it less of the surrounding wall to copy, and
+full resolution makes a 120 px stroke a huge hole, so it paints from the dark horse instead. The
+page's automatic patches also left white blobs (the glyphs' white outline), which is follow-up A.
+
+**What landed.**
+
+- **No flat plate; SFX wait for their patch.** `build_pipeline_scene` no longer plates a region
+  without a patch. An SFX region (`region_type = sfx`, which cleanup excludes) without a patch is
+  not drawn and its policy is `review`, unless the user typed its text by hand. Other text without
+  a patch is drawn over the source with its halo. The editor matches (`isUnpatchedSoundEffect`; only
+  a region-less "Add Mask" element keeps its editor plate). QA's `reject_sfx` rule now says an SFX is
+  not drawn yet, so QA does not fail it, and buy a paid retry, for English it cannot see. Tests:
+  `a_region_without_a_patch_gets_no_flat_plate_and_an_sfx_is_not_drawn`, `ReaderInpainting`
+  (hides an unpatched SFX).
+- **Contract rule 8: editor typography.** `style` may carry `font_size` (written only when auto-size
+  is off), `font_style: italic` and `shape: elliptical` (written only for an element the user
+  edited: layout marks 6,690 pipeline elements elliptical, and honouring that would change every
+  page's scene). page-renderer wraps as the editor does (fitter seeded with the size, shape and
+  style) and draws at the fixed size. A scene without the fields is byte-identical, so nothing
+  re-renders. Schema, md, fixtures and all three validators (Ajv, Rust, Python, plus the worker's
+  pinned schema hash) updated; both request builders (worker `render_page_scene`, backend render
+  now) pass the fields on.
+- **Deselect saves.** Deselecting an element (Deselect, a click elsewhere, picking another) flushes
+  its pending edit and requests the render.
+
+**Not changed, noted:** the editor wraps a pipeline element inside its mask polygon and inside an
+ellipse when layout marked it elliptical; page-renderer still uses the rectangle for those. The
+export ZIP still writes a text element's polygon as a "fallback plate", which an import turns into
+a patch.
+
 ## Follow-ups, in order of output value
 
 - **A — cleanup masks (worker).** (1) Close and fill the automatic mask as `tidy_mask` does for hand

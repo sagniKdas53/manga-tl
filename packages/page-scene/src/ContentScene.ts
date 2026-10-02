@@ -28,6 +28,15 @@ export interface SceneTextStyle {
    * job carries the System Settings value and the worker attaches it here. Absent means 100.
    */
   safetyPercent?: number;
+  /**
+   * Contract rule 8 (2026-10-02): the user's fixed font px, present only when they turned
+   * auto-size off. The lines still wrap as the editor wraps them; only the drawn size is fixed.
+   */
+  fontSize?: number;
+  /** Contract rule 8: "italic" when the user chose it; absent means normal. */
+  fontStyle?: "normal" | "italic";
+  /** Contract rule 8: "elliptical" when the user chose that box shape; absent means rectangular. */
+  shape?: "rectangular" | "elliptical";
 }
 
 export interface SceneTextObject {
@@ -121,7 +130,16 @@ export interface ResolvedPageScene {
 }
 
 function fontSpec(style: SceneTextStyle, fontSize: number) {
-  return `${style.weight} ${fontSize}px "${style.fontFamily}", sans-serif`;
+  const italic = style.fontStyle === "italic" ? "italic " : "";
+  return `${style.weight} ${italic}${fontSize}px "${style.fontFamily}", sans-serif`;
+}
+
+/** The user's fixed size when it is a usable number, else undefined (auto-fit). */
+function fixedFontSize(style: SceneTextStyle): number | undefined {
+  const size = style.fontSize;
+  return typeof size === "number" && Number.isFinite(size) && size > 0
+    ? size
+    : undefined;
 }
 
 function unrotatedBounds(transform: SceneTransform): FitBox {
@@ -179,30 +197,40 @@ export function resolvePageScene(
       paddingPx: object.style.padding,
       safetyPercent: object.style.safetyPercent ?? 100,
     });
+    // The editor's own rule (frontend elementFit): wrap with the fitter, seeded with the user's
+    // size; draw at that size when auto-size is off, at the fitted size otherwise.
+    const fixedSize = fixedFontSize(object.style);
     const fit = fitTextInBox(
       {
         text: object.text,
         maxWidth: fitBox.width,
         maxHeight: fitBox.height,
         fontFamily: object.style.fontFamily,
-        shape: "rectangular",
+        defaultFontSize: fixedSize ?? 16,
+        shape: object.style.shape === "elliptical" ? "elliptical" : "rectangular",
         boxX: fitBox.x,
         boxY: fitBox.y,
         fontWeight: String(object.style.weight),
+        fontStyle: object.style.fontStyle === "italic" ? "italic" : "normal",
       },
       measureText,
     );
-    if (fit.overflow) {
+    const fontSize = fixedSize ?? fit.fontSize;
+    const overflow =
+      fixedSize === undefined
+        ? fit.overflow
+        : fit.lines.length * fixedSize * 1.2 > object.transform.height;
+    if (overflow) {
       diagnostics.push({ code: "text-overflow", objectId: object.objectId });
     }
 
-    const lineHeight = fit.fontSize * 1.2;
+    const lineHeight = fontSize * 1.2;
     const startY =
       object.transform.y +
       object.transform.height / 2 -
       ((fit.lines.length - 1) * lineHeight) / 2;
     const lineBoxes = fit.lines.map((line, index) => {
-      const width = measureText(fontSpec(object.style, fit.fontSize), line);
+      const width = measureText(fontSpec(object.style, fontSize), line);
       const center = clampLineCenter(
         fit.lineCenters?.at(index) ?? fitBox.x + fitBox.width / 2,
         width,
@@ -225,7 +253,7 @@ export function resolvePageScene(
     });
     objects.push({
       objectId: object.objectId,
-      fontSize: fit.fontSize,
+      fontSize,
       lineBoxes,
     });
   }
@@ -289,7 +317,7 @@ export function renderPageSceneSvg(scene: ResolvedPageScene): string {
       if (!resolved || resolved.lineBoxes.length === 0) return "";
       const centerX = object.transform.x + object.transform.width / 2;
       const centerY = object.transform.y + object.transform.height / 2;
-      const common = `font-family="${escapeXml(object.style.fontFamily)}" font-size="${svgNumber(resolved.fontSize)}" font-weight="${svgNumber(object.style.weight)}" text-anchor="start" style="writing-mode:${escapeXml(object.writingMode)}"`;
+      const common = `font-family="${escapeXml(object.style.fontFamily)}" font-size="${svgNumber(resolved.fontSize)}" font-weight="${svgNumber(object.style.weight)}"${object.style.fontStyle === "italic" ? ' font-style="italic"' : ""} text-anchor="start" style="writing-mode:${escapeXml(object.writingMode)}"`;
       const lineText = (line: ResolvedLineBox, paint: string) =>
         `<text x="${svgNumber(line.x)}" y="${svgNumber(line.y + line.height * 0.8)}" ${paint} ${common}>${escapeXml(line.text)}</text>`;
       // Torii's order: the stroke pass for every line first, then the fill pass for every line.

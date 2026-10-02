@@ -162,3 +162,29 @@ test("a context that cannot open a page is dropped, and the next render gets a f
     await instance.stop();
   }
 });
+
+test("contract rule 8: the browser draws the editor's fixed size, not an auto-fit one", async () => {
+  // Page 30 (2026-10-02): the user set the line to 152 px with auto-size off; the export
+  // auto-fitted it to 72 because the renderer never saw the size.
+  const instance = await renderer();
+  try {
+    const base = request();
+    const dialogue = (style) => ({
+      ...base.scene.textObjects[0],
+      transform: { x: 10, y: 5, width: 140, height: 80, rotationDegrees: 0 },
+      text: "Hi",
+      style: { ...base.scene.textObjects[0].style, ...style },
+    });
+    const sizeOf = async (style) => {
+      const result = await instance.render({
+        ...base,
+        scene: { ...base.scene, textObjects: [dialogue(style)] },
+      });
+      return result.layout.find((object) => object.object_id === "dialogue-1").font_size;
+    };
+    assert.ok((await sizeOf({})) <= 40);
+    assert.equal(await sizeOf({ fontSize: 30, fontStyle: "italic", shape: "elliptical" }), 30);
+  } finally {
+    await instance.stop();
+  }
+});

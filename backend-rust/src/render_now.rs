@@ -448,6 +448,24 @@ async fn draw(
             font_ids.insert(font.to_string());
         }
         let transform = &item["transform"];
+        let mut renderer_style = json!({
+            "fontFamily": style["font_id"],
+            "fill": style["fill"],
+            "stroke": style["stroke"],
+            "weight": style["weight"],
+            "padding": style["padding"],
+            "safetyPercent": safety_percent,
+        });
+        // Contract rule 8: the user's typography, passed on only when the scene carries it.
+        for (scene_key, renderer_key) in [
+            ("font_size", "fontSize"),
+            ("font_style", "fontStyle"),
+            ("shape", "shape"),
+        ] {
+            if let Some(value) = style.get(scene_key).filter(|v| !v.is_null()) {
+                renderer_style[renderer_key] = value.clone();
+            }
+        }
         text_objects.push(json!({
             "objectId": item["object_id"],
             "text": item["text"],
@@ -460,14 +478,7 @@ async fn draw(
             },
             "writingMode": item["writing_mode"],
             "alignment": item["alignment"],
-            "style": {
-                "fontFamily": style["font_id"],
-                "fill": style["fill"],
-                "stroke": style["stroke"],
-                "weight": style["weight"],
-                "padding": style["padding"],
-                "safetyPercent": safety_percent,
-            },
+            "style": renderer_style,
             "visible": item["visible"],
             "zIndex": item["z_index"],
         }));

@@ -3,7 +3,7 @@
 //! A cleanup pass becomes an Inpainting layer; the scene builder draws each visible patch where the
 //! editor left it (moved, resized, faded), follows the region's own verdict (R7-D4), keeps patches
 //! decoupled from text, retires an older pass to history (R7-D2/D2b), keeps a region-less patch
-//! drawable through a manual_cleanup object, and keeps the flat plate only as the fallback.
+//! drawable through a manual_cleanup object, and never draws the old flat plate (2026-10-02).
 //!
 //! Requires REAL Postgres + Valkey + MinIO (env-gated like every integration suite).
 
@@ -548,8 +548,12 @@ async fn a_patch_is_drawn_where_the_editor_leaves_it_and_follows_its_region() {
     cleanup_series(&pool, series_id).await;
 }
 
+/// User review, 2026-10-02 (page 21): a region with no patch got a flat plate in its sampled
+/// colour -- the "old type mask" -- which on SFX (excluded from cleanup) showed before QA ran.
+/// Now no region gets one: dialogue whose cleanup found nothing is drawn over the source, an SFX
+/// is not drawn until it has a patch, and an SFX the user typed by hand is drawn.
 #[tokio::test]
-async fn a_region_whose_cleanup_produced_nothing_keeps_its_flat_plate() {
+async fn a_region_without_a_patch_gets_no_flat_plate_and_an_sfx_is_not_drawn() {
     let Some((_app, pool, state)) = app().await else {
         eprintln!(
             "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
@@ -577,12 +581,45 @@ async fn a_region_whose_cleanup_produced_nothing_keeps_its_flat_plate() {
     );
 
     let drawn = scene(&state, page_id).await;
-    assert_eq!(cleanups(&drawn).len(), 1, "the plate is the fallback");
+    assert!(cleanups(&drawn).is_empty(), "no flat plate");
+    assert_eq!(text_objects(&drawn).len(), 1);
     assert_eq!(
-        cleanups(&drawn)[0]["bounds"],
-        serde_json::json!({"x": 20, "y": 30, "width": 60, "height": 40})
+        text_objects(&drawn)[0]["kind"],
+        "manual_text",
+        "dialogue with no patch is drawn over the source"
     );
-    assert_eq!(text_objects(&drawn)[0]["kind"], "automatic_text");
+
+    // The layout stage called it a sound effect: cleanup left it alone, so it is not drawn.
+    sqlx::query("UPDATE ocr_regions SET region_type = 'sfx' WHERE id = $1")
+        .bind(region)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let drawn = scene(&state, page_id).await;
+    assert!(cleanups(&drawn).is_empty());
+    assert!(
+        text_objects(&drawn).is_empty(),
+        "an SFX with no patch is not drawn"
+    );
+    assert_eq!(
+        policy_action(&drawn, region),
+        "review",
+        "nothing replaces its lettering"
+    );
+
+    // Typed by hand, it is the user's: drawn over the source.
+    sqlx::query("UPDATE layer_elements SET is_manually_edited = TRUE WHERE layer_id = $1")
+        .bind(tl)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let drawn = scene(&state, page_id).await;
+    assert_eq!(
+        text_objects(&drawn).len(),
+        1,
+        "hand-typed SFX text is drawn"
+    );
+    assert!(cleanups(&drawn).is_empty());
     cleanup_series(&pool, series_id).await;
 }
 

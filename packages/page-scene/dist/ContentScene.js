@@ -1,5 +1,17 @@
 import { clampLineCenter, fitTextInBox, textFitBox, } from "./layout.js";
 /**
+ * A cleanup patch fills its rect exactly, whatever the rect's aspect ratio. An edited patch may be
+ * resized non-uniformly, and SVG's default (`xMidYMid meet`) would letterbox it instead. The editor
+ * canvas draws its patches with the same value so the two agree pixel for pixel.
+ */
+export const CLEANUP_PRESERVE_ASPECT_RATIO = "none";
+/** The opacity attribute a cleanup patch carries, or undefined when it is opaque. */
+export function cleanupOpacity(opacity) {
+    if (opacity === undefined || !Number.isFinite(opacity) || opacity >= 1)
+        return undefined;
+    return Math.max(0, opacity);
+}
+/**
  * Stroke width as a fraction of the resolved font px (tracker R2, user decision 2 of 2026-09-17).
  * Read off Torii's client (`renderPipelineVectorText`, 2026-09-18): 6 px at 24 px, 8-12 px at
  * 40-77 px, i.e. 15-25 %. The previous 4 % was about five times too thin to read as a halo.
@@ -15,7 +27,15 @@ export function resolvedTextLayout(scene) {
     }));
 }
 function fontSpec(style, fontSize) {
-    return `${style.weight} ${fontSize}px "${style.fontFamily}", sans-serif`;
+    const italic = style.fontStyle === "italic" ? "italic " : "";
+    return `${style.weight} ${italic}${fontSize}px "${style.fontFamily}", sans-serif`;
+}
+/** The user's fixed size when it is a usable number, else undefined (auto-fit). */
+function fixedFontSize(style) {
+    const size = style.fontSize;
+    return typeof size === "number" && Number.isFinite(size) && size > 0
+        ? size
+        : undefined;
 }
 function unrotatedBounds(transform) {
     const radians = (transform.rotationDegrees * Math.PI) / 180;
@@ -41,7 +61,10 @@ export function resolvePageScene(input, measureText) {
         if (!object.visible)
             continue;
         if (!object.text) {
-            diagnostics.push({ code: "empty-manual-text", objectId: object.objectId });
+            diagnostics.push({
+                code: "empty-manual-text",
+                objectId: object.objectId,
+            });
             objects.push({ objectId: object.objectId, fontSize: 0, lineBoxes: [] });
             continue;
         }
@@ -50,40 +73,62 @@ export function resolvePageScene(input, measureText) {
             bounds.y < 0 ||
             bounds.x + bounds.width > input.source.width ||
             bounds.y + bounds.height > input.source.height) {
-            diagnostics.push({ code: "object-clips-page", objectId: object.objectId });
+            diagnostics.push({
+                code: "object-clips-page",
+                objectId: object.objectId,
+            });
         }
         const fitBox = textFitBox(object.transform, {
             paddingPx: object.style.padding,
             safetyPercent: object.style.safetyPercent ?? 100,
         });
+        // The editor's own rule (frontend elementFit): wrap with the fitter, seeded with the user's
+        // size; draw at that size when auto-size is off, at the fitted size otherwise.
+        const fixedSize = fixedFontSize(object.style);
         const fit = fitTextInBox({
             text: object.text,
             maxWidth: fitBox.width,
             maxHeight: fitBox.height,
             fontFamily: object.style.fontFamily,
-            shape: "rectangular",
+            defaultFontSize: fixedSize ?? 16,
+            shape: object.style.shape === "elliptical" ? "elliptical" : "rectangular",
             boxX: fitBox.x,
             boxY: fitBox.y,
             fontWeight: String(object.style.weight),
+            fontStyle: object.style.fontStyle === "italic" ? "italic" : "normal",
         }, measureText);
-        if (fit.overflow) {
+        const fontSize = fixedSize ?? fit.fontSize;
+        const overflow = fixedSize === undefined
+            ? fit.overflow
+            : fit.lines.length * fixedSize * 1.2 > object.transform.height;
+        if (overflow) {
             diagnostics.push({ code: "text-overflow", objectId: object.objectId });
         }
-        const lineHeight = fit.fontSize * 1.2;
+        const lineHeight = fontSize * 1.2;
         const startY = object.transform.y +
             object.transform.height / 2 -
             ((fit.lines.length - 1) * lineHeight) / 2;
         const lineBoxes = fit.lines.map((line, index) => {
-            const width = measureText(fontSpec(object.style, fit.fontSize), line);
+            const width = measureText(fontSpec(object.style, fontSize), line);
             const center = clampLineCenter(fit.lineCenters?.at(index) ?? fitBox.x + fitBox.width / 2, width, fitBox.x, fitBox.width);
             const x = object.alignment === "start"
                 ? fitBox.x
                 : object.alignment === "end"
                     ? fitBox.x + fitBox.width - width
                     : center - width / 2;
-            return { x, y: startY + index * lineHeight - lineHeight / 2, width, height: lineHeight, text: line };
+            return {
+                x,
+                y: startY + index * lineHeight - lineHeight / 2,
+                width,
+                height: lineHeight,
+                text: line,
+            };
         });
-        objects.push({ objectId: object.objectId, fontSize: fit.fontSize, lineBoxes });
+        objects.push({
+            objectId: object.objectId,
+            fontSize,
+            lineBoxes,
+        });
     }
     return { input, objects, diagnostics };
 }
@@ -118,7 +163,11 @@ export function renderPageSceneSvg(scene) {
     const cleanupMarkup = [...scene.input.cleanupAssets]
         .filter((asset) => asset.visible)
         .sort((left, right) => left.zIndex - right.zIndex)
-        .map((asset) => `<image data-cleanup-id="${escapeXml(asset.cleanupId)}" href="${escapeXml(asset.href)}" x="${svgNumber(asset.x)}" y="${svgNumber(asset.y)}" width="${svgNumber(asset.width)}" height="${svgNumber(asset.height)}"/>`)
+        .map((asset) => {
+        const opacity = cleanupOpacity(asset.opacity);
+        const opacityAttribute = opacity === undefined ? "" : ` opacity="${svgNumber(opacity)}"`;
+        return `<image data-cleanup-id="${escapeXml(asset.cleanupId)}" href="${escapeXml(asset.href)}" x="${svgNumber(asset.x)}" y="${svgNumber(asset.y)}" width="${svgNumber(asset.width)}" height="${svgNumber(asset.height)}" preserveAspectRatio="${CLEANUP_PRESERVE_ASPECT_RATIO}"${opacityAttribute}/>`;
+    })
         .join("");
     const glyphMarkup = [...scene.input.textObjects]
         .filter((object) => object.visible)
@@ -129,7 +178,7 @@ export function renderPageSceneSvg(scene) {
             return "";
         const centerX = object.transform.x + object.transform.width / 2;
         const centerY = object.transform.y + object.transform.height / 2;
-        const common = `font-family="${escapeXml(object.style.fontFamily)}" font-size="${svgNumber(resolved.fontSize)}" font-weight="${svgNumber(object.style.weight)}" text-anchor="start" style="writing-mode:${escapeXml(object.writingMode)}"`;
+        const common = `font-family="${escapeXml(object.style.fontFamily)}" font-size="${svgNumber(resolved.fontSize)}" font-weight="${svgNumber(object.style.weight)}"${object.style.fontStyle === "italic" ? ' font-style="italic"' : ""} text-anchor="start" style="writing-mode:${escapeXml(object.writingMode)}"`;
         const lineText = (line, paint) => `<text x="${svgNumber(line.x)}" y="${svgNumber(line.y + line.height * 0.8)}" ${paint} ${common}>${escapeXml(line.text)}</text>`;
         // Torii's order: the stroke pass for every line first, then the fill pass for every line.
         // One <text> per line with paint-order would let line 2's halo cover line 1's glyphs

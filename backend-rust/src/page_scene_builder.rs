@@ -252,15 +252,6 @@ pub fn bounds_page_share(bounds: &Value, page_w: i32, page_h: i32) -> f64 {
     (dim("width") * dim("height")) / (f64::from(page_w) * f64::from(page_h))
 }
 
-/// Share of the page a patch's bounds cover, 0..1.
-fn patch_page_share(raster: &Raster, page_w: i32, page_h: i32) -> f64 {
-    let page = (page_w as f64) * (page_h as f64);
-    if page <= 0.0 {
-        return 1.0;
-    }
-    (raster.width as f64) * (raster.height as f64) / page
-}
-
 /// `(patch_png, mask_png)` for one legacy mask: the patch is the polygon filled with the sampled
 /// background colour, the mask is the same coverage as white-on-transparent.
 fn legacy_patch_and_mask(raster: &Raster, colour: [u8; 3]) -> Result<(Vec<u8>, Vec<u8>), String> {
@@ -346,6 +337,12 @@ fn quad_for(region: &OcrRegion) -> Vec<Value> {
         .iter()
         .map(|(dx, dy)| json!({ "x": cx + dx * cos - dy * sin, "y": cy + dx * sin + dy * cos }))
         .collect()
+}
+
+/// Whether the layout classifier called this region a sound effect: the type the cleanup stage
+/// excludes (`coordinator::cleanup_region_entry`).
+fn is_sound_effect(region_type: Option<&str>) -> bool {
+    region_type.is_some_and(|kind| kind.eq_ignore_ascii_case("sfx"))
 }
 
 fn policy_kind(region_type: Option<&str>) -> &'static str {
@@ -472,6 +469,8 @@ pub async fn build_pipeline_scene(
     // Which regions end up replaced: any visible element with non-empty text, or a drawn
     // Inpainting patch (below). Everything else is `review`, which the contract reads as "pixels
     // untouched, visibly unresolved".
+    // A sound effect's text alone does not replace it: it is drawn only once it has a patch
+    // (the patch loop below adds it then) or the user typed it by hand. See the text loop.
     let mut replaced: std::collections::HashSet<Uuid> = std::collections::HashSet::new();
     for (_, element) in &elements {
         if let Some(region_id) = element.region_id
@@ -479,6 +478,12 @@ pub async fn build_pipeline_scene(
                 .text
                 .as_deref()
                 .is_some_and(|t| !t.trim().is_empty())
+            && (element.is_manually_edited == Some(true)
+                || !regions.iter().any(|region| {
+                    region.id == region_id
+                        && region.cleanup_patch_sha256.is_none()
+                        && is_sound_effect(region.region_type.as_deref())
+                }))
         {
             replaced.insert(region_id);
         }
@@ -733,84 +738,26 @@ pub async fn build_pipeline_scene(
             .expect("owner_by_region is built from regions");
 
         // Tracker R7: the region's patches are its Inpainting elements, emitted above. A region
-        // that has a worker patch never gets the flat plate, even when its patch is hidden or
-        // deleted: then the source shows under the text. The plate is only the fallback for a
-        // region whose cleanup produced nothing.
-        let mut cleanup_ids: Vec<String> = cleanup_ids_by_region
+        // that has a worker patch shows the source under its text when that patch is hidden or
+        // deleted. A region with no patch at all gets no flat plate any more (user review,
+        // 2026-10-02): the plate was the "old type mask" the user kept finding on SFX.
+        let cleanup_ids: Vec<String> = cleanup_ids_by_region
             .get(&region_id)
             .cloned()
             .unwrap_or_default();
-        if cleanup_ids.is_empty() && region.cleanup_patch_sha256.is_none() {
-            let raster = parse_polygon(element.mask_polygon.as_ref())
-                .and_then(|points| rasterize_polygon(&points, page_w as i64, page_h as i64));
-            if let Some(raster) = raster.filter(|raster| {
-                // Tracker R2 gate: no patch larger than a quarter of the page. The worker's merge
-                // no longer produces such a region, so this only fires on old rows or a wrong
-                // detector mask -- and then the text is drawn over the source rather than the page
-                // being flattened under one plate.
-                let share = patch_page_share(raster, page_w, page_h);
-                if share > MAX_PATCH_PAGE_SHARE {
-                    warnings.push(format!(
-                        "element {} patch refused: {:.1} % of the page exceeds the {:.0} % gate; text drawn over source",
-                        element.id,
-                        share * 100.0,
-                        MAX_PATCH_PAGE_SHARE * 100.0
-                    ));
-                    false
-                } else {
-                    true
-                }
-            }) {
-                let colour = parse_hex_colour(element.background_color.as_deref());
-                let (patch_png, mask_png) = legacy_patch_and_mask(&raster, colour)?;
-                let patch_sha = hex::encode(Sha256::digest(&patch_png));
-                let mask_sha = hex::encode(Sha256::digest(&mask_png));
-                let patch_id = format!("patch-{}", element.id);
-                let mask_id = format!("mask-{}", element.id);
-                for (id, sha, bytes) in [
-                    (&patch_id, &patch_sha, &patch_png),
-                    (&mask_id, &mask_sha, &mask_png),
-                ] {
-                    let path = scene_asset_path(page_id, sha);
-                    if !state.storage.exists(&path).await {
-                        state
-                            .storage
-                            .upload_bytes(&path, bytes.clone(), "image/png")
-                            .await
-                            .map_err(|e| format!("could not upload scene asset {path}: {e}"))?;
-                    }
-                    assets.push(json!({
-                        "asset_id": id,
-                        "kind": if id == &patch_id { "cleanup_patch" } else { "glyph_mask" },
-                        "sha256": sha,
-                        "byte_length": bytes.len(),
-                        "mime_type": "image/png",
-                    }));
-                    asset_paths.insert(id.clone(), path);
-                }
-                let cleanup_id = format!("cleanup-{}", element.id);
-                cleanup_artifacts.push(json!({
-                    "cleanup_id": cleanup_id,
-                    "owner_ids": [owner_id],
-                    "source_sha256": source_sha256,
-                    "mask_asset_id": mask_id,
-                    "patch_asset_id": patch_id,
-                    "bounds": { "x": raster.x, "y": raster.y, "width": raster.width, "height": raster.height },
-                    "generator_sha256": generator_sha256,
-                    "active_set_dependency": "independent",
-                    "diagnostics": [],
-                }));
-                cleanup_ids.push(cleanup_id);
-            } else if element.mask_polygon.is_some() {
-                warnings.push(format!(
-                    "element {} has a mask polygon that does not rasterize; text is drawn over source pixels",
-                    element.id
-                ));
-            }
-            // A NULL mask is the R2 free-standing-text case, not a defect: the worker returns no
-            // plate for text with no container, and the text goes over the untouched source with
-            // its halo.
+        if cleanup_ids.is_empty()
+            && region.cleanup_patch_sha256.is_none()
+            && is_sound_effect(region.region_type.as_deref())
+            && element.is_manually_edited != Some(true)
+        {
+            // SFX are never typeset and cleanup leaves their lettering alone, so an SFX with no
+            // patch is not drawn: the artist's lettering shows as drawn. If QA keeps it, it gets
+            // one late cleanup patch (`coordinator::queue_late_patches`) and is drawn then. Text
+            // the user typed into one by hand is drawn, over the source.
+            continue;
         }
+        // Any other text without a patch -- the R2 free-standing case, or a cleanup that found
+        // nothing -- goes over the untouched source with its halo.
 
         objects.push(json!({
             "object_id": format!("text-{}", element.id),
@@ -886,7 +833,7 @@ fn style_for(
 ) -> Value {
     let width = element.max_width.filter(|w| *w > 0).unwrap_or(1) as f64;
     let height = element.max_height.filter(|h| *h > 0).unwrap_or(1) as f64;
-    json!({
+    let mut style = json!({
         "font_id": font_id,
         "fill": element.text_color.clone().filter(|c| !c.trim().is_empty()).unwrap_or_else(|| "#000000".into()),
         // Tracker R2, user decision 2 (2026-09-17): text is drawn with a thick stroke in the
@@ -899,7 +846,34 @@ fn style_for(
         // px for this box so the frozen contract's single number carries it. It used to be a
         // literal 4.0 whatever the settings said; only the editor read them.
         "padding": geometry.padding_px(width, height),
-    })
+    });
+    // Contract rule 8 (2026-10-02): the editor's typography choices, each written only when the
+    // user made it, so a pipeline element's scene -- and its digest -- is what it always was.
+    // Before this the export auto-fitted every line whatever size the editor showed.
+    if element.auto_size == Some(false)
+        && let Some(size) = element.size.filter(|s| s.is_finite() && *s > 0.0)
+    {
+        style["font_size"] = json!(size);
+    }
+    if element
+        .font_style
+        .as_deref()
+        .is_some_and(|s| s.eq_ignore_ascii_case("italic"))
+    {
+        style["font_style"] = json!("italic");
+    }
+    // The layout stage marks most bubble text elliptical already (6,690 elements on the test
+    // stack, 2026-10-02); honouring that for all of them would change every page's scene, so it
+    // re-renders (and re-queues QA) everywhere. Only an element the user edited carries it.
+    if element.is_manually_edited == Some(true)
+        && element
+            .box_shape
+            .as_deref()
+            .is_some_and(|s| s.eq_ignore_ascii_case("elliptical"))
+    {
+        style["shape"] = json!("elliptical");
+    }
+    style
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1038,6 +1012,47 @@ pub async fn current_asset_paths(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn text_element(fields: Value) -> LayerElement {
+        let mut base = json!({
+            "id": Uuid::nil(), "x": 10.0, "y": 20.0, "layerId": Uuid::nil(),
+            "maxWidth": 300, "maxHeight": 400, "size": 72.0, "autoSize": true,
+            "boxShape": "elliptical", "fontStyle": "normal", "isManuallyEdited": false,
+        });
+        for (key, value) in fields.as_object().unwrap() {
+            base[key] = value.clone();
+        }
+        serde_json::from_value(base).unwrap()
+    }
+
+    #[test]
+    fn style_carries_the_editors_typography_only_when_the_user_chose_it() {
+        let geometry = crate::settings::TextBoxGeometry::DEFAULT;
+        // A pipeline element: auto-sized, elliptical from layout, never touched. Its style must
+        // stay exactly as before, or every page's scene digest moves and every page re-renders.
+        let pipeline = style_for(&text_element(json!({})), "comic-neue", &geometry);
+        for key in ["font_size", "font_style", "shape"] {
+            assert!(pipeline.get(key).is_none(), "{key} on an untouched element");
+        }
+        // Page 30: 152 px with auto-size off, elliptical, edited by hand.
+        let edited = style_for(
+            &text_element(json!({"size": 152.0, "autoSize": false, "isManuallyEdited": true})),
+            "comic-neue",
+            &geometry,
+        );
+        assert_eq!(edited["font_size"], json!(152.0));
+        assert_eq!(edited["shape"], json!("elliptical"));
+        assert!(edited.get("font_style").is_none(), "normal is the default");
+        let italic = style_for(
+            &text_element(
+                json!({"fontStyle": "italic", "boxShape": "rectangular", "isManuallyEdited": true}),
+            ),
+            "comic-neue",
+            &geometry,
+        );
+        assert_eq!(italic["font_style"], json!("italic"));
+        assert!(italic.get("shape").is_none() && italic.get("font_size").is_none());
+    }
 
     #[test]
     fn polygon_parses_from_string_and_array() {
@@ -1203,11 +1218,14 @@ mod tests {
                 Pt { x: 0.0, y: h },
             ]
         };
-        let plate = rasterize_polygon(&rect(1011.0, 1617.0), 1412, 2000).unwrap();
-        assert!(patch_page_share(&plate, 1412, 2000) > MAX_PATCH_PAGE_SHARE);
+        let share = |w: f64, h: f64, page_w: i32, page_h: i32| {
+            let raster = rasterize_polygon(&rect(w, h), 1412, 2000).unwrap();
+            let bounds = json!({ "x": raster.x, "y": raster.y, "width": raster.width, "height": raster.height });
+            bounds_page_share(&bounds, page_w, page_h)
+        };
+        assert!(share(1011.0, 1617.0, 1412, 2000) > MAX_PATCH_PAGE_SHARE);
         // A balloon-sized patch is not.
-        let balloon = rasterize_polygon(&rect(300.0, 400.0), 1412, 2000).unwrap();
-        assert!(patch_page_share(&balloon, 1412, 2000) < MAX_PATCH_PAGE_SHARE);
-        assert_eq!(patch_page_share(&balloon, 0, 0), 1.0);
+        assert!(share(300.0, 400.0, 1412, 2000) < MAX_PATCH_PAGE_SHARE);
+        assert_eq!(share(300.0, 400.0, 0, 0), 1.0);
     }
 }

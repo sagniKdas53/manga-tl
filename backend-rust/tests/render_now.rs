@@ -228,8 +228,10 @@ async fn an_edited_page_renders_in_the_request_and_queues_no_qa() {
     .await
     .expect("layer");
     sqlx::query(
-        "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, word_wrap, layer_id) \
-         VALUES (uuid_generate_v4(), 'Hand-placed line', 20, 20, 120, 40, TRUE, FALSE, $1)",
+        "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, word_wrap, layer_id, \
+           size, auto_size, is_manually_edited, box_shape, font_style) \
+         VALUES (uuid_generate_v4(), 'Hand-placed line', 20, 20, 120, 40, TRUE, FALSE, $1, \
+           30, FALSE, TRUE, 'elliptical', 'italic')",
     )
     .bind(layer_id)
     .execute(&pool)
@@ -259,6 +261,12 @@ async fn an_edited_page_renders_in_the_request_and_queues_no_qa() {
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     let sent = last.lock().unwrap().clone();
     assert_eq!(sent["scene"]["textObjects"][0]["text"], "Hand-placed line");
+    // Contract rule 8: the editor's size (auto-size off), shape and italic reach the renderer.
+    let style = &sent["scene"]["textObjects"][0]["style"];
+    assert_eq!(
+        (&style["fontSize"], &style["shape"], &style["fontStyle"]),
+        (&json!(30.0), &json!("elliptical"), &json!("italic"))
+    );
 
     let (status, png) = send(
         &app,

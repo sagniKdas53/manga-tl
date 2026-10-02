@@ -763,6 +763,14 @@ async fn full_pipeline_walks_every_stage() {
         .collect();
     assert_eq!(excluded.len(), 1, "the SFX region is excluded from cleanup");
     assert_eq!(excluded[0]["regionId"], region_id.0.to_string());
+    // The dialogue region: cleaned, so it is the one translated and drawn below. An SFX without a
+    // patch is not drawn at all (2026-10-02), so it cannot carry the translation under test.
+    let dialogue_id = dispatched_regions
+        .iter()
+        .find(|entry| entry["policyAction"] == "replace")
+        .and_then(|entry| entry["regionId"].as_str())
+        .expect("the other region is cleaned")
+        .to_string();
 
     // A response that reports only some of the dispatched regions is an incomplete cleanup, and
     // an incomplete cleanup withholds translation rather than translating an uncleaned page.
@@ -864,7 +872,7 @@ async fn full_pipeline_walks_every_stage() {
         "imageId": image_id.to_string(),
         "pageId": page_id.to_string(),
         "translations": [
-            {"regionId": region_id.0.to_string(), "translatedText": "Hello", "translationFailed": false, "translationScore": 0.95, "modelIdentifier": "openai/gpt-4o", "confidence": 0.9}
+            {"regionId": dialogue_id, "translatedText": "Hello", "translationFailed": false, "translationScore": 0.95, "modelIdentifier": "openai/gpt-4o", "confidence": 0.9}
         ],
         "cost": {"estimated_cost": 0.002, "provider": "openai", "model": "gpt-4o"}
     });
@@ -885,8 +893,8 @@ async fn full_pipeline_walks_every_stage() {
             .unwrap();
     assert_eq!(layer_count, 1);
 
-    // One Translation row per OCR region: the translated one is drawn, the excluded SFX keeps a
-    // hidden, textless row so the layer still lists every region.
+    // One Translation row per OCR region: the translated dialogue is drawn, the excluded SFX keeps
+    // a hidden, textless row so the layer still lists every region.
     let (element_count, drawn): (i64, i64) = sqlx::query_as(
         "SELECT COUNT(*), COUNT(*) FILTER (WHERE COALESCE(le.visible, FALSE)) \
          FROM layer_elements le JOIN layers l ON l.id=le.layer_id WHERE l.page_id=$1 AND l.type='translation'",
@@ -1021,7 +1029,7 @@ async fn full_pipeline_walks_every_stage() {
         "imageId": image_id.to_string(),
         "pageId": page_id.to_string(),
         "translations": [
-            {"regionId": region_id.0.to_string(), "translatedText": "Hello after retry", "translationFailed": false, "translationScore": 0.99, "modelIdentifier": "openai/gpt-4o", "confidence": 0.95}
+            {"regionId": dialogue_id, "translatedText": "Hello after retry", "translationFailed": false, "translationScore": 0.99, "modelIdentifier": "openai/gpt-4o", "confidence": 0.95}
         ],
         "cost": {"estimated_cost": 0.002, "provider": "openai", "model": "gpt-4o"}
     });

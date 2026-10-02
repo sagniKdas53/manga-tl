@@ -19,6 +19,15 @@ export interface SceneTextStyle {
      * job carries the System Settings value and the worker attaches it here. Absent means 100.
      */
     safetyPercent?: number;
+    /**
+     * Contract rule 8 (2026-10-02): the user's fixed font px, present only when they turned
+     * auto-size off. The lines still wrap as the editor wraps them; only the drawn size is fixed.
+     */
+    fontSize?: number;
+    /** Contract rule 8: "italic" when the user chose it; absent means normal. */
+    fontStyle?: "normal" | "italic";
+    /** Contract rule 8: "elliptical" when the user chose that box shape; absent means rectangular. */
+    shape?: "rectangular" | "elliptical";
 }
 export interface SceneTextObject {
     objectId: string;
@@ -36,7 +45,17 @@ export interface SceneCleanupAsset extends SceneAsset {
     y: number;
     zIndex: number;
     visible: boolean;
+    /** Contract rule 7 (tracker R7): the editor's patch opacity in [0, 1]; absent means 1. */
+    opacity?: number;
 }
+/**
+ * A cleanup patch fills its rect exactly, whatever the rect's aspect ratio. An edited patch may be
+ * resized non-uniformly, and SVG's default (`xMidYMid meet`) would letterbox it instead. The editor
+ * canvas draws its patches with the same value so the two agree pixel for pixel.
+ */
+export declare const CLEANUP_PRESERVE_ASPECT_RATIO = "none";
+/** The opacity attribute a cleanup patch carries, or undefined when it is opaque. */
+export declare function cleanupOpacity(opacity: number | undefined): number | undefined;
 export interface PageSceneContentInput {
     source: SceneAsset;
     cleanupAssets: SceneCleanupAsset[];

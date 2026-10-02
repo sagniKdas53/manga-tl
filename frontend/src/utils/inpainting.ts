@@ -67,13 +67,23 @@ export function regionAllowsPatch(
   );
 }
 
-/**
- * A region with a worker patch never gets the flat `backgroundColor` plate, even when the user has
- * hidden or deleted the patch (then the source shows). The plate is only the fallback for a region
- * whose cleanup produced nothing.
- */
+/** Whether the region has a worker cleanup patch. */
 export const regionHasPatch = (region: OcrRegion | null | undefined): boolean =>
   Boolean(region?.cleanupPatchSha256);
+
+/**
+ * Mirrors the scene builder (user review, 2026-10-02): a sound effect is excluded from cleanup,
+ * so until QA keeps it and its one late patch lands it is not drawn, and the artist's lettering
+ * shows. Text the user typed into one by hand is drawn.
+ */
+export const isUnpatchedSoundEffect = (
+  element: Pick<LayerElement, "regionId" | "isManuallyEdited">,
+  region: OcrRegion | null | undefined,
+): boolean =>
+  Boolean(element.regionId) &&
+  (region?.regionType ?? "").toLowerCase() === "sfx" &&
+  !regionHasPatch(region) &&
+  !element.isManuallyEdited;
 
 export interface PaintedPatch {
   element: LayerElement;

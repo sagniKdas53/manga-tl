@@ -220,7 +220,7 @@ const pageDetails = () => ({
 });
 
 const renderReader = async () => {
-  render(
+  const view = render(
     <Reader
       user={mockUser}
       selectedSeries={mockSeries}
@@ -237,6 +237,7 @@ const renderReader = async () => {
       document.querySelector('[data-cleanup-id="cleanup-patch-el"]'),
     ).not.toBeNull(),
   );
+  return view;
 };
 
 const calls = (method: string, pattern: RegExp) =>
@@ -383,12 +384,69 @@ describe("Reader Inpainting layer (tracker R7)", () => {
     }
   });
 
-  it("drops the flat plate where the region has a patch, and keeps it where cleanup gave none", async () => {
+  it("draws no flat plate under any region's text, patched or not", async () => {
+    // User review 2026-10-02 (page 21): the plate was the "old type mask" on SFX before QA.
     await renderReader();
-    const plates = [...document.querySelectorAll(".svg-overlay polygon")].map(
-      (p) => p.getAttribute("points"),
+    expect(document.querySelectorAll(".svg-overlay polygon")).toHaveLength(0);
+    expect(
+      document.querySelector('.svg-overlay [data-element-id="el-2"]'),
+    ).not.toBeNull();
+  });
+
+  it("hides a sound effect that has no patch, and shows one typed by hand", async () => {
+    // As the export: cleanup leaves SFX alone, so until QA keeps one and its late patch lands,
+    // the artist's lettering shows.
+    const base = mockSafeFetch.getMockImplementation()!;
+    let handTyped = false;
+    mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (/\/api\/pages\/[^/]+$/.test(url)) {
+        const details = pageDetails();
+        Object.assign(details.ocrRegions[1], { regionType: "sfx" });
+        details.layers[0].elements[1] = {
+          ...details.layers[0].elements[1],
+          isManuallyEdited: handTyped,
+        };
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(details),
+        });
+      }
+      return base(url, init);
+    });
+    const { unmount } = await renderReader();
+    expect(
+      document.querySelector('.svg-overlay [data-element-id="el-2"]'),
+    ).toBeNull();
+    expect(
+      document.querySelector('.svg-overlay [data-element-id="el-1"]'),
+    ).not.toBeNull();
+    unmount();
+
+    handTyped = true;
+    await renderReader();
+    expect(
+      document.querySelector('.svg-overlay [data-element-id="el-2"]'),
+    ).not.toBeNull();
+  });
+
+  it("saves an element's pending edit when it is deselected", async () => {
+    // User review 2026-10-02 (page 30): after Deselect the edit sat unsaved until Export asked.
+    await renderReader();
+    fireEvent.click(
+      document.querySelector('.svg-overlay [data-element-id="el-2"]')!,
     );
-    expect(plates).toEqual(["300,400 400,400 400,460 300,460"]);
+    fireEvent.change(await screen.findByLabelText("Text Content"), {
+      target: { value: "Hey there" },
+    });
+    expect(calls("PUT", /\/api\/layer-elements\/el-2$/)).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Deselect" }));
+    await waitFor(() =>
+      expect(calls("PUT", /\/api\/layer-elements\/el-2$/)).toHaveLength(1),
+    );
+    await waitFor(() =>
+      expect(calls("POST", /\/api\/pages\/p1\/render$/)).toHaveLength(1),
+    );
   });
 
   it("draws nothing for a region whose translation QA emptied, as the export does", async () => {
@@ -452,9 +510,7 @@ describe("Reader Inpainting layer (tracker R7)", () => {
     // page's revision twenty times, and the render waited for the debounce and a worker.
     await renderReader();
     fireEvent.click(
-      document.querySelector(
-        '.svg-overlay polygon[points="300,400 400,400 400,460 300,460"]',
-      )!,
+      document.querySelector('.svg-overlay [data-element-id="el-2"]')!,
     );
     const field = await screen.findByLabelText("Text Content");
     fireEvent.change(field, { target: { value: "Hey there" } });
@@ -489,9 +545,7 @@ describe("Reader Inpainting layer (tracker R7)", () => {
     });
     await renderReader();
     fireEvent.click(
-      document.querySelector(
-        '.svg-overlay polygon[points="300,400 400,400 400,460 300,460"]',
-      )!,
+      document.querySelector('.svg-overlay [data-element-id="el-2"]')!,
     );
     fireEvent.change(await screen.findByLabelText("Text Content"), {
       target: { value: "Hey there" },
@@ -589,7 +643,11 @@ describe("Reader Inpainting layer (tracker R7)", () => {
         document.querySelector('[data-cleanup-id="cleanup-patch-el"]'),
       ).toBeNull(),
     );
-    expect(document.querySelectorAll(".svg-overlay polygon")).toHaveLength(1);
+    // The text is untouched, and no flat plate comes back in the patch's place.
+    expect(
+      document.querySelector('.svg-overlay [data-element-id="el-1"]'),
+    ).not.toBeNull();
+    expect(document.querySelectorAll(".svg-overlay polygon")).toHaveLength(0);
 
     await act(async () => {
       fireEvent.keyDown(window, { key: "z", ctrlKey: true });

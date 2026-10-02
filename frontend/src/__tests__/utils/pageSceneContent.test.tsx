@@ -195,3 +195,94 @@ describe("cleanup patches as the editor leaves them (tracker R7)", () => {
     ).toBe("0.4");
   });
 });
+
+describe("contract rule 8: the editor's typography", () => {
+  // Page 30 (2026-10-02): the user set 152 px with auto-size off; the export auto-fitted to 72.
+  const page30 = (style: Record<string, unknown>): PageSceneContentInput => ({
+    source: { href: "source.png", width: 4961, height: 7016 },
+    cleanupAssets: [],
+    textObjects: [
+      {
+        objectId: "text-page-30",
+        text: "Which one do\n you think it'll \nbe today?",
+        transform: { x: 3559, y: 538, width: 1004, height: 1402, rotationDegrees: 0 },
+        writingMode: "horizontal-tb",
+        alignment: "center",
+        style: {
+          fontFamily: "Test Font",
+          fill: "#000000",
+          stroke: "#e3e3e3",
+          weight: 700,
+          padding: 4,
+          ...style,
+        },
+        visible: true,
+        zIndex: 1,
+      },
+    ],
+  });
+
+  it("draws at the user's fixed size, not the auto-fit one", () => {
+    const fitted = resolvePageScene(page30({}), measureText);
+    const fixed = resolvePageScene(page30({ fontSize: 152 }), measureText);
+    expect(fitted.objects[0].fontSize).toBeLessThanOrEqual(72);
+    expect(fixed.objects[0].fontSize).toBe(152);
+    expect(fixed.objects[0].lineBoxes.map((line) => line.height)).toEqual(
+      fixed.objects[0].lineBoxes.map(() => 152 * 1.2),
+    );
+    expect(renderPageSceneSvg(fixed)).toContain('font-size="152"');
+  });
+
+  it("reports overflow when the fixed size cannot fit the box", () => {
+    const scene = resolvePageScene(page30({ fontSize: 900 }), measureText);
+    expect(scene.objects[0].fontSize).toBe(900);
+    expect(scene.diagnostics).toContainEqual({
+      code: "text-overflow",
+      objectId: "text-page-30",
+    });
+  });
+
+  it("sets italic on the glyphs and in the measuring font", () => {
+    const fonts: string[] = [];
+    const scene = resolvePageScene(page30({ fontStyle: "italic" }), (font, text) => {
+      fonts.push(font);
+      return measureText(font, text);
+    });
+    expect(fonts.every((font) => font.includes("italic"))).toBe(true);
+    expect(renderPageSceneSvg(scene)).toContain('font-style="italic"');
+  });
+
+  it("wraps an elliptical box inside its ellipse, which narrows the lines", () => {
+    const text = "word ".repeat(40).trim();
+    const box = { x: 0, y: 0, width: 400, height: 400, rotationDegrees: 0 };
+    const input = (shape?: "elliptical"): PageSceneContentInput => ({
+      source: { href: "s.png", width: 500, height: 500 },
+      cleanupAssets: [],
+      textObjects: [
+        {
+          ...page30({}).textObjects[0],
+          text,
+          transform: box,
+          style: { ...page30({}).textObjects[0].style, ...(shape ? { shape } : {}) },
+        },
+      ],
+    });
+    const widest = (scene: ReturnType<typeof resolvePageScene>) =>
+      Math.max(...scene.objects[0].lineBoxes.map((line) => line.width));
+    const rectangle = resolvePageScene(input(), measureText);
+    const ellipse = resolvePageScene(input("elliptical"), measureText);
+    expect(ellipse.objects[0].lineBoxes).not.toEqual(rectangle.objects[0].lineBoxes);
+    expect(widest(ellipse) / ellipse.objects[0].fontSize).toBeLessThanOrEqual(
+      widest(rectangle) / rectangle.objects[0].fontSize,
+    );
+  });
+
+  it("leaves a scene without the fields exactly as before", () => {
+    const before = resolvePageScene(page30({}), measureText);
+    const explicitDefaults = resolvePageScene(
+      page30({ fontStyle: "normal", shape: "rectangular" }),
+      measureText,
+    );
+    expect(explicitDefaults.objects).toEqual(before.objects);
+  });
+});

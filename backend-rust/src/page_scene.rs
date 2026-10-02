@@ -130,6 +130,29 @@ pub async fn current_render_artifact(
     }
 }
 
+/// Contract rule 8 (2026-10-02): the optional editor typography on a text object's style.
+fn validate_editor_typography(item: &serde_json::Map<String, Value>) -> Result<(), PageSceneError> {
+    let Some(style) = item.get("style").and_then(Value::as_object) else {
+        return Ok(());
+    };
+    if let Some(size) = style.get("font_size")
+        && !size.as_f64().is_some_and(|v| v.is_finite() && v > 0.0)
+    {
+        return Err(error("style.font_size must be a positive number"));
+    }
+    if let Some(font_style) = style.get("font_style")
+        && !matches!(font_style.as_str(), Some("normal" | "italic"))
+    {
+        return Err(error("style.font_style must be normal or italic"));
+    }
+    if let Some(shape) = style.get("shape")
+        && !matches!(shape.as_str(), Some("rectangular" | "elliptical"))
+    {
+        return Err(error("style.shape must be rectangular or elliptical"));
+    }
+    Ok(())
+}
+
 /// Shared authorization gate for every automatic replacement artifact. A policy authorizes
 /// neither cleanup nor text unless its effective action is `replace`; automatic text is never
 /// allowed to carry an empty or whitespace-only replacement.
@@ -374,6 +397,7 @@ pub fn validate_page_scene(document: Value) -> Result<ValidatedPageScene, PageSc
                     return Err(error("object transform width and height must be positive"));
                 }
             }
+            validate_editor_typography(item)?;
         }
         if kind != "automatic_text" {
             continue;
