@@ -1139,15 +1139,42 @@ pub async fn get_image_file(State(state): State<AppState>, Path(image_id): Path<
     }
 }
 
-/// GET /api/pages/{pageId}/rendered — only the immutable artifact for the current scene.
+/// The revision a `renderedUrl` was issued for (`list_pages`). Both are optional: Export and the
+/// editor ask for whatever is current.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenderedQuery {
+    pub revision: Option<i32>,
+    pub scene_sha256: Option<String>,
+}
+
+/// GET /api/pages/{pageId}/rendered — only the immutable artifact for the current scene. A URL
+/// naming a revision or scene that is no longer current is answered 409 `superseded`, never with
+/// another revision's pixels.
 pub async fn get_page_rendered(
     State(state): State<AppState>,
     Path(page_id): Path<Uuid>,
+    Query(asked): Query<RenderedQuery>,
 ) -> Response {
     if find_page(&state.pool, page_id).await.is_none() {
         return StatusCode::NOT_FOUND.into_response();
     }
     let mut response = match current_render_artifact(&state.pool, page_id).await {
+        Ok(CurrentRenderArtifact::Ready(artifact))
+            if asked
+                .revision
+                .is_some_and(|revision| revision != artifact.page_revision)
+                || asked
+                    .scene_sha256
+                    .as_deref()
+                    .is_some_and(|sha| sha != artifact.logical_scene_sha256.trim()) =>
+        {
+            (
+                StatusCode::CONFLICT,
+                Json(json!({ "status": "superseded", "revision": artifact.page_revision })),
+            )
+                .into_response()
+        }
         Ok(CurrentRenderArtifact::Ready(artifact)) => {
             let path = artifact
                 .rendered_png_storage_path

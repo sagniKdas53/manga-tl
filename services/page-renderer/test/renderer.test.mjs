@@ -163,6 +163,32 @@ test("a context that cannot open a page is dropped, and the next render gets a f
   }
 });
 
+test("a render whose page will not close still frees its slot, and drops the context", async () => {
+  const instance = await renderer();
+  try {
+    await instance.render(request());
+    const [dying] = instance.contexts;
+    const openPage = dying.newPage.bind(dying);
+    dying.newPage = async () => {
+      const page = await openPage();
+      page.setContent = async () => {
+        throw new Error("Target page, context or browser has been closed");
+      };
+      page.close = async () => {
+        throw new Error("Target page, context or browser has been closed");
+      };
+      return page;
+    };
+    await assert.rejects(instance.render(request()), /has been closed/);
+    assert.equal(instance.inUse.size, 0, "the failed render released its slot");
+    assert.ok(!instance.contexts.includes(dying), "the dead context left the pool");
+    const again = await instance.render(request());
+    assert.equal(again.width, 160);
+  } finally {
+    await instance.stop();
+  }
+});
+
 test("contract rule 8: the browser draws the editor's fixed size, not an auto-fit one", async () => {
   // Page 30 (2026-10-02): the user set the line to 152 px with auto-size off; the export
   // auto-fitted it to 72 because the renderer never saw the size.

@@ -4024,7 +4024,8 @@
                     "status": {
                       "enum": [
                         "pending",
-                        "failed"
+                        "failed",
+                        "superseded"
                       ],
                       "type": "string"
                     }
@@ -4037,7 +4038,7 @@
                 }
               }
             },
-            "description": "Current render is pending or failed"
+            "description": "Current render is pending or failed, or the requested revision is superseded"
           }
         },
         "tags": [

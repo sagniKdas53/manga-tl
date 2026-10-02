@@ -692,6 +692,7 @@ async fn recovery_reset_stale_and_debounced_render() {
     let pending_response = manga_backend::routes::page::get_page_rendered(
         axum::extract::State(state.clone()),
         axum::extract::Path(page_id),
+        axum::extract::Query(Default::default()),
     )
     .await;
     assert_eq!(
@@ -805,6 +806,7 @@ async fn recovery_reset_stale_and_debounced_render() {
     let ready_response = manga_backend::routes::page::get_page_rendered(
         axum::extract::State(state.clone()),
         axum::extract::Path(page_id),
+        axum::extract::Query(Default::default()),
     )
     .await;
     assert_eq!(ready_response.status(), StatusCode::OK);
@@ -823,6 +825,47 @@ async fn recovery_reset_stale_and_debounced_render() {
         current_output,
         "the public page read returns exactly the current immutable artifact"
     );
+    // A renderedUrl issued for an earlier revision is superseded, not served this one's pixels;
+    // the current one's URL is served.
+    let current_revision: i32 =
+        sqlx::query_scalar("SELECT scene_revision FROM pages WHERE id = $1")
+            .bind(page_id)
+            .fetch_one(&pool)
+            .await
+            .expect("current revision");
+    let stale_url = manga_backend::routes::page::get_page_rendered(
+        axum::extract::State(state.clone()),
+        axum::extract::Path(page_id),
+        axum::extract::Query(manga_backend::routes::page::RenderedQuery {
+            revision: Some(current_revision - 1),
+            scene_sha256: None,
+        }),
+    )
+    .await;
+    assert_eq!(stale_url.status(), StatusCode::CONFLICT);
+    let stale_body: serde_json::Value = serde_json::from_slice(
+        &stale_url
+            .into_body()
+            .collect()
+            .await
+            .expect("superseded body")
+            .to_bytes(),
+    )
+    .expect("superseded json");
+    assert_eq!(
+        stale_body,
+        serde_json::json!({ "status": "superseded", "revision": current_revision })
+    );
+    let current_url = manga_backend::routes::page::get_page_rendered(
+        axum::extract::State(state.clone()),
+        axum::extract::Path(page_id),
+        axum::extract::Query(manga_backend::routes::page::RenderedQuery {
+            revision: Some(current_revision),
+            scene_sha256: Some("c".repeat(64)),
+        }),
+    )
+    .await;
+    assert_eq!(current_url.status(), StatusCode::OK);
     let duplicate = manga_backend::jobs::coordinator::CALLBACK_IDENTITY
         .scope(
             current_identity,
@@ -879,6 +922,7 @@ async fn recovery_reset_stale_and_debounced_render() {
     let failed_response = manga_backend::routes::page::get_page_rendered(
         axum::extract::State(state.clone()),
         axum::extract::Path(page_id),
+        axum::extract::Query(Default::default()),
     )
     .await;
     assert_eq!(failed_response.status(), StatusCode::CONFLICT);
@@ -904,6 +948,7 @@ async fn recovery_reset_stale_and_debounced_render() {
     let retry_pending_response = manga_backend::routes::page::get_page_rendered(
         axum::extract::State(state.clone()),
         axum::extract::Path(page_id),
+        axum::extract::Query(Default::default()),
     )
     .await;
     assert_eq!(

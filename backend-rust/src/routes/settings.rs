@@ -196,9 +196,12 @@ pub async fn get_settings(State(state): State<AppState>, _user: AuthUser) -> Res
 /// PUT /api/settings — saves every non-null field, returns the refreshed view.
 pub async fn update_settings(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     body: Result<Json<SystemSettingsDto>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
+    if !may_write_settings(&user) {
+        return crate::error::access_denied("/api/settings");
+    }
     let Ok(Json(dto)) = body else {
         return crate::error::unreadable_body("/api/settings");
     };
@@ -363,6 +366,12 @@ pub async fn validate_settings(State(state): State<AppState>, _user: AuthUser) -
     Json(json!({ "orphaned": orphaned })).into_response()
 }
 
+/// Who may change the global settings: an admin or a translator, as for every other editing
+/// route. A viewer reads them and changes nothing (the token alone proves only who it is).
+fn may_write_settings(user: &AuthUser) -> bool {
+    user.role.eq_ignore_ascii_case("admin") || user.role.eq_ignore_ascii_case("translator")
+}
+
 /// Sub-router mounted under `/api/settings`.
 /// PUT /api/settings/custom-models — replaces the owner's custom model IDs and returns them
 /// normalized. They are valid at once for the pipeline's catalog checks (a chapter override naming
@@ -370,9 +379,12 @@ pub async fn validate_settings(State(state): State<AppState>, _user: AuthUser) -
 /// `custom`. Nothing is invalidated: a model applies to the next job that resolves it.
 pub async fn put_custom_models(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     body: Result<Json<Vec<crate::providers::CustomModel>>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
+    if !may_write_settings(&user) {
+        return crate::error::access_denied("/api/settings/custom-models");
+    }
     let Ok(Json(models)) = body else {
         return crate::error::unreadable_body("/api/settings/custom-models");
     };

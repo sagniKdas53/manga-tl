@@ -639,3 +639,59 @@ async fn a_deleted_page_has_no_acceptable_cleanup_callback() {
 
     cleanup_series(&pool, series_id).await;
 }
+
+/// A render whose last attempt died is failed by recovery, and so is its ledger row. Left
+/// `running`, the row read as live work: the debounce sweep never queued the page again and
+/// Export called it pending until the next edit (CodeRabbit, PR #152).
+#[tokio::test]
+async fn a_render_failed_by_recovery_fails_its_ledger_row_too() {
+    let Some((_app, pool, _redis, state)) = app().await else {
+        return;
+    };
+    let _guard = QUEUE_GUARD.lock().await;
+    let (series_id, _chapter_id, page_id, image_id) = seed_pipeline(&pool).await;
+    let job_id = seed_live_job(&pool, "render", image_id, page_id).await;
+    sqlx::query(
+        "INSERT INTO page_scene_snapshots \
+         (page_id, revision, contract_version, source_sha256, logical_scene_sha256, scene_json) \
+         VALUES ($1, 0, 'page-scene/v1', repeat('a', 64), repeat('b', 64), '{}'::jsonb)",
+    )
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO page_render_jobs (job_id, page_id, page_revision, logical_scene_sha256, status) \
+         VALUES ($1, $2, 0, repeat('b', 64), 'running')",
+    )
+    .bind(&job_id)
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    // Its last attempt, and the lease ran out.
+    sqlx::query(
+        "UPDATE jobs SET attempt = 3, lease_expires_at = now() - interval '5 seconds' WHERE id = $1",
+    )
+    .bind(&job_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    manga_backend::jobs::recovery::recover_stale_processing_jobs(&state).await;
+
+    let (status, _, _) = job_row(&pool, &job_id).await;
+    let ledger: String =
+        sqlx::query_scalar("SELECT status FROM page_render_jobs WHERE job_id = $1")
+            .bind(&job_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!((status.as_str(), ledger.as_str()), ("FAILED", "failed"));
+
+    let _ = sqlx::query("DELETE FROM page_scene_snapshots WHERE page_id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await;
+    cleanup_series(&pool, series_id).await;
+}

@@ -3429,7 +3429,7 @@ export interface operations {
                     "*/*": components["schemas"]["StreamingResponseBody"];
                 };
             };
-            /** @description Current render is pending or failed */
+            /** @description Current render is pending or failed, or the requested revision is superseded */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3439,7 +3439,7 @@ export interface operations {
                         /** Format: int32 */
                         revision: number;
                         /** @enum {string} */
-                        status: "pending" | "failed";
+                        status: "pending" | "failed" | "superseded";
                     };
                 };
             };

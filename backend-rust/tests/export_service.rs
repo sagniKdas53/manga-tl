@@ -130,7 +130,7 @@ async fn seed_chapter_with_page(pool: &sqlx::PgPool, storage: &MinioService) -> 
     let storage_path = format!("originals/{image_id}.png");
     sqlx::query(
         "INSERT INTO images (id, created_at, filename, storage_path, hash, width, height) \
-         VALUES ($1, now(), '001.png', $2, 'hash-export', 1, 1)",
+         VALUES ($1, now(), '001.jpg', $2, 'hash-export', 1, 1)",
     )
     .bind(image_id)
     .bind(&storage_path)
@@ -358,6 +358,7 @@ async fn export_zip_metadata_cache_hit_and_notifications() {
         "qa verdict travels inside metadataJson"
     );
 
+    // The upload was a .jpg; the entry holds the rendered PNG, so it is named .png.
     let mut page_entry = archive.by_name("001.png").expect("rendered page entry");
     let mut archived_page = Vec::new();
     page_entry

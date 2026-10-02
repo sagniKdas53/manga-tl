@@ -278,8 +278,17 @@ export class PageRenderer {
         layout: diagnostics.layout ?? [],
       };
     } finally {
-      await page.close();
-      this.inUse.delete(context);
+      // The context is released whatever happens here: a page that will not close (its browser
+      // or context died mid-render) used to throw past the release, and with one context every
+      // later render was told the renderer is busy. Such a context is dropped, as above.
+      try {
+        await page.close();
+      } catch {
+        this.contexts = this.contexts.filter((candidate) => candidate !== context);
+        await context.close().catch(() => {});
+      } finally {
+        this.inUse.delete(context);
+      }
     }
   }
 }

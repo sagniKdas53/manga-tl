@@ -118,13 +118,14 @@ async fn app() -> Option<(
     ))
 }
 
-async fn probe_user(pool: &sqlx::PgPool, jwt: &JwtUtils) -> String {
+async fn probe_user(pool: &sqlx::PgPool, jwt: &JwtUtils, role: &str) -> String {
     let email = format!("__settings-e2e-{}@example.invalid", Uuid::new_v4());
     sqlx::query(
         "INSERT INTO users (id, created_at, display_name, email, password_hash, role) \
-         VALUES (uuid_generate_v4(), now(), 'Probe', $1, 'x', 'viewer')",
+         VALUES (uuid_generate_v4(), now(), 'Probe', $1, 'x', $2)",
     )
     .bind(&email)
+    .bind(role)
     .execute(pool)
     .await
     .expect("probe user insert");
@@ -195,7 +196,20 @@ async fn settings_get_put_roundtrip_and_validate_overrides() {
     let _ = sqlx::query("DELETE FROM users WHERE email LIKE '__settings-e2e-%'")
         .execute(&pool)
         .await;
-    let token = probe_user(&pool, &jwt).await;
+    let token = probe_user(&pool, &jwt, "admin").await;
+    // A viewer reads the settings but changes neither them nor the custom models.
+    let viewer = probe_user(&pool, &jwt, "viewer").await;
+    for uri in ["/tlhub/api/settings", "/tlhub/api/settings/custom-models"] {
+        let (status, _, _) = send(
+            app.clone(),
+            "PUT",
+            uri,
+            Some(&viewer),
+            Some("[]".to_string()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{uri}");
+    }
     let series_id = Uuid::new_v4();
     sqlx::query(
         "INSERT INTO series (id, created_at, updated_at, title, reading_direction, original_language) \

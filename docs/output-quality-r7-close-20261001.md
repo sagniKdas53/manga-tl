@@ -185,6 +185,29 @@ editor bugs (videos `vokoscreenNG-2026-10-02_19-07-21.mkv`, `…_19-09-44.mkv`).
 Both renders are QA-free (`hand_edited_at`). Backend 247 / frontend 472 tests green; each new
 test was seen failing without its fix.
 
+**Editor and export wrap a line differently (RCA only; fix with the typesetting work).** Ch. 6
+page 1, "Hyoo! Say it with your beak…": the editor showed eight lines, the export six. Same inputs
+on both sides (172 px fixed, bold, box 799, inset 4, default System Settings, the same
+`fitTextInBox`) and the same font build (Comic Neue Bold 2.003 from Google Fonts and from Debian
+measure identically: "Say it with" 776 px, fits in 791). The editor's eight lines are exactly what
+DejaVu Sans Bold (Firefox's `sans-serif`) gives: "Say it" 548, "Say it with" 1030, "your beak:"
+1036, "Gwah- 700. The canvas fits text while it renders with `measureText` on a detached canvas,
+which never makes the browser load a web font; `ensureFontsLoaded` runs only for the layers ZIP
+(`Reader.tsx:3068`), and nothing re-renders on `document.fonts` load. So a freshly opened page can
+keep line breaks measured in the fallback face until something re-renders. Fix: load the page's
+faces before the first fit and re-render when `document.fonts` finishes loading.
+
+**CodeRabbit full review (8 findings).** Fixed: export ZIP entries are named `.png` (they hold the
+render, whatever the upload was); stale/startup recovery that fails a render job also fails its
+ledger row (a row left `running` blocked the debounce sweep and Export); `GET
+/pages/{id}/rendered?revision=&sceneSha256=` answers 409 `superseded` for a URL that is no longer
+current (spec enum updated, types regenerated); settings writes (`PUT /api/settings`,
+`/custom-models`) refuse viewers (admins and translators keep them, as on every editing route);
+page-renderer releases its context when `page.close()` throws; contract rule 7 sits after rule 6;
+`fetch_a09_references.sh` stops when `corpus` is missing. Deferred to the typesetting work:
+`maskPolygon` reaches the editor's fitter but not the scene contract, so a masked element can wrap
+differently in the export (the project.json elements above have none).
+
 ## Follow-ups, in order of output value
 
 - **A — cleanup masks (worker).** (1) Close and fill the automatic mask as `tidy_mask` does for hand

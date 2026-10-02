@@ -4,9 +4,10 @@ set -uo pipefail
 LIST="${LIST:-docs/quality-runs/a09-20260913-stages/torii-list.txt}"
 LOG_DIR="${LOG_DIR:-docs/quality-runs/a09-20260913-stages/torii-logs}"
 STATUS="${STATUS:-docs/quality-runs/a09-20260913-stages/torii-status.jsonl}"
+[ -d corpus ] || { echo "corpus submodule missing; run from the repository root" >&2; exit 1; }
 mkdir -p "$LOG_DIR"
 : >"$STATUS"
-cd corpus
+cd corpus || exit 1
 while read -r sample; do
   [ -z "$sample" ] && continue
   id=$(basename "$sample")

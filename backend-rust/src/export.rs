@@ -142,20 +142,6 @@ async fn try_build(
             zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
         for page in &pages {
-            let image: Image = sqlx::query_as("SELECT * FROM images WHERE id = $1")
-                .bind(page.image_id)
-                .fetch_one(&state.pool)
-                .await
-                .map_err(|e| ExportFailure {
-                    message: format!("image lookup failed: {e}"),
-                })?;
-            let filename = if image.filename.trim().is_empty() {
-                format!("page_{}.png", page.page_number)
-            } else {
-                image.filename.clone()
-            };
-            let ext = filename.rsplit('.').next().unwrap_or("png");
-
             let artifact = match current_render_artifact(&state.pool, page.id).await {
                 Ok(CurrentRenderArtifact::Ready(artifact)) => artifact,
                 Ok(CurrentRenderArtifact::Pending { revision }) => {
@@ -194,7 +180,8 @@ async fn try_build(
                     ),
                 });
             };
-            let entry_name = format!("{:03}.{}", page.page_number, ext);
+            // Every entry is the rendered PNG, whatever the upload's format was.
+            let entry_name = format!("{:03}.png", page.page_number);
             writer
                 .start_file(entry_name, options)
                 .map_err(|e| ExportFailure {

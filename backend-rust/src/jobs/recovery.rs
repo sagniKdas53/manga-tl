@@ -15,6 +15,25 @@ use crate::jobs::{HEAVY_QUEUES, LIGHT_QUEUES};
 use crate::state::AppState;
 use uuid::Uuid;
 
+/// Marks a render job's ledger row failed after recovery failed the job itself, as the worker's
+/// status report does (`update_job_status`). A row left `running` reads as live work: the debounce
+/// sweep would never queue the page again, render-now would wait on it, and Export would call the
+/// page pending until someone edited it. Rows of other job types do not exist; a no-op for them.
+async fn fail_render_ledger<'e, E>(executor: E, job_id: &str)
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    if let Err(err) = sqlx::query(
+        "UPDATE page_render_jobs SET status = 'failed' WHERE job_id = $1 AND status <> 'succeeded'",
+    )
+    .bind(job_id)
+    .execute(executor)
+    .await
+    {
+        tracing::error!("Could not mark render job {job_id} failed in its ledger: {err}");
+    }
+}
+
 /// Boot-time reset of orphaned PROCESSING jobs, in one transaction.
 pub async fn reset_processing_jobs_to_pending(state: &AppState) {
     let mut tx = match state.pool.begin().await {
@@ -40,7 +59,7 @@ pub async fn reset_processing_jobs_to_pending(state: &AppState) {
                 attempt - 1,
                 max_attempts
             );
-            let _ = sqlx::query(
+            let failed = sqlx::query(
                 "UPDATE jobs SET status='FAILED', error=$2, updated_at=now() WHERE id=$1",
             )
             .bind(&job.id)
@@ -51,6 +70,9 @@ pub async fn reset_processing_jobs_to_pending(state: &AppState) {
             ))
             .execute(&mut *tx)
             .await;
+            if failed.is_ok_and(|done| done.rows_affected() > 0) {
+                fail_render_ledger(&mut *tx, &job.id).await;
+            }
         } else {
             tracing::info!(
                 "Resetting processing job {} to PENDING on startup (attempt {}/{})",
@@ -137,7 +159,7 @@ pub async fn recover_stale_processing_jobs(state: &AppState) {
                     page_generation,
                     job.input_generation
                 );
-                let _ = sqlx::query(
+                let failed = sqlx::query(
                     "UPDATE jobs SET status='FAILED', \
                        error='Superseded: the page inputs were replaced while this attempt ran', \
                        updated_at=now() WHERE id=$1 AND status='PROCESSING'",
@@ -145,6 +167,9 @@ pub async fn recover_stale_processing_jobs(state: &AppState) {
                 .bind(&job.id)
                 .execute(&state.pool)
                 .await;
+                if failed.is_ok_and(|done| done.rows_affected() > 0) {
+                    fail_render_ledger(&state.pool, &job.id).await;
+                }
                 continue;
             }
         }
@@ -161,7 +186,7 @@ pub async fn recover_stale_processing_jobs(state: &AppState) {
         if attempt > max_attempts {
             // The same compare-and-swap as the re-arm below: a heartbeat or a callback that
             // landed after this sweep read the row must not be overwritten with FAILED.
-            let _ = sqlx::query(
+            let failed = sqlx::query(
                 "UPDATE jobs SET status='FAILED', error='Max attempts exhausted after stale recovery', \
                    updated_at=now() \
                  WHERE id=$1 AND status='PROCESSING' \
@@ -174,6 +199,9 @@ pub async fn recover_stale_processing_jobs(state: &AppState) {
             .bind(job.lease_expires_at)
             .execute(&state.pool)
             .await;
+            if failed.is_ok_and(|done| done.rows_affected() > 0) {
+                fail_render_ledger(&state.pool, &job.id).await;
+            }
         } else {
             // Compare-and-swap on the attempt, lease token and lease expiry this sweep observed.
             // A heartbeat renews lease_expires_at, not the token: without the expiry in the
