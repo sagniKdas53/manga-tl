@@ -455,6 +455,49 @@ describe("Reader project ZIP export", () => {
     expect(project.totalCost.estimated_cost).toBeCloseTo(0.0125);
   });
 
+  it("draws an elliptical element's text as the editor shows it, not uppercased (G3)", async () => {
+    const element = layerPayload[0].elements[0];
+    element.boxShape = "elliptical";
+    try {
+      render(
+        <Reader
+          user={mockUser}
+          selectedSeries={mockSeries}
+          selectedChapter={mockChapter}
+          chapters={[mockChapter]}
+          pages={[mockPage]}
+          theme="dark"
+        />,
+      );
+      const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
+      Object.defineProperty(img, "naturalWidth", {
+        value: 1200,
+        configurable: true,
+      });
+      Object.defineProperty(img, "naturalHeight", {
+        value: 1600,
+        configurable: true,
+      });
+      fireEvent.load(img);
+      fireEvent.click(await screen.findByText("Export Project (ZIP)"));
+      await waitFor(() => {
+        expect(capturedZip).not.toBeNull();
+      });
+
+      const painted = vi
+        .mocked(HTMLCanvasElement.prototype.getContext)
+        .mock.results.map((result) => result.value)
+        .filter((context) => context !== null)
+        .flatMap((context) => vi.mocked(context!.fillText).mock.calls)
+        .map((call: unknown[]) => String(call[0]))
+        .join(" ");
+      expect(painted).toContain("going");
+      expect(painted).not.toContain("GOING");
+    } finally {
+      element.boxShape = "rectangular";
+    }
+  });
+
   it("carries the Inpainting layer: each patch file by digest, and each patch's edits", async () => {
     const patchSha = "a".repeat(64);
     const maskSha = "b".repeat(64);

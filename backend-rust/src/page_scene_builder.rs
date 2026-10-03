@@ -862,14 +862,14 @@ fn style_for(
     {
         style["font_style"] = json!("italic");
     }
-    // The layout stage marks most bubble text elliptical already (6,690 elements on the test
-    // stack, 2026-10-02); honouring that for all of them would change every page's scene, so it
-    // re-renders (and re-queues QA) everywhere. Only an element the user edited carries it.
-    if element.is_manually_edited == Some(true)
-        && element
-            .box_shape
-            .as_deref()
-            .is_some_and(|s| s.eq_ignore_ascii_case("elliptical"))
+    // G3 (user, 2026-10-03: what you see is what you get): the editor wraps every elliptical
+    // element in the ellipse, so the scene does too. The layout stage marks most bubble text
+    // elliptical (6,690 elements on the test stack, 2026-10-02), so this changes those pages'
+    // scenes: their next render or Export draws them again and queues QA, accepted by the user.
+    if element
+        .box_shape
+        .as_deref()
+        .is_some_and(|s| s.eq_ignore_ascii_case("elliptical"))
     {
         style["shape"] = json!("elliptical");
     }
@@ -1026,14 +1026,24 @@ mod tests {
     }
 
     #[test]
-    fn style_carries_the_editors_typography_only_when_the_user_chose_it() {
+    fn style_carries_the_editors_typography_and_box_shape() {
         let geometry = crate::settings::TextBoxGeometry::DEFAULT;
-        // A pipeline element: auto-sized, elliptical from layout, never touched. Its style must
-        // stay exactly as before, or every page's scene digest moves and every page re-renders.
+        // A pipeline element: auto-sized, elliptical from layout, never touched. Size and style
+        // stay the export's own; the shape is the editor's (G3), so both wrap in the ellipse.
         let pipeline = style_for(&text_element(json!({})), "comic-neue", &geometry);
-        for key in ["font_size", "font_style", "shape"] {
+        for key in ["font_size", "font_style"] {
             assert!(pipeline.get(key).is_none(), "{key} on an untouched element");
         }
+        assert_eq!(pipeline["shape"], json!("elliptical"));
+        let rectangular = style_for(
+            &text_element(json!({"boxShape": "rectangular"})),
+            "comic-neue",
+            &geometry,
+        );
+        assert!(
+            rectangular.get("shape").is_none(),
+            "rectangular is the default"
+        );
         // Page 30: 152 px with auto-size off, elliptical, edited by hand.
         let edited = style_for(
             &text_element(json!({"size": 152.0, "autoSize": false, "isManuallyEdited": true})),
