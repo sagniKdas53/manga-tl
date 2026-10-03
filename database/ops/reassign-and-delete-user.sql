@@ -7,7 +7,8 @@
 --     -f - < database/ops/reassign-and-delete-user.sql
 --
 -- Every column that names a user: images.created_by, series.created_by and
--- layer_edit_history.edited_by (foreign keys), and translations.created_by (no constraint).
+-- layer_edit_history.edited_by (foreign keys), and translations.created_by and
+-- translation_regions.edited_by (no constraint).
 -- A throwaway that owns nothing (the laptop one) is deleted the same way.
 
 \set ON_ERROR_STOP on
@@ -29,6 +30,7 @@ UPDATE images i SET created_by = s.owner FROM swap s WHERE i.created_by = s.thro
 UPDATE series r SET created_by = s.owner FROM swap s WHERE r.created_by = s.throwaway;
 UPDATE layer_edit_history h SET edited_by = s.owner FROM swap s WHERE h.edited_by = s.throwaway;
 UPDATE translations t SET created_by = s.owner FROM swap s WHERE t.created_by = s.throwaway;
+UPDATE translation_regions r SET edited_by = s.owner FROM swap s WHERE r.edited_by = s.throwaway;
 DELETE FROM users u USING swap s WHERE u.id = s.throwaway;
 
 COMMIT;

@@ -49,7 +49,7 @@ Each item says whether it makes output better or is upkeep.
    `images.created_by` to the user's account, then delete the throwaway. Also delete the laptop
    throwaway account.
    - **Script ready 2026-10-03:** `database/ops/reassign-and-delete-user.sql` moves
-     `images`, `series`, `layer_edit_history` and `translations` ownership in one transaction,
+     `images`, `series`, `layer_edit_history`, `translations` and `translation_regions` ownership in one transaction,
      then deletes the throwaway; it changes nothing unless both accounts exist. Tested on a
      throwaway Postgres. The user runs it on prod after the deploy, and on the laptop with
      the laptop throwaway's email (it owns nothing, so only the delete happens).
