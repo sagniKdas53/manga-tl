@@ -8,21 +8,14 @@ import {
 export type { FitResult };
 export { clampLineCenter };
 
-/**
- * Loads every distinct export face before Canvas starts measuring or painting it.
- *
- * The shared layout core deliberately has no browser dependency. This is the one browser-only
- * boundary that supplies its text measurement.
- */
-export const ensureFontsLoaded = async (
-  elements: Iterable<{
-    font?: string | null;
-    fontWeight?: string | null;
-    fontStyle?: string | null;
-  }>,
-): Promise<void> => {
-  if (typeof document === "undefined" || !document.fonts) return;
+export interface FontRef {
+  font?: string | null;
+  fontWeight?: string | null;
+  fontStyle?: string | null;
+}
 
+/** The distinct CSS font specs a set of elements draws with, sorted, in `document.fonts.load` form. */
+export const fontSpecs = (elements: Iterable<FontRef>): string[] => {
   const specs = new Set<string>();
   for (const element of elements) {
     const style =
@@ -33,6 +26,12 @@ export const ensureFontsLoaded = async (
     const family = element.font || "Comic Neue";
     specs.add(`${weight} ${style}16px "${family}"`);
   }
+  return [...specs].sort();
+};
+
+/** Loads each spec; a face that fails to load does not hold up the others. */
+export const loadFontSpecs = async (specs: Iterable<string>): Promise<void> => {
+  if (typeof document === "undefined" || !document.fonts) return;
   await Promise.all(
     [...specs].map((spec) =>
       document.fonts.load(spec).catch(() => {
@@ -41,6 +40,15 @@ export const ensureFontsLoaded = async (
     ),
   );
 };
+
+/**
+ * Loads every distinct export face before Canvas starts measuring or painting it.
+ *
+ * The shared layout core deliberately has no browser dependency. This is the one browser-only
+ * boundary that supplies its text measurement.
+ */
+export const ensureFontsLoaded = (elements: Iterable<FontRef>): Promise<void> =>
+  loadFontSpecs(fontSpecs(elements));
 
 /**
  * Browser adapter for the pure package layout core.

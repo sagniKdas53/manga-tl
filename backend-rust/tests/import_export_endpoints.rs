@@ -599,8 +599,9 @@ async fn image_archive_upload_and_project_restore() {
     .unwrap();
     assert_eq!(
         restored.len(),
-        2,
-        "the patch whose file is not in the archive is not restored; the fallback plate becomes one"
+        1,
+        "the patch whose file is not in the archive is not restored, and the text's polygon is \
+         not turned into one"
     );
     let (x, y, w, h, opacity, region, reference) = &restored[0];
     assert_eq!((*x, *y, *w, *h, *opacity), (14.5, 20.0, 90, 30, Some(0.4)));
@@ -626,22 +627,8 @@ async fn image_archive_upload_and_project_restore() {
         );
     }
 
-    // The text's fallback plate, whose region this page does not have, is now a region-less patch
-    // after the others, drawn by the builder's own plate rasteriser; the text keeps no polygon.
-    let (px, py, pw, ph, _, plate_region, plate_ref) = &restored[1];
-    assert_eq!(
-        (*px, *py, *pw, *ph, *plate_region),
-        (24.0, 24.0, 20, 20, None)
-    );
-    assert_eq!(plate_ref["order"], 1);
-    assert_eq!(
-        plate_ref["generatorSha256"],
-        {
-            use sha2::Digest;
-            hex::encode(sha2::Sha256::digest(b"plain-mask/v1"))
-        }
-        .as_str()
-    );
+    // G4: no region's text is drawn over a flat plate (2026-10-02), so a polygon on imported text
+    // is not a plate to rebuild. It stays on the element, where the editor fits the text inside it.
     let text_polygon: Option<serde_json::Value> = sqlx::query_scalar(
         "SELECT e.mask_polygon FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
          WHERE l.page_id = $1 AND l.type = 'translation'",
@@ -650,7 +637,10 @@ async fn image_archive_upload_and_project_restore() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(text_polygon, None);
+    assert_eq!(
+        text_polygon,
+        Some(serde_json::json!([[24, 24], [44, 24], [44, 44], [24, 44]]))
+    );
 
     // A cleanup file whose bytes do not match its name makes the archive unreadable.
     let tampered = zip_of(
