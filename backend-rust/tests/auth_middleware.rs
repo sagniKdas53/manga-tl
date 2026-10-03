@@ -66,6 +66,7 @@ fn test_config() -> manga_backend::config::Config {
         jwt_secret: None,
         internal_api_token: None,
         jwt_expiration_ms: 3_600_000,
+        self_hosted_admin: false,
         redis: manga_backend::config::RedisConfig {
             host: "localhost".into(),
             port: 6379,

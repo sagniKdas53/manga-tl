@@ -183,6 +183,9 @@ services:
       - JWT_SECRET_FILE=/run/secrets/jwt_secret
       - CONTEXT_PATH=${CONTEXT_PATH:-/tlhub}
       - INTERNAL_API_TOKEN_FILE=/run/secrets/internal_api_token
+      # Self-hosted: every signed-in user may do every admin task (delete, settings, health).
+      # Set it to false to go back to the stored roles (admin / translator / viewer).
+      - SELF_HOSTED_ADMIN=${SELF_HOSTED_ADMIN:-true}
       - WORKER_URLS=${WORKER_URLS:-http://worker:8000}
       - WORKER_POLL_MS=${WORKER_POLL_MS:-2000}
       - RENDER_DEBOUNCE_SECONDS=${RENDER_DEBOUNCE_SECONDS:-30}

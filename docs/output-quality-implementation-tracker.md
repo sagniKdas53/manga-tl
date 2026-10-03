@@ -32,6 +32,10 @@ Each item says whether it makes output better or is upkeep.
    - The role checks are spread over `routes/page.rs`, `settings.rs`, `health.rs`, `series.rs`,
      `manual_cleanup.rs`, `auth.rs` and `layers.rs`. This way none of them change.
    - Default on in the shipped compose files. Tests cover both settings.
+   - **Done 2026-10-03** (`feat/self-hosted-admin`). The setting is `SELF_HOSTED_ADMIN`, applied by
+     `auth::effective_role` in the extractor and in the login, register and `PUT /me` responses.
+     The stored role is never written. A browser already signed in keeps its saved role in the
+     menu until the next sign-in; the server-side checks change at once.
 3. **G1: fonts before the first fit (output).** The editor waits for the page's fonts before it
    fits text, and fits again when `document.fonts` finishes loading. This fixes ch. 6 p. 1 wrapping
    to eight lines in the editor and six in the export. Frontend only.

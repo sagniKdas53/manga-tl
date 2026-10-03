@@ -151,6 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         jwt_secret: None,
         internal_api_token: None,
         jwt_expiration_ms: 0,
+        self_hosted_admin: false,
         minio: minio.clone(),
         redis: RedisConfig {
             host: "unused".into(),

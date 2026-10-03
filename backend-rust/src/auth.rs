@@ -66,7 +66,22 @@ async fn resolve_auth_user(parts: &mut Parts, state: &AppState) -> Option<AuthUs
         .await
         .ok()
         .flatten();
-    user.map(AuthUser::from)
+    user.map(|user| {
+        let mut auth_user = AuthUser::from(user);
+        auth_user.role = effective_role(auth_user.role, state.config.self_hosted_admin);
+        auth_user
+    })
+}
+
+/// The role a signed-in user acts with. Under `SELF_HOSTED_ADMIN` that is `admin` for everyone;
+/// otherwise the stored role. Every role check reads [`AuthUser::role`], which is set through
+/// here, so this is the one place the flag is applied.
+pub fn effective_role(stored: String, self_hosted_admin: bool) -> String {
+    if self_hosted_admin {
+        "admin".to_string()
+    } else {
+        stored
+    }
 }
 
 impl FromRequestParts<AppState> for AuthUser {

@@ -50,6 +50,7 @@ async fn app() -> Option<(Router, sqlx::PgPool, JwtUtils)> {
         jwt_secret: None,
         internal_api_token: None,
         jwt_expiration_ms: 3_600_000,
+        self_hosted_admin: false,
         minio: MinioConfig {
             endpoint: "http://localhost:9000".into(),
             external_url: None,
