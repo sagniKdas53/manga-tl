@@ -50,6 +50,11 @@ pub struct Config {
     pub minio: MinioConfig,
     /// Redis/Valkey connection settings (Spring used SPRING_DATA_REDIS_*).
     pub redis: RedisConfig,
+    /// `SELF_HOSTED_ADMIN`: every signed-in user is treated as an admin. Meant for a
+    /// self-hosted install where everyone who can sign in is trusted. Applied once, when the
+    /// auth extractor resolves the user, so no role check changes. The stored role is untouched.
+    /// Off when unset; the shipped compose files turn it on.
+    pub self_hosted_admin: bool,
 }
 
 /// MinIO (S3-compatible) object storage. Compose passes:
@@ -156,6 +161,14 @@ impl Config {
             },
         };
 
+        let self_hosted_admin = match parse_flag(env_var("SELF_HOSTED_ADMIN")) {
+            Ok(on) => on,
+            Err(raw) => {
+                problems.push(format!("SELF_HOSTED_ADMIN ({raw}) is not true or false."));
+                false
+            }
+        };
+
         // --- Port of SecretsStartupValidator.validate() ------------------------------
         problems.extend(check_secret(
             "JWT_SECRET",
@@ -191,6 +204,7 @@ impl Config {
             jwt_expiration_ms,
             minio,
             redis,
+            self_hosted_admin,
         })
     }
 }
@@ -359,6 +373,19 @@ fn redis_port(raw: Option<String>) -> Result<u16, String> {
     }
 }
 
+/// A boolean switch: unset is off; `true`/`1`/`yes`/`on` and `false`/`0`/`no`/`off`, any case.
+/// Anything else is returned as the error so startup can name it.
+fn parse_flag(raw: Option<String>) -> Result<bool, String> {
+    let Some(raw) = raw else {
+        return Ok(false);
+    };
+    match raw.to_ascii_lowercase().as_str() {
+        "true" | "1" | "yes" | "on" => Ok(true),
+        "false" | "0" | "no" | "off" => Ok(false),
+        _ => Err(raw),
+    }
+}
+
 /// Env var helper treating empty/whitespace-only values as unset.
 fn env_var(name: &str) -> Option<String> {
     env::var(name)
@@ -487,5 +514,17 @@ mod tests {
         assert_eq!(normalize_context_path("tlhub"), "/tlhub");
         assert_eq!(normalize_context_path("/tlhub/"), "/tlhub");
         assert_eq!(normalize_context_path(" /tlhub "), "/tlhub");
+    }
+
+    #[test]
+    fn flags_parse_both_ways_and_reject_the_rest() {
+        assert_eq!(parse_flag(None), Ok(false));
+        for on in ["true", "TRUE", "1", "yes", "On"] {
+            assert_eq!(parse_flag(Some(on.into())), Ok(true), "{on}");
+        }
+        for off in ["false", "0", "no", "OFF"] {
+            assert_eq!(parse_flag(Some(off.into())), Ok(false), "{off}");
+        }
+        assert_eq!(parse_flag(Some("maybe".into())), Err("maybe".to_string()));
     }
 }

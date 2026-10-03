@@ -70,6 +70,8 @@ services:
       RENDER_DEBOUNCE_SECONDS: ${RENDER_DEBOUNCE_SECONDS:-30}
       PAGE_RENDERER_URL: http://page-renderer:8090
       CONTEXT_PATH: ${CONTEXT_PATH:-/tlhub}
+      # Every signed-in user is an admin; false goes back to the stored roles.
+      SELF_HOSTED_ADMIN: ${SELF_HOSTED_ADMIN:-true}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     secrets: [ db_password, minio_password, jwt_secret, internal_api_token, worker_api_secret ]
     # DEV_HTTP_BIND=0.0.0.0 in .env opens the Reader to the LAN (phones, tablets); MinIO stays local.

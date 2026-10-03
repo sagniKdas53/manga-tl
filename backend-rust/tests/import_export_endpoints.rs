@@ -63,6 +63,7 @@ async fn app() -> Option<(Router, sqlx::PgPool)> {
         jwt_secret: None,
         internal_api_token: Some("test-internal-token".into()),
         jwt_expiration_ms: 3_600_000,
+        self_hosted_admin: false,
         minio: minio.clone(),
         redis: manga_backend::config::RedisConfig {
             host: "localhost".into(),

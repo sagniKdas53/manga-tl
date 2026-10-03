@@ -49,6 +49,10 @@ fn db_config_from_env() -> Option<DatabaseConfig> {
 }
 
 async fn app() -> Option<(Router, sqlx::PgPool)> {
+    app_with(false).await
+}
+
+async fn app_with(self_hosted_admin: bool) -> Option<(Router, sqlx::PgPool)> {
     let pool = db::connect(&db_config_from_env()?).await.ok()?;
     let config = manga_backend::config::Config {
         context_path: "/tlhub".into(),
@@ -64,6 +68,7 @@ async fn app() -> Option<(Router, sqlx::PgPool)> {
         jwt_secret: None,
         internal_api_token: None,
         jwt_expiration_ms: 3_600_000,
+        self_hosted_admin,
         minio: MinioConfig {
             endpoint: "http://localhost:9000".into(),
             external_url: None,
@@ -471,4 +476,159 @@ async fn full_account_lifecycle() {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 
     cleanup(&pool).await;
+}
+
+/// SELF_HOSTED_ADMIN: with it on, a translator account is an admin everywhere it is read (login,
+/// `/me`, refresh, and the role checks behind the extractor), while its stored role stays
+/// `translator`. With it off, the same account is refused an admin-only route.
+#[tokio::test]
+async fn self_hosted_admin_flag_makes_every_signed_in_user_admin() {
+    let Some((app_on, pool)) = app_with(true).await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL not set");
+        return;
+    };
+    let (app_off, _) = app_with(false).await.expect("same database");
+
+    // Not `__auth-e2e%`: full_account_lifecycle wipes that prefix and runs in parallel, so this
+    // test seeds its own account. Registration then never sees an empty table, which would store
+    // the translator as the first-user admin.
+    let tag = &uuid::Uuid::new_v4().to_string()[..8];
+    let email = format!("__admin-flag-{tag}@example.invalid");
+    let bootstrap = format!("__admin-flag-{tag}-bootstrap@example.invalid");
+    let password = format!("t-{tag}-9A!");
+    let delete = || async {
+        sqlx::query("DELETE FROM users WHERE email = $1 OR email = $2")
+            .bind(&email)
+            .bind(&bootstrap)
+            .execute(&pool)
+            .await
+            .expect("cleanup");
+    };
+    delete().await;
+    sqlx::query(
+        "INSERT INTO users (id, created_at, display_name, email, password_hash, role) \
+         VALUES (uuid_generate_v4(), now(), 'Bootstrap', $1, 'x', 'admin')",
+    )
+    .bind(&bootstrap)
+    .execute(&pool)
+    .await
+    .expect("bootstrap user");
+
+    let (status, _, body) = body_string(
+        send(
+            app_on.clone(),
+            "POST",
+            "/tlhub/api/auth/register",
+            None,
+            Some(format!(
+                r#"{{"email":"{email}","password":"{password}","displayName":"Flag Probe","role":"translator"}}"#
+            )),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let registered: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        registered["role"], "admin",
+        "register reports the effective role"
+    );
+
+    let stored: String = sqlx::query_scalar("SELECT role FROM users WHERE email = $1")
+        .bind(&email)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(stored, "translator", "the flag never writes the role");
+
+    let login_body = format!(r#"{{"email":"{email}","password":"{password}"}}"#);
+    let (status, _, body) = body_string(
+        send(
+            app_on.clone(),
+            "POST",
+            "/tlhub/api/auth/login",
+            None,
+            Some(login_body.clone()),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let login: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(login["role"], "admin");
+    let token = login["token"].as_str().unwrap().to_string();
+
+    for (method, uri) in [
+        ("GET", "/tlhub/api/auth/me"),
+        ("POST", "/tlhub/api/auth/refresh"),
+    ] {
+        let (status, _, body) =
+            body_string(send(app_on.clone(), method, uri, Some(&token), None).await).await;
+        assert_eq!(status, StatusCode::OK, "{uri}: {body}");
+        let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(parsed["role"], "admin", "{uri}");
+    }
+
+    let (status, _, body) = body_string(
+        send(
+            app_on.clone(),
+            "PUT",
+            "/tlhub/api/auth/me",
+            Some(&token),
+            Some(r#"{"displayName":"Flag Probe 2"}"#.into()),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&body).unwrap()["role"],
+        "admin"
+    );
+
+    // An admin-only route: /actuator/loggers.
+    let (status, _, body) = body_string(
+        send(
+            app_on.clone(),
+            "GET",
+            "/tlhub/actuator/loggers",
+            Some(&token),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "flag on: {body}");
+
+    // Flag off: the same account is a translator again.
+    let (status, _, body) = body_string(
+        send(
+            app_off.clone(),
+            "GET",
+            "/tlhub/api/auth/me",
+            Some(&token),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&body).unwrap()["role"],
+        "translator"
+    );
+    let (status, _, _) = body_string(
+        send(
+            app_off.clone(),
+            "GET",
+            "/tlhub/actuator/loggers",
+            Some(&token),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "flag off");
+
+    delete().await;
 }

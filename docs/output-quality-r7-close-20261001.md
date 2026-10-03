@@ -239,7 +239,8 @@ differently in the export (the project.json elements above have none).
   under it, so a patch hidden while the repaint runs does not come back.
 - **I — self-hosted admin flag (added 2026-10-02, user).** One setting, on by default in the
   shipped compose files, that lets every signed-in user do every admin task. It is applied once, in
-  the auth extractor. See the tracker's plan for 2026-10-03.
+  the auth extractor. See the tracker's plan for 2026-10-03. **Done 2026-10-03** as
+  `SELF_HOSTED_ADMIN` (`feat/self-hosted-admin`).
 
 ## Evidence
 

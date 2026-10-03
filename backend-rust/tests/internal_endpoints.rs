@@ -85,6 +85,7 @@ async fn app() -> Option<(
         jwt_secret: None,
         internal_api_token: Some(INTERNAL_TOKEN.into()),
         jwt_expiration_ms: 3_600_000,
+        self_hosted_admin: false,
         minio: minio.clone(),
         redis: RedisConfig {
             host: "localhost".into(),
