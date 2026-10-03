@@ -84,7 +84,8 @@ Each item says whether it makes output better or is upkeep.
 - **Done 2026-10-03.** Phase 1.1–1.2 had already been done by the user on 2026-10-02 (the
   worktrees are gone; 6 `torii/images/` files remain in `gaps/unfiled/iuno/`, which are not
   copies and stay). Phase 0's baseline is corpus PR #7 (stacked on #6, the backup-branch
-  rescue); `v1-baseline` is tagged at its merge.
+  rescue); both merged, and `v1-baseline` is tagged at #7's merge, `8b858693` (pushed to
+  GitHub and pi5). The parent's corpus pin is that commit.
 
 **Afternoon: get ready for typesetting (output).** Write the C + G packet; no code yet.
 - C: split `background_color` into an outline colour and a plate colour (migration, golden OpenAPI
