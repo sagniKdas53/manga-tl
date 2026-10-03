@@ -48,6 +48,11 @@ Each item says whether it makes output better or is upkeep.
    `bunny-import-c68d0f@example.invalid`, which owns the SpaceBunny images. Reassign
    `images.created_by` to the user's account, then delete the throwaway. Also delete the laptop
    throwaway account.
+   - **Script ready 2026-10-03:** `database/ops/reassign-and-delete-user.sql` moves
+     `images`, `series`, `layer_edit_history` and `translations` ownership in one transaction,
+     then deletes the throwaway; it changes nothing unless both accounts exist. Tested on a
+     throwaway Postgres. The user runs it on prod after the deploy, and on the laptop with
+     the laptop throwaway's email (it owns nothing, so only the delete happens).
 
 **Midday: free corpus space (upkeep, about 17 GB).** Phase 0 and Phase 1.1–1.2 of the corpus-v2 plan
 (`corpus/docs/CORPUS_V2_PLAN.md`, in the private corpus repo).
@@ -55,6 +60,10 @@ Each item says whether it makes output better or is upkeep.
 - Phase 1.1–1.2: remove the two merged worktrees under `corpus/.claude/worktrees/` (16.4 GB) and
   the `torii/images/` copies (896 files, about 0.6 GB).
 - MEGA sync is paused first. The agent prepares a hash-checked list and the user runs the deletes.
+- **Done 2026-10-03.** Phase 1.1–1.2 had already been done by the user on 2026-10-02 (the
+  worktrees are gone; 6 `torii/images/` files remain in `gaps/unfiled/iuno/`, which are not
+  copies and stay). Phase 0's baseline is corpus PR #7 (stacked on #6, the backup-branch
+  rescue); `v1-baseline` is tagged at its merge.
 
 **Afternoon: get ready for typesetting (output).** Write the C + G packet; no code yet.
 - C: split `background_color` into an outline colour and a plate colour (migration, golden OpenAPI
