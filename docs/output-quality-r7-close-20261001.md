@@ -236,7 +236,8 @@ differently in the export (the project.json elements above have none).
      turns into a patch.
 - **H — parked review items (PR #152).** Validate `PUT /pages/{id}/scene` against the full JSON
   Schema (nothing calls it today). Fence a manual repaint's callback on a digest of the patches
-  under it, so a patch hidden while the repaint runs does not come back.
+  under it, so a patch hidden while the repaint runs does not come back. **Repaint fence done
+  2026-10-03** (`underlaySha256`); schema validation moves to the C + G packet with G2.
 - **I — self-hosted admin flag (added 2026-10-02, user).** One setting, on by default in the
   shipped compose files, that lets every signed-in user do every admin task. It is applied once, in
   the auth extractor. See the tracker's plan for 2026-10-03.

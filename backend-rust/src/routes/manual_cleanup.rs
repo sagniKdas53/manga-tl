@@ -110,6 +110,58 @@ async fn underlay(state: &AppState, page_id: Uuid, revision: i32) -> Result<Vec<
         .collect())
 }
 
+/// H2: a sha256 over the underlay entries whose bounds meet the mark -- the patches the worker
+/// composites into the repaint. The queue stores it in the job; the callback compares it with the
+/// page's underlay as it is then, so a patch hidden or changed under the mark while the repaint
+/// ran is not brought back by landing it. Patches elsewhere on the page do not count, so two
+/// repaints in different places do not refuse each other.
+fn underlay_digest(underlay: &[Value], mark: &MaskBounds) -> String {
+    let meets = |entry: &&Value| {
+        let n = |key: &str| entry[key].as_f64().unwrap_or(0.0);
+        let (x, y, w, h) = (n("x"), n("y"), n("width"), n("height"));
+        let (mx, my) = (mark.x as f64, mark.y as f64);
+        let (mw, mh) = (mark.width as f64, mark.height as f64);
+        x < mx + mw && mx < x + w && y < my + mh && my < y + h
+    };
+    let under: Vec<&Value> = underlay.iter().filter(meets).collect();
+    hex::encode(Sha256::digest(
+        serde_json::to_vec(&under).expect("the underlay serializes"),
+    ))
+}
+
+/// [`underlay_digest`] of the page's current underlay under `mark`.
+pub async fn underlay_sha256(
+    state: &AppState,
+    page_id: Uuid,
+    mark: &MaskBounds,
+) -> Result<String, String> {
+    let revision: i32 = sqlx::query_scalar("SELECT scene_revision FROM pages WHERE id = $1")
+        .bind(page_id)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(underlay_digest(
+        &underlay(state, page_id, revision).await?,
+        mark,
+    ))
+}
+
+/// The digest and mark a job was queued with. `None` for a `restore` (it has no underlay) and for
+/// a job queued before the fence existed; those land unchecked, as before.
+async fn queued_underlay(pool: &sqlx::PgPool, job_id: &str) -> Option<(String, MaskBounds)> {
+    let payload: Option<String> = sqlx::query_scalar("SELECT payload FROM jobs WHERE id = $1")
+        .bind(job_id)
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten()
+        .flatten();
+    let payload: Value = serde_json::from_str(&payload?).ok()?;
+    let digest = payload.get("underlaySha256")?.as_str()?.to_owned();
+    let mark = serde_json::from_value(payload.get("manualMask")?.clone()).ok()?;
+    Some((digest, mark))
+}
+
 /// The page's source image: id, storage path, sha256, width, height, and the page's scene revision.
 type PageSource = (Uuid, String, Option<String>, Option<i32>, Option<i32>, i32);
 
@@ -220,6 +272,7 @@ pub async fn queue_manual_cleanup(
                 .into_response();
         }
     };
+    let underlay_sha = (method != "restore").then(|| underlay_digest(&underlay, &bounds));
     let fill_color = fill_color.map(str::to_owned);
     let queued_sha = mask_sha.clone();
     coordinator::enqueue_job_directly(
@@ -245,6 +298,9 @@ pub async fn queue_manual_cleanup(
             job.insert("method".into(), json!(method));
             job.insert("fillColor".into(), json!(fill_color));
             job.insert("underlay".into(), Value::Array(underlay));
+            if let Some(digest) = underlay_sha {
+                job.insert("underlaySha256".into(), json!(digest));
+            }
         },
     )
     .await;
@@ -352,6 +408,24 @@ pub async fn apply_callback(
             .and_then(Value::as_str)
             .unwrap_or("the worker reported the repaint failed")
             .to_owned()),
+    };
+    // H2, checked before the claim like the objects above.
+    let outcome = match outcome {
+        Ok(reference) => match queued_underlay(&state.pool, job_id).await {
+            None => Ok(reference),
+            Some((queued, mark)) => match underlay_sha256(state, page.id, &mark).await {
+                Ok(now) if now == queued => Ok(reference),
+                Ok(_) => Err(
+                    "a cleanup patch under the marked area was hidden or changed while \
+                              it was repainted; mark it again"
+                        .to_owned(),
+                ),
+                Err(err) => Err(format!(
+                    "could not check the patches under the repaint: {err}"
+                )),
+            },
+        },
+        Err(problem) => Err(problem),
     };
 
     let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;

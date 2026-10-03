@@ -44,6 +44,12 @@ Each item says whether it makes output better or is upkeep.
    - H1: validate `PUT /pages/{id}/scene` against the full JSON Schema.
    - H2: fence a manual repaint's callback on a digest of the patches under it.
    - Both are review leftovers with no visible effect today. Do them if the morning has room.
+   - **H2 done 2026-10-03** (`fix/manual-repaint-fence`). The queue stores a sha256 of the
+     patches under the mark (`underlaySha256`); the callback rebuilds it and fails the job with
+     "mark it again" if one was hidden or changed meanwhile. Patches elsewhere on the page do
+     not count, so two repaints in different places do not refuse each other.
+   - **H1 moved to the C + G packet.** It needs a JSON Schema crate (none is in the tree) for a
+     route nothing calls, and G2 edits the same schema and validators.
 6. **Housekeeping on the copied data (upkeep).** The test data brings along the throwaway user
    `bunny-import-c68d0f@example.invalid`, which owns the SpaceBunny images. Reassign
    `images.created_by` to the user's account, then delete the throwaway. Also delete the laptop
