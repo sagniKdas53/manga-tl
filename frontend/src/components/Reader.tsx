@@ -3122,10 +3122,8 @@ export const Reader: React.FC<ReaderProps> = ({
           if (!el.visible) return;
           const width = el.maxWidth || 100;
           const height = el.maxHeight || 100;
-          let displayText = el.text || "";
-          if (el.boxShape === "elliptical") {
-            displayText = displayText.toUpperCase();
-          }
+          // G3: the text as the editor shows it; elliptical boxes are not uppercased.
+          const displayText = el.text || "";
 
           // AUDIT-R1: one definition of the fitted rectangle, shared with render.py.
           const rawBox = { x: el.x, y: el.y, width, height };
