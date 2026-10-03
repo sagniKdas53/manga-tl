@@ -69,10 +69,17 @@ describe("useFontsVersion", () => {
     const { rerender } = renderHook(({ els }) => useFontsVersion(els), {
       initialProps: { els: comic },
     });
-    rerender({ els: [...comic, { font: "Comic Neue", fontWeight: "bold", fontStyle: "normal" }] });
+    rerender({
+      els: [
+        ...comic,
+        { font: "Comic Neue", fontWeight: "bold", fontStyle: "normal" },
+      ],
+    });
     expect(fonts.set.load).toHaveBeenCalledTimes(1);
 
-    rerender({ els: [{ font: "Bangers", fontWeight: "bold", fontStyle: "normal" }] });
+    rerender({
+      els: [{ font: "Bangers", fontWeight: "bold", fontStyle: "normal" }],
+    });
     expect(fonts.set.load).toHaveBeenCalledWith('bold 16px "Bangers"');
   });
 
