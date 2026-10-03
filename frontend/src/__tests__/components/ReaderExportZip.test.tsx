@@ -507,8 +507,9 @@ describe("Reader project ZIP export", () => {
           json: () =>
             Promise.resolve({
               panels: [],
-              // r1 has a patch, so its text's plate means nothing off this page; r9 has a patch
-              // but no usable English, so R7-D4 does not paint it.
+              // r1 has a patch and its text a polygon, which is exported as it is (G4: a polygon is
+              // the fit shape, not a plate); r9 has a patch but no usable English, so R7-D4 does
+              // not paint it.
               ocrRegions: [
                 {
                   id: "r1",
@@ -611,7 +612,9 @@ describe("Reader project ZIP export", () => {
     const text = project.layers.find(
       (l: { type: string }) => l.type === "translation",
     );
-    expect(text.elements[0].maskPolygon).toBeNull();
+    expect(text.elements[0].maskPolygon).toBe(
+      "[[61,665],[130,665],[130,1174],[61,1174]]",
+    );
   });
 
   it("reads the original from /file, not the lossy reader variant", async () => {
