@@ -488,20 +488,31 @@ async fn self_hosted_admin_flag_makes_every_signed_in_user_admin() {
         return;
     };
     let (app_off, _) = app_with(false).await.expect("same database");
-    ensure_users_exist(&pool).await;
 
-    // Not `__auth-e2e%`: full_account_lifecycle wipes that prefix and runs in parallel.
+    // Not `__auth-e2e%`: full_account_lifecycle wipes that prefix and runs in parallel, so this
+    // test seeds its own account. Registration then never sees an empty table, which would store
+    // the translator as the first-user admin.
     let tag = &uuid::Uuid::new_v4().to_string()[..8];
     let email = format!("__admin-flag-{tag}@example.invalid");
+    let bootstrap = format!("__admin-flag-{tag}-bootstrap@example.invalid");
     let password = format!("t-{tag}-9A!");
     let delete = || async {
-        sqlx::query("DELETE FROM users WHERE email = $1")
+        sqlx::query("DELETE FROM users WHERE email = $1 OR email = $2")
             .bind(&email)
+            .bind(&bootstrap)
             .execute(&pool)
             .await
             .expect("cleanup");
     };
     delete().await;
+    sqlx::query(
+        "INSERT INTO users (id, created_at, display_name, email, password_hash, role) \
+         VALUES (uuid_generate_v4(), now(), 'Bootstrap', $1, 'x', 'admin')",
+    )
+    .bind(&bootstrap)
+    .execute(&pool)
+    .await
+    .expect("bootstrap user");
 
     let (status, _, body) = body_string(
         send(
