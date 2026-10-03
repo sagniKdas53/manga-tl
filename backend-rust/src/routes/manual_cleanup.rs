@@ -18,6 +18,7 @@ use base64::Engine;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
@@ -83,9 +84,25 @@ pub fn validate_mask(png: &[u8], bounds: &MaskBounds) -> Result<(), String> {
 /// from exactly the page the export shows.
 async fn underlay(state: &AppState, page_id: Uuid, revision: i32) -> Result<Vec<Value>, String> {
     let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
-    let built =
-        crate::page_scene_builder::build_pipeline_scene(state, &mut tx, page_id, revision).await;
+    let artifacts = underlay_in(state, &mut tx, page_id, revision).await;
     tx.rollback().await.map_err(|e| e.to_string())?;
+    artifacts
+}
+
+/// [`underlay`] read inside `tx`; the builder's writes are undone with a savepoint.
+async fn underlay_in(
+    state: &AppState,
+    tx: &mut Transaction<'_, Postgres>,
+    page_id: Uuid,
+    revision: i32,
+) -> Result<Vec<Value>, String> {
+    let mut savepoint = sqlx::Connection::begin(&mut **tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    let built =
+        crate::page_scene_builder::build_pipeline_scene(state, &mut savepoint, page_id, revision)
+            .await;
+    savepoint.rollback().await.map_err(|e| e.to_string())?;
     let built = built?;
     let artifacts = built.validated.document["cleanup_artifacts"]
         .as_array()
@@ -108,6 +125,86 @@ async fn underlay(state: &AppState, page_id: Uuid, revision: i32) -> Result<Vec<
             }))
         })
         .collect())
+}
+
+/// H2: a sha256 over the underlay entries whose bounds meet the mark -- the patches the worker
+/// composites into the repaint. The queue stores it in the job; the callback compares it with the
+/// page's underlay as it is then, so a patch hidden or changed under the mark while the repaint
+/// ran is not brought back by landing it. Patches elsewhere on the page do not count, so two
+/// repaints in different places do not refuse each other.
+fn underlay_digest(underlay: &[Value], mark: &MaskBounds) -> String {
+    let meets = |entry: &&Value| {
+        let n = |key: &str| entry[key].as_f64().unwrap_or(0.0);
+        let (x, y, w, h) = (n("x"), n("y"), n("width"), n("height"));
+        let (mx, my) = (mark.x as f64, mark.y as f64);
+        let (mw, mh) = (mark.width as f64, mark.height as f64);
+        x < mx + mw && mx < x + w && y < my + mh && my < y + h
+    };
+    let under: Vec<&Value> = underlay.iter().filter(meets).collect();
+    hex::encode(Sha256::digest(
+        serde_json::to_vec(&under).expect("the underlay serializes"),
+    ))
+}
+
+/// [`underlay_digest`] of the page's current underlay under `mark`.
+pub async fn underlay_sha256(
+    state: &AppState,
+    page_id: Uuid,
+    mark: &MaskBounds,
+) -> Result<String, String> {
+    let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+    let digest = underlay_sha256_in(state, &mut tx, page_id, mark).await;
+    tx.rollback().await.map_err(|e| e.to_string())?;
+    digest
+}
+
+/// [`underlay_sha256`] inside `tx`, holding the page row's lock until `tx` ends. Every patch and
+/// visibility edit advances the page's revision in its own transaction, so none can land between
+/// this read and the commit of the patch it fences.
+async fn underlay_sha256_in(
+    state: &AppState,
+    tx: &mut Transaction<'_, Postgres>,
+    page_id: Uuid,
+    mark: &MaskBounds,
+) -> Result<String, String> {
+    let revision: i32 =
+        sqlx::query_scalar("SELECT scene_revision FROM pages WHERE id = $1 FOR UPDATE")
+            .bind(page_id)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(|e| e.to_string())?;
+    Ok(underlay_digest(
+        &underlay_in(state, tx, page_id, revision).await?,
+        mark,
+    ))
+}
+
+/// The digest and mark a job was queued with. `Ok(None)` for a `restore` (it has no underlay) and
+/// for a job queued before the fence existed; those land unchecked, as before. A failed read is an
+/// error, not a job without a digest.
+async fn queued_underlay(
+    tx: &mut Transaction<'_, Postgres>,
+    job_id: &str,
+) -> Result<Option<(String, MaskBounds)>, String> {
+    let payload: Option<Option<String>> =
+        sqlx::query_scalar("SELECT payload FROM jobs WHERE id = $1")
+            .bind(job_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(|e| e.to_string())?;
+    let Some(payload) = payload.flatten() else {
+        return Ok(None);
+    };
+    let Ok(payload) = serde_json::from_str::<Value>(&payload) else {
+        return Ok(None);
+    };
+    let digest = payload.get("underlaySha256").and_then(Value::as_str);
+    let mark = payload
+        .get("manualMask")
+        .and_then(|mark| serde_json::from_value::<MaskBounds>(mark.clone()).ok());
+    Ok(digest
+        .zip(mark)
+        .map(|(digest, mark)| (digest.to_owned(), mark)))
 }
 
 /// The page's source image: id, storage path, sha256, width, height, and the page's scene revision.
@@ -220,6 +317,7 @@ pub async fn queue_manual_cleanup(
                 .into_response();
         }
     };
+    let underlay_sha = (method != "restore").then(|| underlay_digest(&underlay, &bounds));
     let fill_color = fill_color.map(str::to_owned);
     let queued_sha = mask_sha.clone();
     coordinator::enqueue_job_directly(
@@ -245,6 +343,9 @@ pub async fn queue_manual_cleanup(
             job.insert("method".into(), json!(method));
             job.insert("fillColor".into(), json!(fill_color));
             job.insert("underlay".into(), Value::Array(underlay));
+            if let Some(digest) = underlay_sha {
+                job.insert("underlaySha256".into(), json!(digest));
+            }
         },
     )
     .await;
@@ -353,7 +454,6 @@ pub async fn apply_callback(
             .unwrap_or("the worker reported the repaint failed")
             .to_owned()),
     };
-
     let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
     match coordinator::claim_callback_tx(&mut tx, Some(job_id), image_id, JOB_TYPE)
         .await
@@ -369,6 +469,30 @@ pub async fn apply_callback(
             return Err(CallbackError::Superseded);
         }
     }
+    // H2, in the transaction that records the patch: the page row stays locked from the check to
+    // the commit, so a patch or visibility edit cannot slip in between.
+    let outcome = match outcome {
+        Ok(reference) => match queued_underlay(&mut tx, job_id).await {
+            Ok(None) => Ok(reference),
+            Ok(Some((queued, mark))) => {
+                match underlay_sha256_in(state, &mut tx, page.id, &mark).await {
+                    Ok(now) if now == queued => Ok(reference),
+                    Ok(_) => Err(
+                        "a cleanup patch under the marked area was hidden or changed \
+                                  while it was repainted; mark it again"
+                            .to_owned(),
+                    ),
+                    Err(err) => Err(format!(
+                        "could not check the patches under the repaint: {err}"
+                    )),
+                }
+            }
+            Err(err) => Err(format!(
+                "could not read the repaint's queued underlay: {err}"
+            )),
+        },
+        Err(problem) => Err(problem),
+    };
     let applied = match outcome {
         Ok(reference) => {
             match crate::inpainting::record_manual_patch(&mut tx, page.id, &reference)

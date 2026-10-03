@@ -1003,6 +1003,12 @@ async fn a_manual_repaint_is_validated_and_queued_ahead_of_the_pipeline() {
         manga_backend::page_scene_builder::scene_asset_path(page_id, &patch).as_str()
     );
     assert!(
+        payload["underlaySha256"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64),
+        "the job carries the digest its callback is fenced on (H2)"
+    );
+    assert!(
         payload["imageUrl"]
             .as_str()
             .is_some_and(|url| url.contains("X-Amz-Expires=604800")),
@@ -1033,6 +1039,10 @@ async fn a_manual_repaint_is_validated_and_queued_ahead_of_the_pipeline() {
     let payload: serde_json::Value = serde_json::from_str(&payload).unwrap();
     assert_eq!(payload["method"], "restore");
     assert_eq!(payload["underlay"], serde_json::json!([]));
+    assert!(
+        payload.get("underlaySha256").is_none(),
+        "a restore has nothing to fence"
+    );
 
     let _ = sqlx::query("DELETE FROM jobs WHERE page_id = $1")
         .bind(page_id)
@@ -1042,16 +1052,27 @@ async fn a_manual_repaint_is_validated_and_queued_ahead_of_the_pipeline() {
 }
 
 async fn processing_manual_job(pool: &sqlx::PgPool, page_id: Uuid, image_id: Uuid) -> String {
+    processing_manual_job_with(pool, page_id, image_id, "{}").await
+}
+
+/// A manual job whose stored payload is `payload`, as `queue_manual_cleanup` would have left it.
+async fn processing_manual_job_with(
+    pool: &sqlx::PgPool,
+    page_id: Uuid,
+    image_id: Uuid,
+    payload: &str,
+) -> String {
     let job_id = Uuid::new_v4().to_string();
     sqlx::query(
         "INSERT INTO jobs (id, type, status, image_id, page_id, attempt, max_attempts, payload, \
            input_generation, lease_token, created_at, updated_at) \
-         VALUES ($1, 'manual-cleanup', 'PROCESSING', $2, $3, 1, 3, '{}', \
+         VALUES ($1, 'manual-cleanup', 'PROCESSING', $2, $3, 1, 3, $4, \
            (SELECT input_generation FROM pages WHERE id = $3), 'lease-m', now(), now())",
     )
     .bind(&job_id)
     .bind(image_id)
     .bind(page_id)
+    .bind(payload)
     .execute(pool)
     .await
     .expect("manual job");
@@ -1246,6 +1267,159 @@ async fn a_manual_repaint_lands_on_a_new_top_inpainting_layer() {
     .await
     .unwrap();
     assert_eq!(layers, 2, "only the one landed repaint added a layer");
+
+    let _ = sqlx::query("DELETE FROM jobs WHERE page_id = $1")
+        .bind(page_id)
+        .execute(&pool)
+        .await;
+    cleanup_series(&pool, series_id).await;
+}
+
+/// H2: a repaint composites the patches under its mark into its own patch. If one of them is
+/// hidden while the repaint runs, landing it would bring the hidden patch back, so the callback
+/// refuses it. A repaint elsewhere on the page, with nothing changed under it, still lands.
+#[tokio::test]
+async fn a_repaint_is_refused_when_a_patch_under_it_changed_while_it_ran() {
+    let Some((app, pool, state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    let (series_id, page_id, image_id, ocr, tl) = seed_page(&pool).await;
+    let region = seed_region(
+        &pool,
+        page_id,
+        (ocr, tl),
+        1,
+        (20, 30, 60, 40),
+        "やあ",
+        "Hello",
+        None,
+    )
+    .await;
+    give_patch(
+        &state,
+        page_id,
+        region,
+        &sha('1'),
+        &sha('2'),
+        (18, 28, 64, 44),
+    )
+    .await;
+    let pass = record_pass(&state, page_id, &[region]).await.unwrap();
+    for digest in [sha('3'), sha('4')] {
+        state
+            .storage
+            .upload_bytes(
+                &manga_backend::page_scene_builder::scene_asset_path(page_id, &digest),
+                b"png".to_vec(),
+                "image/png",
+            )
+            .await
+            .unwrap();
+    }
+
+    // Two repaints queued now: one over the patch, one in a corner it does not reach.
+    let queue = |bounds: manga_backend::routes::manual_cleanup::MaskBounds| {
+        let state = state.clone();
+        async move {
+            let digest =
+                manga_backend::routes::manual_cleanup::underlay_sha256(&state, page_id, &bounds)
+                    .await
+                    .unwrap();
+            serde_json::json!({
+                "method": "telea",
+                "manualMask": { "x": bounds.x, "y": bounds.y, "width": bounds.width, "height": bounds.height },
+                "underlaySha256": digest,
+            })
+            .to_string()
+        }
+    };
+    use manga_backend::routes::manual_cleanup::MaskBounds;
+    let over = queue(MaskBounds {
+        x: 30,
+        y: 40,
+        width: 16,
+        height: 12,
+    })
+    .await;
+    let corner = queue(MaskBounds {
+        x: 0,
+        y: 0,
+        width: 5,
+        height: 5,
+    })
+    .await;
+    let over_job = processing_manual_job_with(&pool, page_id, image_id, &over).await;
+    let corner_job = processing_manual_job_with(&pool, page_id, image_id, &corner).await;
+
+    // The user hides the pass while both run.
+    sqlx::query("UPDATE layers SET visible = FALSE WHERE id = $1")
+        .bind(pass)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let complete = |job_id: &str, bounds: (i64, i64, i64, i64)| {
+        serde_json::json!({
+            "jobId": job_id, "imageId": image_id, "pageId": page_id, "status": "complete",
+            "cleanupPatchSha256": sha('3'), "cleanupPatchByteLength": 3,
+            "cleanupMaskSha256": sha('4'), "cleanupMaskByteLength": 3,
+            "cleanupGeneratorSha256": sha('0'),
+            "cleanupBounds": { "x": bounds.0, "y": bounds.1, "width": bounds.2, "height": bounds.3 },
+        })
+    };
+    assert_eq!(
+        manual_callback(
+            &app,
+            &pool,
+            &over_job,
+            complete(&over_job, (30, 40, 16, 12))
+        )
+        .await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        manual_callback(
+            &app,
+            &pool,
+            &corner_job,
+            complete(&corner_job, (0, 0, 5, 5))
+        )
+        .await,
+        StatusCode::OK
+    );
+
+    let status = |job_id: String| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query_as::<_, (String, Option<String>)>(
+                "SELECT status, error FROM jobs WHERE id = $1",
+            )
+            .bind(job_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        }
+    };
+    let (over_status, over_error) = status(over_job.clone()).await;
+    assert_eq!(over_status, "FAILED");
+    assert!(
+        over_error.unwrap_or_default().contains("mark it again"),
+        "the user is told why"
+    );
+    assert_eq!(status(corner_job.clone()).await.0, "COMPLETED");
+    let manual_patches: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
+         WHERE l.page_id = $1 AND l.type = 'inpainting' AND l.id <> $2",
+    )
+    .bind(page_id)
+    .bind(pass)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(manual_patches, 1, "only the corner repaint landed");
 
     let _ = sqlx::query("DELETE FROM jobs WHERE page_id = $1")
         .bind(page_id)
