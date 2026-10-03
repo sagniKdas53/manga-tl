@@ -32,18 +32,39 @@ Each item says whether it makes output better or is upkeep.
    - The role checks are spread over `routes/page.rs`, `settings.rs`, `health.rs`, `series.rs`,
      `manual_cleanup.rs`, `auth.rs` and `layers.rs`. This way none of them change.
    - Default on in the shipped compose files. Tests cover both settings.
+   - **Done 2026-10-03** (`feat/self-hosted-admin`). The setting is `SELF_HOSTED_ADMIN`, applied by
+     `auth::effective_role` in the extractor and in the login, register and `PUT /me` responses.
+     The stored role is never written. A browser already signed in keeps its saved role in the
+     menu until the next sign-in; the server-side checks change at once.
 3. **G1: fonts before the first fit (output).** The editor waits for the page's fonts before it
    fits text, and fits again when `document.fonts` finishes loading. This fixes ch. 6 p. 1 wrapping
    to eight lines in the editor and six in the export. Frontend only.
+   - **Done 2026-10-03** (`fix/editor-export-match`). `useFontsVersion` asks for the page's faces
+     as soon as it sees them and changes when they, or any font, finish loading. The canvas
+     re-renders on the change; the issues list's fit cache takes it as a dependency.
 4. **G3 and G4 (output, matching).**
    - G3: pipeline elements marked elliptical wrap in the ellipse in the editor but in the rectangle
      in the export.
    - G4: the export ZIP still writes a text element's polygon as a "fallback plate", and an import
      turns it into a patch.
+     - **Done 2026-10-03** (`fix/editor-export-match`). The importer no longer turns a text
+       polygon into a patch (`record_imported_plates` is gone). It could never be right: R7-D3
+       rejects pre-R7 archives, and no R7 page plates region text. The polygon stays on the
+       element, where the editor fits the text inside it, and the export writes it as it is.
+     - G3 is waiting for the user. Honouring `elliptical` for pipeline elements changes every
+       page's scene (its next render or Export re-renders and queues QA), against "no
+       re-renders"; making the editor use the rectangle until an element is edited matches with
+       no scene change but makes the judged surface wrap worse.
 5. **H1 and H2 (upkeep).**
    - H1: validate `PUT /pages/{id}/scene` against the full JSON Schema.
    - H2: fence a manual repaint's callback on a digest of the patches under it.
    - Both are review leftovers with no visible effect today. Do them if the morning has room.
+   - **H2 done 2026-10-03** (`fix/manual-repaint-fence`). The queue stores a sha256 of the
+     patches under the mark (`underlaySha256`); the callback rebuilds it and fails the job with
+     "mark it again" if one was hidden or changed meanwhile. Patches elsewhere on the page do
+     not count, so two repaints in different places do not refuse each other.
+   - **H1 moved to the C + G packet.** It needs a JSON Schema crate (none is in the tree) for a
+     route nothing calls, and G2 edits the same schema and validators.
 6. **Housekeeping on the copied data (upkeep).** The test data brings along the throwaway user
    `bunny-import-c68d0f@example.invalid`, which owns the SpaceBunny images. Reassign
    `images.created_by` to the user's account, then delete the throwaway. Also delete the laptop

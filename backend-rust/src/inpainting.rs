@@ -194,40 +194,6 @@ async fn newest_visible_layer(
     }
 }
 
-/// A project import onto a page without the source regions: each fallback plate the archive's
-/// text carried becomes a region-less patch, painted after the page's other patches in the order
-/// given -- where the pre-import builder painted plates. The plate is rasterised by the builder's
-/// own `plain_plate_cleanup`, so it is the same pixels.
-pub async fn record_imported_plates(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    page_id: Uuid,
-    plates: &[crate::page_scene_builder::PlainPlate],
-) -> Result<(), sqlx::Error> {
-    if plates.is_empty() {
-        return Ok(());
-    }
-    let layer_id = newest_visible_layer(tx, page_id, "imported-plates").await?;
-    let last: Option<i64> = sqlx::query_scalar(
-        "SELECT MAX((cleanup_ref->>'order')::bigint) FROM layer_elements WHERE layer_id = $1",
-    )
-    .bind(layer_id)
-    .fetch_one(&mut **tx)
-    .await?;
-    for (index, plate) in plates.iter().enumerate() {
-        let reference = CleanupRef {
-            patch_sha256: plate.patch_sha256.clone(),
-            patch_byte_length: plate.patch_byte_length,
-            mask_sha256: plate.mask_sha256.clone(),
-            mask_byte_length: plate.mask_byte_length,
-            generator_sha256: plate.generator_sha256.clone(),
-            bounds: plate.bounds.clone(),
-            order: last.unwrap_or(-1) + 1 + index as i64,
-        };
-        insert_patch_element(tx, layer_id, None, &reference).await?;
-    }
-    Ok(())
-}
-
 /// Records one cleanup pass: a new, visible Inpainting layer holding the current patch of each of
 /// `region_ids` that has one. Returns the layer id, or `None` when no region had a patch (then no
 /// layer is made, but the regions' older patches are still retired: the pass replaced them).

@@ -93,6 +93,7 @@ async fn setup(test_suffix: &str) -> Option<Ctx> {
         jwt_secret: None,
         internal_api_token: None,
         jwt_expiration_ms: 3_600_000,
+        self_hosted_admin: false,
         minio: MinioConfig {
             endpoint: "http://localhost:9000".into(),
             external_url: None,

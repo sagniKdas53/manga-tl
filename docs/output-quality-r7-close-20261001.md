@@ -226,20 +226,24 @@ differently in the export (the project.json elements above have none).
 - **E — automatic angles, `AUDIT-R23`**, as in the 2026-09-29 handoff.
 - **G — editor and export match one to one (added 2026-10-02; do with C).**
   1. Load the page's fonts before the first fit, and fit again when `document.fonts` finishes
-     loading (ch. 6 p. 1, § Fourth review round). Test: open a page before its web font is ready.
+     loading (ch. 6 p. 1, § Fourth review round). Test: open a page before its web font is ready. **Done
+     2026-10-03** (`useFontsVersion`).
   2. Carry `maskPolygon` in the page-scene contract (schema, Ajv/Rust/Python validators, the
      worker's pinned schema hash) and pass it to `resolvePageScene`, or stop passing it in the
      editor. Test with a masked element (CodeRabbit, PR #152).
   3. Pipeline elements marked elliptical: the editor wraps them in the ellipse, the renderer in
      the rectangle (shape is sent only for hand-edited elements).
   4. The export ZIP still writes a text element's polygon as a "fallback plate", which an import
-     turns into a patch.
+     turns into a patch. **Done 2026-10-03:** the import keeps the polygon on the element
+     and makes no patch.
 - **H — parked review items (PR #152).** Validate `PUT /pages/{id}/scene` against the full JSON
   Schema (nothing calls it today). Fence a manual repaint's callback on a digest of the patches
-  under it, so a patch hidden while the repaint runs does not come back.
+  under it, so a patch hidden while the repaint runs does not come back. **Repaint fence done
+  2026-10-03** (`underlaySha256`); schema validation moves to the C + G packet with G2.
 - **I — self-hosted admin flag (added 2026-10-02, user).** One setting, on by default in the
   shipped compose files, that lets every signed-in user do every admin task. It is applied once, in
-  the auth extractor. See the tracker's plan for 2026-10-03.
+  the auth extractor. See the tracker's plan for 2026-10-03. **Done 2026-10-03** as
+  `SELF_HOSTED_ADMIN` (`feat/self-hosted-admin`).
 
 ## Evidence
 

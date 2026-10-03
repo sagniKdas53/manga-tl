@@ -26,6 +26,7 @@ import {
 import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
 import { paintLayerMask } from "../utils/maskPaint";
 import { elementFit } from "../utils/elementFit";
+import { useFontsVersion } from "../hooks/useFontsVersion";
 import { STROKE_WIDTH_RATIO } from "@manga-library/page-scene";
 import {
   CLEANUP_PRESERVE_ASPECT_RATIO,
@@ -34,7 +35,6 @@ import {
   fetchSceneAsset,
   paintedPatches,
   loadSceneAssetUrl,
-  regionHasPatch,
   isUnpatchedSoundEffect,
   usePatchImageUrls,
 } from "../utils/inpainting";
@@ -1053,6 +1053,11 @@ export const Reader: React.FC<ReaderProps> = ({
     () => translationElementByRegion(layers),
     [layers],
   );
+  // G1: refit once the page's web fonts arrive. The canvas below fits while it renders, so the
+  // state change re-renders it; this memo caches fits, so it takes the version as a dependency.
+  const fontsVersion = useFontsVersion(
+    React.useMemo(() => layers.flatMap((l) => l.elements), [layers]),
+  );
   const overflowingElementIds = React.useMemo(() => {
     const ids = new Set<string>();
     for (const { layer, elements } of layers) {
@@ -1068,7 +1073,9 @@ export const Reader: React.FC<ReaderProps> = ({
       }
     }
     return ids;
-  }, [layers, textBoxGeometry]);
+    // fontsVersion is not read: a change means the same text now measures differently.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layers, textBoxGeometry, fontsVersion]);
   const issues = React.useMemo(
     () =>
       layers.some(
@@ -3258,13 +3265,9 @@ export const Reader: React.FC<ReaderProps> = ({
               fontStyle: el.fontStyle || "normal",
               isManuallyEdited: el.isManuallyEdited || false,
               boxShape: el.boxShape || "rectangular",
-              // A region with a patch never gets the flat plate, so its polygon means nothing
-              // outside this page. Whatever polygon a region's text keeps is its fallback plate,
-              // which the importer turns into a patch.
-              maskPolygon:
-                el.regionId && regionHasPatch(allRegionsById.get(el.regionId))
-                  ? null
-                  : el.maskPolygon,
+              // G4: the polygon is the shape the text is fitted into, never a plate (no region's
+              // text has had a flat plate since 2026-10-02). The importer keeps it as it is.
+              maskPolygon: el.maskPolygon,
               regionId: el.regionId,
               qaStatus: el.region?.qaStatus,
               qaScore: el.region?.qaScore,
@@ -3331,7 +3334,6 @@ export const Reader: React.FC<ReaderProps> = ({
     textBoxGeometry,
     layers,
     patches,
-    allRegionsById,
     dirtyElements,
     saveAllPendingChanges,
   ]);

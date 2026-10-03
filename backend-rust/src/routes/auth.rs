@@ -63,11 +63,19 @@ impl From<User> for AuthResponse {
     }
 }
 
-fn auth_response_with_token(user: &User, token: String) -> AuthResponse {
+fn auth_response_with_token(state: &AppState, user: &User, token: String) -> AuthResponse {
     AuthResponse {
         token: Some(token),
-        ..AuthResponse::from(user.clone())
+        ..auth_response(state, user.clone())
     }
+}
+
+/// A response built from the stored row reports the role the user acts with, as `/me` does
+/// (its user comes through the extractor, which has applied `SELF_HOSTED_ADMIN` already).
+fn auth_response(state: &AppState, user: User) -> AuthResponse {
+    let mut response = AuthResponse::from(user);
+    response.role = crate::auth::effective_role(response.role, state.config.self_hosted_admin);
+    response
 }
 
 impl From<crate::auth::AuthUser> for AuthResponse {
@@ -298,7 +306,7 @@ pub async fn register(
     let Some(token) = signed_token(&state, &user.email) else {
         return signing_failed();
     };
-    Json(auth_response_with_token(&user, token)).into_response()
+    Json(auth_response_with_token(&state, &user, token)).into_response()
 }
 
 /// AUDIT-B19: a token that could not be signed is an error, never an empty token in a 200 — the
@@ -347,7 +355,7 @@ pub async fn login(
     let Some(token) = signed_token(&state, &user.email) else {
         return signing_failed();
     };
-    Json(auth_response_with_token(&user, token)).into_response()
+    Json(auth_response_with_token(&state, &user, token)).into_response()
 }
 
 /// GET /me — profile without token.
@@ -407,7 +415,7 @@ pub async fn update_profile(
             .expect("display_name update");
     }
 
-    Json(AuthResponse::from(updated)).into_response()
+    Json(auth_response(&state, updated)).into_response()
 }
 
 /// POST /change-password

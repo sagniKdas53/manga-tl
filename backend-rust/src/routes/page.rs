@@ -2856,22 +2856,13 @@ fn archive_cleanup_assets(
 /// Restores `layers`/`elements` from a project.json; returns counts on success.
 /// `track_manual_edits` stamps the image's last_edited_at when manual edits exist
 /// (the chapters/{id}/import-project behaviour).
-/// A fallback plate an archive's text carried for a region this page does not have (tracker R7).
-struct ImportedPlate {
-    element_id: Uuid,
-    polygon: serde_json::Value,
-    colour: Option<String>,
-    /// `(layer zOrder, original element id)`: the order the exporting page's builder painted it.
-    paint_key: (i32, String),
-}
-
 async fn restore_project_layers(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     page_id: Uuid,
     project_json: &[u8],
     track_manual_edits: bool,
     cleanup_shas: &std::collections::HashSet<String>,
-) -> Result<(usize, usize, Vec<ImportedPlate>), ()> {
+) -> Result<(usize, usize), ()> {
     let root: serde_json::Value = serde_json::from_slice(project_json).map_err(|_| ())?;
     let layers_node = root
         .get("layers")
@@ -2882,7 +2873,6 @@ async fn restore_project_layers(
     let mut imported_layers = 0usize;
     let mut imported_elements = 0usize;
     let mut has_manual_edits = false;
-    let mut plates: Vec<ImportedPlate> = Vec::new();
 
     for layer_node in &layers_node {
         let ltype = layer_node
@@ -3019,7 +3009,6 @@ async fn restore_project_layers(
             // named a missing row (a foreign-key failure) or another page's region; now the link
             // is dropped, and an Inpainting patch without one is kept as the user's (contract
             // rule 7).
-            let had_region = region_id.is_some();
             let region_id = match region_id {
                 Some(id) => sqlx::query_scalar::<_, Uuid>(
                     "SELECT id FROM ocr_regions WHERE id = $1 AND page_id = $2",
@@ -3056,31 +3045,6 @@ async fn restore_project_layers(
                 .map(|o| o.clamp(0.0, 1.0));
 
             let element_id = Uuid::new_v4();
-            // Tracker R7: a region's text still carrying a polygon was drawn over a fallback
-            // plate (the exporter strips it where the region had a patch). Without the region
-            // the builder would not plate it, so it becomes a patch (restore_project_page).
-            if had_region
-                && region_id.is_none()
-                && visible
-                && el_visible
-                && matches!(ltype.to_lowercase().as_str(), "translation" | "sfx")
-                && !text.trim().is_empty()
-                && let Some(polygon) = mask_polygon.clone()
-            {
-                plates.push(ImportedPlate {
-                    element_id,
-                    polygon,
-                    colour: background_color.clone(),
-                    paint_key: (
-                        z_order,
-                        el.get("id")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string(),
-                    ),
-                });
-            }
-
             sqlx::query(
                 "INSERT INTO layer_elements (id, text, font, size, auto_size, max_width, max_height, word_wrap, rotation, \
                  x, y, visible, background_color, text_color, font_weight, font_style, box_shape, mask_polygon, \
@@ -3132,7 +3096,7 @@ async fn restore_project_layers(
         }
     }
 
-    Ok((imported_layers, imported_elements, plates))
+    Ok((imported_layers, imported_elements))
 }
 
 async fn restore_project_page(
@@ -3169,7 +3133,7 @@ async fn restore_project_page(
             .await
             .map_err(|_| ())?;
     }
-    let (layers, elements, mut plates) = restore_project_layers(
+    let counts = restore_project_layers(
         &mut tx,
         page_id,
         project_json,
@@ -3177,63 +3141,6 @@ async fn restore_project_page(
         &cleanup_shas,
     )
     .await?;
-    let counts = (layers, elements);
-    if !plates.is_empty() {
-        let (page_w, page_h): (Option<i32>, Option<i32>) = sqlx::query_as(
-            "SELECT i.width, i.height FROM pages p JOIN images i ON i.id = p.image_id WHERE p.id = $1",
-        )
-        .bind(page_id)
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(|_| ())?;
-        let (page_w, page_h) = (page_w.unwrap_or(0), page_h.unwrap_or(0));
-        plates.sort_by(|a, b| a.paint_key.cmp(&b.paint_key));
-        let mut patches = Vec::new();
-        // Only a plate that became a patch gives up its mask polygon. One refused by the size gate
-        // or by plain_plate_cleanup keeps it, so the scene still draws its plate (or, past the
-        // gate, warns and draws the text over source) instead of the mask silently vanishing.
-        let mut converted: Vec<Uuid> = Vec::new();
-        for plate in &plates {
-            match crate::page_scene_builder::plain_plate_cleanup(
-                state,
-                page_id,
-                &plate.polygon,
-                plate.colour.as_deref(),
-                page_w,
-                page_h,
-            )
-            .await
-            {
-                // The builder's R2 gate: no plate over a quarter of the page.
-                Ok(patch)
-                    if crate::page_scene_builder::bounds_page_share(
-                        &patch.bounds,
-                        page_w,
-                        page_h,
-                    ) <= crate::page_scene_builder::MAX_PATCH_PAGE_SHARE =>
-                {
-                    patches.push(patch);
-                    converted.push(plate.element_id);
-                }
-                Ok(_) => tracing::warn!(
-                    "project import: plate for element {} is over the page-share gate; kept as a mask",
-                    plate.element_id
-                ),
-                Err(err) => tracing::warn!(
-                    "project import: plate for element {} not converted: {err}",
-                    plate.element_id
-                ),
-            }
-        }
-        crate::inpainting::record_imported_plates(&mut tx, page_id, &patches)
-            .await
-            .map_err(|_| ())?;
-        sqlx::query("UPDATE layer_elements SET mask_polygon = NULL WHERE id = ANY($1)")
-            .bind(&converted)
-            .execute(&mut *tx)
-            .await
-            .map_err(|_| ())?;
-    }
     if replacement_image_id.is_some() {
         // New source pixels: every cleanup patch and OCR box on this page was computed from the
         // old ones, so the generation fence has to move with them (R3 phase-separation design,

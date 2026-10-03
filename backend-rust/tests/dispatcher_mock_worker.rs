@@ -116,6 +116,7 @@ async fn app_with_mock(mock_url: &str) -> Option<(sqlx::PgPool, Arc<RedisService
         jwt_secret: None,
         internal_api_token: None,
         jwt_expiration_ms: 3_600_000,
+        self_hosted_admin: false,
         minio: minio.clone(),
         redis: manga_backend::config::RedisConfig {
             host: "localhost".into(),
