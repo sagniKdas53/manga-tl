@@ -2,7 +2,7 @@
 
 Start with the current checkpoint below and the [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md). The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
 
-Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section, and the [plan for 2026-10-03](#plan-for-2026-10-03-user-2026-10-02-late) comes first. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25-ocr-threshold-added-2026-09-26). Read the summary and [current next-session handoff](output-quality-next-session-20260929.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section, and the [plan for 2026-10-03](#plan-for-2026-10-03-user-2026-10-02-late) is done except its afternoon item; **start with the [2026-10-04 handoff](output-quality-next-session-20261004.md)**. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25-ocr-threshold-added-2026-09-26). Read the summary and [current next-session handoff](output-quality-next-session-20260929.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
 
 ## Plan for 2026-10-03 (user, 2026-10-02 late)
 
@@ -24,6 +24,11 @@ Each item says whether it makes output better or is upkeep.
      `data/old-3`, nothing is deleted), take the test stack's DB and MinIO passwords, put the three
      ONNX models where prod's worker reads them, and pull `main`.
    - The user runs this. Agent auto mode blocks changes to production.
+   - **Deferred 2026-10-03 (user):** no deploy now. A fresh prod stack is built when the whole
+     tracker is done, so this step and the prod run of item 6 are dropped. Two things learned
+     for that day: the main compose file mounts no ONNX files, so a prod worker reads them from
+     `data/worker/huggingface/models/` (owned by UID 10001); and `SELF_HOSTED_ADMIN` defaults to
+     on, so set it `false` if anyone outside can reach the stack.
 2. **Self-hosted admin flag (upkeep, new item I).** This is a self-hosted app, so one setting
    should let every signed-in user do every admin task: delete things, change settings, see health.
    - Proposal: resolve it once, in the auth extractor. With the flag on, every authenticated user
@@ -56,10 +61,10 @@ Each item says whether it makes output better or is upkeep.
        hand-edited ones, so the export wraps in the ellipse as the editor does. This changes the
        scene of every page with elliptical pipeline text. The reader keeps serving each page's
        stored render, so nothing re-renders by itself; a page's next render or Export draws it
-       again and queues QA. The user accepted that over "no re-renders". **Caveat found
+       again and queues a paid QA pass. The user accepted that over "no re-renders". **Caveat found
        afterwards:** `reuse_unchanged_render` (the 2026-09-30 storm fix) sees each such page as
        changed once, so the first settings save after deploy re-renders the whole library and
-       queues QA for every page. The ZIP's per-layer text PNG also stops uppercasing elliptical text,
+       queues a paid QA pass for every page. The ZIP's per-layer text PNG also stops uppercasing elliptical text,
        which neither the editor nor the server render did.
 5. **H1 and H2 (upkeep).**
    - H1: validate `PUT /pages/{id}/scene` against the full JSON Schema.
