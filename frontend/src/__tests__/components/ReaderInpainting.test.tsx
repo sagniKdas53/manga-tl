@@ -1021,6 +1021,54 @@ describe("Mask editor (inpainting view)", () => {
     expect(wrapper.style.transform).toContain("translate(60px, 30px)");
   });
 
+  it("keeps a one-finger pan when a second finger starts a pinch", async () => {
+    // Reader.tsx treats the device as a touch screen when `ontouchstart` exists.
+    (window as unknown as { ontouchstart: null }).ontouchstart = null;
+    try {
+      await renderReader();
+      await waitFor(() =>
+        expect(document.querySelector(".svg-overlay")!.textContent).toContain(
+          "Hello",
+        ),
+      );
+      const area = document.querySelector(".reader-canvas-area") as HTMLElement;
+      const wrapper = document.querySelector(
+        ".manga-canvas-wrapper",
+      ) as HTMLElement;
+      const touch = (x: number, y: number) => ({ clientX: x, clientY: y });
+
+      await act(async () => {
+        fireEvent.touchStart(area, { touches: [touch(100, 100)] });
+      });
+      await act(async () => {
+        fireEvent.touchMove(area, { touches: [touch(160, 130)] });
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      });
+      expect(wrapper.style.transform).toContain("translate(60px, 30px)");
+
+      // A second finger lands and the pinch zooms: the page stays where the drag left it.
+      await act(async () => {
+        fireEvent.touchStart(area, {
+          touches: [touch(160, 130), touch(260, 130)],
+        });
+      });
+      await act(async () => {
+        fireEvent.touchMove(area, {
+          touches: [touch(140, 130), touch(290, 130)],
+        });
+      });
+      expect(wrapper.style.transform).toContain("translate(60px, 30px)");
+      expect(wrapper.style.transform).not.toContain("scale(1)");
+
+      await act(async () => {
+        fireEvent.touchEnd(area, { touches: [] });
+      });
+      expect(wrapper.style.transform).toContain("translate(60px, 30px)");
+    } finally {
+      delete (window as unknown as { ontouchstart?: null }).ontouchstart;
+    }
+  });
+
   it("puts its tools in the sidebar's place, never pans while painting, and restores what the eraser marks", async () => {
     await renderReader();
     const overlay = document.querySelector(".svg-overlay")!;

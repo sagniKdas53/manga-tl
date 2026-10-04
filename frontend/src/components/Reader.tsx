@@ -3529,6 +3529,9 @@ export const Reader: React.FC<ReaderProps> = ({
     }
 
     if (e.touches.length === 2) {
+      // Settle a one-finger pan first: the pinch's zoom renders would otherwise write the
+      // pre-drag `pan` back to the page, and the stale live offset would land on lift-off.
+      commitLivePan();
       // Pinch zoom start
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;

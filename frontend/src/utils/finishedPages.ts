@@ -48,7 +48,11 @@ export const rememberPageLink = (
   if (!imageId || typeof chapterId !== "string" || !chapterId) return;
   const page = Number(pageNumber);
   if (!Number.isInteger(page) || page < 1) return;
-  if (linkByImage.size >= MAX_LINKS) linkByImage.clear();
+  // Evict the oldest (a Map iterates in insertion order), so recent rows keep their links.
+  if (linkByImage.size >= MAX_LINKS && !linkByImage.has(imageId)) {
+    const oldest = linkByImage.keys().next().value;
+    if (oldest !== undefined) linkByImage.delete(oldest);
+  }
   linkByImage.set(imageId, { chapterId, pageNumber: page });
 };
 

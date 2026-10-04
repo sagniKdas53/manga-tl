@@ -68,4 +68,14 @@ describe("finishedPages", () => {
     expect(rows[0].link).toEqual({ chapterId: "ch-1", pageNumber: 7 });
     expect(rows[1].link).toBeNull();
   });
+
+  it("forgets the oldest link, not all of them, when the store is full", () => {
+    for (let i = 0; i < 2001; i++) rememberPageLink(`img${i}`, "ch-1", 1);
+    const rows = finishedPages([
+      note("new", "img2000", "SUCCESS", "Page Processing Complete", 2),
+      note("old", "img0", "SUCCESS", "Page Processing Complete", 1),
+    ]);
+    expect(rows[0].link).not.toBeNull();
+    expect(rows[1].link).toBeNull();
+  });
 });

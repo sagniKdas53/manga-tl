@@ -123,6 +123,19 @@ describe("typing a page number", () => {
     expect(onJump).toHaveBeenCalledWith(10);
   });
 
+  it("goes nowhere when what was typed is not a whole number", () => {
+    const onJump = renderNav();
+    for (const typed of ["7abc", "3.9", " "]) {
+      fireEvent.doubleClick(
+        screen.getByRole("button", { name: "Page 2 of 10" }),
+      );
+      const field = screen.getByRole("spinbutton");
+      fireEvent.change(field, { target: { value: typed } });
+      fireEvent.keyDown(field, { key: "Enter" });
+    }
+    expect(onJump).not.toHaveBeenCalled();
+  });
+
   it("goes nowhere on Escape", () => {
     const onJump = renderNav();
     fireEvent.doubleClick(screen.getByRole("button", { name: "Page 2 of 10" }));

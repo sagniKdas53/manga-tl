@@ -50,9 +50,11 @@ const PageCounter: React.FC<{
     if (canJump) setDraft(String(currentPage));
   };
   const commit = () => {
-    const typed = parseInt(draft ?? "", 10);
+    // Number, not parseInt: "7abc" or "3.9" is not a page, rather than page 7 or 3.
+    const raw = (draft ?? "").trim();
+    const typed = raw === "" ? NaN : Number(raw);
     setDraft(null);
-    if (Number.isNaN(typed)) return;
+    if (!Number.isInteger(typed)) return;
     const page = Math.min(totalPages, Math.max(1, typed));
     if (page !== currentPage) onJumpToPage?.(page);
   };
