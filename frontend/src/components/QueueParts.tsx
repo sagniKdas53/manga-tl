@@ -43,7 +43,9 @@ export const PipelineStrip: React.FC<{
       aria-label={
         allDone
           ? "All stages done"
-          : `Stage ${current + 1} of ${STRIP_STAGES.length}: ${stageLabelOf(jobType)}`
+          : current >= 0
+            ? `Stage ${current + 1} of ${STRIP_STAGES.length}: ${stageLabelOf(jobType)}`
+            : `Stage: ${stageLabelOf(jobType)}`
       }
       sx={{ display: "flex", gap: "3px", width: "100%" }}
     >

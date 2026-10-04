@@ -9,6 +9,26 @@ import {
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ZipImportDialog } from "../../components/ZipImportDialog";
 import type { Series, User } from "../../types";
+import type { ArchiveContents, ArchivePage } from "../../utils/zipPages";
+
+// The real archive reader, with two hooks: a test can hold one read back to control the order
+// reads finish in, and every page handed to `releaseArchivePages` is recorded.
+const archive = vi.hoisted(() => ({
+  hold: null as null | ((file: Blob) => Promise<ArchiveContents> | null),
+  released: [] as string[],
+}));
+vi.mock("../../utils/zipPages", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../utils/zipPages")>();
+  return {
+    ...actual,
+    readArchivePages: (file: Blob) =>
+      archive.hold?.(file) ?? actual.readArchivePages(file),
+    releaseArchivePages: (pages: ArchivePage[]) => {
+      archive.released.push(...pages.map((page) => page.id));
+      actual.releaseArchivePages(pages);
+    },
+  };
+});
 
 const mockSafeFetch = vi.fn();
 vi.mock("../../utils", () => ({
@@ -62,6 +82,8 @@ const uploadedPages = async (formData: FormData) => {
 
 describe("ZipImportDialog", () => {
   beforeEach(() => {
+    archive.hold = null;
+    archive.released = [];
     mockSafeFetch.mockReset();
     mockSafeFetch.mockImplementation((url: string) => {
       if (url === "/api/settings") return ok({});
@@ -206,6 +228,63 @@ describe("ZipImportDialog", () => {
     const sent = (init.body as FormData).get("file") as File;
     expect(sent.name).toBe("Romance Dawn.zip");
     expect(sent.size).toBe(file.size);
+    // Nothing set on the chapter, so the field is left out and the chapter inherits. The
+    // backend reads anything but "true" as false, so "null" would have pinned it off.
+    expect((init.body as FormData).has("useFallbackModels")).toBe(false);
+  });
+
+  it("ignores a slow read of an earlier file once another file was chosen", async () => {
+    const first = await archiveFile();
+    let finishFirst: (contents: ArchiveContents) => void = () => {};
+    archive.hold = (file) =>
+      file === first
+        ? new Promise<ArchiveContents>((resolve) => {
+            finishFirst = resolve;
+          })
+        : null;
+    render(
+      <ZipImportDialog
+        open
+        onClose={vi.fn()}
+        user={user}
+        series={series}
+        initialFile={first}
+        onImported={vi.fn()}
+      />,
+    );
+    await act(async () => {});
+
+    const zip = new JSZip();
+    zip.file("a.png", "a");
+    zip.file("b.png", "b");
+    const second = new File(
+      [await zip.generateAsync({ type: "blob" })],
+      "Other chapter.zip",
+    );
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", {
+      value: { types: ["Files"], files: [second] },
+    });
+    window.dispatchEvent(drop);
+    expect(await screen.findByText("2 of 2 pages")).toBeInTheDocument();
+
+    // The first file's read finishes last. Its pages must not replace the second file's.
+    const stale = ["x/1.png", "x/2.png", "x/3.png"].map((id) => ({
+      id,
+      name: id.split("/")[1],
+      extension: ".png",
+      thumbUrl: `blob:${id}`,
+      read: () => Promise.resolve(new Uint8Array()),
+    }));
+    await act(async () => {
+      finishFirst({ pages: stale, isProjectArchive: false });
+    });
+
+    expect(screen.getByText("2 of 2 pages")).toBeInTheDocument();
+    expect(screen.getByText("Other chapter.zip")).toBeInTheDocument();
+    expect(archive.released).toEqual(
+      expect.arrayContaining(stale.map((p) => p.id)),
+    );
   });
 
   it("does not create a second series when a failed upload is retried", async () => {

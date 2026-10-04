@@ -63,6 +63,13 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
   isLoadingMore,
   onLoadMore,
 }) => {
+  // One path for click and Enter, so the two can't drift apart.
+  const openChapter = (c: Chapter) => {
+    onSelectChapter(c);
+    onNavigate(
+      `/chapters/${c.id}/${toSlug(c.title || `chapter-${c.chapterNumber}`)}`,
+    );
+  };
   return (
     <>
       <Stack
@@ -109,18 +116,9 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
               tabIndex={0}
               aria-label={`Chapter ${c.chapterNumber}${c.title ? `, ${c.title}` : ""}`}
               onKeyDown={(e) => {
-                if (e.key !== "Enter") return;
-                onSelectChapter(c);
-                onNavigate(
-                  `/chapters/${c.id}/${toSlug(c.title || `chapter-${c.chapterNumber}`)}`,
-                );
+                if (e.key === "Enter") openChapter(c);
               }}
-              onClick={() => {
-                onSelectChapter(c);
-                onNavigate(
-                  `/chapters/${c.id}/${toSlug(c.title || `chapter-${c.chapterNumber}`)}`,
-                );
-              }}
+              onClick={() => openChapter(c)}
               sx={{
                 cursor: "pointer",
                 // The card fills its Grid cell so a row of mixed-length titles stays even.

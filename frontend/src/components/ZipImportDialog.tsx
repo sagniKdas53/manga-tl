@@ -143,7 +143,11 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
 
   // --- reading the archive ----------------------------------------------------------------
 
+  // Each read gets a number. A read that finishes after a newer file was chosen, or after the
+  // dialog closed, is released instead of shown, so the preview never belongs to another file.
+  const loadSeqRef = useRef(0);
   const loadFile = useCallback(async (next: File) => {
+    const seq = ++loadSeqRef.current;
     setFile(next);
     setReadError("");
     setReading(true);
@@ -153,6 +157,10 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
     });
     try {
       const { pages, isProjectArchive } = await readArchivePages(next);
+      if (seq !== loadSeqRef.current) {
+        releaseArchivePages(pages);
+        return;
+      }
       if (isProjectArchive) {
         releaseArchivePages(pages);
         setReadError(
@@ -167,13 +175,17 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
         setNewTitle((current) => current || titleFromFileName(next.name));
       }
     } catch {
+      if (seq !== loadSeqRef.current) return;
       setReadError(
         "This file could not be read as a ZIP, CBZ or ePub archive.",
       );
     } finally {
-      setReading(false);
+      if (seq === loadSeqRef.current) setReading(false);
     }
   }, []);
+  useEffect(() => {
+    if (!open) loadSeqRef.current++;
+  }, [open]);
 
   // Reset every time the dialog opens; read a dropped file straight away.
   useEffect(() => {
@@ -203,7 +215,13 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
-  useEffect(() => () => releaseArchivePages(itemsRef.current), []);
+  useEffect(
+    () => () => {
+      loadSeqRef.current++;
+      releaseArchivePages(itemsRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -393,10 +411,11 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
       if (o.cleanupMode) formData.append("cleanupMode", o.cleanupMode);
       if (o.ocrMergeThreshold !== null)
         formData.append("ocrMergeThreshold", String(o.ocrMergeThreshold));
-      formData.append(
-        "useFallbackModels",
-        String(o.useFallbackModels ?? into.useFallbackModels ?? null),
-      );
+      // Only a value set on this chapter is sent. The backend reads any value other than "true"
+      // as false, so sending "null" (or the series' value) would pin the chapter instead of
+      // letting it inherit.
+      if (o.useFallbackModels !== null)
+        formData.append("useFallbackModels", String(o.useFallbackModels));
 
       const res = await safeFetch(`/api/series/${into.id}/chapters/import`, {
         method: "POST",

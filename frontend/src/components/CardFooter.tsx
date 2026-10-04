@@ -80,7 +80,11 @@ const CardFooter: React.FC<{ info: CardInfo[]; actions: CardAction[] }> = ({
           size="small"
           aria-label={action.title}
           title={action.title}
-          onClick={action.onClick}
+          onClick={(e) => {
+            // The footer sits inside a clickable card; an action must never also open it.
+            e.stopPropagation();
+            action.onClick(e);
+          }}
           onKeyDown={(e) => e.stopPropagation()}
           sx={{
             width: 28,

@@ -10,6 +10,21 @@ declare module "@mui/material/styles" {
   }
 }
 
+/**
+ * Dark-mode surfaces above `background.paper`, named once. `index.css` carries the same values
+ * as `--bg-raised` and `--bg-chip`, and theme.test.ts checks the two stay equal.
+ */
+export const DARK_SURFACES = {
+  /** Quiet buttons, menus. */
+  raised: "#313131",
+  /** Chips, and a raised surface under the pointer. */
+  chip: "#3b3b3b",
+  /** A disabled quiet button: between paper and raised. */
+  raisedDisabled: "#2b2b2b",
+  /** The loud button's fill under the pointer: one step darker than `primary.dark`. */
+  primaryFillHover: "#c22846",
+} as const;
+
 // AUDIT-F1: previously `themeObj(mode)`, rebuilt from scratch on every light/dark toggle via
 // `useMemo(() => themeObj(mode), [mode])` in App.tsx — a whole new MUI theme object (and a
 // re-render of every consumer, re-serialising every Emotion style in the tree) on each toggle.
@@ -151,7 +166,7 @@ export const theme = createTheme({
               props: { variant: "contained", color: "primary" },
               style: t.applyStyles("dark", {
                 backgroundColor: t.vars.palette.primary.dark,
-                "&:hover": { backgroundColor: "#c22846" },
+                "&:hover": { backgroundColor: DARK_SURFACES.primaryFillHover },
               }),
             },
             // Every other action is quiet: a filled grey in dark mode instead of a pink
@@ -161,15 +176,15 @@ export const theme = createTheme({
             {
               props: { variant: "outlined" },
               style: t.applyStyles("dark", {
-                backgroundColor: "#313131",
+                backgroundColor: DARK_SURFACES.raised,
                 borderColor: "transparent",
                 "&:hover": {
-                  backgroundColor: "#3b3b3b",
+                  backgroundColor: DARK_SURFACES.chip,
                   borderColor: "transparent",
                 },
                 "&.Mui-disabled": {
                   borderColor: "transparent",
-                  backgroundColor: "#2b2b2b",
+                  backgroundColor: DARK_SURFACES.raisedDisabled,
                 },
               }),
             },
@@ -194,7 +209,7 @@ export const theme = createTheme({
             {
               props: { color: "default" },
               style: t.applyStyles("dark", {
-                backgroundColor: "#3b3b3b",
+                backgroundColor: DARK_SURFACES.chip,
                 color: "#d9d9d9",
                 borderColor: "transparent",
               }),
@@ -220,7 +235,7 @@ export const theme = createTheme({
     MuiMenu: {
       styleOverrides: {
         paper: ({ theme: t }) =>
-          t.applyStyles("dark", { backgroundColor: "#313131" }),
+          t.applyStyles("dark", { backgroundColor: DARK_SURFACES.raised }),
       },
     },
     MuiTooltip: {

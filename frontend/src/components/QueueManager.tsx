@@ -1166,8 +1166,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                           }
                                           disabled={isPaused}
                                         >
-                                          {job.status === "PAUSED" ||
-                                          isPaused ? (
+                                          {job.status === "PAUSED" ? (
                                             <PlayArrowIcon fontSize="small" />
                                           ) : (
                                             <PauseIcon fontSize="small" />

@@ -168,7 +168,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                 <Inherited
                   value={onOff(selectedChapter.resolvedUseFallbackModels)}
                   from={
-                    selectedChapter.useFallbackModels === null ? "series" : null
+                    selectedChapter.useFallbackModels == null ? "series" : null
                   }
                 />
               ),
