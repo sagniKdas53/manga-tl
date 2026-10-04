@@ -67,8 +67,9 @@ when you choose "cover with a plain mask" (`plain_plate_cleanup`) and the per-la
 export ZIP. Plain mask is a stop-gap kept only for failed cleanups (your decision, 2026-09-25).
 
 **5. Font weight defaults disagree, but nothing is affected.** With no weight set, the editor
-measures text as bold, draws it at normal weight, and the export uses 400. All 1,280 translation
-elements have `bold`, so no page shows this today.
+measures text as bold, draws it at normal weight, and the export uses 400. Every element on a
+translation layer has `bold`: all 1,280 rows, counting hidden layers and empty elements, so the
+865 measured above too. No page on this database shows this today.
 
 ## The parts
 

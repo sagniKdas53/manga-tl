@@ -8,7 +8,8 @@
 afternoon item, which is the first job below.
 
 **Tomorrow, in order:**
-1. **Write the C + G packet** (no code yet; output). This is the plan's afternoon item.
+1. ~~Write the C + G packet~~ **Done 2026-10-04** ([packet](output-quality-cg-packet-20261004.md)). Start
+   with A.
 2. Then the follow-ups in order of output value: **A** cleanup masks, **B** one balloon one text
    unit, **C + G** typesetting (from the packet), **F** Photoshop-style layers, **E** automatic
    angles.
