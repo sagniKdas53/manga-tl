@@ -88,6 +88,40 @@ describe("Dashboard Component", () => {
     localStorage.clear();
   });
 
+  it("keeps New chapter, Import chapter and ZIP drops in place but leading nowhere yet", () => {
+    render(
+      <Dashboard
+        mode="dark"
+        user={mockUser}
+        seriesList={initialSeries}
+        setSeriesList={mockSetSeriesList}
+        sortBy="updatedAt"
+        setSortBy={mockSetSortBy}
+        sortDir="desc"
+        setSortDir={mockSetSortDir}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
+        onSelectSeries={mockOnSelectSeries}
+      />,
+    );
+    const notYet =
+      "Chapters without a series are coming later. For now, open a series and import there.";
+
+    fireEvent.click(screen.getByRole("button", { name: /New chapter/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Import chapter/ }));
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", {
+      value: { types: ["Files"], files: [new File(["z"], "chapter.zip")] },
+    });
+    window.dispatchEvent(drop);
+
+    expect(mockShowToast).toHaveBeenCalledTimes(3);
+    expect(mockShowToast).toHaveBeenLastCalledWith(notYet, "info");
+    expect(drop.defaultPrevented).toBe(true); // the browser must not open the file
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("renders the dashboard with list of series", () => {
     render(
       <Dashboard

@@ -214,10 +214,7 @@ describe("SeriesDetails", () => {
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "more series actions" }),
-    );
-    const deleteBtn = screen.getByRole("menuitem", { name: /Delete series/i });
+    const deleteBtn = screen.getByRole("button", { name: /Delete series/i });
     fireEvent.click(deleteBtn);
 
     expect(

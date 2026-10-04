@@ -30,10 +30,8 @@ body,
 }
 
 :root {
-  --font-sans:
-    "Atkinson Hyperlegible Next", "Noto Sans JP", "Noto Sans KR",
-    "Noto Sans SC", system-ui, sans-serif;
-  --font-display: var(--font-sans);
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
 
   /* Dark palette.
    *

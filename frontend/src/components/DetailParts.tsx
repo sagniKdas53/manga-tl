@@ -73,85 +73,93 @@ export const Inherited: React.FC<{
 );
 
 /**
- * One model, as a neutral pill: what it does, then its name. A model set at this level gets an
- * accent dot, so the one or two overrides stand out from the inherited rest without every pill
- * spelling out "(inherited)".
+ * One model, as a neutral pill: what it does, its name, its provider, and where the value comes
+ * from. Settings are looked up chapter first, then series, then system settings; the last part
+ * of the pill names the level that answered ("set here", "from series", "from settings").
  */
+export type SettingSource = "chapter" | "series" | "global";
+
 export const ModelPill: React.FC<{
   role: string;
   model: string;
   provider?: string | null;
-  setHere?: boolean;
+  source: SettingSource;
+  /** The level this header shows. */
+  level: "chapter" | "series";
   disabled?: boolean;
-  levelName: string;
-}> = ({
-  role,
-  model,
-  provider,
-  setHere = false,
-  disabled = false,
-  levelName,
-}) => (
-  <Tooltip
-    title={
-      setHere
-        ? `Set on this ${levelName}`
-        : `Inherited${disabled ? ", not used in the current QA mode" : ""}`
-    }
-  >
-    <Box
-      component="span"
-      sx={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 0.75,
-        maxWidth: "100%",
-        px: 1,
-        py: 0.25,
-        borderRadius: "4px",
-        bgcolor: "var(--bg-chip)",
-        fontSize: "0.8125rem",
-        opacity: disabled ? 0.55 : 1,
-        whiteSpace: "nowrap",
-        overflow: "hidden",
-      }}
+}> = ({ role, model, provider, source, level, disabled = false }) => {
+  const setHere = source === level;
+  const origin = setHere
+    ? "set here"
+    : source === "series"
+      ? "from series"
+      : "from settings";
+  const chain =
+    level === "chapter"
+      ? "Looked up on the chapter, then the series, then system settings."
+      : "Looked up on the series, then system settings.";
+  const answer = setHere
+    ? `Set on this ${level}.`
+    : source === "series"
+      ? "Not set on the chapter, so the series' value is used."
+      : `Not set on the ${level === "chapter" ? "chapter or series" : "series"}, so the system setting is used.`;
+  return (
+    <Tooltip
+      title={`${answer} ${chain}${disabled ? " Not used in the current QA mode." : ""}`}
     >
-      {setHere && (
-        <Box
-          component="span"
-          aria-label={`set on this ${levelName}`}
-          sx={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            bgcolor: "primary.main",
-            flexShrink: 0,
-          }}
-        />
-      )}
       <Box
         component="span"
-        sx={{ color: "text.secondary" }}
+        sx={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 0.75,
+          maxWidth: "100%",
+          px: 1,
+          py: 0.25,
+          borderRadius: "4px",
+          bgcolor: "var(--bg-chip)",
+          fontSize: "0.8125rem",
+          opacity: disabled ? 0.55 : 1,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+        }}
       >
-        {role}
-      </Box>
-      <Box
-        component="span"
-        sx={{ overflow: "hidden", textOverflow: "ellipsis" }}
-      >
-        {model}
-      </Box>
-      {provider && (
         <Box
           component="span"
           sx={{ color: "text.secondary" }}
         >
-          {provider}
+          {role}
         </Box>
-      )}
-    </Box>
-  </Tooltip>
-);
+        <Box
+          component="span"
+          sx={{ overflow: "hidden", textOverflow: "ellipsis" }}
+        >
+          {model}
+        </Box>
+        {provider && (
+          <Box
+            component="span"
+            sx={{ color: "text.secondary" }}
+          >
+            {provider}
+          </Box>
+        )}
+        <Box
+          component="span"
+          sx={{
+            pl: 0.75,
+            borderLeft: 1,
+            borderColor: "divider",
+            color: setHere ? "primary.main" : "text.secondary",
+            fontWeight: setHere ? 600 : 400,
+          }}
+        >
+          {origin}
+        </Box>
+      </Box>
+    </Tooltip>
+  );
+};
 
 export const PillRow: React.FC<{ children: React.ReactNode }> = ({
   children,

@@ -3,13 +3,10 @@ import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import IconButton from "@mui/material/IconButton";
-import Menu from "@mui/material/Menu";
-import MenuItem from "@mui/material/MenuItem";
 import AddIcon from "@mui/icons-material/Add";
 import UploadIcon from "@mui/icons-material/Upload";
 import EditIcon from "@mui/icons-material/Edit";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
+import DeleteIcon from "@mui/icons-material/Delete";
 import type { Series, User, SystemSettingsDto } from "../types";
 import { safeFetch, resolveOverride } from "../utils";
 import { readingDirectionLabel } from "../utils/readingDirection";
@@ -113,7 +110,6 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
     resolvedTlProvider.value === "openrouter" ||
     resolvedQaProvider.value === "openrouter";
 
-  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const fromSettings = (source?: string | null) =>
     source === "series" ? null : "settings";
   const directionLabel = readingDirectionLabel(series.readingDirection);
@@ -181,8 +177,8 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                       role="OCR"
                       model={resolvedOcr.value}
                       provider={resolvedOcrProvider.value}
-                      setHere={resolvedOcr.source === "series"}
-                      levelName="series"
+                      source={resolvedOcr.source}
+                      level="series"
                     />
                   )}
                   {resolvedTl.value && (
@@ -190,32 +186,32 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                       role="Translation"
                       model={resolvedTl.value}
                       provider={resolvedTlProvider.value}
-                      setHere={resolvedTl.source === "series"}
-                      levelName="series"
+                      source={resolvedTl.source}
+                      level="series"
                     />
                   )}
                   {resolvedQa.value && (
                     <ModelPill
                       role="QA text"
                       model={resolvedQa.value}
-                      setHere={resolvedQa.source === "series"}
+                      source={resolvedQa.source}
                       disabled={
                         resolvedQaMode.value === "vlm" ||
                         resolvedQaMode.value === "none"
                       }
-                      levelName="series"
+                      level="series"
                     />
                   )}
                   {resolvedQaVlm.value && !qaVlmCapabilityMissing && (
                     <ModelPill
                       role="QA vision"
                       model={resolvedQaVlm.value}
-                      setHere={resolvedQaVlm.source === "series"}
+                      source={resolvedQaVlm.source}
                       disabled={
                         resolvedQaMode.value === "llm" ||
                         resolvedQaMode.value === "none"
                       }
-                      levelName="series"
+                      level="series"
                     />
                   )}
                 </PillRow>
@@ -249,28 +245,14 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
           >
             Edit series
           </Button>
-          <IconButton
-            aria-label="more series actions"
-            aria-haspopup="true"
-            onClick={(e) => setMenuAnchor(e.currentTarget)}
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={<DeleteIcon />}
+            onClick={onDeleteSeries}
           >
-            <MoreVertIcon />
-          </IconButton>
-          <Menu
-            anchorEl={menuAnchor}
-            open={Boolean(menuAnchor)}
-            onClose={() => setMenuAnchor(null)}
-          >
-            <MenuItem
-              onClick={(e) => {
-                setMenuAnchor(null);
-                onDeleteSeries(e);
-              }}
-              sx={{ color: "error.main" }}
-            >
-              Delete series
-            </MenuItem>
-          </Menu>
+            Delete series
+          </Button>
         </Stack>
       </HeaderShell>
     </Box>

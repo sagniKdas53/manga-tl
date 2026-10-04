@@ -149,10 +149,9 @@ describe("ChapterHeader", () => {
     expect(defaultProps.onExportClick).toHaveBeenCalledTimes(1);
   });
 
-  it("calls onDeleteClick from the overflow menu", () => {
+  it("calls onDeleteClick when Delete chapter clicked", () => {
     render(<ChapterHeader {...defaultProps} />);
-    fireEvent.click(screen.getByLabelText("more actions"));
-    fireEvent.click(screen.getByText("Delete chapter"));
+    fireEvent.click(screen.getByRole("button", { name: /Delete chapter/ }));
     expect(defaultProps.onDeleteClick).toHaveBeenCalledTimes(1);
   });
 
@@ -205,8 +204,8 @@ describe("ChapterHeader", () => {
     );
     expect(screen.getByText("ocr-model")).toBeDefined();
     expect(screen.getByText("openrouter")).toBeDefined();
-    // Set on the chapter, so it carries the accent dot.
-    expect(screen.getByLabelText("set on this chapter")).toBeDefined();
+    // Set on the chapter itself: the pill says so.
+    expect(screen.getByText("set here")).toBeDefined();
   });
 
   it("renders resolved translation chips", () => {
@@ -226,8 +225,9 @@ describe("ChapterHeader", () => {
     expect(screen.getByText("Translation")).toBeDefined();
     expect(screen.getByText("gemini-flash")).toBeDefined();
     expect(screen.getByText("gemini")).toBeDefined();
-    // Inherited from the series: no dot.
-    expect(screen.queryByLabelText("set on this chapter")).toBeNull();
+    // Inherited: the pill names the level it came from.
+    expect(screen.getByText("from series")).toBeDefined();
+    expect(screen.queryByText("set here")).toBeNull();
   });
 
   it("renders resolved QA chips", () => {

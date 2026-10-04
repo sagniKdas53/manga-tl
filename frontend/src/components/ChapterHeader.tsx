@@ -4,8 +4,8 @@ import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import IconButton from "@mui/material/IconButton";
-import Divider from "@mui/material/Divider";
 import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import UploadIcon from "@mui/icons-material/Upload";
 import DownloadIcon from "@mui/icons-material/Download";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -200,8 +200,8 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                       role="OCR"
                       model={selectedChapter.resolvedOcr.model}
                       provider={selectedChapter.resolvedOcr.provider}
-                      setHere={selectedChapter.resolvedOcr.source === "chapter"}
-                      levelName="chapter"
+                      source={selectedChapter.resolvedOcr.source}
+                      level="chapter"
                     />
                   )}
                   {selectedChapter.resolvedTranslation?.model && (
@@ -209,22 +209,20 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                       role="Translation"
                       model={selectedChapter.resolvedTranslation.model}
                       provider={selectedChapter.resolvedTranslation.provider}
-                      setHere={
-                        selectedChapter.resolvedTranslation.source === "chapter"
-                      }
-                      levelName="chapter"
+                      source={selectedChapter.resolvedTranslation.source}
+                      level="chapter"
                     />
                   )}
                   {selectedChapter.resolvedQa?.llmModel && (
                     <ModelPill
                       role="QA text"
                       model={selectedChapter.resolvedQa.llmModel}
-                      setHere={selectedChapter.resolvedQa.source === "chapter"}
+                      source={selectedChapter.resolvedQa.source}
                       disabled={
                         selectedChapter.resolvedQa?.mode === "vlm" ||
                         selectedChapter.resolvedQa?.mode === "none"
                       }
-                      levelName="chapter"
+                      level="chapter"
                     />
                   )}
                   {selectedChapter.resolvedQa?.vlmModel &&
@@ -232,14 +230,12 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                       <ModelPill
                         role="QA vision"
                         model={selectedChapter.resolvedQa.vlmModel}
-                        setHere={
-                          selectedChapter.resolvedQa.source === "chapter"
-                        }
+                        source={selectedChapter.resolvedQa.source}
                         disabled={
                           selectedChapter.resolvedQa?.mode === "llm" ||
                           selectedChapter.resolvedQa?.mode === "none"
                         }
-                        levelName="chapter"
+                        level="chapter"
                       />
                     )}
                 </PillRow>
@@ -275,6 +271,14 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
             {isImporting ? "Importing…" : "Import project (ZIP)"}
           </Button>
 
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={<DeleteIcon />}
+            onClick={onDeleteClick}
+          >
+            Delete chapter
+          </Button>
           <IconButton
             onClick={(e) => setOverflowAnchorEl(e.currentTarget)}
             aria-label="more actions"
@@ -305,16 +309,6 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
               }}
             >
               Delete saved exports
-            </MenuItem>
-            <Divider />
-            <MenuItem
-              onClick={() => {
-                onDeleteClick();
-                setOverflowAnchorEl(null);
-              }}
-              sx={{ color: "error.main" }}
-            >
-              Delete chapter
             </MenuItem>
           </Menu>
         </Stack>

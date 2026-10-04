@@ -301,7 +301,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         onImported={(chapter, _series, pageCount) => {
           setChapters((prev) => insertChapterInOrder(prev, chapter, sortAsc));
           showToast(
-            `Imported ${pageCount} pages as chapter ${chapter.chapterNumber}. Processing has started; reload the page to see it in the queue.`,
+            `Imported ${pageCount} pages as chapter ${chapter.chapterNumber}. Follow it in the queue.`,
             "success",
           );
         }}

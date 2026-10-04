@@ -93,19 +93,42 @@ export const theme = createTheme({
     // exists to prevent.
     colorSchemeSelector: "class",
   },
-  // One family for everything. Atkinson Hyperlegible Next was drawn for low-vision legibility,
-  // which is the job here: small model names and stage labels read on a tablet at night. The
-  // CJK fallbacks are for source-language titles. Headings differ by weight and size only.
   typography: {
-    fontFamily:
-      '"Atkinson Hyperlegible Next", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", system-ui, sans-serif',
+    fontFamily: '"Plus Jakarta Sans", "Roboto", system-ui, sans-serif',
     fontSize: 14,
-    h1: { fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.01em" },
-    h2: { fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.01em" },
-    h3: { fontSize: "1.375rem", fontWeight: 700 },
-    h4: { fontSize: "1.625rem", fontWeight: 700, letterSpacing: "-0.01em" },
-    h5: { fontSize: "1.25rem", fontWeight: 700 },
-    h6: { fontSize: "1rem", fontWeight: 700 },
+    h1: {
+      fontFamily: '"Outfit", sans-serif',
+      fontSize: "1.75rem",
+      fontWeight: 700,
+      letterSpacing: "-0.01em",
+    },
+    h2: {
+      fontFamily: '"Outfit", sans-serif',
+      fontSize: "1.5rem",
+      fontWeight: 700,
+      letterSpacing: "-0.01em",
+    },
+    h3: {
+      fontFamily: '"Outfit", sans-serif',
+      fontSize: "1.375rem",
+      fontWeight: 700,
+    },
+    h4: {
+      fontFamily: '"Outfit", sans-serif',
+      fontSize: "1.625rem",
+      fontWeight: 700,
+      letterSpacing: "-0.01em",
+    },
+    h5: {
+      fontFamily: '"Outfit", sans-serif',
+      fontSize: "1.25rem",
+      fontWeight: 700,
+    },
+    h6: {
+      fontFamily: '"Outfit", sans-serif',
+      fontSize: "1rem",
+      fontWeight: 700,
+    },
     button: { fontWeight: 600, letterSpacing: 0 },
   },
   shape: {

@@ -85,10 +85,7 @@ describe("SeriesHeader", () => {
     fireEvent.click(screen.getByRole("button", { name: /Edit series/i }));
     expect(mockEditSeries).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "more series actions" }),
-    );
-    fireEvent.click(screen.getByRole("menuitem", { name: /Delete series/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Delete series/i }));
     expect(mockDeleteSeries).toHaveBeenCalledTimes(1);
   });
 });

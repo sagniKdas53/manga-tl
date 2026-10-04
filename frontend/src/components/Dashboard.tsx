@@ -26,7 +26,6 @@ import ConfirmModal from "./ConfirmModal";
 import CreateSeriesDialog from "./CreateSeriesDialog";
 import LazyImage from "./LazyImage";
 import LoadMoreSentinel from "./LoadMoreSentinel";
-import ZipImportDialog from "./ZipImportDialog";
 import DropOverlay from "./DropOverlay";
 import { useArchiveDrop } from "../hooks/useArchiveDrop";
 import { isChapterArchiveFile } from "../utils/zipPages";
@@ -97,21 +96,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const closeConfirmModal = () =>
     setConfirmModal((prev) => ({ ...prev, isOpen: false }));
 
-  // Import a chapter archive from the library: drop it anywhere, or use the button. The dialog
-  // asks which series it goes into, or makes a new one with its languages (#217).
-  const [showImport, setShowImport] = useState(false);
-  const [droppedArchive, setDroppedArchive] = useState<File | null>(null);
-  const draggingArchive = useArchiveDrop(
-    !showImport && !showSeriesModal,
-    (file) => {
-      if (!isChapterArchiveFile(file)) {
-        showToast("Drop a .zip, .cbz or .epub to import a chapter.", "info");
-        return;
-      }
-      setDroppedArchive(file);
-      setShowImport(true);
-    },
-  );
+  // Standalone chapters (a chapter with no series) need a schema change and are a future
+  // milestone. Until then the library's "New chapter", "Import chapter" and ZIP drop are in
+  // place but lead nowhere: they say so and point at the series page, where import works.
+  const standaloneNotYet = () =>
+    showToast(
+      "Chapters without a series are coming later. For now, open a series and import there.",
+      "info",
+    );
+  const draggingArchive = useArchiveDrop(!showSeriesModal, (file) => {
+    if (!isChapterArchiveFile(file)) {
+      showToast("Drop a .zip, .cbz or .epub to import a chapter.", "info");
+      return;
+    }
+    standaloneNotYet();
+  });
 
   const openSeries = (s: Series) => {
     onSelectSeries(s);
@@ -226,12 +225,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <Button
           variant="outlined"
           startIcon={<UploadIcon />}
-          onClick={() => {
-            setDroppedArchive(null);
-            setShowImport(true);
-          }}
+          onClick={standaloneNotYet}
         >
           Import chapter
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<AddIcon />}
+          onClick={standaloneNotYet}
+        >
+          New chapter
         </Button>
         <Button
           variant="contained"
@@ -394,31 +397,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onClose={handleCancelSeriesModal}
         onSuccess={handleSeriesSuccess}
       />
-      <ZipImportDialog
-        open={showImport}
-        onClose={() => {
-          setShowImport(false);
-          setDroppedArchive(null);
-        }}
-        initialFile={droppedArchive}
-        user={user}
-        onImported={(chapter, series, pageCount) => {
-          setSeriesList((prev) =>
-            prev.some((existing) => existing.id === series.id)
-              ? prev
-              : [series, ...prev],
-          );
-          showToast(
-            `Imported ${pageCount} pages into ${series.title} as chapter ${chapter.chapterNumber}. Processing has started; reload to see it in the queue.`,
-            "success",
-          );
-          openSeries(series);
-        }}
-      />
       <DropOverlay
         visible={draggingArchive}
-        title="Import a chapter"
-        detail="Drop a ZIP, CBZ or ePub. You choose the series and check the pages next."
+        title="Chapters without a series are coming later"
+        detail="To import this ZIP now, open a series and drop it there."
       />
       <ConfirmModal
         isOpen={confirmModal.isOpen}
