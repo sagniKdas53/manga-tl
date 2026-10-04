@@ -101,6 +101,8 @@ Each item says whether it makes output better or is upkeep.
   GitHub and pi5). The parent's corpus pin is that commit.
 
 **Afternoon: get ready for typesetting (output).** Write the C + G packet; no code yet.
+- **Written 2026-10-04:** [the C + G packet](output-quality-cg-packet-20261004.md). G2 is not an
+  edge case: 425 of 865 elements on 132 of 153 laptop pages fit differently in the export.
 - C: split `background_color` into an outline colour and a plate colour (migration, golden OpenAPI
   hand-edit, frontend types).
 - Measure the Torii contrast halo from the 270 bundles (`strokeColor`, `lineWidth` against font
