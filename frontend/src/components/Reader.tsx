@@ -3392,6 +3392,14 @@ export const Reader: React.FC<ReaderProps> = ({
       } else if (e.key === "Escape") {
         setSelectedItem(null);
         setActiveRegion(null);
+      } else if (
+        (e.key === "j" || e.key === "k") &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey
+      ) {
+        // Step through the page's open issues, as the Review tab says.
+        handleStepIssue(e.key === "j" ? 1 : -1);
       }
     };
 
@@ -3399,7 +3407,7 @@ export const Reader: React.FC<ReaderProps> = ({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [curPageNum, navigateToPage]);
+  }, [curPageNum, navigateToPage, handleStepIssue]);
 
   // --- PANNING / DRAGGING WORKSPACE ---
   // The mask editor's panel and its Select menu are React portals rendered from inside the canvas,
@@ -5172,6 +5180,7 @@ export const Reader: React.FC<ReaderProps> = ({
         {showRightSidebar && !inpaintingView && (
           <ReaderRightSidebar
             {...rightSidebarHandlers}
+            pageId={selectedPage?.id ?? null}
             selectedItem={selectedItem}
             setSelectedItem={setSelectedItem}
             activeLayerId={activeLayerId}

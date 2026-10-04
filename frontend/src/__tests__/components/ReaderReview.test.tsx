@@ -10,7 +10,7 @@ import {
   regionIssues,
   translationElementByRegion,
 } from "../../utils/regionIssues";
-import { IssueList, MergePanel } from "../../components/ReaderIssues";
+import { ReviewPanel, MergePanel } from "../../components/ReaderIssues";
 import type { Layer, LayerElement, OcrRegion } from "../../types";
 
 const region = (id: string, order: number, extra: Partial<OcrRegion> = {}) =>
@@ -368,14 +368,94 @@ describe("issues view", () => {
     const onSelect = vi.fn();
     const issue = regionIssue(region("a", 2), undefined, false)!;
     render(
-      <IssueList
+      <ReviewPanel
         issues={[issue]}
-        selectedRegionId={null}
+        pageId="p1"
         onSelect={onSelect}
       />,
     );
     fireEvent.click(screen.getByText("Not translated"));
     expect(onSelect).toHaveBeenCalledWith(issue);
+  });
+
+  it("keeps a settled issue on the list, ticked off, until the page changes", () => {
+    const a = regionIssue(region("a", 1), undefined, false)!;
+    const b = regionIssue(
+      region("b", 2),
+      element("eb", "b", "Hello there", true),
+      true,
+    )!;
+    const { rerender } = render(
+      <ReviewPanel
+        issues={[a, b]}
+        pageId="p1"
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("2 to review")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "0 of 2 issues on this page settled" }),
+    ).toBeInTheDocument();
+
+    // #1 is settled: it stays, ticked, and can no longer be opened.
+    rerender(
+      <ReviewPanel
+        issues={[b]}
+        pageId="p1"
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("1 to review")).toBeInTheDocument();
+    expect(screen.getByText("#1 settled")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "1 of 2 issues on this page settled" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^#1:/ })).toBeNull();
+
+    rerender(
+      <ReviewPanel
+        issues={[]}
+        pageId="p1"
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("All 2 settled")).toBeInTheDocument();
+
+    // A new page starts a new tally.
+    rerender(
+      <ReviewPanel
+        issues={[]}
+        pageId="p2"
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText("Nothing to review on this page."),
+    ).toBeInTheDocument();
+  });
+
+  it("shows one kind of issue at a time when asked", () => {
+    const a = regionIssue(region("a", 1), undefined, false)!;
+    const b = regionIssue(
+      region("b", 2),
+      element("eb", "b", "Hello there", true),
+      true,
+    )!;
+    expect(a.kind).not.toBe(b.kind);
+    render(
+      <ReviewPanel
+        issues={[a, b]}
+        pageId="p1"
+        onSelect={vi.fn()}
+      />,
+    );
+    const list = screen.getByRole("list", { name: "Issues on this page" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: /^Not translated/ }));
+    expect(within(list).getAllByRole("listitem")).toHaveLength(1);
+    expect(within(list).getByText(a.title)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^All/ }));
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
   });
 
   it("merges only once two pieces are picked", () => {

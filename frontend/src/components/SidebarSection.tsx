@@ -9,6 +9,13 @@ interface SidebarSectionProps {
   headerExtra?: React.ReactNode;
 }
 
+/**
+ * One group of controls in a Reader sidebar.
+ *
+ * Groups used to be bordered cards with an all-caps overline each, so a sidebar was a stack of
+ * boxes inside a box and a third of its height was frame (reader review, 2026-10-04). Now a group
+ * is its controls under a plain sentence-case label, with one hairline between groups.
+ */
 const SidebarSection: React.FC<SidebarSectionProps> = ({
   title,
   children,
@@ -16,12 +23,13 @@ const SidebarSection: React.FC<SidebarSectionProps> = ({
   headerExtra,
 }) => (
   <Box
+    component="section"
+    aria-label={title}
+    className="sidebar-section"
     sx={{
-      border: "1px solid var(--border-color)",
-      borderRadius: "10px",
-      p: 1.5,
-      mb: 2,
-      backgroundColor: "var(--bg-surface, transparent)",
+      py: 1.75,
+      borderTop: "1px solid var(--border-color)",
+      "&:first-of-type": { borderTop: "none", pt: 0.5 },
       ...sx,
     }}
   >
@@ -31,17 +39,18 @@ const SidebarSection: React.FC<SidebarSectionProps> = ({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          mb: 1.25,
+          gap: 1,
+          minHeight: 28,
+          mb: 0.75,
         }}
       >
         <Typography
-          variant="overline"
-          component="div"
+          component="h3"
           sx={{
-            fontSize: "10.5px",
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            color: "var(--text-dim, var(--text-muted))",
+            m: 0,
+            fontSize: "12.5px",
+            fontWeight: 600,
+            color: "var(--text-muted)",
           }}
         >
           {title}

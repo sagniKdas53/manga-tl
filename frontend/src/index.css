@@ -61,6 +61,7 @@ body,
   --success: #5fc495;
   --success-glow: rgba(95, 196, 149, 0.12);
   --warning: #e6b98a;
+  --on-warning: #1f1400;
   --error: #eb8b65;
 
   --conversation: #8cc3ea;
@@ -107,6 +108,9 @@ body,
 
   --success: #10b981;
   --success-glow: rgba(16, 185, 129, 0.08);
+  /* The dark scheme's sand is unreadable on white; a review flag needs AA here too. */
+  --warning: #9a5b00;
+  --on-warning: #ffffff;
 
   --text-main: #343333;
   --text-muted: #5f5f5f;
@@ -210,7 +214,6 @@ body {
   padding: 4px 8px;
   border-radius: 6px;
   border: 1px solid var(--border-color);
-  text-transform: uppercase;
   font-weight: 600;
   font-size: 11px;
 }
@@ -374,11 +377,10 @@ body {
 }
 
 .panel-section-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
   margin-bottom: 12px;
 }
 
@@ -1026,12 +1028,12 @@ input:checked + .slider:before {
 }
 
 .reader-left-sidebar-nhentai {
-  width: 280px;
+  width: 264px;
   border-right: 1px solid var(--border-color);
   background: var(--bg-surface);
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 12px 16px 24px;
   box-sizing: border-box;
   overflow-y: auto;
   z-index: 90;
@@ -1051,12 +1053,12 @@ input:checked + .slider:before {
 }
 
 .reader-right-sidebar-nhentai {
-  width: 320px;
+  width: 336px;
   border-left: 1px solid var(--border-color);
   background: var(--bg-surface);
   display: flex;
   flex-direction: column;
-  padding: 24px;
+  padding: 12px 16px 24px;
   box-sizing: border-box;
   overflow-y: auto;
   z-index: 90;

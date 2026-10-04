@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import ReaderLeftSidebar from "../../components/ReaderLeftSidebar";
 import type { Page } from "../../types";
@@ -102,7 +102,7 @@ describe("ReaderLeftSidebar Component", () => {
       />,
     );
     // The switch can be queried by label
-    const cleanSwitch = screen.getByLabelText(/Clean Scanlation/i);
+    const cleanSwitch = screen.getByLabelText(/Clean scanlation/i);
     fireEvent.click(cleanSwitch);
     expect(defaultProps.setCleanScanlationView).toHaveBeenCalledWith(true);
     expect(defaultProps.setManuallyShownOcrLayers).toHaveBeenCalled();
@@ -144,8 +144,8 @@ describe("ReaderLeftSidebar Component", () => {
     );
 
     // Test chapter navigation
-    const prevChBtn = screen.getByText(/Prev Ch/i);
-    const nextChBtn = screen.getByText(/Next Ch/i);
+    const prevChBtn = screen.getByRole("button", { name: /Previous chapter/i });
+    const nextChBtn = screen.getByRole("button", { name: /Next chapter/i });
 
     expect(prevChBtn).toBeInTheDocument();
     expect(nextChBtn).toBeInTheDocument();
@@ -172,5 +172,17 @@ describe("ReaderLeftSidebar Component", () => {
 
     fireEvent.click(screen.getByTestId("last-page-btn"));
     expect(navigatePageMock).toHaveBeenCalledWith(5);
+  });
+
+  it("sets how far ahead to load with a stepper, apart from zoom", () => {
+    render(<ReaderLeftSidebar {...defaultProps} />);
+    const loading = screen.getByRole("region", { name: "Loading" });
+    fireEvent.click(
+      within(loading).getByRole("button", { name: "Load more pages ahead" }),
+    );
+    expect(defaultProps.setPrefetchAhead).toHaveBeenCalledWith(3);
+    // The zoom group holds no prefetch control.
+    const zoom = screen.getByRole("region", { name: "Zoom" });
+    expect(within(zoom).queryByText(/ahead/i)).toBeNull();
   });
 });

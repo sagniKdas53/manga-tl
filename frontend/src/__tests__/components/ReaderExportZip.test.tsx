@@ -266,7 +266,9 @@ describe("Reader project ZIP export", () => {
 
     const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
     fireEvent.load(img);
-    fireEvent.click(await screen.findByText("Export Page (PNG)"));
+    // Export lives in the inspector's Page tab.
+    fireEvent.click(await screen.findByRole("tab", { name: "Page" }));
+    fireEvent.click(await screen.findByText("Export page (PNG)"));
 
     await waitFor(() => {
       expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
@@ -356,7 +358,9 @@ describe("Reader project ZIP export", () => {
     );
     const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
     fireEvent.load(img);
-    fireEvent.click(await screen.findByText("Export Page (PNG)"));
+    // Export lives in the inspector's Page tab.
+    fireEvent.click(await screen.findByRole("tab", { name: "Page" }));
+    fireEvent.click(await screen.findByText("Export page (PNG)"));
   }
 
   it("renders a page whose render is pending, then exports it", async () => {
@@ -410,7 +414,11 @@ describe("Reader project ZIP export", () => {
     });
     fireEvent.load(img);
 
-    fireEvent.click(await screen.findByText("Export Project (ZIP)"));
+    // Export lives in the inspector's Page tab.
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Page" }));
+
+    fireEvent.click(await screen.findByText("Export project (ZIP)"));
 
     await waitFor(() => {
       expect(capturedZip).not.toBeNull();
@@ -479,7 +487,9 @@ describe("Reader project ZIP export", () => {
         configurable: true,
       });
       fireEvent.load(img);
-      fireEvent.click(await screen.findByText("Export Project (ZIP)"));
+      // Export lives in the inspector's Page tab.
+      fireEvent.click(await screen.findByRole("tab", { name: "Page" }));
+      fireEvent.click(await screen.findByText("Export project (ZIP)"));
       await waitFor(() => {
         expect(capturedZip).not.toBeNull();
       });
@@ -624,7 +634,9 @@ describe("Reader project ZIP export", () => {
     );
     const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
     fireEvent.load(img);
-    fireEvent.click(await screen.findByText("Export Project (ZIP)"));
+    // Export lives in the inspector's Page tab.
+    fireEvent.click(await screen.findByRole("tab", { name: "Page" }));
+    fireEvent.click(await screen.findByText("Export project (ZIP)"));
     await waitFor(() => expect(capturedZip).not.toBeNull());
 
     const zip = await JSZip.loadAsync(capturedZip!);
@@ -674,7 +686,9 @@ describe("Reader project ZIP export", () => {
 
     const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
     fireEvent.load(img);
-    fireEvent.click(await screen.findByText("Export Project (ZIP)"));
+    // Export lives in the inspector's Page tab.
+    fireEvent.click(await screen.findByRole("tab", { name: "Page" }));
+    fireEvent.click(await screen.findByText("Export project (ZIP)"));
 
     await waitFor(() => {
       expect(capturedZip).not.toBeNull();

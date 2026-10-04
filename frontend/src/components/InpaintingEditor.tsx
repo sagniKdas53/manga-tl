@@ -268,7 +268,7 @@ function InpaintingPanel({
           fullWidth
           value={editor.tool}
           onChange={(_e, value) => value && editor.setTool(value)}
-          sx={{ mb: 1 }}
+          sx={{ mb: 1, "& .MuiToggleButton-root": { textTransform: "none" } }}
         >
           <ToggleButton
             value="brush"
