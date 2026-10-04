@@ -173,7 +173,19 @@ G2, and the outline width if chosen, change the scene of nearly every page:
 3. C, if D3 says so.
 4. One release with G3, then the gate run on the test pages.
 
-## Decisions for you
+## Decisions (user, 2026-10-04)
+
+- **D1: (a).** The export follows the editor and fits into the polygon.
+- **D2: keep 0.18 × font px** and judge it on the test pages; switch to Torii's curve only if the
+  results look wrong.
+- **D3: skipped.** The split only matters when you choose **Mask** on a flagged region in the
+  review list (the plain-mask stop-gap, used where cleanup left text or found none). The plate
+  takes the region's sampled background colour, which is also the outline colour of the text on
+  it. An edge case of an edge case: documented here, not built.
+
+So the build is G2 with H1 and the weight defaults, then one release with G3 and the gate run.
+
+## Decisions as they were put
 
 - **D1: which way do the editor and the export agree?**
   - (a) The export follows the editor and fits into the polygon. On the export, elliptical text
