@@ -992,6 +992,35 @@ describe("Mask editor (inpainting view)", () => {
     );
   });
 
+  it("pans the page with a drag and keeps it there once the drag ends", async () => {
+    await renderReader();
+    await waitFor(() =>
+      expect(document.querySelector(".svg-overlay")!.textContent).toContain(
+        "Hello",
+      ),
+    );
+    const area = document.querySelector(".reader-canvas-area") as HTMLElement;
+    const wrapper = document.querySelector(
+      ".manga-canvas-wrapper",
+    ) as HTMLElement;
+    expect(wrapper.style.transform).toContain("translate(0px, 0px)");
+
+    await act(async () => {
+      fireEvent.mouseDown(area, { clientX: 100, clientY: 100, button: 0 });
+    });
+    // The page follows the pointer by a direct style write, one per frame, not a re-render.
+    await act(async () => {
+      fireEvent.mouseMove(area, { clientX: 160, clientY: 130 });
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    expect(wrapper.style.transform).toContain("translate(60px, 30px)");
+
+    await act(async () => {
+      fireEvent.mouseUp(area, { clientX: 160, clientY: 130 });
+    });
+    expect(wrapper.style.transform).toContain("translate(60px, 30px)");
+  });
+
   it("puts its tools in the sidebar's place, never pans while painting, and restores what the eraser marks", async () => {
     await renderReader();
     const overlay = document.querySelector(".svg-overlay")!;

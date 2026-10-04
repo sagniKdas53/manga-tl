@@ -73,6 +73,7 @@ import {
 } from "../utils/polygonUtils";
 import JSZip from "jszip";
 import { useNotifications } from "./useNotifications";
+import { useStableCallbacks } from "../hooks/useStableCallbacks";
 import { useToast } from "./ToastContext";
 import CircularProgress from "@mui/material/CircularProgress";
 
@@ -523,6 +524,13 @@ export const Reader: React.FC<ReaderProps> = ({
   // Pan & Drag States
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
+  // While a pan drag is under way the page moves by writing its transform straight to the
+  // wrapper, once per frame, and `pan` is committed when the drag ends. Setting state on every
+  // move re-rendered the whole Reader, sidebars and overlays included, about 100 ms per move in
+  // a dev build (measured 2026-10-04), so the page lagged behind the pointer.
+  const canvasWrapperRef = useRef<HTMLDivElement>(null);
+  const livePanRef = useRef<{ x: number; y: number } | null>(null);
+  const panFrameRef = useRef<number | null>(null);
   /** 'none' = normal read mode, 'drag' = move element, 'reshape' = vertex editing */
   const [interactionMode, setInteractionMode] = useState<
     "none" | "drag" | "reshape"
@@ -3422,6 +3430,28 @@ export const Reader: React.FC<ReaderProps> = ({
     hasMoved.current = false;
   };
 
+  const movePanLive = (x: number, y: number) => {
+    livePanRef.current = { x, y };
+    if (panFrameRef.current !== null) return;
+    panFrameRef.current = requestAnimationFrame(() => {
+      panFrameRef.current = null;
+      const live = livePanRef.current;
+      const wrapper = canvasWrapperRef.current;
+      if (live && wrapper) {
+        wrapper.style.transform = `translate(${live.x}px, ${live.y}px) scale(${zoom})`;
+      }
+    });
+  };
+  const commitLivePan = () => {
+    if (panFrameRef.current !== null) {
+      cancelAnimationFrame(panFrameRef.current);
+      panFrameRef.current = null;
+    }
+    const live = livePanRef.current;
+    livePanRef.current = null;
+    if (live) setPan(live);
+  };
+
   const handleMouseMoveCanvas = (e: React.MouseEvent) => {
     if (!isDraggingCanvas) return;
     const dx = e.clientX - initialTouchPos.current.x;
@@ -3429,13 +3459,14 @@ export const Reader: React.FC<ReaderProps> = ({
     if (Math.sqrt(dx * dx + dy * dy) > 10) {
       hasMoved.current = true;
     }
-    setPan({
-      x: e.clientX - dragStart.current.x,
-      y: e.clientY - dragStart.current.y,
-    });
+    movePanLive(
+      e.clientX - dragStart.current.x,
+      e.clientY - dragStart.current.y,
+    );
   };
 
   const handleMouseUpCanvas = () => {
+    commitLivePan();
     setIsDraggingCanvas(false);
   };
 
@@ -3517,10 +3548,10 @@ export const Reader: React.FC<ReaderProps> = ({
       if (Math.sqrt(dx * dx + dy * dy) > 10) {
         hasMoved.current = true;
       }
-      setPan({
-        x: e.touches[0].clientX - dragStart.current.x,
-        y: e.touches[0].clientY - dragStart.current.y,
-      });
+      movePanLive(
+        e.touches[0].clientX - dragStart.current.x,
+        e.touches[0].clientY - dragStart.current.y,
+      );
     }
   };
 
@@ -3530,6 +3561,7 @@ export const Reader: React.FC<ReaderProps> = ({
       touchStartDist.current = null;
     }
     if (e.touches.length === 0) {
+      commitLivePan();
       setIsDraggingCanvas(false);
     }
   };
@@ -3931,6 +3963,58 @@ export const Reader: React.FC<ReaderProps> = ({
     });
   };
 
+  // Same-identity handlers for the memoised chrome around the canvas, so a render that only
+  // moves the page (zoom, a drag, a hover) does not re-render the sidebars too.
+  const rightSidebarHandlers = useStableCallbacks({
+    onInpaintingLayerClick: handleInpaintingLayerClick,
+    handleMoveLayer,
+    handleCreateTranslationLayer,
+    handleCreateSfxLayer,
+    handleToggleLayerVisibility,
+    handleCloneLayer,
+    handleDeleteLayer,
+    handleAddNewElement,
+    handleLaunchEyeDropper,
+    handleRedoPageOcr,
+    handleRedoPageTranslation,
+    handleExportPng,
+    handleExportZip,
+    handleUndo,
+    handleEnterReshapeMode,
+    handleUpdateSelectedElement,
+    handleSaveElementChanges,
+    handleSetElementVisibility,
+    handleDeleteElement,
+    handleRedoRegion,
+    onSelectIssue: handleSelectIssue,
+    onStepIssue: handleStepIssue,
+    handleRegionAction,
+    handleSaveIssueTranslation,
+    handleSaveSourceText,
+    onToggleMergeMode: handleToggleMergeMode,
+    onToggleMergeRegion: handleToggleMergeRegion,
+    onConfirmMerge: handleConfirmMerge,
+  });
+  const chromeHandlers = useStableCallbacks({
+    navigateToChapter: (chapter: Chapter) =>
+      navigate(`/chapters/${chapter.id}/${toSlug(chapter.title || "chapter")}`),
+    onBack: () =>
+      navigate(
+        `/chapters/${selectedChapter ? selectedChapter.id : ""}/${selectedChapter ? toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`) : ""}`,
+      ),
+    onToggleLeftSidebar: () => setShowLeftSidebar((prev) => !prev),
+    onToggleRightSidebar: () => setShowRightSidebar((prev) => !prev),
+    onReviewClick: handleReviewNext,
+  });
+  const navSegments = React.useMemo(
+    () => [
+      selectedSeries ? selectedSeries.title : "Series",
+      `Ch. ${selectedChapter?.chapterNumber ?? "?"}`,
+      `Page ${selectedPage?.pageNumber ?? "?"}`,
+    ],
+    [selectedSeries, selectedChapter?.chapterNumber, selectedPage?.pageNumber],
+  );
+
   // Truly out of range (not just "not loaded yet") — matches the redirect effect above, and
   // exists to cover the one render before that effect's `navigate` takes hold. A page that's
   // in range but simply hasn't arrived from its batch yet falls through to the generic
@@ -3975,22 +4059,14 @@ export const Reader: React.FC<ReaderProps> = ({
     <div className="reader-container-nhentai">
       <ReaderTopNav
         title={`${selectedSeries ? selectedSeries.title : "Series"} \u2014 Chapter ${selectedChapter?.chapterNumber} \u2014 Page ${selectedPage?.pageNumber}`}
-        segments={[
-          selectedSeries ? selectedSeries.title : "Series",
-          `Ch. ${selectedChapter?.chapterNumber ?? "?"}`,
-          `Page ${selectedPage?.pageNumber ?? "?"}`,
-        ]}
-        onBack={() =>
-          navigate(
-            `/chapters/${selectedChapter ? selectedChapter.id : ""}/${selectedChapter ? toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`) : ""}`,
-          )
-        }
-        onToggleLeftSidebar={() => setShowLeftSidebar((prev) => !prev)}
-        onToggleRightSidebar={() => setShowRightSidebar((prev) => !prev)}
+        segments={navSegments}
+        onBack={chromeHandlers.onBack}
+        onToggleLeftSidebar={chromeHandlers.onToggleLeftSidebar}
+        onToggleRightSidebar={chromeHandlers.onToggleRightSidebar}
         leftSidebarOpen={showLeftSidebar}
         rightSidebarOpen={showRightSidebar}
         reviewCount={issues.length}
-        onReviewClick={handleReviewNext}
+        onReviewClick={chromeHandlers.onReviewClick}
       />
 
       {/* Main Workspace split */}
@@ -4018,11 +4094,7 @@ export const Reader: React.FC<ReaderProps> = ({
             navigateToPage={navigateToPage}
             prevChapter={prevChapter}
             nextChapter={nextChapter}
-            navigateToChapter={(chapter) => {
-              navigate(
-                `/chapters/${chapter.id}/${toSlug(chapter.title || "chapter")}`,
-              );
-            }}
+            navigateToChapter={chromeHandlers.navigateToChapter}
             selectedPage={selectedPage}
             handleDeletePage={handleDeletePage}
             handleChangePageNumber={handleChangePageNumber}
@@ -4087,6 +4159,7 @@ export const Reader: React.FC<ReaderProps> = ({
             }}
           >
             <div
+              ref={canvasWrapperRef}
               className="manga-canvas-wrapper"
               style={{
                 transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
@@ -5098,55 +5171,28 @@ export const Reader: React.FC<ReaderProps> = ({
         )}
         {showRightSidebar && !inpaintingView && (
           <ReaderRightSidebar
+            {...rightSidebarHandlers}
             selectedItem={selectedItem}
             setSelectedItem={setSelectedItem}
             activeLayerId={activeLayerId}
             setActiveLayerId={setActiveLayerId}
-            onInpaintingLayerClick={handleInpaintingLayerClick}
             sortedLayers={sortedLayers}
             layers={layers}
             manuallyShownOcrLayers={manuallyShownOcrLayers}
             cleanScanlationView={cleanScanlationView}
-            handleMoveLayer={handleMoveLayer}
-            handleCreateTranslationLayer={handleCreateTranslationLayer}
-            handleCreateSfxLayer={handleCreateSfxLayer}
-            handleToggleLayerVisibility={handleToggleLayerVisibility}
-            handleCloneLayer={handleCloneLayer}
-            handleDeleteLayer={handleDeleteLayer}
-            handleAddNewElement={handleAddNewElement}
-            handleLaunchEyeDropper={handleLaunchEyeDropper}
-            handleRedoPageOcr={handleRedoPageOcr}
             isRedoingPageOcr={isRedoingPageOcr}
-            handleRedoPageTranslation={handleRedoPageTranslation}
             isRedoingPageTranslation={isRedoingPageTranslation}
-            handleExportPng={handleExportPng}
-            handleExportZip={handleExportZip}
             interactionMode={interactionMode}
             setInteractionMode={setInteractionMode}
             undoStack={undoStack}
-            handleUndo={handleUndo}
-            handleEnterReshapeMode={handleEnterReshapeMode}
-            handleUpdateSelectedElement={handleUpdateSelectedElement}
             dirtyElements={dirtyElements}
-            handleSaveElementChanges={handleSaveElementChanges}
-            handleSetElementVisibility={handleSetElementVisibility}
-            handleDeleteElement={handleDeleteElement}
             ocrRegions={ocrRegions}
             isRedoingRegionOcr={isRedoingRegionOcr}
-            handleRedoRegion={handleRedoRegion}
             issues={issues}
-            onSelectIssue={handleSelectIssue}
-            onStepIssue={handleStepIssue}
-            handleRegionAction={handleRegionAction}
-            handleSaveIssueTranslation={handleSaveIssueTranslation}
-            handleSaveSourceText={handleSaveSourceText}
             isReviewingRegion={isReviewingRegion}
             mergeMode={mergeMode}
             mergeSelection={mergeSelection}
             mergePreview={mergePreview}
-            onToggleMergeMode={handleToggleMergeMode}
-            onToggleMergeRegion={handleToggleMergeRegion}
-            onConfirmMerge={handleConfirmMerge}
             isMerging={isMerging}
             isRedoingRegionTl={isRedoingRegionTl}
           />

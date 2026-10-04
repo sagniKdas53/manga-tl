@@ -1,3 +1,4 @@
+import React from "react";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import IconButton from "@mui/material/IconButton";
@@ -38,7 +39,7 @@ const navButtonSx = (active?: boolean) => ({
   },
 });
 
-export default function ReaderTopNav({
+function ReaderTopNav({
   title,
   segments,
   onBack,
@@ -216,3 +217,5 @@ export default function ReaderTopNav({
     </Box>
   );
 }
+
+export default React.memo(ReaderTopNav);
