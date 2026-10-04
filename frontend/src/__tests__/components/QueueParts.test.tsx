@@ -26,4 +26,31 @@ describe("PipelineStrip", () => {
       screen.getByRole("img", { name: "Stage: brand-new-stage" }),
     ).toBeInTheDocument();
   });
+
+  it("pulses the running stage only when asked to", () => {
+    // jsdom computes no animations, so read the rule Emotion generated for the segment.
+    const pulses = (el: HTMLElement) => {
+      const css = [...document.querySelectorAll("style")]
+        .map((tag) => tag.textContent)
+        .join("\n");
+      return [...el.classList].some((cls) =>
+        new RegExp(`\\.${cls}\\{[^}]*animation:`).test(css),
+      );
+    };
+    const { rerender } = render(
+      <PipelineStrip
+        jobType="ocr"
+        state="running"
+      />,
+    );
+    expect(pulses(screen.getByTitle("OCR"))).toBe(true);
+    rerender(
+      <PipelineStrip
+        jobType="ocr"
+        state="running"
+        animate={false}
+      />,
+    );
+    expect(pulses(screen.getByTitle("OCR"))).toBe(false);
+  });
 });

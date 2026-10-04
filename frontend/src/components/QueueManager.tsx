@@ -22,12 +22,7 @@ import { useToast } from "./ToastContext";
 import ConfirmModal from "./ConfirmModal";
 import { useDependencyLogger } from "../hooks/useDependencyLogger";
 import { formatErrorMessage } from "../utils/jobErrorMessage";
-import { FinishedList, PipelineStrip } from "./QueueParts";
-import {
-  finishedPages,
-  rememberPageLink,
-  type PageLink,
-} from "../utils/finishedPages";
+import { PipelineStrip } from "./QueueParts";
 import {
   formatElapsed,
   stageLabelOf,
@@ -52,7 +47,6 @@ interface Job {
 
 /** Cached result of JSON.parse(job.payload) — keyed by job id */
 interface ParsedPayload {
-  chapterId?: string;
   seriesTitle?: string;
   chapterTitle?: string;
   chapterNumber?: number;
@@ -68,6 +62,15 @@ interface ParsedPayload {
   redoType?: string;
   [key: string]: unknown;
 }
+
+/**
+ * Width of a row's right column: the elapsed time ("1 h 59 min") or up to two icon buttons
+ * (retry + remove, or pause + remove). Fixed, so every row's strip has the same width.
+ */
+const ROW_TOOLS_WIDTH = 88;
+
+/** From this many jobs on, the running segment stops pulsing (one CSS animation per row). */
+const STRIP_ANIMATION_LIMIT = 100;
 
 /** How long a finished job stays visible before it is swept out of the drawer. */
 const COMPLETED_GRACE_MS = 10000;
@@ -176,8 +179,6 @@ interface QueueManagerProps {
   forceOpen: boolean;
   onRequestOpen: () => void;
   onClose: () => void;
-  /** Open a finished page in the Reader, from the Done tab. */
-  onOpenPage?: (link: PageLink) => void;
 }
 
 const parsedPayloadCache = new Map<string, ParsedPayload>();
@@ -186,7 +187,6 @@ const MAX_PARSED_PAYLOAD_CACHE = 500;
 export const QueueManager: React.FC<QueueManagerProps> = ({
   token,
   forceOpen,
-  onOpenPage,
   onRequestOpen,
   onClose,
 }) => {
@@ -195,7 +195,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
   const [collapsedChapters, setCollapsedChapters] = useState<Set<string>>(
     new Set(),
   );
-  const { subscribe, notifications } = useNotifications();
+  const { subscribe } = useNotifications();
   const { showToast } = useToast();
 
   const getParsed = useCallback((job: Job): ParsedPayload | null => {
@@ -650,7 +650,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     job.status === "COMPLETED" ? nextPipelineStage(job.type) : null;
 
   type Bucket = "running" | "waiting" | "failed" | "done";
-  type Filter = "all" | "running" | "waiting" | "failed" | "done";
+  type Filter = "all" | "running" | "waiting" | "failed";
   const [filter, setFilter] = useState<Filter>("all");
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
 
@@ -752,22 +752,11 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     });
   };
 
-  // The Done tab. Where each page lives is learned from the jobs' payloads first, in the same
-  // pass, so a finished page can link to the Reader as soon as one of its jobs was seen.
-  const finished = useMemo(() => {
-    jobs.forEach((job) => {
-      const parsed = getParsed(job);
-      rememberPageLink(job.imageId, parsed?.chapterId, parsed?.pageNumber);
-    });
-    return finishedPages(notifications ?? []);
-  }, [notifications, jobs, getParsed]);
-
   const filters: { key: Filter; label: string; count: number }[] = [
     { key: "all", label: "All", count: jobs.length },
     { key: "running", label: "Running", count: counts.running },
     { key: "waiting", label: "Waiting", count: counts.waiting },
     { key: "failed", label: "Failed", count: counts.failed },
-    { key: "done", label: "Done", count: finished.length },
   ];
 
   return (
@@ -964,20 +953,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
           </Box>
 
           <Box sx={{ flex: 1, overflowY: "auto" }}>
-            {filter === "done" ? (
-              <FinishedList
-                pages={finished}
-                now={now}
-                onOpenPage={
-                  onOpenPage
-                    ? (link) => {
-                        onOpenPage(link);
-                        onClose();
-                      }
-                    : undefined
-                }
-              />
-            ) : jobs.length === 0 ? (
+            {jobs.length === 0 ? (
               <Box sx={{ px: 3, py: 6, textAlign: "center" }}>
                 <Typography sx={{ fontWeight: 600 }}>
                   Nothing in the queue
@@ -1086,7 +1062,9 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                               aria-label={`${pageLabel ?? formatJobType(job.type)}: ${text}`}
                               sx={{
                                 display: "grid",
-                                gridTemplateColumns: "1fr auto",
+                                // A fixed right column: sized by its content, each row's strip
+                                // had its own width and shifted as "8 s" became "22 s".
+                                gridTemplateColumns: `1fr ${ROW_TOOLS_WIDTH}px`,
                                 columnGap: 1.5,
                                 rowGap: 0.75,
                                 px: 2.5,
@@ -1140,14 +1118,21 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                 sx={{
                                   display: "flex",
                                   alignItems: "center",
+                                  justifyContent: "flex-end",
                                   gap: 0.25,
                                   gridRow: "span 2",
+                                  minWidth: 0,
                                 }}
                               >
                                 {elapsed && (
                                   <Typography
                                     variant="body2"
-                                    sx={{ color: "text.secondary", mr: 0.5 }}
+                                    sx={{
+                                      color: "text.secondary",
+                                      mr: 0.5,
+                                      whiteSpace: "nowrap",
+                                      fontVariantNumeric: "tabular-nums",
+                                    }}
                                   >
                                     {elapsed}
                                   </Typography>
@@ -1230,6 +1215,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                 state={state}
                                 allDone={state === "done"}
                                 retry={isRetryLoopType(job.type)}
+                                animate={jobs.length < STRIP_ANIMATION_LIMIT}
                               />
                               {(providerModel ||
                                 job.attempt > 1 ||

@@ -470,6 +470,12 @@ describe("issues view", () => {
         selectedItem={null}
       />,
     );
+    // Layers is the default tab; the user opens Review.
+    expect(screen.getByRole("tab", { name: "Layers" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    fireEvent.click(screen.getByRole("tab", { name: /Review/ }));
     expect(screen.getByText("2 to review")).toBeInTheDocument();
 
     // #1 is opened in the inspector and settled there, then the inspector closes.
@@ -494,7 +500,7 @@ describe("issues view", () => {
     expect(screen.getByText("#1 settled")).toBeInTheDocument();
     expect(screen.getByText("1 to review")).toBeInTheDocument();
 
-    // The last one: Review stays the open tab, and says so.
+    // The last one: Review stays the open tab (the inspector came and went), and says so.
     rerender(
       <Harness
         issues={[]}

@@ -357,14 +357,13 @@ describe("Reader Component", () => {
         ok: true,
         json: () => Promise.resolve([]),
       });
-      fireEvent.click(screen.getByRole("tab", { name: "Page" }));
-      fireEvent.click(screen.getByText("Redo page OCR"));
+      fireEvent.click(screen.getByText("Redo OCR"));
 
       mockSafeFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve([]),
       });
-      fireEvent.click(screen.getByText("Redo page translation"));
+      fireEvent.click(screen.getByText("Redo translation"));
 
       // Click layer creation buttons
       mockSafeFetch.mockResolvedValueOnce({
@@ -372,7 +371,6 @@ describe("Reader Component", () => {
         json: () =>
           Promise.resolve({ id: "l1", type: "translation", name: "TL Layer" }),
       });
-      fireEvent.click(screen.getByRole("tab", { name: "Layers" }));
       fireEvent.click(screen.getByTitle("Add Translation Layer"));
 
       mockSafeFetch.mockResolvedValueOnce({

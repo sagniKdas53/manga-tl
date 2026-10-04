@@ -108,11 +108,6 @@ export const NavBar: React.FC<NavBarProps> = ({
                   forceOpen={activeDrawer === "queue"}
                   onRequestOpen={() => setActiveDrawer("queue")}
                   onClose={() => setActiveDrawer("none")}
-                  onOpenPage={(link) =>
-                    navigate(
-                      `/chapters/${link.chapterId}/reader/${link.pageNumber}`,
-                    )
-                  }
                 />
               </Suspense>
               <Suspense fallback={null}>

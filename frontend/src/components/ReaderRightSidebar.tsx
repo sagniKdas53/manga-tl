@@ -181,9 +181,11 @@ const deleteLayerButtonSx = {
 
 const inlineSpinnerSx = { color: "inherit" } as const;
 
-// The no-selection view is three tabs (reader review, 2026-10-04). Before, it was one long
-// column of bordered cards under an empty-state banner; Export sat below the fold.
-type SidebarTab = "review" | "layers" | "page";
+// The no-selection view is two tabs (reader review, 2026-10-04/05): Layers, open by default,
+// holds the tools, a scrolling layer list and the page actions; Review holds the issues.
+// Before, it was one long column of bordered cards under an empty-state banner, with Export
+// below the fold.
+type SidebarTab = "review" | "layers";
 
 const tabsSx = {
   minHeight: 36,
@@ -228,17 +230,12 @@ const toolButtonSx = {
   "& .MuiButton-startIcon svg": { fontSize: 17 },
 } as const;
 
-const pageActionButtonSx = {
-  justifyContent: "flex-start",
-  fontSize: "12.5px",
-} as const;
-
-const pageActionHintSx = {
-  fontSize: "12px",
-  lineHeight: 1.45,
-  color: "var(--text-muted)",
-  mt: -0.5,
-  mb: 0.5,
+/** The layer list scrolls on its own, so the page actions below it stay in reach. */
+const layerListScrollSx = {
+  maxHeight: "min(42vh, 440px)",
+  overflowY: "auto",
+  mx: -0.5,
+  px: 0.5,
 } as const;
 
 const inspectorHeaderRowSx = {
@@ -594,9 +591,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     [ocrRegions],
   );
 
-  // Rows include settled issues, so settling the last one keeps Review open on "All settled".
-  const tab: SidebarTab =
-    pickedTab ?? (reviewRows.length > 0 ? "review" : "layers");
+  // Layers is the default (review, 2026-10-05); Review is one click away, and its badge and the
+  // top bar's "N to review" chip say when it has work. A picked tab stays across pages.
+  const tab: SidebarTab = pickedTab ?? "layers";
 
   return (
     <Box
@@ -655,12 +652,6 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               id="inspector-tab-layers"
               aria-controls="inspector-panel"
               label="Layers"
-            />
-            <Tab
-              value="page"
-              id="inspector-tab-page"
-              aria-controls="inspector-panel"
-              label="Page"
             />
           </Tabs>
 
@@ -790,318 +781,323 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     </Box>
                   }
                 >
-                  {sortedLayers.length === 0 ? (
-                    <Typography
-                      variant="body2"
-                      sx={noLayersTextSx}
-                    >
-                      No active layers.
-                    </Typography>
-                  ) : (
-                    [...sortedLayers].reverse().map((lData, idx) => {
-                      const isActive = lData.layer.id === activeLayerId;
-                      const isVisible = lData.layer.visible;
-                      const stackNumber = sortedLayers.length - idx;
-                      const isExpanded = expandedLayers.has(lData.layer.id);
-                      const hiddenCount = lData.elements.filter(
-                        (el) => !el.visible,
-                      ).length;
-                      return (
-                        <React.Fragment key={lData.layer.id}>
-                          <Box
-                            onClick={() => {
-                              setActiveLayerId(lData.layer.id);
-                              if (isInpaintingLayer(lData.layer)) {
-                                onInpaintingLayerClick?.(lData.layer.id);
-                              }
-                            }}
-                            sx={[
-                              layerRowBaseSx,
-                              {
-                                border: isActive
-                                  ? "1px solid var(--primary)"
-                                  : "1px solid var(--border-color)",
-                                backgroundColor: isActive
-                                  ? "var(--primary-glow)"
-                                  : "transparent",
-                                boxShadow: isActive
-                                  ? "0 0 8px var(--primary-glow)"
-                                  : "none",
-                                opacity: isVisible ? 1 : 0.5,
-                                "&:hover": {
-                                  borderColor: isActive
-                                    ? "var(--primary)"
-                                    : "var(--text-dim, var(--text-muted))",
-                                },
-                              },
-                            ]}
-                          >
+                  <Box sx={layerListScrollSx}>
+                    {sortedLayers.length === 0 ? (
+                      <Typography
+                        variant="body2"
+                        sx={noLayersTextSx}
+                      >
+                        No active layers.
+                      </Typography>
+                    ) : (
+                      [...sortedLayers].reverse().map((lData, idx) => {
+                        const isActive = lData.layer.id === activeLayerId;
+                        const isVisible = lData.layer.visible;
+                        const stackNumber = sortedLayers.length - idx;
+                        const isExpanded = expandedLayers.has(lData.layer.id);
+                        const hiddenCount = lData.elements.filter(
+                          (el) => !el.visible,
+                        ).length;
+                        return (
+                          <React.Fragment key={lData.layer.id}>
                             <Box
+                              onClick={() => {
+                                setActiveLayerId(lData.layer.id);
+                                if (isInpaintingLayer(lData.layer)) {
+                                  onInpaintingLayerClick?.(lData.layer.id);
+                                }
+                              }}
                               sx={[
-                                layerStackNumberBaseSx,
+                                layerRowBaseSx,
                                 {
+                                  border: isActive
+                                    ? "1px solid var(--primary)"
+                                    : "1px solid var(--border-color)",
                                   backgroundColor: isActive
-                                    ? "var(--primary)"
-                                    : "var(--bg-input, rgba(0,0,0,0.06))",
-                                  color: isActive
-                                    ? "#fff"
-                                    : "var(--text-muted)",
+                                    ? "var(--primary-glow)"
+                                    : "transparent",
+                                  boxShadow: isActive
+                                    ? "0 0 8px var(--primary-glow)"
+                                    : "none",
+                                  opacity: isVisible ? 1 : 0.5,
+                                  "&:hover": {
+                                    borderColor: isActive
+                                      ? "var(--primary)"
+                                      : "var(--text-dim, var(--text-muted))",
+                                  },
                                 },
                               ]}
                             >
-                              {stackNumber}
-                            </Box>
-                            <Box sx={layerNameColumnSx}>
-                              <Typography
-                                component="span"
+                              <Box
                                 sx={[
-                                  layerNameBaseSx,
+                                  layerStackNumberBaseSx,
                                   {
-                                    fontWeight: isActive ? 700 : 600,
-                                    color: isActive
-                                      ? "var(--primary-hover)"
-                                      : "var(--text-main)",
-                                  },
-                                ]}
-                              >
-                                {typeof lData.layer.metadataJson?.layer_name ===
-                                "string"
-                                  ? lData.layer.metadataJson.layer_name
-                                  : lData.layer.type === "translation"
-                                    ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || "EN"})`
-                                    : lData.layer.type === "sfx"
-                                      ? "SFX Layer"
-                                      : lData.layer.type === "ocr"
-                                        ? "OCR Layer"
-                                        : isInpaintingLayer(lData.layer)
-                                          ? "Inpainting"
-                                          : `Layer (${lData.layer.type})`}
-                              </Typography>
-                              <Typography
-                                component="span"
-                                sx={[
-                                  layerElementCountSx,
-                                  {
-                                    cursor: lData.elements.length
-                                      ? "pointer"
-                                      : "default",
-                                    userSelect: "none",
-                                  },
-                                ]}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (lData.elements.length) {
-                                    toggleLayerExpanded(lData.layer.id);
-                                  }
-                                }}
-                                title={
-                                  lData.elements.length
-                                    ? "Show this layer's elements"
-                                    : undefined
-                                }
-                              >
-                                {lData.elements.length > 0
-                                  ? `${isExpanded ? "▾" : "▸"} `
-                                  : ""}
-                                {lData.elements.length} elements
-                                {hiddenCount ? ` · ${hiddenCount} hidden` : ""}
-                                {!isVisible ? " · layer hidden" : ""}
-                              </Typography>
-                            </Box>
-                            <Box
-                              sx={layerActionsRowSx}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Tooltip
-                                title={isVisible ? "Hide layer" : "Show layer"}
-                              >
-                                <IconButton
-                                  size="small"
-                                  onClick={() =>
-                                    handleToggleLayerVisibility(lData.layer.id)
-                                  }
-                                  sx={{
-                                    color: isVisible
+                                    backgroundColor: isActive
                                       ? "var(--primary)"
-                                      : "var(--text-dim, var(--text-muted))",
+                                      : "var(--bg-input, rgba(0,0,0,0.06))",
+                                    color: isActive
+                                      ? "#fff"
+                                      : "var(--text-muted)",
+                                  },
+                                ]}
+                              >
+                                {stackNumber}
+                              </Box>
+                              <Box sx={layerNameColumnSx}>
+                                <Typography
+                                  component="span"
+                                  sx={[
+                                    layerNameBaseSx,
+                                    {
+                                      fontWeight: isActive ? 700 : 600,
+                                      color: isActive
+                                        ? "var(--primary-hover)"
+                                        : "var(--text-main)",
+                                    },
+                                  ]}
+                                >
+                                  {typeof lData.layer.metadataJson
+                                    ?.layer_name === "string"
+                                    ? lData.layer.metadataJson.layer_name
+                                    : lData.layer.type === "translation"
+                                      ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || "EN"})`
+                                      : lData.layer.type === "sfx"
+                                        ? "SFX Layer"
+                                        : lData.layer.type === "ocr"
+                                          ? "OCR Layer"
+                                          : isInpaintingLayer(lData.layer)
+                                            ? "Inpainting"
+                                            : `Layer (${lData.layer.type})`}
+                                </Typography>
+                                <Typography
+                                  component="span"
+                                  sx={[
+                                    layerElementCountSx,
+                                    {
+                                      cursor: lData.elements.length
+                                        ? "pointer"
+                                        : "default",
+                                      userSelect: "none",
+                                    },
+                                  ]}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (lData.elements.length) {
+                                      toggleLayerExpanded(lData.layer.id);
+                                    }
                                   }}
-                                >
-                                  {isVisible ? (
-                                    <VisibilityIcon fontSize="small" />
-                                  ) : (
-                                    <VisibilityOffIcon fontSize="small" />
-                                  )}
-                                </IconButton>
-                              </Tooltip>
-
-                              <Tooltip title="Clone layer (copies above, hides original as backup)">
-                                <IconButton
-                                  size="small"
-                                  onClick={() =>
-                                    handleCloneLayer(lData.layer.id)
+                                  title={
+                                    lData.elements.length
+                                      ? "Show this layer's elements"
+                                      : undefined
                                   }
-                                  sx={cloneLayerButtonSx}
                                 >
-                                  <ContentCopyIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-
-                              <Tooltip title="Delete layer">
-                                <IconButton
-                                  size="small"
-                                  onClick={() =>
-                                    handleDeleteLayer(lData.layer.id)
+                                  {lData.elements.length > 0
+                                    ? `${isExpanded ? "▾" : "▸"} `
+                                    : ""}
+                                  {lData.elements.length} elements
+                                  {hiddenCount
+                                    ? ` · ${hiddenCount} hidden`
+                                    : ""}
+                                  {!isVisible ? " · layer hidden" : ""}
+                                </Typography>
+                              </Box>
+                              <Box
+                                sx={layerActionsRowSx}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Tooltip
+                                  title={
+                                    isVisible ? "Hide layer" : "Show layer"
                                   }
-                                  sx={deleteLayerButtonSx}
                                 >
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() =>
+                                      handleToggleLayerVisibility(
+                                        lData.layer.id,
+                                      )
+                                    }
+                                    sx={{
+                                      color: isVisible
+                                        ? "var(--primary)"
+                                        : "var(--text-dim, var(--text-muted))",
+                                    }}
+                                  >
+                                    {isVisible ? (
+                                      <VisibilityIcon fontSize="small" />
+                                    ) : (
+                                      <VisibilityOffIcon fontSize="small" />
+                                    )}
+                                  </IconButton>
+                                </Tooltip>
+
+                                <Tooltip title="Clone layer (copies above, hides original as backup)">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() =>
+                                      handleCloneLayer(lData.layer.id)
+                                    }
+                                    sx={cloneLayerButtonSx}
+                                  >
+                                    <ContentCopyIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+
+                                <Tooltip title="Delete layer">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() =>
+                                      handleDeleteLayer(lData.layer.id)
+                                    }
+                                    sx={deleteLayerButtonSx}
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
                             </Box>
-                          </Box>
-                          {isExpanded && (
-                            <Box sx={elementListSx}>
-                              {inReadingOrder(lData.elements, regionById).map(
-                                (element) => {
-                                  // AUDIT-F25. This was `!== false`, which made a null-visible element
-                                  // read as visible here while the canvas, the hidden-count above and the
-                                  // worker's renderer all treated it as hidden. The row then offered
-                                  // "Hide element" for something already invisible, wrote `false`, and the
-                                  // first click changed nothing on screen. `=== true` is the same rule the
-                                  // other three readers use.
-                                  const elementVisible =
-                                    element.visible === true;
-                                  const isSelectedElement =
-                                    selectedItem?.id === element.id &&
-                                    selectedItem?.isLayerElement;
-                                  const region = element.regionId
-                                    ? regionById.get(element.regionId)
-                                    : undefined;
-                                  const rowStatus = regionRowStatus(
-                                    region,
-                                    element,
-                                  );
-                                  const label = isPatchElement(element)
-                                    ? `Patch${region ? ` · ${(region.text || "").trim()}` : " · no region"}`
-                                    : (element.text || "").trim() ||
-                                      (region?.text || "").trim() ||
-                                      "(no text)";
-                                  return (
-                                    <Box
-                                      key={element.id}
-                                      onClick={() => {
-                                        setActiveLayerId(lData.layer.id);
-                                        setSelectedItem({
-                                          ...element,
-                                          isLayerElement: true,
-                                        });
-                                      }}
-                                      sx={[
-                                        elementRowSx,
-                                        {
-                                          opacity: elementVisible ? 1 : 0.55,
-                                          backgroundColor: isSelectedElement
-                                            ? "var(--primary-glow)"
-                                            : "transparent",
-                                        },
-                                      ]}
-                                    >
-                                      {region?.bubbleReadingOrder ? (
-                                        <Box
-                                          component="span"
-                                          sx={{
-                                            flex: "0 0 auto",
-                                            minWidth: "22px",
-                                            fontSize: "11px",
-                                            fontWeight: 700,
-                                            color: "var(--text-muted)",
-                                            fontVariantNumeric: "tabular-nums",
-                                          }}
-                                        >
-                                          #{region.bubbleReadingOrder}
-                                        </Box>
-                                      ) : null}
-                                      <Typography
-                                        component="span"
-                                        sx={elementLabelSx}
-                                        title={label}
+                            {isExpanded && (
+                              <Box sx={elementListSx}>
+                                {inReadingOrder(lData.elements, regionById).map(
+                                  (element) => {
+                                    // AUDIT-F25. This was `!== false`, which made a null-visible element
+                                    // read as visible here while the canvas, the hidden-count above and the
+                                    // worker's renderer all treated it as hidden. The row then offered
+                                    // "Hide element" for something already invisible, wrote `false`, and the
+                                    // first click changed nothing on screen. `=== true` is the same rule the
+                                    // other three readers use.
+                                    const elementVisible =
+                                      element.visible === true;
+                                    const isSelectedElement =
+                                      selectedItem?.id === element.id &&
+                                      selectedItem?.isLayerElement;
+                                    const region = element.regionId
+                                      ? regionById.get(element.regionId)
+                                      : undefined;
+                                    const rowStatus = regionRowStatus(
+                                      region,
+                                      element,
+                                    );
+                                    const label = isPatchElement(element)
+                                      ? `Patch${region ? ` · ${(region.text || "").trim()}` : " · no region"}`
+                                      : (element.text || "").trim() ||
+                                        (region?.text || "").trim() ||
+                                        "(no text)";
+                                    return (
+                                      <Box
+                                        key={element.id}
+                                        onClick={() => {
+                                          setActiveLayerId(lData.layer.id);
+                                          setSelectedItem({
+                                            ...element,
+                                            isLayerElement: true,
+                                          });
+                                        }}
+                                        sx={[
+                                          elementRowSx,
+                                          {
+                                            opacity: elementVisible ? 1 : 0.55,
+                                            backgroundColor: isSelectedElement
+                                              ? "var(--primary-glow)"
+                                              : "transparent",
+                                          },
+                                        ]}
                                       >
-                                        {label}
-                                      </Typography>
-                                      {rowStatus && (
-                                        <Box
+                                        {region?.bubbleReadingOrder ? (
+                                          <Box
+                                            component="span"
+                                            sx={{
+                                              flex: "0 0 auto",
+                                              minWidth: "22px",
+                                              fontSize: "11px",
+                                              fontWeight: 700,
+                                              color: "var(--text-muted)",
+                                              fontVariantNumeric:
+                                                "tabular-nums",
+                                            }}
+                                          >
+                                            #{region.bubbleReadingOrder}
+                                          </Box>
+                                        ) : null}
+                                        <Typography
                                           component="span"
+                                          sx={elementLabelSx}
+                                          title={label}
+                                        >
+                                          {label}
+                                        </Typography>
+                                        {rowStatus && (
+                                          <Box
+                                            component="span"
+                                            title={
+                                              region?.qaFeedback || undefined
+                                            }
+                                            sx={{
+                                              flex: "0 0 auto",
+                                              px: 0.75,
+                                              borderRadius: "999px",
+                                              fontSize: "10px",
+                                              fontWeight: 700,
+                                              lineHeight: "16px",
+                                              color:
+                                                rowStatus.tone === "warning"
+                                                  ? "var(--warning)"
+                                                  : "var(--text-muted)",
+                                              border: `1px solid ${
+                                                rowStatus.tone === "warning"
+                                                  ? "var(--warning)"
+                                                  : "var(--border-color)"
+                                              }`,
+                                            }}
+                                          >
+                                            {rowStatus.label}
+                                          </Box>
+                                        )}
+                                        <Tooltip
                                           title={
-                                            region?.qaFeedback || undefined
+                                            elementVisible
+                                              ? "Hide element"
+                                              : "Show element"
                                           }
-                                          sx={{
-                                            flex: "0 0 auto",
-                                            px: 0.75,
-                                            borderRadius: "999px",
-                                            fontSize: "10px",
-                                            fontWeight: 700,
-                                            lineHeight: "16px",
-                                            color:
-                                              rowStatus.tone === "warning"
-                                                ? "var(--warning)"
-                                                : "var(--text-muted)",
-                                            border: `1px solid ${
-                                              rowStatus.tone === "warning"
-                                                ? "var(--warning)"
-                                                : "var(--border-color)"
-                                            }`,
-                                          }}
                                         >
-                                          {rowStatus.label}
-                                        </Box>
-                                      )}
-                                      <Tooltip
-                                        title={
-                                          elementVisible
-                                            ? "Hide element"
-                                            : "Show element"
-                                        }
-                                      >
-                                        <IconButton
-                                          size="small"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleSetElementVisibility(
-                                              element,
-                                              !elementVisible,
-                                            );
-                                          }}
-                                          sx={{
-                                            color: elementVisible
-                                              ? "var(--primary)"
-                                              : "var(--text-dim, var(--text-muted))",
-                                          }}
-                                        >
-                                          {elementVisible ? (
-                                            <VisibilityIcon fontSize="small" />
-                                          ) : (
-                                            <VisibilityOffIcon fontSize="small" />
-                                          )}
-                                        </IconButton>
-                                      </Tooltip>
-                                    </Box>
-                                  );
-                                },
-                              )}
-                            </Box>
-                          )}
-                        </React.Fragment>
-                      );
-                    })
-                  )}
+                                          <IconButton
+                                            size="small"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleSetElementVisibility(
+                                                element,
+                                                !elementVisible,
+                                              );
+                                            }}
+                                            sx={{
+                                              color: elementVisible
+                                                ? "var(--primary)"
+                                                : "var(--text-dim, var(--text-muted))",
+                                            }}
+                                          >
+                                            {elementVisible ? (
+                                              <VisibilityIcon fontSize="small" />
+                                            ) : (
+                                              <VisibilityOffIcon fontSize="small" />
+                                            )}
+                                          </IconButton>
+                                        </Tooltip>
+                                      </Box>
+                                    );
+                                  },
+                                )}
+                              </Box>
+                            )}
+                          </React.Fragment>
+                        );
+                      })
+                    )}
+                  </Box>
                 </SidebarSection>
-              </>
-            )}
 
-            {tab === "page" && (
-              <>
-                <SidebarSection title="Run again">
-                  <Box sx={{ display: "grid", gap: 1 }}>
+                <SidebarSection title="This page">
+                  <Box sx={toolGridSx}>
                     <Button
                       variant="outlined"
                       size="small"
@@ -1117,15 +1113,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       }
                       onClick={handleRedoPageOcr}
                       disabled={isRedoingPageOcr}
-                      fullWidth
-                      sx={pageActionButtonSx}
+                      title="Discard this page's OCR results and detect the text again"
+                      sx={toolButtonSx}
                     >
-                      Redo page OCR
+                      Redo OCR
                     </Button>
-                    <Typography sx={pageActionHintSx}>
-                      Discards this page's OCR results and detects the text
-                      again.
-                    </Typography>
                     <Button
                       variant="outlined"
                       size="small"
@@ -1141,38 +1133,30 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       }
                       onClick={handleRedoPageTranslation}
                       disabled={isRedoingPageTranslation}
-                      fullWidth
-                      sx={pageActionButtonSx}
+                      title="Discard this page's translation and translate it again"
+                      sx={toolButtonSx}
                     >
-                      Redo page translation
+                      Redo translation
                     </Button>
-                    <Typography sx={pageActionHintSx}>
-                      Discards this page's translation and translates it again.
-                    </Typography>
-                  </Box>
-                </SidebarSection>
-
-                <SidebarSection title="Export">
-                  <Box sx={{ display: "grid", gap: 1 }}>
                     <Button
                       variant="outlined"
                       size="small"
                       startIcon={<FileDownloadIcon />}
                       onClick={handleExportPng}
-                      fullWidth
-                      sx={pageActionButtonSx}
+                      title="Download this page as a PNG"
+                      sx={toolButtonSx}
                     >
-                      Export page (PNG)
+                      Export PNG
                     </Button>
                     <Button
                       variant="outlined"
                       size="small"
                       startIcon={<FileDownloadIcon />}
                       onClick={handleExportZip}
-                      fullWidth
-                      sx={pageActionButtonSx}
+                      title="Download this page's layered project as a ZIP"
+                      sx={toolButtonSx}
                     >
-                      Export project (ZIP)
+                      Export ZIP
                     </Button>
                   </Box>
                 </SidebarSection>

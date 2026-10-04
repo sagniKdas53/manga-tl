@@ -5,7 +5,6 @@ import {
   fireEvent,
   waitFor,
   act,
-  within,
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { vi, describe, it, expect, beforeEach } from "vitest";
@@ -94,90 +93,6 @@ describe("QueueManager", () => {
     });
     (useNotifications as Mock).mockReturnValue({
       subscribe: vi.fn(() => () => {}),
-    });
-  });
-
-  it("lists the pages that finished this session in a Done tab, and opens one", async () => {
-    // job-1's payload says where img-1 lives, so its finished row can link to the Reader.
-    const jobs = [
-      {
-        ...mockJobs[0],
-        payload: JSON.stringify({
-          chapterId: "ch-9",
-          chapterNumber: 2,
-          pageNumber: 3,
-          seriesTitle: "My Manga",
-        }),
-      },
-    ];
-    (safeFetch as Mock).mockImplementation((url: string) =>
-      url === "/api/jobs"
-        ? Promise.resolve({
-            ok: true,
-            json: async () => ({ isPaused: false, jobs }),
-          })
-        : Promise.reject(new Error("Unknown URL")),
-    );
-    const context = { seriesTitle: "My Manga", chapterNumber: "2" };
-    (useNotifications as Mock).mockReturnValue({
-      subscribe: vi.fn(() => () => {}),
-      notifications: [
-        {
-          id: "n2",
-          type: "WARNING",
-          title: "Manual Review Needed",
-          imageId: "img-2",
-          timestamp: Date.now() - 120000,
-          context: { ...context, pageNumber: "4" },
-        },
-        {
-          id: "n1",
-          type: "SUCCESS",
-          title: "Page Processing Complete",
-          imageId: "img-1",
-          timestamp: Date.now() - 60000,
-          context: { ...context, pageNumber: "3" },
-        },
-        {
-          id: "n0",
-          type: "EXPORT_SUCCESS",
-          title: "Export Ready",
-          timestamp: Date.now(),
-        },
-      ],
-    });
-    const onOpenPage = vi.fn();
-    const Wrapper = () => {
-      const [open, setOpen] = React.useState(false);
-      return (
-        <QueueManager
-          token={mockToken}
-          forceOpen={open}
-          onRequestOpen={() => setOpen(true)}
-          onClose={() => setOpen(false)}
-          onOpenPage={onOpenPage}
-        />
-      );
-    };
-    render(<Wrapper />);
-    fireEvent.click(screen.getByTitle("Queue Manager"));
-    await waitFor(() =>
-      expect(
-        screen.getByRole("listitem", { name: "Page 3: Waiting for OCR" }),
-      ).toBeInTheDocument(),
-    );
-
-    fireEvent.click(screen.getByRole("tab", { name: "Done 2" }));
-    expect(
-      screen.getByRole("listitem", { name: "Page 4: Manual Review Needed" }),
-    ).toBeInTheDocument();
-    const done = screen.getByRole("listitem", { name: "Page 3: Done" });
-    // Only the page whose chapter the queue has seen can be opened.
-    expect(screen.queryByRole("button", { name: "Open Page 4" })).toBeNull();
-    fireEvent.click(within(done).getByRole("button", { name: "Open Page 3" }));
-    expect(onOpenPage).toHaveBeenCalledWith({
-      chapterId: "ch-9",
-      pageNumber: 3,
     });
   });
 
