@@ -118,9 +118,9 @@ describe("Dashboard + usePaginatedResource wiring (AUDIT-F10 / AUDIT-T3)", () =>
     await waitFor(() => expect(mockSafeFetch).toHaveBeenCalledTimes(1));
     expect(requestedSorts()[0]).toBe("updatedAt-desc");
 
-    // Pick "Created Date ↑" — a change of both field and direction.
+    // Pick "Oldest first" (createdAt ascending) — a change of both field and direction.
     fireEvent.mouseDown(document.querySelector('[role="combobox"]')!);
-    fireEvent.click(await screen.findByText("Created Date ↑"));
+    fireEvent.click(await screen.findByText("Oldest first"));
 
     await waitFor(() => expect(mockSafeFetch).toHaveBeenCalledTimes(2));
     // The whole point: the second request carries the NEW sort. Before AUDIT-F10 was
@@ -144,7 +144,7 @@ describe("Dashboard + usePaginatedResource wiring (AUDIT-F10 / AUDIT-T3)", () =>
     await waitFor(() => expect(mockSafeFetch).toHaveBeenCalledTimes(1));
 
     fireEvent.mouseDown(document.querySelector('[role="combobox"]')!);
-    fireEvent.click(await screen.findByText("Last Updated ↑"));
+    fireEvent.click(await screen.findByText("Least recently updated"));
 
     await waitFor(() => expect(mockSafeFetch).toHaveBeenCalledTimes(2));
     expect(localStorage.getItem("dashboard_sort_by")).toBe("updatedAt");

@@ -73,7 +73,6 @@ export const NavBar: React.FC<NavBarProps> = ({
           <Typography
             variant="h6"
             sx={{
-              fontFamily: '"Outfit", sans-serif',
               fontWeight: 700,
               color: "text.primary",
             }}

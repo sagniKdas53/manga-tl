@@ -1,28 +1,30 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AddIcon from "@mui/icons-material/Add";
+import UploadIcon from "@mui/icons-material/Upload";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
-import CardActions from "@mui/material/CardActions";
-import CardContent from "@mui/material/CardContent";
-import Chip from "@mui/material/Chip";
 import FormControl from "@mui/material/FormControl";
 import IconButton from "@mui/material/IconButton";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
-import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { useToast } from "./ToastContext";
 import type { User, Series } from "../types";
 import { safeFetch, toSlug } from "../utils";
+import { readingDirectionLabel } from "../utils/readingDirection";
 import ConfirmModal from "./ConfirmModal";
 import CreateSeriesDialog from "./CreateSeriesDialog";
 import LazyImage from "./LazyImage";
 import LoadMoreSentinel from "./LoadMoreSentinel";
+import ZipImportDialog from "./ZipImportDialog";
+import DropOverlay from "./DropOverlay";
+import { useArchiveDrop } from "../hooks/useArchiveDrop";
+import { isChapterArchiveFile } from "../utils/zipPages";
 
 interface DashboardProps {
   user: User;
@@ -90,6 +92,27 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const closeConfirmModal = () =>
     setConfirmModal((prev) => ({ ...prev, isOpen: false }));
 
+  // Import a chapter archive from the library: drop it anywhere, or use the button. The dialog
+  // asks which series it goes into, or makes a new one with its languages (#217).
+  const [showImport, setShowImport] = useState(false);
+  const [droppedArchive, setDroppedArchive] = useState<File | null>(null);
+  const draggingArchive = useArchiveDrop(
+    !showImport && !showSeriesModal,
+    (file) => {
+      if (!isChapterArchiveFile(file)) {
+        showToast("Drop a .zip, .cbz or .epub to import a chapter.", "info");
+        return;
+      }
+      setDroppedArchive(file);
+      setShowImport(true);
+    },
+  );
+
+  const openSeries = (s: Series) => {
+    onSelectSeries(s);
+    navigate(`/series/${s.id}/${toSlug(s.title)}`);
+  };
+
   const handleEditSeriesClick = (s: Series, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingSeries(s);
@@ -151,69 +174,67 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   return (
-    <Box sx={{ flex: 1, p: 3, maxWidth: 1200, mx: "auto", width: "100%" }}>
+    <Box
+      sx={{
+        flex: 1,
+        px: { xs: 2, sm: 3 },
+        py: 3,
+        maxWidth: 1240,
+        mx: "auto",
+        width: "100%",
+      }}
+    >
       <Box
         sx={{
           display: "flex",
-          flexDirection: { xs: "column", sm: "row" },
-          justifyContent: "space-between",
-          alignItems: { xs: "flex-start", sm: "center" },
-          gap: 2,
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 1.5,
           mb: 3,
         }}
       >
-        <Box>
-          <Typography
-            variant="h4"
-            sx={{
-              fontFamily: '"Outfit", sans-serif',
-              fontWeight: 600,
-              color: "text.primary",
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{ flex: 1, minWidth: 160 }}
+        >
+          Library
+        </Typography>
+        <FormControl size="small">
+          <Select
+            value={`${sortBy}-${sortDir}`}
+            aria-label="Sort series"
+            onChange={(e) => {
+              const [field, dir] = (e.target.value as string).split("-");
+              setSortBy(field as "createdAt" | "updatedAt");
+              setSortDir(dir as "asc" | "desc");
+              localStorage.setItem("dashboard_sort_by", field);
+              localStorage.setItem("dashboard_sort_dir", dir);
             }}
           >
-            My Manga Library
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{ mt: 0.5, color: "text.secondary" }}
-          >
-            Manage translation projects and OCR workflows
-          </Typography>
-        </Box>
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          spacing={2}
-          sx={{ width: { xs: "100%", sm: "auto" } }}
+            <MenuItem value="updatedAt-desc">Recently updated</MenuItem>
+            <MenuItem value="updatedAt-asc">Least recently updated</MenuItem>
+            <MenuItem value="createdAt-desc">Newest first</MenuItem>
+            <MenuItem value="createdAt-asc">Oldest first</MenuItem>
+          </Select>
+        </FormControl>
+        <Button
+          variant="outlined"
+          startIcon={<UploadIcon />}
+          onClick={() => {
+            setDroppedArchive(null);
+            setShowImport(true);
+          }}
         >
-          <FormControl
-            size="small"
-            sx={{ minWidth: { xs: "100%", sm: 160 } }}
-          >
-            <Select
-              value={`${sortBy}-${sortDir}`}
-              onChange={(e) => {
-                const [field, dir] = (e.target.value as string).split("-");
-                setSortBy(field as "createdAt" | "updatedAt");
-                setSortDir(dir as "asc" | "desc");
-                localStorage.setItem("dashboard_sort_by", field);
-                localStorage.setItem("dashboard_sort_dir", dir);
-              }}
-            >
-              <MenuItem value="updatedAt-desc">Last Updated ↓</MenuItem>
-              <MenuItem value="updatedAt-asc">Last Updated ↑</MenuItem>
-              <MenuItem value="createdAt-desc">Created Date ↓</MenuItem>
-              <MenuItem value="createdAt-asc">Created Date ↑</MenuItem>
-            </Select>
-          </FormControl>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleNewSeriesClick}
-            sx={{ width: { xs: "100%", sm: "auto" } }}
-          >
-            New Series
-          </Button>
-        </Stack>
+          Import chapter
+        </Button>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={handleNewSeriesClick}
+        >
+          New series
+        </Button>
       </Box>
 
       {loadError && sortedSeriesList.length === 0 && (
@@ -225,103 +246,172 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </Alert>
       )}
 
+      {!loadError && sortedSeriesList.length === 0 && !hasMore && (
+        <Box
+          sx={{
+            py: 8,
+            textAlign: "center",
+            border: "1.5px dashed",
+            borderColor: "divider",
+            borderRadius: "10px",
+          }}
+        >
+          <Typography sx={{ fontWeight: 700, fontSize: "1.125rem" }}>
+            Your library is empty
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{ color: "text.secondary", mt: 0.5 }}
+          >
+            Create a series, or drop a chapter ZIP anywhere on this page.
+          </Typography>
+        </Box>
+      )}
+
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-          gap: 2,
+          gridTemplateColumns: {
+            xs: "repeat(auto-fill, minmax(140px, 1fr))",
+            sm: "repeat(auto-fill, minmax(176px, 1fr))",
+          },
+          columnGap: 2.5,
+          rowGap: 3,
         }}
       >
         {sortedSeriesList.map((s) => (
           <Card
             key={s.id}
+            role="link"
+            tabIndex={0}
+            aria-label={s.title}
+            onClick={() => openSeries(s)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") openSeries(s);
+            }}
             sx={{
               cursor: "pointer",
-              display: "flex",
-              flexDirection: "column",
-              transition: "transform 0.2s, box-shadow 0.2s",
-              "&:hover": {
-                transform: "translateY(-4px)",
-                boxShadow: 4,
+              bgcolor: "transparent",
+              boxShadow: "none",
+              borderRadius: 0,
+              overflow: "visible",
+              outline: "none",
+              "&:hover .series-cover, &:focus-visible .series-cover": {
+                outline: "2px solid",
+                outlineColor: "primary.main",
+                outlineOffset: 2,
+              },
+              "&:hover .series-tools, &:focus-within .series-tools": {
+                opacity: 1,
               },
             }}
-            onClick={() => {
-              onSelectSeries(s);
-              navigate(`/series/${s.id}/${toSlug(s.title)}`);
-            }}
           >
-            {s.coverImageUrl ? (
-              <LazyImage
-                src={s.coverImageUrl}
-                alt={s.title}
-                sx={{
-                  display: "block",
-                  width: "100%",
-                  aspectRatio: "2/3",
-                  objectFit: "cover",
-                  bgcolor: "#000",
-                }}
-              />
-            ) : (
+            <Box
+              className="series-cover"
+              sx={{
+                position: "relative",
+                aspectRatio: "2 / 3",
+                borderRadius: "6px",
+                overflow: "hidden",
+                bgcolor: "background.paper",
+              }}
+            >
+              {s.coverImageUrl ? (
+                <LazyImage
+                  src={s.coverImageUrl}
+                  alt={s.title}
+                  sx={{
+                    display: "block",
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  }}
+                />
+              ) : (
+                <Box
+                  sx={{
+                    height: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "text.secondary",
+                    fontWeight: 700,
+                    p: 2,
+                    textAlign: "center",
+                  }}
+                >
+                  No pages yet
+                </Box>
+              )}
               <Box
+                className="series-tools"
                 sx={{
-                  aspectRatio: "2/3",
+                  position: "absolute",
+                  top: 6,
+                  right: 6,
                   display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  bgcolor: "grey.900",
-                  color: "text.secondary",
-                  fontFamily: '"Outfit", sans-serif',
-                  fontWeight: 700,
-                  p: 2,
-                  textAlign: "center",
-                  fontSize: 14,
+                  gap: 0.5,
+                  opacity: 0,
+                  transition: "opacity 0.12s ease",
+                  "@media (hover: none)": { opacity: 1 },
                 }}
               >
-                {s.title}
+                {[
+                  {
+                    title: "Edit Series",
+                    icon: <EditIcon sx={{ fontSize: 16 }} />,
+                    onClick: (e: React.MouseEvent) =>
+                      handleEditSeriesClick(s, e),
+                  },
+                  {
+                    title: "Delete Series",
+                    icon: <DeleteIcon sx={{ fontSize: 16 }} />,
+                    onClick: (e: React.MouseEvent) =>
+                      handleDeleteSeries(s.id, e),
+                  },
+                ].map((tool) => (
+                  <IconButton
+                    key={tool.title}
+                    size="small"
+                    aria-label={tool.title}
+                    title={tool.title}
+                    onClick={tool.onClick}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    sx={{
+                      width: 30,
+                      height: 30,
+                      bgcolor: "rgba(0,0,0,0.7)",
+                      color: "#fff",
+                      "&:hover": { bgcolor: "rgba(0,0,0,0.85)" },
+                    }}
+                  >
+                    {tool.icon}
+                  </IconButton>
+                ))}
               </Box>
-            )}
-            <CardContent sx={{ flex: 1, py: 1.5, "&:last-child": { pb: 1.5 } }}>
-              <Typography
-                variant="h6"
-                noWrap
-              >
-                {s.title}
-              </Typography>
-              <Box
-                sx={{ display: "flex", gap: 0.5, mt: 0.5, flexWrap: "wrap" }}
-              >
-                <Chip
-                  label={`${s.sourceLanguage || s.originalLanguage || "ja"} → ${s.targetLanguage || "en"}`}
-                  size="small"
-                  variant="outlined"
-                />
-                <Chip
-                  label={s.readingDirection}
-                  size="small"
-                  variant="outlined"
-                />
-              </Box>
-            </CardContent>
-            <CardActions sx={{ justifyContent: "flex-end", pt: 0 }}>
-              <IconButton
-                size="small"
-                aria-label="Edit Series"
-                title="Edit Series"
-                onClick={(e) => handleEditSeriesClick(s, e)}
-              >
-                <EditIcon fontSize="small" />
-              </IconButton>
-              <IconButton
-                size="small"
-                aria-label="Delete Series"
-                title="Delete Series"
-                color="error"
-                onClick={(e) => handleDeleteSeries(s.id, e)}
-              >
-                <DeleteIcon fontSize="small" />
-              </IconButton>
-            </CardActions>
+            </Box>
+            <Typography
+              sx={{
+                mt: 1,
+                fontWeight: 700,
+                fontSize: "0.9375rem",
+                lineHeight: 1.3,
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}
+            >
+              {s.title}
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{ color: "text.secondary", mt: 0.25 }}
+            >
+              {s.sourceLanguage || s.originalLanguage || "ja"} →{" "}
+              {s.targetLanguage || "en"},{" "}
+              {readingDirectionLabel(s.readingDirection).toLowerCase()}
+            </Typography>
           </Card>
         ))}
       </Box>
@@ -339,6 +429,32 @@ export const Dashboard: React.FC<DashboardProps> = ({
         user={user}
         onClose={handleCancelSeriesModal}
         onSuccess={handleSeriesSuccess}
+      />
+      <ZipImportDialog
+        open={showImport}
+        onClose={() => {
+          setShowImport(false);
+          setDroppedArchive(null);
+        }}
+        initialFile={droppedArchive}
+        user={user}
+        onImported={(chapter, series, pageCount) => {
+          setSeriesList((prev) =>
+            prev.some((existing) => existing.id === series.id)
+              ? prev
+              : [series, ...prev],
+          );
+          showToast(
+            `Imported ${pageCount} pages into ${series.title} as chapter ${chapter.chapterNumber}.`,
+            "success",
+          );
+          openSeries(series);
+        }}
+      />
+      <DropOverlay
+        visible={draggingArchive}
+        title="Import a chapter"
+        detail="Drop a ZIP, CBZ or ePub. You choose the series and check the pages next."
       />
       <ConfirmModal
         isOpen={confirmModal.isOpen}

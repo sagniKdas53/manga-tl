@@ -119,20 +119,34 @@ describe("QueueManager", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByLabelText("Clear Pending/Failed Jobs"),
+        screen.getByRole("listitem", { name: "Page 3: Waiting for OCR" }),
       ).toBeInTheDocument();
-      expect(screen.getByLabelText("Force Clear Queue")).toBeInTheDocument();
-      expect(screen.getByText("OCR Processing")).toBeInTheDocument();
-      expect(screen.getByText("Translation")).toBeInTheDocument();
+      expect(
+        screen.getByRole("listitem", { name: "Page 4: Failed at Translation" }),
+      ).toBeInTheDocument();
     });
+
+    // Queue-wide clears live in the drawer's menu, not as two icons on every open.
+    fireEvent.click(screen.getByLabelText("Queue actions"));
+    expect(
+      screen.getByRole("menuitem", { name: "Clear waiting and failed jobs" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", {
+        name: "Clear everything, including running jobs",
+      }),
+    ).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
 
     expect(screen.getByText(/My Manga/i)).toBeInTheDocument();
     expect(screen.getByText(/The Beginning/i)).toBeInTheDocument();
     expect(screen.getByText(/Page 3/i)).toBeInTheDocument();
 
-    expect(screen.getAllByLabelText("Pause")[0]).toBeInTheDocument();
-    expect(screen.getAllByLabelText("Retry").length).toBeGreaterThan(0);
-    expect(screen.getAllByLabelText("Delete").length).toBeGreaterThan(0);
+    // Only the actions a row can use are rendered: pause on the waiting job, retry on the
+    // failed one, remove on both.
+    expect(screen.getAllByLabelText("Pause")).toHaveLength(1);
+    expect(screen.getAllByLabelText("Retry")).toHaveLength(1);
+    expect(screen.getAllByLabelText("Delete")).toHaveLength(2);
   });
 
   it("puts a running job at the top of its chapter, above pending and failed (AUDIT-F20)", async () => {
@@ -202,12 +216,10 @@ describe("QueueManager", () => {
       expect(screen.getByText(/Page 3/)).toBeInTheDocument();
     });
 
-    // Read the rendered rows in document order. The page label is its own span ("· Page N"),
-    // so this reflects the order sortJobs actually produced.
-    const order = Array.from(document.querySelectorAll("span"))
-      .map((node) => node.textContent?.trim() ?? "")
-      .filter((text) => /^· Page [123]$/.test(text))
-      .map((text) => text.replace("· ", ""));
+    // Read the rendered rows in document order, so this reflects the order sortJobs produced.
+    const order = screen
+      .getAllByRole("listitem")
+      .map((row) => row.getAttribute("aria-label")?.split(":")[0]);
     expect(order).toEqual(["Page 3", "Page 2", "Page 1"]);
   });
 
@@ -231,10 +243,15 @@ describe("QueueManager", () => {
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Force Clear Queue")).toBeInTheDocument();
+      expect(screen.getByLabelText("Queue actions")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText("Force Clear Queue"));
+    fireEvent.click(screen.getByLabelText("Queue actions"));
+    fireEvent.click(
+      screen.getByRole("menuitem", {
+        name: "Clear everything, including running jobs",
+      }),
+    );
 
     await waitFor(() => {
       expect(
@@ -349,7 +366,9 @@ describe("QueueManager", () => {
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
-      expect(screen.getByText("OCR Processing")).toBeInTheDocument();
+      expect(
+        screen.getByRole("listitem", { name: "Page 3: Waiting for OCR" }),
+      ).toBeInTheDocument();
       expect(screen.getAllByLabelText("Pause")[0]).toBeInTheDocument();
     });
 
@@ -369,7 +388,9 @@ describe("QueueManager", () => {
     rerender(<QueueManagerWrapper />);
 
     await waitFor(() => {
-      expect(screen.getByText("PROCESSING")).toBeInTheDocument();
+      expect(
+        screen.getByRole("listitem", { name: "Page 3: OCR" }),
+      ).toBeInTheDocument();
     });
   });
 
@@ -418,7 +439,9 @@ describe("QueueManager", () => {
     rerender(<QueueManagerWrapper />);
 
     await waitFor(() => {
-      expect(screen.getByText("PROCESSING")).toBeInTheDocument();
+      expect(
+        screen.getByRole("listitem", { name: "Page 3: OCR" }),
+      ).toBeInTheDocument();
     });
 
     landPoll();
@@ -429,9 +452,13 @@ describe("QueueManager", () => {
     // queryByText(...).toBeNull() inside waitFor passes on the first tick and can never
     // fail, which is AUDIT-F8 in the Reader tests.
     await waitFor(() => {
-      expect(screen.getByText("PROCESSING")).toBeInTheDocument();
+      expect(
+        screen.getByRole("listitem", { name: "Page 3: OCR" }),
+      ).toBeInTheDocument();
     });
-    expect(screen.queryByText("PENDING")).toBeNull();
+    expect(
+      screen.queryByRole("listitem", { name: "Page 3: Waiting for OCR" }),
+    ).toBeNull();
   });
 
   it("still applies a poll response that is fresher than what is held", async () => {
@@ -476,7 +503,9 @@ describe("QueueManager", () => {
     rerender(<QueueManagerWrapper />);
 
     await waitFor(() => {
-      expect(screen.getByText("PROCESSING")).toBeInTheDocument();
+      expect(
+        screen.getByRole("listitem", { name: "Page 3: OCR" }),
+      ).toBeInTheDocument();
     });
 
     landPoll();
@@ -484,7 +513,9 @@ describe("QueueManager", () => {
     rerender(<QueueManagerWrapper />);
 
     await waitFor(() => {
-      expect(screen.getByText("FAILED")).toBeInTheDocument();
+      expect(
+        screen.getByRole("listitem", { name: "Page 3: Failed at OCR" }),
+      ).toBeInTheDocument();
     });
   });
 
@@ -511,7 +542,8 @@ describe("QueueManager", () => {
       expect(screen.getAllByLabelText("Retry").length).toBeGreaterThan(0);
     });
 
-    fireEvent.click(screen.getAllByLabelText("Retry")[1]);
+    // One failed job, one Retry: rows no longer carry hidden placeholder actions.
+    fireEvent.click(screen.getByLabelText("Retry"));
 
     await waitFor(() => {
       expect(safeFetch).toHaveBeenCalledWith(
@@ -598,12 +630,10 @@ describe("QueueManager", () => {
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
-      // Both rows are finished `qa` jobs, which end the pipeline — so the surviving row
-      // reads COMPLETED. This assertion used to look for "TRANSITIONING...", which the old
-      // blanket relabel produced for every COMPLETED job; that pinned the bug rather than
-      // the pruning this test is actually about.
-      const texts = screen.queryAllByText("COMPLETED");
-      expect(texts.length).toBe(1);
+      // Only the recent one survives the grace period, and as a finished `qa` it reads Done.
+      const rows = screen.queryAllByRole("listitem");
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toHaveAttribute("aria-label", "QA: Done");
     });
   });
 
@@ -651,32 +681,31 @@ describe("QueueManager", () => {
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
-      expect(
-        screen.getByText("TRANSITIONING → OCR", { exact: false }),
-      ).toBeInTheDocument();
+      expect(screen.getAllByRole("listitem")).toHaveLength(8);
     });
 
-    // Each mid-chain stage names its own successor rather than a generic label. Both
-    // `layout` and `qa-re-ocr` hand off to translation, hence the count of 2 there.
-    const expected: Record<string, number> = {
-      "TRANSITIONING → OCR": 1,
-      "TRANSITIONING → LAYOUT": 1,
-      "TRANSITIONING → TRANSLATION": 2,
-      "TRANSITIONING → RENDER": 1,
-      "TRANSITIONING → QA": 1,
-    };
-    for (const [label, count] of Object.entries(expected)) {
-      expect(screen.queryAllByText(label)).toHaveLength(count);
-    }
+    // Each mid-chain stage names what comes next. The strip folds layout into Translation, so
+    // a finished OCR, a finished layout and a finished QA re-OCR all wait for Translation.
+    const labels = screen
+      .getAllByRole("listitem")
+      .map((row) => row.getAttribute("aria-label"));
+    const count = (text: string) =>
+      labels.filter((label) => label?.endsWith(`: ${text}`)).length;
+    expect(count("Waiting for OCR")).toBe(1);
+    expect(count("Waiting for Translation")).toBe(3);
+    expect(count("Waiting for Render")).toBe(1);
+    expect(count("Waiting for QA")).toBe(1);
 
-    // The terminal stages — a finished `qa` and a one-shot region redo — end the pipeline,
-    // so they read COMPLETED and must not claim a successor.
-    expect(screen.queryAllByText("COMPLETED")).toHaveLength(2);
-    expect(screen.queryAllByText(/UNDEFINED|→\s*$/)).toHaveLength(0);
+    // The terminal stages (a finished `qa`, a one-shot region redo) end the pipeline: they
+    // read Done and must not claim a successor.
+    expect(count("Done")).toBe(2);
+    expect(labels.some((label) => /undefined|for\s*$/i.test(label ?? ""))).toBe(
+      false,
+    );
 
-    // The summary chips group on the coarse label, so the six in-flight rows fold into one.
-    expect(screen.getByText("6 Transitioning")).toBeInTheDocument();
-    expect(screen.getByText("2 Completed")).toBeInTheDocument();
+    // The filter counts fold the six hand-offs into Waiting.
+    expect(screen.getByRole("tab", { name: "Waiting 6" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "All 8" })).toBeInTheDocument();
   });
 
   // AUDIT-F5 removed the 30s poll, and the 10s eviction of finished jobs was living inside

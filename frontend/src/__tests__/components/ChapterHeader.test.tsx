@@ -49,7 +49,9 @@ describe("ChapterHeader", () => {
   it("renders chapter title and series info", () => {
     render(<ChapterHeader {...defaultProps} />);
     expect(screen.getByRole("heading", { name: "Chapter 1" })).toBeDefined();
-    expect(screen.getByText(/One Piece/)).toBeDefined();
+    // The series name appears twice: the back link and the Series row.
+    expect(screen.getAllByText(/One Piece/).length).toBe(2);
+    expect(screen.getByText("Romance Dawn")).toBeDefined();
   });
 
   it("renders page count", () => {
@@ -71,10 +73,13 @@ describe("ChapterHeader", () => {
     expect(screen.getByText("0")).toBeDefined();
   });
 
-  it("renders context injection Enabled chip", () => {
+  it("says page context is on, in words", () => {
     render(<ChapterHeader {...defaultProps} />);
-    const enabledChips = screen.getAllByText("Enabled");
-    expect(enabledChips.length).toBeGreaterThanOrEqual(2);
+    expect(
+      screen.getByText("On, the previous page is sent along"),
+    ).toBeDefined();
+    // Fallback models set on the chapter itself: no "from series" note.
+    expect(screen.queryByText("from series")).toBeNull();
   });
 
   it("renders context injection Disabled when useContextMemory is false", () => {
@@ -87,7 +92,7 @@ describe("ChapterHeader", () => {
         }}
       />,
     );
-    expect(screen.getByText("Disabled")).toBeDefined();
+    expect(screen.getByText("Off")).toBeDefined();
   });
 
   it("renders fallback models Disabled when false", () => {
@@ -101,13 +106,12 @@ describe("ChapterHeader", () => {
         }}
       />,
     );
-    const disabledChips = screen.getAllByText("Disabled");
-    expect(disabledChips.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Off").length).toBeGreaterThanOrEqual(1);
   });
 
   it("calls onBack when back button clicked", () => {
     render(<ChapterHeader {...defaultProps} />);
-    fireEvent.click(screen.getByText("← Back to Series"));
+    fireEvent.click(screen.getByRole("button", { name: "Back to series" }));
     expect(defaultProps.onBack).toHaveBeenCalledTimes(1);
   });
 
@@ -117,15 +121,15 @@ describe("ChapterHeader", () => {
     expect(defaultProps.onEditClick).toHaveBeenCalledTimes(1);
   });
 
-  it("calls onUploadClick when Upload Page clicked", () => {
+  it("calls onUploadClick when Upload pages clicked", () => {
     render(<ChapterHeader {...defaultProps} />);
-    fireEvent.click(screen.getByText("Upload Page"));
+    fireEvent.click(screen.getByText("Upload pages"));
     expect(defaultProps.onUploadClick).toHaveBeenCalledTimes(1);
   });
 
   it("calls onImportClick when Import Project clicked", () => {
     render(<ChapterHeader {...defaultProps} />);
-    fireEvent.click(screen.getByText("Import Project (ZIP)"));
+    fireEvent.click(screen.getByText("Import project (ZIP)"));
     expect(defaultProps.onImportClick).toHaveBeenCalledTimes(1);
   });
 
@@ -136,32 +140,33 @@ describe("ChapterHeader", () => {
         isImporting={true}
       />,
     );
-    expect(screen.getByText("Importing...")).toBeDefined();
+    expect(screen.getByText("Importing…")).toBeDefined();
   });
 
   it("calls onExportClick when Export Chapter clicked", () => {
     render(<ChapterHeader {...defaultProps} />);
-    fireEvent.click(screen.getByText("Export Chapter (ZIP)"));
+    fireEvent.click(screen.getByText("Export chapter (ZIP)"));
     expect(defaultProps.onExportClick).toHaveBeenCalledTimes(1);
   });
 
-  it("calls onDeleteClick when Delete Chapter clicked", () => {
+  it("calls onDeleteClick from the overflow menu", () => {
     render(<ChapterHeader {...defaultProps} />);
-    fireEvent.click(screen.getByText("Delete Chapter"));
+    fireEvent.click(screen.getByLabelText("more actions"));
+    fireEvent.click(screen.getByText("Delete chapter"));
     expect(defaultProps.onDeleteClick).toHaveBeenCalledTimes(1);
   });
 
   it("opens overflow menu and triggers Clear Exports", () => {
     render(<ChapterHeader {...defaultProps} />);
     fireEvent.click(screen.getByLabelText("more actions"));
-    fireEvent.click(screen.getByText("Clear Exports"));
+    fireEvent.click(screen.getByText("Delete saved exports"));
     expect(defaultProps.onClearExportsClick).toHaveBeenCalledTimes(1);
   });
 
   it("opens overflow menu and triggers Force Re-export", () => {
     render(<ChapterHeader {...defaultProps} />);
     fireEvent.click(screen.getByLabelText("more actions"));
-    fireEvent.click(screen.getByText("Force Re-export"));
+    fireEvent.click(screen.getByText("Build a new export"));
     expect(defaultProps.onReexportClick).toHaveBeenCalledTimes(1);
   });
 
@@ -198,8 +203,10 @@ describe("ChapterHeader", () => {
         }}
       />,
     );
-    expect(screen.getByText(/OCR Provider: openrouter/)).toBeDefined();
-    expect(screen.getByText(/OCR: ocr-model/)).toBeDefined();
+    expect(screen.getByText("ocr-model")).toBeDefined();
+    expect(screen.getByText("openrouter")).toBeDefined();
+    // Set on the chapter, so it carries the accent dot.
+    expect(screen.getByLabelText("set on this chapter")).toBeDefined();
   });
 
   it("renders resolved translation chips", () => {
@@ -216,8 +223,11 @@ describe("ChapterHeader", () => {
         }}
       />,
     );
-    expect(screen.getByText(/TL Provider: gemini/)).toBeDefined();
-    expect(screen.getByText(/Translation: gemini-flash/)).toBeDefined();
+    expect(screen.getByText("Translation")).toBeDefined();
+    expect(screen.getByText("gemini-flash")).toBeDefined();
+    expect(screen.getByText("gemini")).toBeDefined();
+    // Inherited from the series: no dot.
+    expect(screen.queryByLabelText("set on this chapter")).toBeNull();
   });
 
   it("renders resolved QA chips", () => {
@@ -236,9 +246,11 @@ describe("ChapterHeader", () => {
         }}
       />,
     );
-    expect(screen.getByText(/hybrid \(overridden\)/)).toBeDefined();
-    expect(screen.getByText(/QA LLM: gpt-4/)).toBeDefined();
-    expect(screen.getByText(/QA VLM: gpt-4v/)).toBeDefined();
+    expect(screen.getByText("hybrid")).toBeDefined();
+    expect(screen.getByText("QA text")).toBeDefined();
+    expect(screen.getByText("gpt-4")).toBeDefined();
+    expect(screen.getByText("QA vision")).toBeDefined();
+    expect(screen.getByText("gpt-4v")).toBeDefined();
   });
 
   it("closes menus via Escape key", () => {

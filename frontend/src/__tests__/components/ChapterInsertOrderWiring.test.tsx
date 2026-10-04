@@ -117,7 +117,7 @@ describe("chapter creation wiring (SeriesDetails + CreateChapterDialog)", () => 
   it("defaults the new chapter number past the highest on the server, not the loaded prefix", async () => {
     renderSeries(true, LOADED_ASC, vi.fn());
 
-    fireEvent.click(screen.getByText("Add Chapter"));
+    fireEvent.click(screen.getByRole("button", { name: /add chapter/i }));
     await waitFor(() =>
       expect(screen.getByText("Create Chapter")).toBeInTheDocument(),
     );
@@ -151,7 +151,7 @@ describe("chapter creation wiring (SeriesDetails + CreateChapterDialog)", () => 
       },
     );
 
-    fireEvent.click(screen.getByText("Add Chapter"));
+    fireEvent.click(screen.getByRole("button", { name: /add chapter/i }));
     await waitFor(() =>
       expect(screen.getByText("Create Chapter")).toBeInTheDocument(),
     );
@@ -188,7 +188,7 @@ describe("chapter creation wiring (SeriesDetails + CreateChapterDialog)", () => 
       },
     );
 
-    fireEvent.click(screen.getByText("Add Chapter"));
+    fireEvent.click(screen.getByRole("button", { name: /add chapter/i }));
     await waitFor(() =>
       expect(screen.getByText("Create Chapter")).toBeInTheDocument(),
     );

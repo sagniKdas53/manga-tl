@@ -2,9 +2,6 @@ import React from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
-import CardActions from "@mui/material/CardActions";
-import CardContent from "@mui/material/CardContent";
-import Chip from "@mui/material/Chip";
 import Grid from "@mui/material/Grid";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -64,12 +61,13 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
           Chapters ({chapters.length})
         </Typography>
         <Button
-          variant="outlined"
+          variant="text"
           size="small"
           startIcon={<ImportExportIcon />}
           onClick={onToggleSort}
+          sx={{ color: "text.secondary" }}
         >
-          Sort: {sortAsc ? "Ascending ↑" : "Descending ↓"}
+          Sort: {sortAsc ? "first to last" : "last to first"}
         </Button>
       </Stack>
 
@@ -92,11 +90,27 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
                 width: "100%",
                 display: "flex",
                 flexDirection: "column",
-                transition: "transform 0.2s, box-shadow 0.2s",
-                "&:hover": {
-                  transform: "translateY(-4px)",
-                  boxShadow: 4,
+                bgcolor: "transparent",
+                boxShadow: "none",
+                borderRadius: 0,
+                overflow: "visible",
+                "&:hover .chapter-cover, &:focus-visible .chapter-cover": {
+                  outline: "2px solid",
+                  outlineColor: "primary.main",
+                  outlineOffset: 2,
                 },
+                "&:hover .chapter-tools, &:focus-within .chapter-tools": {
+                  opacity: 1,
+                },
+              }}
+              role="link"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                onSelectChapter(c);
+                onNavigate(
+                  `/chapters/${c.id}/${toSlug(c.title || `chapter-${c.chapterNumber}`)}`,
+                );
               }}
               onClick={() => {
                 onSelectChapter(c);
@@ -105,156 +119,115 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
                 );
               }}
             >
-              {c.coverImageUrl ? (
-                <LazyImage
-                  src={c.coverImageUrl}
-                  alt={c.title || `Chapter ${c.chapterNumber}`}
-                  sx={{
-                    display: "block",
-                    width: "100%",
-                    aspectRatio: "2/3",
-                    objectFit: "cover",
-                    bgcolor: "#000",
-                  }}
-                />
-              ) : series.coverImageUrl ? (
-                <LazyImage
-                  src={series.coverImageUrl}
-                  alt="Fallback Cover"
-                  sx={{
-                    display: "block",
-                    width: "100%",
-                    aspectRatio: "2/3",
-                    objectFit: "cover",
-                    bgcolor: "#000",
-                  }}
-                />
-              ) : (
-                <Box
-                  sx={{
-                    aspectRatio: "2/3",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    bgcolor: "grey.900",
-                    color: "text.secondary",
-                    fontFamily: '"Outfit", sans-serif',
-                    fontWeight: 700,
-                    p: 2,
-                    textAlign: "center",
-                    fontSize: 24,
-                  }}
-                >
-                  C{c.chapterNumber}
-                </Box>
-              )}
-
-              <CardContent
-                sx={{ flex: 1, py: 1.5, pb: 1, "&:last-child": { pb: 1.5 } }}
+              <Box
+                className="chapter-cover"
+                sx={{
+                  position: "relative",
+                  aspectRatio: "2 / 3",
+                  borderRadius: "6px",
+                  overflow: "hidden",
+                  bgcolor: "background.paper",
+                }}
               >
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    color: "primary.main",
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                    fontSize: "0.75rem",
-                    mb: 0.5,
-                  }}
-                >
-                  Chapter {c.chapterNumber}
-                </Typography>
-                <Typography
-                  variant="h6"
-                  noWrap
-                  title={c.title || "Untitled"}
-                  sx={{ fontSize: "1rem", lineHeight: 1.2, mb: 1 }}
-                >
-                  {c.title || "Untitled"}
-                </Typography>
-
-                {(c.pageCount ||
-                  c.useContextMemory !== undefined ||
-                  c.resolvedOcr ||
-                  c.resolvedTranslation) && (
+                {c.coverImageUrl || series.coverImageUrl ? (
+                  <LazyImage
+                    src={(c.coverImageUrl || series.coverImageUrl)!}
+                    alt={
+                      c.coverImageUrl
+                        ? c.title || `Chapter ${c.chapterNumber}`
+                        : "Fallback Cover"
+                    }
+                    sx={{
+                      display: "block",
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                    }}
+                  />
+                ) : (
                   <Box
                     sx={{
+                      height: "100%",
                       display: "flex",
-                      flexWrap: "wrap",
-                      gap: 0.5,
-                      mt: 0.5,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "text.secondary",
+                      fontWeight: 700,
+                      fontSize: 24,
                     }}
                   >
-                    {c.pageCount !== undefined && c.pageCount > 0 && (
-                      <Chip
-                        label={`${c.pageCount} pages`}
-                        size="small"
-                        variant="outlined"
-                        title="Total pages in this chapter"
-                      />
-                    )}
-                    {c.useContextMemory !== undefined && (
-                      <Chip
-                        label={c.useContextMemory ? "Context" : "No Context"}
-                        size="small"
-                        variant="outlined"
-                        color={c.useContextMemory ? "primary" : "default"}
-                        title={
-                          c.useContextMemory
-                            ? "Context memory enabled"
-                            : "Context memory disabled"
-                        }
-                      />
-                    )}
-                    {(c.resolvedOcr || c.resolvedTranslation) && (
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          color: "text.secondary",
-                          fontSize: "10px",
-                          lineHeight: "20px",
-                          width: "100%",
-                          mt: 0.5,
-                        }}
-                      >
-                        {c.resolvedOcr && c.resolvedOcr.source !== "global"
-                          ? `OCR: ${c.resolvedOcr.provider}${c.resolvedOcr.model ? " / " + c.resolvedOcr.model : ""} (${c.resolvedOcr.source})`
-                          : ""}
-                        {c.resolvedOcr &&
-                        c.resolvedOcr.source !== "global" &&
-                        c.resolvedTranslation &&
-                        c.resolvedTranslation.source !== "global"
-                          ? " | "
-                          : ""}
-                        {c.resolvedTranslation &&
-                        c.resolvedTranslation.source !== "global"
-                          ? `TL: ${c.resolvedTranslation.provider}${c.resolvedTranslation.model ? " / " + c.resolvedTranslation.model : ""} (${c.resolvedTranslation.source})`
-                          : ""}
-                      </Typography>
-                    )}
+                    {c.chapterNumber}
                   </Box>
                 )}
-              </CardContent>
-
-              <CardActions sx={{ justifyContent: "flex-end", pt: 0 }}>
-                <IconButton
-                  size="small"
-                  aria-label="Edit Chapter"
-                  title="Edit Chapter"
-                  onClick={(e) => onEditChapter(c, e)}
+                <Box
+                  className="chapter-tools"
+                  sx={{
+                    position: "absolute",
+                    top: 6,
+                    right: 6,
+                    display: "flex",
+                    gap: 0.5,
+                    opacity: 0,
+                    transition: "opacity 0.12s ease",
+                    "@media (hover: none)": { opacity: 1 },
+                  }}
                 >
-                  <EditIcon fontSize="small" />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  aria-label="Delete Chapter"
-                  title="Delete Chapter"
-                  color="error"
-                  onClick={(e) => onDeleteChapter(c.id, e)}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </CardActions>
+                  {[
+                    {
+                      title: "Edit Chapter",
+                      icon: <EditIcon sx={{ fontSize: 16 }} />,
+                      onClick: (e: React.MouseEvent) => onEditChapter(c, e),
+                    },
+                    {
+                      title: "Delete Chapter",
+                      icon: <DeleteIcon sx={{ fontSize: 16 }} />,
+                      onClick: (e: React.MouseEvent) =>
+                        onDeleteChapter(c.id, e),
+                    },
+                  ].map((tool) => (
+                    <IconButton
+                      key={tool.title}
+                      size="small"
+                      aria-label={tool.title}
+                      title={tool.title}
+                      onClick={tool.onClick}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      sx={{
+                        width: 30,
+                        height: 30,
+                        bgcolor: "rgba(0,0,0,0.7)",
+                        color: "#fff",
+                        "&:hover": { bgcolor: "rgba(0,0,0,0.85)" },
+                      }}
+                    >
+                      {tool.icon}
+                    </IconButton>
+                  ))}
+                </Box>
+              </Box>
+              <Typography
+                sx={{ mt: 1, fontWeight: 700, fontSize: "0.9375rem" }}
+              >
+                Chapter {c.chapterNumber}
+              </Typography>
+              <Typography
+                variant="body2"
+                noWrap
+                title={c.title || "Untitled"}
+              >
+                {c.title || "Untitled"}
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ color: "text.secondary", fontSize: "0.8125rem" }}
+              >
+                {[
+                  c.pageCount ? `${c.pageCount} pages` : "No pages",
+                  c.useContextMemory ? "page context on" : null,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
+              </Typography>
             </Card>
           </Grid>
         ))}

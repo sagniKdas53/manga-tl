@@ -106,7 +106,9 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    expect(screen.getByText("My Manga Library")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Library" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("One Piece")).toBeInTheDocument();
     expect(screen.getAllByText("Naruto").length).toBeGreaterThan(0);
   });
@@ -594,7 +596,7 @@ describe("Dashboard Component", () => {
       expect(screen.getByRole("listbox")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("option", { name: /Created Date ↓/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Newest first/ }));
 
     // AUDIT-T3: this test used to end at the click with no assertion at all — deleting the
     // Select's entire `onChange` would not have failed it. `Dashboard` owns exactly two

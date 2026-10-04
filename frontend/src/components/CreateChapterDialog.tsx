@@ -84,7 +84,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
   // Set the moment the user types in the Chapter Number field, cleared whenever the dialog is
   // (re)opened. `cancelled` below only fires when the effect tears down — closing the dialog or
   // changing series — never on typing, so on its own it does not stop a slow response landing on
-  // top of a number the user deliberately chose. Same defect as AUDIT-F18's in ImportChapterDialog.
+  // top of a number the user deliberately chose. Same defect as AUDIT-F18's in the old import dialog (now ZipImportDialog).
   const numberTouchedRef = useRef(false);
   const [prevOpen, setPrevOpen] = useState(false);
   const [prevEditingChapter, setPrevEditingChapter] = useState<Chapter | null>(

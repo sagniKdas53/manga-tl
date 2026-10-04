@@ -2,19 +2,24 @@ import React, { useState, useEffect } from "react";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
-import Card from "@mui/material/Card";
-import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
-import Chip from "@mui/material/Chip";
-import Grid from "@mui/material/Grid";
-import Divider from "@mui/material/Divider";
+import IconButton from "@mui/material/IconButton";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
 import AddIcon from "@mui/icons-material/Add";
 import UploadIcon from "@mui/icons-material/Upload";
 import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import type { Series, User, SystemSettingsDto } from "../types";
-import LazyImage from "./LazyImage";
 import { safeFetch, resolveOverride } from "../utils";
+import { readingDirectionLabel } from "../utils/readingDirection";
+import {
+  HeaderShell,
+  Inherited,
+  MetaRows,
+  ModelPill,
+  PillRow,
+} from "./DetailParts";
 
 interface SeriesHeaderProps {
   series: Series;
@@ -108,336 +113,167 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
     resolvedTlProvider.value === "openrouter" ||
     resolvedQaProvider.value === "openrouter";
 
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const fromSettings = (source?: string | null) =>
+    source === "series" ? null : "settings";
+  const directionLabel = readingDirectionLabel(series.readingDirection);
+
   return (
-    <Card
-      elevation={3}
-      sx={{ mb: 4, overflow: "visible" }}
-    >
-      <CardContent sx={{ p: 0, "&:last-child": { pb: 0 } }}>
-        <Grid
-          container
-          spacing={0}
+    <Box sx={{ mb: 4 }}>
+      <HeaderShell
+        coverUrl={series.coverImageUrl}
+        coverAlt={series.title}
+        coverFallback={series.title}
+      >
+        <Typography
+          variant="h4"
+          component="h1"
         >
-          {/* Cover Image Column */}
-          <Grid size={{ xs: 12, sm: 4, md: 3, lg: 2.5 }}>
-            <Box
-              sx={{
-                width: "100%",
-                height: "100%",
-                minHeight: { xs: 200, sm: 250 },
-                maxHeight: { xs: 300, sm: 350 },
-                backgroundColor: "background.default",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRight: (theme) => ({
-                  sm: `1px solid ${theme.palette.divider}`,
-                }),
-                borderBottom: (theme) => ({
-                  xs: `1px solid ${theme.palette.divider}`,
-                  sm: "none",
-                }),
-                overflow: "hidden",
-              }}
-            >
-              {series.coverImageUrl ? (
-                <LazyImage
-                  src={series.coverImageUrl}
-                  alt={series.title}
-                  sx={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                  }}
+          {series.title}
+        </Typography>
+
+        <MetaRows
+          rows={[
+            {
+              label: "Languages",
+              value: `${series.sourceLanguage || series.originalLanguage || "ja"} → ${series.targetLanguage || "en"}`,
+            },
+            { label: "Reading", value: directionLabel },
+            { label: "Chapters", value: chapterCount },
+            {
+              label: "Fallback models",
+              value: (
+                <Inherited
+                  value={series.resolvedUseFallbackModels ? "On" : "Off"}
+                  from={series.useFallbackModels === null ? "settings" : null}
                 />
-              ) : (
-                <Typography
-                  variant="body1"
-                  sx={{
-                    color: "text.secondary",
-                  }}
-                >
-                  {series.title}
-                </Typography>
-              )}
-            </Box>
-          </Grid>
-
-          {/* Info Column */}
-          <Grid size={{ xs: 12, sm: 8, md: 9, lg: 9.5 }}>
-            <Box
-              sx={{
-                p: { xs: 2, sm: 3 },
-                display: "flex",
-                flexDirection: "column",
-                height: "100%",
-              }}
-            >
-              <Typography
-                variant="h4"
-                component="h1"
-                gutterBottom
-                sx={{ fontWeight: "bold", fontFamily: '"Outfit", sans-serif' }}
-              >
-                {series.title}
-              </Typography>
-
-              <Grid
-                container
-                spacing={2}
-                sx={{ mb: 3 }}
-              >
-                <Grid>
-                  <Typography
-                    variant="body2"
-                    gutterBottom
-                    sx={{
-                      color: "text.secondary",
-                    }}
-                  >
-                    Language
-                  </Typography>
-                  <Chip
-                    size="small"
-                    label={`${series.sourceLanguage || series.originalLanguage || "ja"} → ${series.targetLanguage || "en"}`}
-                  />
-                </Grid>
-                <Grid>
-                  <Typography
-                    variant="body2"
-                    gutterBottom
-                    sx={{
-                      color: "text.secondary",
-                    }}
-                  >
-                    Direction
-                  </Typography>
-                  <Chip
-                    size="small"
-                    label={series.readingDirection}
-                  />
-                </Grid>
-                <Grid>
-                  <Typography
-                    variant="body2"
-                    gutterBottom
-                    sx={{
-                      color: "text.secondary",
-                    }}
-                  >
-                    Chapters
-                  </Typography>
-                  <Typography
-                    variant="body1"
-                    sx={{
-                      fontWeight: "medium",
-                    }}
-                  >
-                    {chapterCount}
-                  </Typography>
-                </Grid>
-                <Grid>
-                  <Typography
-                    variant="body2"
-                    gutterBottom
-                    sx={{
-                      color: "text.secondary",
-                    }}
-                  >
-                    Fallback Models
-                  </Typography>
-                  <Chip
-                    size="small"
-                    label={
-                      series.useFallbackModels === null
-                        ? series.resolvedUseFallbackModels
-                          ? "Enabled (inherited)"
-                          : "Disabled (inherited)"
-                        : series.resolvedUseFallbackModels
-                          ? "Enabled"
-                          : "Disabled"
-                    }
-                    color={
-                      series.useFallbackModels === null
-                        ? "default"
-                        : series.resolvedUseFallbackModels
-                          ? "success"
-                          : "warning"
-                    }
-                  />
-                </Grid>
-                {usesOpenRouter && (
-                  <Grid>
-                    <Typography
-                      variant="body2"
-                      gutterBottom
-                      sx={{
-                        color: "text.secondary",
-                      }}
-                    >
-                      Strategy
-                    </Typography>
-                    {resolvedQaRouting.value ? (
-                      <Chip
-                        size="small"
-                        color="secondary"
-                        label={resolvedQaRouting.value}
-                      />
-                    ) : (
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          color: "text.secondary",
-                        }}
-                      >
-                        N/A
-                      </Typography>
-                    )}
-                  </Grid>
-                )}
-                <Grid>
-                  <Typography
-                    variant="body2"
-                    gutterBottom
-                    sx={{
-                      color: "text.secondary",
-                    }}
-                  >
-                    QA Mode
-                  </Typography>
-                  {resolvedQaMode.value ? (
-                    <Chip
-                      size="small"
-                      label={`${resolvedQaMode.value} ${resolvedQaMode.source === "series" ? "(overridden)" : "(inherited)"}`}
-                    />
-                  ) : (
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: "text.secondary",
-                      }}
-                    >
-                      N/A
-                    </Typography>
-                  )}
-                </Grid>
-              </Grid>
-
-              {/* Models Info */}
-              <Box sx={{ mb: 3 }}>
-                <Typography
-                  variant="subtitle2"
-                  gutterBottom
-                  sx={{
-                    color: "text.secondary",
-                  }}
-                >
-                  Configured Models
-                </Typography>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  useFlexGap
-                  sx={{ mt: 1, flexWrap: "wrap" }}
-                >
-                  {resolvedOcrProvider.value && (
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      label={`OCR Provider: ${resolvedOcrProvider.value}`}
-                    />
-                  )}
+              ),
+            },
+            {
+              label: "Routing",
+              value: (
+                <Inherited
+                  value={resolvedQaRouting.value}
+                  from={fromSettings(resolvedQaRouting.source)}
+                />
+              ),
+              hidden: !usesOpenRouter || !resolvedQaRouting.value,
+            },
+            {
+              label: "QA",
+              value: (
+                <Inherited
+                  value={resolvedQaMode.value || "Not set"}
+                  from={
+                    resolvedQaMode.value
+                      ? fromSettings(resolvedQaMode.source)
+                      : null
+                  }
+                />
+              ),
+            },
+            {
+              label: "Models",
+              value: (
+                <PillRow>
                   {resolvedOcr.value && (
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      label={`OCR: ${resolvedOcr.value} ${resolvedOcr.source === "series" ? "(overridden)" : "(inherited)"}`}
-                    />
-                  )}
-                  {resolvedTlProvider.value && (
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      label={`TL Provider: ${resolvedTlProvider.value}`}
+                    <ModelPill
+                      role="OCR"
+                      model={resolvedOcr.value}
+                      provider={resolvedOcrProvider.value}
+                      setHere={resolvedOcr.source === "series"}
+                      levelName="series"
                     />
                   )}
                   {resolvedTl.value && (
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      label={`Translation: ${resolvedTl.value} ${resolvedTl.source === "series" ? "(overridden)" : "(inherited)"}`}
+                    <ModelPill
+                      role="Translation"
+                      model={resolvedTl.value}
+                      provider={resolvedTlProvider.value}
+                      setHere={resolvedTl.source === "series"}
+                      levelName="series"
                     />
                   )}
-
                   {resolvedQa.value && (
-                    <Chip
-                      size="small"
-                      variant="outlined"
+                    <ModelPill
+                      role="QA text"
+                      model={resolvedQa.value}
+                      setHere={resolvedQa.source === "series"}
                       disabled={
                         resolvedQaMode.value === "vlm" ||
                         resolvedQaMode.value === "none"
                       }
-                      label={`QA LLM: ${resolvedQa.value} ${resolvedQa.source === "series" ? "(overridden)" : "(inherited)"}`}
+                      levelName="series"
                     />
                   )}
                   {resolvedQaVlm.value && !qaVlmCapabilityMissing && (
-                    <Chip
-                      size="small"
-                      variant="outlined"
+                    <ModelPill
+                      role="QA vision"
+                      model={resolvedQaVlm.value}
+                      setHere={resolvedQaVlm.source === "series"}
                       disabled={
                         resolvedQaMode.value === "llm" ||
                         resolvedQaMode.value === "none"
                       }
-                      label={`QA VLM: ${resolvedQaVlm.value} ${resolvedQaVlm.source === "series" ? "(overridden)" : "(inherited)"}`}
+                      levelName="series"
                     />
                   )}
-                </Stack>
-              </Box>
+                </PillRow>
+              ),
+            },
+          ]}
+        />
 
-              <Box sx={{ flexGrow: 1 }} />
-              <Divider sx={{ mb: 2, mt: 1 }} />
-
-              {/* Actions Row */}
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{ flexWrap: "wrap", gap: 1 }}
-              >
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={onAddChapter}
-                >
-                  Add Chapter
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<UploadIcon />}
-                  onClick={onImportChapter}
-                >
-                  Import Chapter (ZIP)
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<EditIcon />}
-                  onClick={onEditSeries}
-                >
-                  Edit Series
-                </Button>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<DeleteIcon />}
-                  onClick={onDeleteSeries}
-                >
-                  Delete Series
-                </Button>
-              </Stack>
-            </Box>
-          </Grid>
-        </Grid>
-      </CardContent>
-    </Card>
+        <Stack
+          direction="row"
+          sx={{ flexWrap: "wrap", gap: 1, alignItems: "center", mt: 0.5 }}
+        >
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={onAddChapter}
+          >
+            Add chapter
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<UploadIcon />}
+            onClick={onImportChapter}
+          >
+            Import chapter (ZIP)
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<EditIcon />}
+            onClick={onEditSeries}
+          >
+            Edit series
+          </Button>
+          <IconButton
+            aria-label="more series actions"
+            aria-haspopup="true"
+            onClick={(e) => setMenuAnchor(e.currentTarget)}
+          >
+            <MoreVertIcon />
+          </IconButton>
+          <Menu
+            anchorEl={menuAnchor}
+            open={Boolean(menuAnchor)}
+            onClose={() => setMenuAnchor(null)}
+          >
+            <MenuItem
+              onClick={(e) => {
+                setMenuAnchor(null);
+                onDeleteSeries(e);
+              }}
+              sx={{ color: "error.main" }}
+            >
+              Delete series
+            </MenuItem>
+          </Menu>
+        </Stack>
+      </HeaderShell>
+    </Box>
   );
 };
 

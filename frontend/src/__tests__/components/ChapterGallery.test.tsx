@@ -137,7 +137,10 @@ describe("ChapterGallery Component", () => {
     expect(
       screen.getByRole("heading", { name: "Chapter 1" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("One Piece / Romance Dawn")).toBeInTheDocument();
+    expect(screen.getByText("Romance Dawn")).toBeInTheDocument();
+    expect(
+      screen.getByText("One Piece", { selector: "dd" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Page 1")).toBeInTheDocument();
   });
 
@@ -319,7 +322,7 @@ describe("ChapterGallery Component", () => {
     );
 
     const exportBtn = screen.getByRole("button", {
-      name: "Export Chapter (ZIP)",
+      name: "Export chapter (ZIP)",
     });
     fireEvent.click(exportBtn);
 

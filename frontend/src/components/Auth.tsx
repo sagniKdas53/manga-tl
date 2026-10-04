@@ -104,7 +104,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
               variant="h5"
               component="h2"
               gutterBottom
-              sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 700 }}
+              sx={{ fontWeight: 700 }}
             >
               {isLogin ? "Welcome Back" : "Create Account"}
             </Typography>
