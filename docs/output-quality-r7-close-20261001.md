@@ -233,13 +233,17 @@ differently in the export (the project.json elements above have none).
      editor. Test with a masked element (CodeRabbit, PR #152).
   3. Pipeline elements marked elliptical: the editor wraps them in the ellipse, the renderer in
      the rectangle (shape is sent only for hand-edited elements).
+     **Done 2026-10-03** (user chose "what you see is what you get"; PR #171): every elliptical
+     element carries the shape. One-time cost: each such page's next render cannot reuse its old one (one render, plus paid QA
+     unless edited by hand). A settings save re-renders nothing.
   4. The export ZIP still writes a text element's polygon as a "fallback plate", which an import
      turns into a patch. **Done 2026-10-03:** the import keeps the polygon on the element
      and makes no patch.
 - **H — parked review items (PR #152).** Validate `PUT /pages/{id}/scene` against the full JSON
   Schema (nothing calls it today). Fence a manual repaint's callback on a digest of the patches
   under it, so a patch hidden while the repaint runs does not come back. **Repaint fence done
-  2026-10-03** (`underlaySha256`); schema validation moves to the C + G packet with G2.
+  2026-10-03** (`underlaySha256`); schema validation (H1) moves to the C + G packet with G2.
+  It is small: the schema already exists (`contracts/page-scene-v1.schema.json`).
 - **I — self-hosted admin flag (added 2026-10-02, user).** One setting, on by default in the
   shipped compose files, that lets every signed-in user do every admin task. It is applied once, in
   the auth extractor. See the tracker's plan for 2026-10-03. **Done 2026-10-03** as
