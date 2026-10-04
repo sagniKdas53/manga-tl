@@ -252,6 +252,22 @@ async fn chapter_import_and_export_lifecycle() {
         "first imported page must have entered the pipeline"
     );
 
+    // #212: the importer owns the imported images. Job events go only to an image's owner, so
+    // ownerless imports never reached the importer's queue until a reload.
+    let owned_by_importer: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pages p JOIN images i ON i.id = p.image_id \
+         JOIN users u ON u.id = i.created_by \
+         WHERE p.chapter_id = $1 AND u.display_name = 'ImportExport'",
+    )
+    .bind(uuid::Uuid::parse_str(&chapter_id).unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        owned_by_importer, 2,
+        "every imported image must record the importing user as its owner"
+    );
+
     // Duplicate chapter number conflicts with Java's exact message.
     let archive2 = zip_of(vec![("a.png".into(), png_bytes([5, 5, 5]))], None);
     let body = multipart(
