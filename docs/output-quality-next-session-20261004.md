@@ -85,10 +85,12 @@ Details are in [the R7 close doc](output-quality-r7-close-20261001.md#follow-ups
 
 ## Things to know
 
-- **G3's one-time cost.** The check that stopped the 2026-09-30 re-render storm
-  (`reuse_unchanged_render`) sees every page with elliptical text as changed once. The next settings
-  save re-renders the whole library and queues a paid QA pass for each page. To avoid surprise,
-  re-render deliberately when you choose to, or expect it on the first settings save.
+- **G3's one-time cost, per page.** The check that stopped the 2026-09-30 re-render storm
+  (`reuse_unchanged_render`) cannot reuse the old render of a page with elliptical text, because its
+  scene changed. So each such page pays once, the next time it renders (Render now, Export, or the
+  sweep after an edit): one render, plus a paid QA pass unless it was edited by hand. It is not
+  library-wide. A settings save makes no page dirty (since 2026-09-30), and nothing else marks every
+  page. A bulk re-render of the library would pay it for every elliptical page at once.
 - **`SELF_HOSTED_ADMIN` is on by default** and sign-up is open. When the fresh prod stack is built,
   set it `false` if anyone outside can reach it.
 - **Fresh prod stack notes.** The main compose file mounts no ONNX files. A prod worker reads

@@ -62,9 +62,11 @@ Each item says whether it makes output better or is upkeep.
        scene of every page with elliptical pipeline text. The reader keeps serving each page's
        stored render, so nothing re-renders by itself; a page's next render or Export draws it
        again and queues a paid QA pass. The user accepted that over "no re-renders". **Caveat found
-       afterwards:** `reuse_unchanged_render` (the 2026-09-30 storm fix) sees each such page as
-       changed once, so the first settings save after deploy re-renders the whole library and
-       queues a paid QA pass for every page. The ZIP's per-layer text PNG also stops uppercasing elliptical text,
+       afterwards:** `reuse_unchanged_render` (the 2026-09-30 storm fix) cannot reuse such a page's
+       old render once, because its scene changed. That costs one render, plus a paid QA pass
+       unless the page was edited by hand, the next time the page renders. It is not
+       library-wide: a settings save makes no page dirty (since 2026-09-30, CodeRabbit on #172),
+       and nothing else marks every page. The ZIP's per-layer text PNG also stops uppercasing elliptical text,
        which neither the editor nor the server render did.
 5. **H1 and H2 (upkeep).**
    - H1: validate `PUT /pages/{id}/scene` against the full JSON Schema.

@@ -234,7 +234,8 @@ differently in the export (the project.json elements above have none).
   3. Pipeline elements marked elliptical: the editor wraps them in the ellipse, the renderer in
      the rectangle (shape is sent only for hand-edited elements).
      **Done 2026-10-03** (user chose "what you see is what you get"; PR #171): every elliptical
-     element carries the shape. One-time cost: the next settings save re-renders the library.
+     element carries the shape. One-time cost: each such page's next render cannot reuse its old one (one render, plus paid QA
+     unless edited by hand). A settings save re-renders nothing.
   4. The export ZIP still writes a text element's polygon as a "fallback plate", which an import
      turns into a patch. **Done 2026-10-03:** the import keeps the polygon on the element
      and makes no patch.
