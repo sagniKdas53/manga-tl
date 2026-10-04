@@ -19,13 +19,13 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteIcon from "@mui/icons-material/Delete";
-import ColorizeIcon from "@mui/icons-material/Colorize";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import UndoIcon from "@mui/icons-material/Undo";
 import OpenWithIcon from "@mui/icons-material/OpenWith";
 import CropIcon from "@mui/icons-material/Crop";
 import TextFieldsIcon from "@mui/icons-material/TextFields";
+import type { ReviewRow } from "../hooks/useReviewTally";
 import CropSquareIcon from "@mui/icons-material/CropSquare";
 import CallMergeIcon from "@mui/icons-material/CallMerge";
 import Tabs from "@mui/material/Tabs";
@@ -487,8 +487,10 @@ export interface ReaderRightSidebarProps {
   isRedoingRegionOcr: boolean;
   handleRedoRegion: (region: OcrRegion, type: "ocr" | "translation") => void;
   isRedoingRegionTl: boolean;
-  /** The page shown; the Review tab keeps a tally of what was settled on it. */
-  pageId?: string | null;
+  /** The page's review tally from the Reader: every issue seen here, settled or not. */
+  reviewRows?: ReviewRow[];
+  /** No translation layer is shown, so the Review tab has nothing to judge. */
+  reviewHidden?: boolean;
   /** Regions needing a person, in reading order. */
   issues: RegionIssue[];
   onSelectIssue: (issue: RegionIssue) => void;
@@ -564,7 +566,8 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     handleRedoRegion,
     isRedoingRegionTl,
     issues,
-    pageId,
+    reviewRows = [],
+    reviewHidden = false,
     onSelectIssue,
     onStepIssue,
     handleRegionAction,
@@ -591,8 +594,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     [ocrRegions],
   );
 
+  // Rows include settled issues, so settling the last one keeps Review open on "All settled".
   const tab: SidebarTab =
-    pickedTab ?? (issues.length > 0 ? "review" : "layers");
+    pickedTab ?? (reviewRows.length > 0 ? "review" : "layers");
 
   return (
     <Box
@@ -668,8 +672,8 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
           >
             {tab === "review" && (
               <ReviewPanel
-                issues={issues}
-                pageId={pageId ?? null}
+                rows={reviewRows}
+                hidden={reviewHidden}
                 onSelect={onSelectIssue}
               />
             )}
@@ -709,21 +713,10 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       Add mask
                     </Button>
                     <Button
-                      variant="outlined"
-                      size="small"
-                      startIcon={<ColorizeIcon />}
-                      sx={toolButtonSx}
-                      onClick={() => handleLaunchEyeDropper("backgroundColor")}
-                      disabled={!selectedItem || !selectedItem.isLayerElement}
-                      title="Select an element, then sample a colour from the screen for its background"
-                    >
-                      Pick colour
-                    </Button>
-                    <Button
                       variant={mergeMode ? "contained" : "outlined"}
                       size="small"
                       startIcon={<CallMergeIcon />}
-                      sx={toolButtonSx}
+                      sx={[toolButtonSx, { gridColumn: "1 / -1" }]}
                       onClick={onToggleMergeMode}
                       disabled={ocrRegions.length < 2}
                       title="Join fragments that belong to one text block, then clean and translate them as one"

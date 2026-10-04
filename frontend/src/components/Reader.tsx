@@ -74,6 +74,7 @@ import {
 import JSZip from "jszip";
 import { useNotifications } from "./useNotifications";
 import { useStableCallbacks } from "../hooks/useStableCallbacks";
+import { useReviewTally } from "../hooks/useReviewTally";
 import { useToast } from "./ToastContext";
 import CircularProgress from "@mui/material/CircularProgress";
 
@@ -1084,15 +1085,29 @@ export const Reader: React.FC<ReaderProps> = ({
     // fontsVersion is not read: a change means the same text now measures differently.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layers, textBoxGeometry, fontsVersion]);
+  // Issues are judged against what is drawn: with every translation layer hidden there is
+  // nothing to judge, and the review tally freezes instead of reading that as all settled.
+  const reviewable = layers.some(
+    (l) => l.layer.type === "translation" && l.layer.visible === true,
+  );
   const issues = React.useMemo(
     () =>
-      layers.some(
-        (l) => l.layer.type === "translation" && l.layer.visible === true,
-      )
+      reviewable
         ? regionIssues(ocrRegions, issueElements, overflowingElementIds)
         : [],
-    [layers, ocrRegions, issueElements, overflowingElementIds],
+    [reviewable, ocrRegions, issueElements, overflowingElementIds],
   );
+  const regionIds = React.useMemo(
+    () => new Set(ocrRegions.map((r) => r.id)),
+    [ocrRegions],
+  );
+  const reviewTally = useReviewTally({
+    pageId: selectedPage?.id ?? null,
+    issues,
+    regionIds,
+    reviewable,
+  });
+  const markRegionSettled = reviewTally.markActedOn;
 
   const selectRegionForReview = useCallback(
     (r: OcrRegion) => {
@@ -3615,6 +3630,8 @@ export const Reader: React.FC<ReaderProps> = ({
     forceType?: "ocr" | "translation",
   ) => {
     const type = forceType || (showTranslations ? "translation" : "ocr");
+    // A redo may replace the region; the Review tab still counts it as dealt with.
+    markRegionSettled(r.id);
     if (type === "ocr") setIsRedoingRegionOcr(true);
     else setIsRedoingRegionTl(true);
 
@@ -3739,6 +3756,7 @@ export const Reader: React.FC<ReaderProps> = ({
       } else {
         await postRegionReview(r, action);
       }
+      markRegionSettled(r.id);
       // Settled: move on to the next issue rather than leaving an empty inspector.
       const remaining = issues.filter((i) => i.region.id !== r.id);
       if (action !== "fit" && remaining.length > 0) {
@@ -3788,6 +3806,7 @@ export const Reader: React.FC<ReaderProps> = ({
         showError,
       );
       await postRegionReview(issue.region, "accept");
+      markRegionSettled(issue.region.id);
       refreshAfterOverlayChange();
     } catch (err) {
       console.error("Saving the typed translation failed:", err);
@@ -5180,7 +5199,8 @@ export const Reader: React.FC<ReaderProps> = ({
         {showRightSidebar && !inpaintingView && (
           <ReaderRightSidebar
             {...rightSidebarHandlers}
-            pageId={selectedPage?.id ?? null}
+            reviewRows={reviewTally.rows}
+            reviewHidden={!reviewable}
             selectedItem={selectedItem}
             setSelectedItem={setSelectedItem}
             activeLayerId={activeLayerId}

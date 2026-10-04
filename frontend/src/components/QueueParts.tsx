@@ -104,12 +104,6 @@ export const PipelineStrip: React.FC<{
   );
 };
 
-const OUTCOME_TEXT: Record<PageOutcome, string> = {
-  done: "Done",
-  review: "Needs review",
-  failed: "QA failed",
-};
-
 const OUTCOME_COLOR: Record<PageOutcome, string> = {
   done: "var(--text-muted)",
   review: "var(--warning)",
@@ -179,8 +173,9 @@ export const FinishedList: React.FC<{
               const ago = Number.isFinite(page.at)
                 ? formatElapsed(new Date(page.at).toISOString(), now)
                 : null;
-              const said =
-                page.outcome === "done" ? OUTCOME_TEXT.done : page.title;
+              // A problem is named in the backend's own words ("Manual Review Needed",
+              // "Re-render Failed"); a clean finish is just Done.
+              const said = page.outcome === "done" ? "Done" : page.title;
               return (
                 <Box
                   key={page.id}
@@ -210,9 +205,7 @@ export const FinishedList: React.FC<{
                         color: OUTCOME_COLOR[page.outcome],
                       }}
                     >
-                      {page.outcome === "done"
-                        ? OUTCOME_TEXT.done
-                        : `${OUTCOME_TEXT[page.outcome]}: ${page.title}`}
+                      {said}
                     </Typography>
                   </Box>
                   {ago && (

@@ -48,6 +48,16 @@ describe("finishedPages", () => {
     expect(rows[0].pageLabel).toBe("Page 7");
   });
 
+  it("ignores warnings sent while a page is still running", () => {
+    const rows = finishedPages([
+      note("n2", "img1", "WARNING", "Cleanup Review Required", 2000),
+      note("n1", "img2", "ERROR", "Re-render Failed", 1000),
+    ]);
+    expect(rows.map((r) => [r.imageId, r.outcome])).toEqual([
+      ["img2", "failed"],
+    ]);
+  });
+
   it("links a page to the Reader only when its chapter is known", () => {
     rememberPageLink("img1", "ch-1", 7);
     rememberPageLink("img2", undefined, 3);

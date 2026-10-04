@@ -11,6 +11,7 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import SidebarSection from "./SidebarSection";
+import type { ReviewRow } from "../hooks/useReviewTally";
 import type { OcrRegion } from "../types";
 import {
   ISSUE_ACTION_LABELS,
@@ -53,11 +54,6 @@ const KIND_LABELS: Record<IssueKind, string> = {
   overflow: "Doesn't fit",
 };
 
-interface ReviewRow {
-  issue: RegionIssue;
-  settled: boolean;
-}
-
 /**
  * The Review tab: everything on the page that needs a person, in reading order, numbered as the
  * balloons are numbered on the page.
@@ -65,58 +61,36 @@ interface ReviewRow {
  * Reader review (2026-10-04) asked for a better way through a page's issues. A settled issue
  * used to vanish from the list, so after three fixes there was no telling how far you had got.
  * The list now keeps what it has shown on this page, ticks off what you settle, and draws the
- * page's progress as one segment per issue. J and K step through the open ones (Reader.tsx).
+ * page's progress as one segment per issue. The tally itself lives in the Reader
+ * (useReviewTally), because this tab unmounts while an issue is open in the inspector. J and K
+ * step through the open ones (Reader.tsx).
  */
 export const ReviewPanel: React.FC<{
-  issues: RegionIssue[];
-  /** The page these issues belong to. A new page starts a new tally. */
-  pageId: string | null;
+  /** Every issue seen on this page, settled or not, in reading order (useReviewTally). */
+  rows: ReviewRow[];
+  /** No translation layer is shown, so nothing can be judged. */
+  hidden?: boolean;
   onSelect: (issue: RegionIssue) => void;
-}> = ({ issues, pageId, onSelect }) => {
-  // Every issue seen on this page so far, by region. Adjusted during render (React's pattern
-  // for state that follows a prop), so the tally is never a frame behind the list.
-  const [tally, setTally] = React.useState<{
-    pageId: string | null;
-    seen: Map<string, RegionIssue>;
-  }>(() => ({
-    pageId,
-    seen: new Map(issues.map((i) => [i.region.id, i])),
-  }));
-  if (tally.pageId !== pageId) {
-    setTally({
-      pageId,
-      seen: new Map(issues.map((i) => [i.region.id, i])),
-    });
-  } else if (issues.some((i) => tally.seen.get(i.region.id) !== i)) {
-    const seen = new Map(tally.seen);
-    issues.forEach((i) => seen.set(i.region.id, i));
-    setTally({ pageId, seen });
-  }
-
+}> = ({ rows, hidden = false, onSelect }) => {
   const [kind, setKind] = React.useState<IssueKind | "all">("all");
 
-  const open = new Set(issues.map((i) => i.region.id));
-  const rows: ReviewRow[] = [...tally.seen.values()]
-    .map((issue) => ({ issue, settled: !open.has(issue.region.id) }))
-    .sort(
-      (a, b) =>
-        (a.issue.region.bubbleReadingOrder ?? Infinity) -
-        (b.issue.region.bubbleReadingOrder ?? Infinity),
-    );
-  const settledCount = rows.filter((r) => r.settled).length;
+  const issues = rows.filter((r) => !r.settled).map((r) => r.issue);
+  const settledCount = rows.length - issues.length;
   const kinds = [...new Set(issues.map((i) => i.kind))];
   const activeKind = kind !== "all" && kinds.includes(kind) ? kind : "all";
   const shown = rows.filter(
     (r) => activeKind === "all" || r.issue.kind === activeKind,
   );
 
-  if (rows.length === 0) {
+  if (hidden || rows.length === 0) {
     return (
       <Typography
         component="p"
         sx={{ ...smallTextSx, color: "var(--text-muted)", py: 1 }}
       >
-        Nothing to review on this page.
+        {hidden
+          ? "Show a translation layer to review this page."
+          : "Nothing to review on this page."}
       </Typography>
     );
   }

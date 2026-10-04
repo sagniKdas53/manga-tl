@@ -5,10 +5,27 @@ import type { Notification } from "../components/useNotifications";
  * already keeps (reader review, 2026-10-04: "just add completed here").
  *
  * The notifications are the source because they are held at the app root for the whole
- * session, while the queue drawer unmounts whenever the Reader is open. A page's last
- * notification says how it ended: Page Processing Complete, or one of QA's warnings (review
- * needed, QA failures, manual review), or QA Failed. Export notifications are not pages.
+ * session, while the queue drawer unmounts whenever the Reader is open.
+ *
+ * Only notifications that end a page's run count (FINAL_TITLES). The backend also sends page
+ * warnings mid-run, "Cleanup Review Required" and "No Translatable Text", and listing those
+ * would put a page under Done while it is still being worked on.
  */
+
+/**
+ * The titles that end a page's run, as the backend sends them: QA's callback outcomes
+ * (backend-rust/src/routes/internal.rs) and the failed re-render after a QA correction.
+ * The queue already keys off "Page Processing Complete" the same way.
+ */
+const FINAL_TITLES = new Set([
+  "Page Processing Complete",
+  "Processing Complete, QA Skipped",
+  "QA Incomplete — Review Needed",
+  "Processing Finished With QA Failures",
+  "Manual Review Needed",
+  "QA Failed",
+  "Re-render Failed",
+]);
 
 export interface PageLink {
   chapterId: string;
@@ -75,7 +92,7 @@ export const finishedPages = (
   const seen = new Set<string>();
   const rows: FinishedPage[] = [];
   for (const n of notifications) {
-    if (!n.imageId || String(n.type).startsWith("EXPORT")) continue;
+    if (!n.imageId || !FINAL_TITLES.has(n.title)) continue;
     if (seen.has(n.imageId)) continue;
     seen.add(n.imageId);
     rows.push({

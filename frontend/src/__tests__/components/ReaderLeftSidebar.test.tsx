@@ -176,13 +176,13 @@ describe("ReaderLeftSidebar Component", () => {
 
   it("sets how far ahead to load with a stepper, apart from zoom", () => {
     render(<ReaderLeftSidebar {...defaultProps} />);
-    const loading = screen.getByRole("region", { name: "Loading" });
+    const loading = screen.getByRole("group", { name: "Loading" });
     fireEvent.click(
       within(loading).getByRole("button", { name: "Load more pages ahead" }),
     );
     expect(defaultProps.setPrefetchAhead).toHaveBeenCalledWith(3);
     // The zoom group holds no prefetch control.
-    const zoom = screen.getByRole("region", { name: "Zoom" });
+    const zoom = screen.getByRole("group", { name: "Zoom" });
     expect(within(zoom).queryByText(/ahead/i)).toBeNull();
   });
 });
