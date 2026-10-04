@@ -37,6 +37,10 @@ tracker is done.
 
 ## 1. The C + G packet (write first, no code)
 
+**Written 2026-10-04:** [output-quality-cg-packet-20261004.md](output-quality-cg-packet-20261004.md),
+with three decisions for the user. The user also set A (cleanup masks) as an edge case: a small
+fix, not a project. Build order stays A, B, C + G.
+
 The goal is one packet that makes the editor and the export draw text the same way, then adds the
 text-style work. Write it as a plan doc with test pages and gates, and say for each part whether it
 makes output better or is upkeep.
