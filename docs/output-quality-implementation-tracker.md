@@ -131,7 +131,8 @@ to Node 24.
    missing from the scene, elliptical pipeline elements, and the export ZIP's fallback plate.
 4. **F — Photoshop-style layers.**
 5. **E — automatic angles** (`AUDIT-R23`).
-6. **M9** (validate, regenerate, promote) after these, as decided 2026-09-28.
+6. **M9** (validate, regenerate, promote) after these, as decided 2026-09-28, and after the rest
+   of corpus-v2 (user, 2026-10-02 late; see the plan for 2026-10-03).
 
 **Waiting on you:**
 - Production (`~/Documents/docker-composes/manga-tl` on chrome-box) still runs the pre-R7 build.

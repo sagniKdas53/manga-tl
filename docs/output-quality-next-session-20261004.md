@@ -11,8 +11,9 @@ afternoon item, which is the first job below.
 1. **Write the C + G packet** (no code yet; output). This is the plan's afternoon item.
 2. Then the follow-ups in order of output value: **A** cleanup masks, **B** one balloon one text
    unit, **C + G** typesetting (from the packet), **F** Photoshop-style layers, **E** automatic
-   angles, then **M9**.
-3. After the tracker: the rest of corpus-v2, the corpus rebuild, and a fresh prod stack.
+   angles.
+3. After the tracker: the rest of corpus-v2, then **M9** (validate, regenerate the corpus, promote;
+   this is the corpus rebuild), then a fresh prod stack. The user set this order on 2026-10-02.
 
 ## What 2026-10-03 did
 
@@ -81,7 +82,6 @@ Details are in [the R7 close doc](output-quality-r7-close-20261001.md#follow-ups
   a merge that survives a reload.
 - **E — automatic angles (output, `AUDIT-R23`).** OCR has the text angle in its quads but writes
   `rotation: 0`.
-- **M9** — validate, regenerate, promote.
 
 ## Things to know
 
