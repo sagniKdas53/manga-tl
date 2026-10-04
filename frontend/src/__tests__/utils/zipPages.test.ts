@@ -31,6 +31,38 @@ describe("zipPages: the gallery shows what the backend would import", () => {
     ]);
   });
 
+  it("matches archive.rs natural_cmp case for case", () => {
+    // The cases from archive.rs's own tests.
+    const sorted = (names: string[]) => [...names].sort(naturalCompare);
+    expect(naturalCompare("007.png", "8.png")).toBeLessThan(0);
+    expect(naturalCompare("7.png", "008.png")).toBeLessThan(0);
+    expect(naturalCompare("010.png", "9.png")).toBeGreaterThan(0);
+    expect(naturalCompare("007.png", "7.png")).not.toBe(0);
+    expect(
+      sorted(["ch1/10.jpg", "ch1/2.jpg", "ch10/1.jpg", "ch2/1.jpg"]),
+    ).toEqual(["ch1/2.jpg", "ch1/10.jpg", "ch2/1.jpg", "ch10/1.jpg"]);
+    expect(sorted(["Page10.png", "page2.png", "PAGE1.png"])).toEqual([
+      "PAGE1.png",
+      "page2.png",
+      "Page10.png",
+    ]);
+    expect(naturalCompare("a.png", "A.png")).not.toBe(0);
+    expect(
+      naturalCompare(
+        "9999999999999999999999999999999999999999.png",
+        "10000000000000000000000000000000000000000.png",
+      ),
+    ).toBeLessThan(0);
+  });
+
+  it("orders non-ASCII names by byte, as the backend does, not by locale", () => {
+    // A locale collator puts é next to e, before z; the backend compares UTF-8 bytes.
+    expect([..."é.jpg z.jpg".split(" ")].sort(naturalCompare)).toEqual([
+      "z.jpg",
+      "é.jpg",
+    ]);
+  });
+
   it("skips macOS forks and hidden files, like archive.rs keep", () => {
     expect(keepEntry("__MACOSX/._1.png")).toBe(false);
     expect(keepEntry("chapter/.DS_Store")).toBe(false);
