@@ -132,13 +132,14 @@ export const theme = createTheme({
               }),
             },
             // Every other action is quiet: a filled grey in dark mode instead of a pink
-            // outline. Outlined buttons were the main clutter: every header had four.
+            // outline. Outlined buttons were the main clutter: every header had four. Only the
+            // primary colour loses its tint; an outlined error, warning or success button
+            // elsewhere keeps its colour, because there the colour is the message.
             {
               props: { variant: "outlined" },
               style: t.applyStyles("dark", {
                 backgroundColor: "#313131",
                 borderColor: "transparent",
-                color: t.vars.palette.text.primary,
                 "&:hover": {
                   backgroundColor: "#3b3b3b",
                   borderColor: "transparent",
@@ -150,9 +151,9 @@ export const theme = createTheme({
               }),
             },
             {
-              props: { variant: "outlined", color: "error" },
+              props: { variant: "outlined", color: "primary" },
               style: t.applyStyles("dark", {
-                color: t.vars.palette.error.main,
+                color: t.vars.palette.text.primary,
               }),
             },
           ],
@@ -161,17 +162,22 @@ export const theme = createTheme({
     },
     MuiChip: {
       styleOverrides: {
-        // Metadata pills: one neutral style, no outline. State is said in words, not fills.
+        // Metadata pills: one neutral style, no outline. Only the default colour is restyled:
+        // a coloured chip elsewhere (the Reader's review list, Settings) keeps its colour.
         root: ({ theme: t }) => ({
           borderRadius: 4,
           fontWeight: 500,
-          ...t.applyStyles("dark", {
-            backgroundColor: "#3b3b3b",
-            color: "#d9d9d9",
-          }),
+          variants: [
+            {
+              props: { color: "default" },
+              style: t.applyStyles("dark", {
+                backgroundColor: "#3b3b3b",
+                color: "#d9d9d9",
+                borderColor: "transparent",
+              }),
+            },
+          ],
         }),
-        outlined: ({ theme: t }) =>
-          t.applyStyles("dark", { borderColor: "transparent" }),
       },
     },
     MuiCard: {

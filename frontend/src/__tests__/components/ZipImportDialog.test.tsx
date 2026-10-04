@@ -173,6 +173,84 @@ describe("ZipImportDialog", () => {
     });
   });
 
+  it("sends the archive untouched when no page was removed or moved", async () => {
+    const file = await archiveFile();
+    render(
+      <ZipImportDialog
+        open
+        onClose={vi.fn()}
+        user={user}
+        series={series}
+        initialFile={file}
+        onImported={vi.fn()}
+      />,
+    );
+    await waitFor(() => screen.getByText("3 of 3 pages"));
+    fireEvent.click(screen.getByRole("button", { name: "Import 3 pages" }));
+
+    await waitFor(() =>
+      expect(mockSafeFetch).toHaveBeenCalledWith(
+        "/api/series/s1/chapters/import",
+        expect.anything(),
+      ),
+    );
+    const [, init] = mockSafeFetch.mock.calls.find(([url]) =>
+      String(url).endsWith("/chapters/import"),
+    )!;
+    const sent = (init.body as FormData).get("file") as File;
+    expect(sent.name).toBe("Romance Dawn.zip");
+    expect(sent.size).toBe(file.size);
+  });
+
+  it("does not create a second series when a failed upload is retried", async () => {
+    let uploads = 0;
+    mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/settings") return ok({});
+      if (url.startsWith("/api/series?")) return ok({ content: [series] });
+      if (url === "/api/series" && init?.method === "POST")
+        return ok({ ...series, id: "new", title: "Romance Dawn" });
+      if (url.endsWith("/chapters/import")) {
+        uploads += 1;
+        return uploads === 1
+          ? Promise.resolve({
+              ok: false,
+              json: () => Promise.resolve({}),
+              text: () => Promise.resolve('{"message":"storage unavailable"}'),
+            })
+          : ok({ id: "c1", chapterNumber: 1 });
+      }
+      return Promise.reject(new Error(`unexpected ${url}`));
+    });
+    const onImported = vi.fn();
+    render(
+      <ZipImportDialog
+        open
+        onClose={vi.fn()}
+        user={user}
+        initialFile={await archiveFile()}
+        onImported={onImported}
+      />,
+    );
+    await waitFor(() => screen.getByText("3 of 3 pages"));
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Into" }));
+    fireEvent.click(await screen.findByRole("option", { name: "New series…" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Import 3 pages" }));
+    expect(await screen.findByText("storage unavailable")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Import 3 pages" }));
+    await waitFor(() => expect(onImported).toHaveBeenCalled());
+
+    const creates = mockSafeFetch.mock.calls.filter(
+      ([url, init]) => url === "/api/series" && init?.method === "POST",
+    );
+    expect(creates).toHaveLength(1);
+    expect(mockSafeFetch).toHaveBeenLastCalledWith(
+      "/api/series/new/chapters/import",
+      expect.anything(),
+    );
+  });
+
   it("refuses a page-project archive and says where it goes instead", async () => {
     const zip = new JSZip();
     zip.file("project.json", "{}");

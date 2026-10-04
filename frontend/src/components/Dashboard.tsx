@@ -445,7 +445,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               : [series, ...prev],
           );
           showToast(
-            `Imported ${pageCount} pages into ${series.title} as chapter ${chapter.chapterNumber}.`,
+            `Imported ${pageCount} pages into ${series.title} as chapter ${chapter.chapterNumber}. Processing has started; reload to see it in the queue.`,
             "success",
           );
           openSeries(series);

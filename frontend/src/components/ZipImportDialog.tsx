@@ -128,6 +128,7 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
     useState<ModelOverridesValue>(EMPTY_OVERRIDES);
 
   const [importing, setImporting] = useState(false);
+  const [buildPercent, setBuildPercent] = useState<number | null>(null);
   const [importError, setImportError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -247,6 +248,29 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
     };
   }, [open, isNewSeries, targetSeries, user.token]);
 
+  // While the dialog is open, a file dropped anywhere (on the backdrop, between tiles) is taken
+  // as "choose another file" instead of making the browser open it and leave the app.
+  const pickFileRef = useRef<(next: File | undefined) => void>(() => {});
+  useEffect(() => {
+    if (!open) return;
+    const hasFiles = (e: DragEvent) =>
+      Array.from(e.dataTransfer?.types ?? []).includes("Files");
+    const onDragOver = (e: DragEvent) => {
+      if (hasFiles(e)) e.preventDefault();
+    };
+    const onDrop = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      if (!importing) pickFileRef.current(e.dataTransfer?.files?.[0]);
+    };
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [open, importing]);
+
   // --- editing the page list ---------------------------------------------------------------
 
   const kept = items.filter((item) => !item.removed);
@@ -332,10 +356,27 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
     setImportError("");
     setImporting(true);
     try {
-      const into = isNewSeries ? await createSeries() : targetSeries!;
-      const archive = await buildOrderedArchive(kept);
+      let into: Series;
+      if (isNewSeries) {
+        into = await createSeries();
+        // Point the dialog at the series just made, so a retry after a failed upload imports
+        // into it instead of creating a second one.
+        setSeriesOptions((prev) => [into, ...prev]);
+        setDestination(into.id);
+      } else {
+        into = targetSeries!;
+      }
       const formData = new FormData();
-      formData.append("file", archive, `${titleFromFileName(file.name)}.zip`);
+      if (removedCount === 0 && !isReordered) {
+        // Nothing was changed: send the archive as it came, without unpacking and re-zipping.
+        formData.append("file", file, file.name);
+      } else {
+        const archive = await buildOrderedArchive(kept, (percent) =>
+          setBuildPercent(Math.round(percent)),
+        );
+        setBuildPercent(null);
+        formData.append("file", archive, `${titleFromFileName(file.name)}.zip`);
+      }
       formData.append("chapterNumber", String(chapterNum));
       formData.append("title", chapterTitle);
       const o = overrides;
@@ -379,6 +420,7 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
       setImportError(err instanceof Error ? err.message : String(err));
     } finally {
       setImporting(false);
+      setBuildPercent(null);
     }
   };
 
@@ -392,6 +434,9 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
     }
     void loadFile(next);
   };
+  useEffect(() => {
+    pickFileRef.current = pickFile;
+  });
 
   const inherited = {
     ocrProvider: targetSeries?.ocrProvider || settings?.ocrProvider,
@@ -479,12 +524,6 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
         {/* 1. The pages ------------------------------------------------------------------ */}
         {items.length === 0 ? (
           <Box
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              pickFile(e.dataTransfer.files?.[0]);
-            }}
             sx={{
               border: "1.5px dashed",
               borderColor: "divider",
@@ -616,9 +655,12 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
                       setDragId(item.id);
                       e.dataTransfer.effectAllowed = "move";
                     }}
-                    onDragEnter={() => setDropTargetId(item.id)}
+                    onDragEnter={() => dragId && setDropTargetId(item.id)}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => {
+                      // Only a page being moved is handled here. A file dragged in from
+                      // outside falls through to the dialog's window-level drop handler.
+                      if (!dragId) return;
                       e.preventDefault();
                       e.stopPropagation();
                       dropOn(item.id);
@@ -657,6 +699,8 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
                         component="img"
                         src={item.thumbUrl}
                         alt=""
+                        loading="lazy"
+                        decoding="async"
                         draggable={false}
                         sx={{
                           width: "100%",
@@ -954,7 +998,9 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
           }
         >
           {importing
-            ? "Importing…"
+            ? buildPercent !== null
+              ? `Preparing pages… ${buildPercent}%`
+              : "Importing…"
             : kept.length > 0
               ? `Import ${kept.length} ${kept.length === 1 ? "page" : "pages"}`
               : "Import"}

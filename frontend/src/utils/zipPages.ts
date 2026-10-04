@@ -50,7 +50,8 @@ export interface ArchivePage {
   name: string;
   extension: string;
   thumbUrl: string;
-  bytes: Uint8Array;
+  /** The page's bytes, read from the archive only when an import needs them. */
+  read: () => Promise<Uint8Array>;
 }
 
 export interface ArchiveContents {
@@ -73,19 +74,19 @@ export const readArchivePages = async (
     .filter((entry) => extensionOf(entry.name))
     .sort((a, b) => naturalCompare(a.name, b.name));
 
+  // One copy per page in memory: JSZip's, plus a Blob behind each thumbnail. The bytes are not
+  // also held as an array; `read` pulls them from the archive at import time.
   const pages = await Promise.all(
     images.map(async (entry) => {
       const extension = extensionOf(entry.name)!;
-      const bytes = await entry.async("uint8array");
-      const blob = new Blob([bytes as BlobPart], {
-        type: MIME_BY_EXTENSION[extension],
-      });
+      const raw = await entry.async("blob");
+      const blob = new Blob([raw], { type: MIME_BY_EXTENSION[extension] });
       return {
         id: entry.name,
         name: entry.name.split("/").pop() || entry.name,
         extension,
         thumbUrl: URL.createObjectURL(blob),
-        bytes,
+        read: () => entry.async("uint8array"),
       };
     }),
   );
@@ -103,16 +104,20 @@ export const releaseArchivePages = (pages: ArchivePage[]) => {
  */
 export const buildOrderedArchive = async (
   pages: ArchivePage[],
+  /** 0–100. Rebuilding a 400-page chapter takes about 15 s on a laptop, so say how far it got. */
+  onProgress?: (percent: number) => void,
 ): Promise<Blob> => {
   const zip = new JSZip();
   const width = Math.max(4, String(pages.length).length);
-  pages.forEach((page, index) => {
+  for (const [index, page] of pages.entries()) {
     zip.file(
       `${String(index + 1).padStart(width, "0")}${page.extension}`,
-      page.bytes,
+      await page.read(),
     );
-  });
-  return zip.generateAsync({ type: "blob", compression: "STORE" });
+  }
+  return zip.generateAsync({ type: "blob", compression: "STORE" }, (meta) =>
+    onProgress?.(meta.percent),
+  );
 };
 
 export const isChapterArchiveFile = (file: File): boolean =>
