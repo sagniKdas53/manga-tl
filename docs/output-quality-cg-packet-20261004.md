@@ -21,16 +21,27 @@ All numbers are from the laptop's dev database (153 pages, 865 translated text e
 270 Torii bundles in `corpus/samples/*/sample*/torii/metadata.json`. Nothing was changed.
 
 **1. The balloon shape is the biggest remaining mismatch.** The editor fits text into the
-element's `mask_polygon` (the balloon outline the worker found) when the polygon is at least as
-wide as the text box. The export never sees the polygon, because the page scene does not carry it,
+element's `mask_polygon` when the polygon is at least as wide as the text box. Every translated
+element on this database has one, of two kinds: 503 are traced balloon outlines from the bubble
+detector, and 362 are rectangle-like (the text's bbox, or the padded rounded "cover" shape the
+worker draws round it). The export never sees the polygon, because the page scene does not carry it,
 so it fits into the plain rectangle or ellipse. Measured by running the editor's own `elementFit`
 in Chromium with Comic Neue loaded, once with the polygon and once without:
 - **425 of 865 elements (49 %) on 132 of 153 pages differ.** 373 get a different font size, and 52
-  the same size but different line breaks.
-- Where the size differs, the editor's text is usually larger: median 1.08×, from 0.94× to 1.18×
-  (10th to 90th percentile).
-- The R7 close doc filed this as "test with a masked element". It is not an edge case: every
-  translated element on this database has a polygon.
+  the same size but different line breaks. 301 of the 425 have a traced balloon outline, 124 a
+  rectangle-like one.
+- **Elliptical elements** (315 with a size change): the editor's text is larger on 288 of them,
+  median 1.10× (1.02× to 1.19×, 10th to 90th percentile).
+- **Rectangular elements** (58 with a size change): the editor's text is smaller on all 58, median
+  0.94× (0.84× to 0.96×). The fitter clamps the polygon to the box, so a polygon can only narrow a
+  rectangle's lines.
+- The R7 close doc filed this as "test with a masked element". It is not an edge case.
+
+**What this means for G3 (2026-10-03).** G3 made the export wrap elliptical elements in the
+ellipse, on the belief that the editor does. The editor does so only when the polygon is ignored:
+for 96 of the 682 elliptical elements. For the other 586 it wraps in the polygon. So G3 matched the
+editor on those 96 only; on the rest, the export moved from the rectangle to the ellipse while the
+editor stayed on the polygon.
 
 **2. Outline width: ours is a fixed 0.18 × font px; Torii's grows more slowly.** Torii's
 `lineWidth` is about 3 + font px ÷ 10 (median 4 px under 20 px text, 6 at 20–39, 8 at 40–59, 10 at
@@ -49,7 +60,7 @@ have one more than 1 px thicker.
 **3. Outline colour: no change proposed.** Ours is the local background colour the worker samples.
 That is the rule read from Torii's own client on 2026-09-18 (tracker row R2), and the bundles agree:
 2,252 of 2,880 strokes are white, 221 near-white, 178 black, 9 near-black and 220 (8 %) other
-colours. Ours has a mid-grey outline on about 5 % of elements, the same kind of thing.
+colours. Ours samples the same way, so some outlines are mid-grey on both.
 
 **4. The plate colour is barely used.** Besides the outline, `background_color` fills the plate
 when you choose "cover with a plain mask" (`plain_plate_cleanup`) and the per-layer mask in the
@@ -151,7 +162,7 @@ G2, and the outline width if chosen, change the scene of nearly every page:
 - **Ch. 6 p. 1**: large 172 px text, eight editor lines against six in the export before G1.
 - **The six fixtures**: sample177, sample222, sample61, sample99, sample93, sample83.
 - **One balloon page per language** from the short list: sample7 (ja), sample197 (ko), sample641
-  (zh). The six are mostly free-standing text with few polygons.
+  (zh). The six are mostly free-standing text, so they have few traced balloon outlines.
 - **An elliptical and a rectangular element with a polygon**, and one plain-mask element (for C).
 
 ## Order when it is built
@@ -164,10 +175,13 @@ G2, and the outline width if chosen, change the scene of nearly every page:
 ## Decisions for you
 
 - **D1: which way do the editor and the export agree?**
-  - (a) The export follows the editor and fits into the balloon shape. Text on about half the
-    elements gets the editor's larger size, and what you see in the editor is what you get, as you
-    chose for G3. **Recommended.**
-  - (b) The editor stops using the polygon. The editor's text shrinks to match the export on
-    those elements, and no contract change is needed.
+  - (a) The export follows the editor and fits into the polygon. On the export, elliptical text
+    grows (median 1.10×) and rectangular text shrinks a little (0.94×), on about half the
+    elements. What you see in the editor is what you get, which is what you chose G3 for; G3's
+    ellipse then decides only the 96 elliptical elements whose polygon is ignored.
+    **Recommended**, because the editor is what you have been judging.
+  - (b) The editor stops using the polygon and wraps in the rectangle or ellipse, as the export
+    does. The editor's elliptical text shrinks and its rectangular text grows a little, and no
+    contract change is needed. G3 then becomes the full match.
 - **D2: outline width.** Keep 0.18 × font px, or Torii's 3 + px ÷ 10.
 - **D3: the background colour split.** Build it, defer it until plain mask needs it, or drop it.
