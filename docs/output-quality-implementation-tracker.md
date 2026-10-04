@@ -2,7 +2,7 @@
 
 Start with the current checkpoint below and the [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md). The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
 
-Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section, and the [plan for 2026-10-03](#plan-for-2026-10-03-user-2026-10-02-late) is done except its afternoon item; **start with the [2026-10-04 handoff](output-quality-next-session-20261004.md)**. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25-ocr-threshold-added-2026-09-26). Read the summary and [current next-session handoff](output-quality-next-session-20260929.md) first. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section, and the [plan for 2026-10-03](#plan-for-2026-10-03-user-2026-10-02-late) is done except its afternoon item; **start with the [2026-10-04 handoff](output-quality-next-session-20261004.md)**. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25-ocr-threshold-added-2026-09-26). The [2026-09-29 handoff](output-quality-next-session-20260929.md) is history now. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
 
 ## Plan for 2026-10-03 (user, 2026-10-02 late)
 
@@ -83,8 +83,8 @@ Each item says whether it makes output better or is upkeep.
    - **Script ready 2026-10-03:** `database/ops/reassign-and-delete-user.sql` moves
      `images`, `series`, `layer_edit_history`, `translations` and `translation_regions` ownership in one transaction,
      then deletes the throwaway; it changes nothing unless both accounts exist. Tested on a
-     throwaway Postgres. The user runs it on prod after the deploy, and on the laptop with
-     the laptop throwaway's email (it owns nothing, so only the delete happens).
+     throwaway Postgres. The prod run is dropped with the deploy (see item 1). On the laptop,
+     run it with the laptop throwaway's email (it owns nothing, so only the delete happens).
 
 **Midday: free corpus space (upkeep, about 17 GB).** Phase 0 and Phase 1.1–1.2 of the corpus-v2 plan
 (`corpus/docs/CORPUS_V2_PLAN.md`, in the private corpus repo).

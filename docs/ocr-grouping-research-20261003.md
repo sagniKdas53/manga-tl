@@ -1,3 +1,5 @@
+# Problem statement: OCR line fragments are not reliably converging into groups
+
 <!-- The user's own research (2026-10-03), pasted into the 2026-10-03 session; kept
 here verbatim so item B can start from it. Notes added by the session are in the box below. -->
 
@@ -13,12 +15,12 @@ here verbatim so item B can start from it. Notes added by the session are in the
 >   piece's x-neighbour is the next column, overlap about 28 %, so the whole balloon is vetoed.
 >   Separate miss (ch. 1 p. 4): lines 8–9 px apart against a budget of 0.35 × line height ≈ 7 px.
 >   Filed as `AUDIT-R21` (`docs/issues.md`); manual merge is the workaround.
+>   So H1 is observed, not just a guess. What stays unverified is how common it is across
+>   formats and how much of the remaining failures it explains; Step 0 answers both.
 > - Step 0 data: `corpus/gaps/_rescued/backup-branches-2026-08-23/` holds the 2026-08-12 grouping
 >   A/B layer bundles (region boxes for 40 pages at two settings, 351 and 278 regions); its README
 >   maps each to its current corpus page.
 > - This is follow-up **B** in `docs/output-quality-r7-close-20261001.md`.
-
-# Problem statement: OCR line fragments are not reliably converging into groups
 
 **Repo:** `manga-tl-worker`  |  **Audience:** Claude Code  |  **Status:** code read, nothing run
 This revision replaces an earlier draft that was written from the README alone. That draft proposed bubble-containment grouping and size-normalized thresholds, both of which already exist. Everything below is grounded in the source unless marked *unverified*. No page images or captures were available, so no failure was reproduced.
