@@ -233,6 +233,37 @@ describe("ZipImportDialog", () => {
     expect((init.body as FormData).has("useFallbackModels")).toBe(false);
   });
 
+  it("lets go of the page previews when it closes", async () => {
+    const props = {
+      onClose: vi.fn(),
+      user,
+      series,
+      onImported: vi.fn(),
+    };
+    const file = await archiveFile();
+    const { rerender } = render(
+      <ZipImportDialog
+        open
+        initialFile={file}
+        {...props}
+      />,
+    );
+    await waitFor(() => screen.getByText("3 of 3 pages"));
+    archive.released = [];
+    rerender(
+      <ZipImportDialog
+        open={false}
+        initialFile={file}
+        {...props}
+      />,
+    );
+    await waitFor(() =>
+      expect(archive.released).toEqual(
+        expect.arrayContaining(["ch/1.png", "ch/2.png", "ch/10.png"]),
+      ),
+    );
+  });
+
   it("ignores a slow read of an earlier file once another file was chosen", async () => {
     const first = await archiveFile();
     let finishFirst: (contents: ArchiveContents) => void = () => {};

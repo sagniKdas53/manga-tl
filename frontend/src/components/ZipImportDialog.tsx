@@ -183,8 +183,17 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
       if (seq === loadSeqRef.current) setReading(false);
     }
   }, []);
+  // Closing ends any read still running and lets go of the previews: a 400-page archive holds
+  // one Blob per page until they are released, and the dialog stays mounted while closed.
   useEffect(() => {
-    if (!open) loadSeqRef.current++;
+    if (open) return;
+    loadSeqRef.current++;
+    Promise.resolve().then(() =>
+      setItems((prev) => {
+        releaseArchivePages(prev);
+        return prev.length ? [] : prev;
+      }),
+    );
   }, [open]);
 
   // Reset every time the dialog opens; read a dropped file straight away.
