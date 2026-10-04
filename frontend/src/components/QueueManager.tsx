@@ -22,7 +22,12 @@ import { useToast } from "./ToastContext";
 import ConfirmModal from "./ConfirmModal";
 import { useDependencyLogger } from "../hooks/useDependencyLogger";
 import { formatErrorMessage } from "../utils/jobErrorMessage";
-import { PipelineStrip } from "./QueueParts";
+import { FinishedList, PipelineStrip } from "./QueueParts";
+import {
+  finishedPages,
+  rememberPageLink,
+  type PageLink,
+} from "../utils/finishedPages";
 import {
   formatElapsed,
   stageLabelOf,
@@ -47,6 +52,7 @@ interface Job {
 
 /** Cached result of JSON.parse(job.payload) — keyed by job id */
 interface ParsedPayload {
+  chapterId?: string;
   seriesTitle?: string;
   chapterTitle?: string;
   chapterNumber?: number;
@@ -170,6 +176,8 @@ interface QueueManagerProps {
   forceOpen: boolean;
   onRequestOpen: () => void;
   onClose: () => void;
+  /** Open a finished page in the Reader, from the Done tab. */
+  onOpenPage?: (link: PageLink) => void;
 }
 
 const parsedPayloadCache = new Map<string, ParsedPayload>();
@@ -178,6 +186,7 @@ const MAX_PARSED_PAYLOAD_CACHE = 500;
 export const QueueManager: React.FC<QueueManagerProps> = ({
   token,
   forceOpen,
+  onOpenPage,
   onRequestOpen,
   onClose,
 }) => {
@@ -186,7 +195,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
   const [collapsedChapters, setCollapsedChapters] = useState<Set<string>>(
     new Set(),
   );
-  const { subscribe } = useNotifications();
+  const { subscribe, notifications } = useNotifications();
   const { showToast } = useToast();
 
   const getParsed = useCallback((job: Job): ParsedPayload | null => {
@@ -641,7 +650,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     job.status === "COMPLETED" ? nextPipelineStage(job.type) : null;
 
   type Bucket = "running" | "waiting" | "failed" | "done";
-  type Filter = "all" | "running" | "waiting" | "failed";
+  type Filter = "all" | "running" | "waiting" | "failed" | "done";
   const [filter, setFilter] = useState<Filter>("all");
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
 
@@ -743,11 +752,22 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     });
   };
 
+  // The Done tab. Where each page lives is learned from the jobs' payloads first, in the same
+  // pass, so a finished page can link to the Reader as soon as one of its jobs was seen.
+  const finished = useMemo(() => {
+    jobs.forEach((job) => {
+      const parsed = getParsed(job);
+      rememberPageLink(job.imageId, parsed?.chapterId, parsed?.pageNumber);
+    });
+    return finishedPages(notifications ?? []);
+  }, [notifications, jobs, getParsed]);
+
   const filters: { key: Filter; label: string; count: number }[] = [
     { key: "all", label: "All", count: jobs.length },
     { key: "running", label: "Running", count: counts.running },
     { key: "waiting", label: "Waiting", count: counts.waiting },
     { key: "failed", label: "Failed", count: counts.failed },
+    { key: "done", label: "Done", count: finished.length },
   ];
 
   return (
@@ -944,7 +964,20 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
           </Box>
 
           <Box sx={{ flex: 1, overflowY: "auto" }}>
-            {jobs.length === 0 ? (
+            {filter === "done" ? (
+              <FinishedList
+                pages={finished}
+                now={now}
+                onOpenPage={
+                  onOpenPage
+                    ? (link) => {
+                        onOpenPage(link);
+                        onClose();
+                      }
+                    : undefined
+                }
+              />
+            ) : jobs.length === 0 ? (
               <Box sx={{ px: 3, py: 6, textAlign: "center" }}>
                 <Typography sx={{ fontWeight: 600 }}>
                   Nothing in the queue
