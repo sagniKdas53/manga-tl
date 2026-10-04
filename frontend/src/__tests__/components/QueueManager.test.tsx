@@ -779,4 +779,26 @@ describe("QueueManager", () => {
       vi.useRealTimers();
     }
   });
+
+  it("keeps pause in place on a running page, disabled, and says why", async () => {
+    (safeFetch as Mock).mockImplementation((url: string) =>
+      url === "/api/jobs"
+        ? Promise.resolve({
+            ok: true,
+            json: async () => ({
+              isPaused: false,
+              jobs: [{ ...mockJobs[0], id: "run", status: "PROCESSING" }],
+            }),
+          })
+        : Promise.reject(new Error("Unknown URL")),
+    );
+    render(<QueueManagerWrapper />);
+    fireEvent.click(screen.getByTitle("Queue Manager"));
+    const pause = await screen.findByLabelText("Pause");
+    expect(pause).toBeDisabled();
+    fireEvent.mouseOver(pause.parentElement!);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Only pages waiting to start can be paused",
+    );
+  });
 });

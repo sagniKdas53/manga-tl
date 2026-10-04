@@ -64,10 +64,10 @@ interface ParsedPayload {
 }
 
 /**
- * Width of a row's right column: the elapsed time ("1 h 59 min") or up to two icon buttons
- * (retry + remove, or pause + remove). Fixed, so every row's strip has the same width.
+ * Width of a row's right column: three 28 px button slots (retry, pause/resume, remove).
+ * Fixed, so every row's strip has the same width; elapsed time sits on the title line.
  */
-const ROW_TOOLS_WIDTH = 88;
+const ROW_TOOLS_WIDTH = 84;
 
 /** From this many jobs on, the running segment stops pulsing (one CSS animation per row). */
 const STRIP_ANIMATION_LIMIT = 100;
@@ -1055,6 +1055,13 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                               : null;
                           const canPause =
                             job.status === "PENDING" || job.status === "PAUSED";
+                          const pauseHint = isPaused
+                            ? "The whole queue is paused"
+                            : canPause
+                              ? job.status === "PAUSED"
+                                ? "Resume"
+                                : "Pause"
+                              : "Only pages waiting to start can be paused";
                           return (
                             <Box
                               key={job.id}
@@ -1062,19 +1069,18 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                               aria-label={`${pageLabel ?? formatJobType(job.type)}: ${text}`}
                               sx={{
                                 display: "grid",
-                                // A fixed right column: sized by its content, each row's strip
-                                // had its own width and shifted as "8 s" became "22 s".
+                                // Fixed tracks: the right column holds three button slots, and
+                                // every row has the same three lines (title, stages, details),
+                                // so no row is wider or taller than another (review, 2026-10-05).
                                 gridTemplateColumns: `1fr ${ROW_TOOLS_WIDTH}px`,
+                                gridTemplateRows: "20px 6px 16px",
                                 columnGap: 1.5,
                                 rowGap: 0.75,
+                                alignItems: "center",
                                 px: 2.5,
                                 py: 1.25,
                                 borderBottom: 1,
                                 borderColor: "divider",
-                                "&:hover .row-tools, &:focus-within .row-tools":
-                                  {
-                                    opacity: 1,
-                                  },
                               }}
                             >
                               <Box
@@ -1097,6 +1103,8 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                 <Typography
                                   variant="body2"
                                   sx={{
+                                    flex: 1,
+                                    minWidth: 0,
                                     color:
                                       state === "failed"
                                         ? "error.main"
@@ -1113,23 +1121,12 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                     state !== "done" &&
                                     ", retry after QA"}
                                 </Typography>
-                              </Box>
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "flex-end",
-                                  gap: 0.25,
-                                  gridRow: "span 2",
-                                  minWidth: 0,
-                                }}
-                              >
                                 {elapsed && (
                                   <Typography
                                     variant="body2"
                                     sx={{
+                                      flexShrink: 0,
                                       color: "text.secondary",
-                                      mr: 0.5,
                                       whiteSpace: "nowrap",
                                       fontVariantNumeric: "tabular-nums",
                                     }}
@@ -1137,62 +1134,71 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                     {elapsed}
                                   </Typography>
                                 )}
-                                {job.status === "FAILED" && (
-                                  <Tooltip
-                                    title="Retry"
-                                    describeChild
-                                  >
-                                    <IconButton
-                                      size="small"
-                                      aria-label="Retry"
-                                      onClick={() => handleRetryJob(job.id)}
-                                    >
-                                      <RestartAltIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                )}
-                                <Box
-                                  className="row-tools"
-                                  sx={{
-                                    display: "flex",
-                                    opacity: { xs: 1, md: 0 },
-                                    transition: "opacity 0.12s ease",
-                                    "@media (hover: none)": { opacity: 1 },
-                                  }}
-                                >
-                                  {canPause && (
+                              </Box>
+
+                              {/* Three fixed slots, always in place: Retry, Pause/Resume,
+                                  Remove. A slot that does not apply stays empty but keeps its
+                                  space, so the buttons never move between rows. */}
+                              <Box
+                                sx={{
+                                  gridColumn: 2,
+                                  gridRow: "1 / span 3",
+                                  display: "grid",
+                                  gridTemplateColumns: "repeat(3, 28px)",
+                                  justifyContent: "end",
+                                  alignItems: "center",
+                                }}
+                              >
+                                <Box>
+                                  {job.status === "FAILED" && (
                                     <Tooltip
+                                      title="Retry"
                                       describeChild
-                                      title={
-                                        isPaused
-                                          ? "The whole queue is paused"
-                                          : job.status === "PAUSED"
-                                            ? "Resume"
-                                            : "Pause"
-                                      }
                                     >
-                                      <span>
-                                        <IconButton
-                                          size="small"
-                                          aria-label={
-                                            job.status === "PAUSED"
-                                              ? "Resume"
-                                              : "Pause"
-                                          }
-                                          onClick={() =>
-                                            handleToggleJobPause(job)
-                                          }
-                                          disabled={isPaused}
-                                        >
-                                          {job.status === "PAUSED" ? (
-                                            <PlayArrowIcon fontSize="small" />
-                                          ) : (
-                                            <PauseIcon fontSize="small" />
-                                          )}
-                                        </IconButton>
-                                      </span>
+                                      <IconButton
+                                        size="small"
+                                        aria-label="Retry"
+                                        onClick={() => handleRetryJob(job.id)}
+                                      >
+                                        <RestartAltIcon fontSize="small" />
+                                      </IconButton>
                                     </Tooltip>
                                   )}
+                                </Box>
+                                <Box>
+                                  {/* Shown on every page still in the pipeline. A running page,
+                                      or one between stages, shows it disabled: the backend can
+                                      only pause a job that has not started (#225). */}
+                                  {state !== "done" &&
+                                    job.status !== "FAILED" && (
+                                      <Tooltip
+                                        describeChild
+                                        title={pauseHint}
+                                      >
+                                        <span>
+                                          <IconButton
+                                            size="small"
+                                            aria-label={
+                                              job.status === "PAUSED"
+                                                ? "Resume"
+                                                : "Pause"
+                                            }
+                                            onClick={() =>
+                                              handleToggleJobPause(job)
+                                            }
+                                            disabled={isPaused || !canPause}
+                                          >
+                                            {job.status === "PAUSED" ? (
+                                              <PlayArrowIcon fontSize="small" />
+                                            ) : (
+                                              <PauseIcon fontSize="small" />
+                                            )}
+                                          </IconButton>
+                                        </span>
+                                      </Tooltip>
+                                    )}
+                                </Box>
+                                <Box>
                                   {job.status !== "PROCESSING" && (
                                     <Tooltip
                                       title="Remove from queue"
@@ -1210,6 +1216,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                   )}
                                 </Box>
                               </Box>
+
                               <PipelineStrip
                                 jobType={job.type}
                                 state={state}
@@ -1217,52 +1224,37 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                 retry={isRetryLoopType(job.type)}
                                 animate={jobs.length < STRIP_ANIMATION_LIMIT}
                               />
-                              {(providerModel ||
-                                job.attempt > 1 ||
-                                job.error) && (
-                                <Box
-                                  sx={{
-                                    gridColumn: "1 / -1",
-                                    display: "flex",
-                                    flexWrap: "wrap",
-                                    columnGap: 1.5,
-                                    fontSize: "0.75rem",
-                                    color: "text.secondary",
-                                  }}
-                                >
-                                  {providerModel && (
-                                    <Box
-                                      component="span"
-                                      sx={{
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                        whiteSpace: "nowrap",
-                                        maxWidth: "100%",
-                                      }}
-                                    >
-                                      {providerModel}
-                                    </Box>
-                                  )}
-                                  {job.attempt > 1 && (
-                                    <span>
-                                      Attempt {job.attempt} of {job.maxAttempts}
-                                    </span>
-                                  )}
-                                  {job.error && (
-                                    <Tooltip title={job.error}>
-                                      <Box
-                                        component="span"
-                                        sx={{
-                                          color: "error.main",
-                                          flexBasis: "100%",
-                                        }}
-                                      >
-                                        {formatErrorMessage(job.error)}
-                                      </Box>
-                                    </Tooltip>
-                                  )}
-                                </Box>
-                              )}
+
+                              {/* One line of details on every row, empty when there are none;
+                                  a long error is cut short here and shown whole on hover. */}
+                              <Box
+                                title={job.error || undefined}
+                                sx={{
+                                  minWidth: 0,
+                                  fontSize: "0.75rem",
+                                  lineHeight: "16px",
+                                  color: "text.secondary",
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  "& > span + span": { ml: 1.5 },
+                                }}
+                              >
+                                {providerModel && <span>{providerModel}</span>}
+                                {job.attempt > 1 && (
+                                  <span>
+                                    Attempt {job.attempt} of {job.maxAttempts}
+                                  </span>
+                                )}
+                                {job.error && (
+                                  <Box
+                                    component="span"
+                                    sx={{ color: "error.main" }}
+                                  >
+                                    {formatErrorMessage(job.error)}
+                                  </Box>
+                                )}
+                              </Box>
                             </Box>
                           );
                         })}
