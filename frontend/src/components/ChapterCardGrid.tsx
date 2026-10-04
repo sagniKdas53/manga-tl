@@ -5,14 +5,35 @@ import Card from "@mui/material/Card";
 import Grid from "@mui/material/Grid";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import IconButton from "@mui/material/IconButton";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import ImportExportIcon from "@mui/icons-material/ImportExport";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import HistoryIcon from "@mui/icons-material/History";
 import type { Series, Chapter, SystemSettingsDto } from "../types";
 import { toSlug } from "../utils";
 import LazyImage from "./LazyImage";
 import LoadMoreSentinel from "./LoadMoreSentinel";
+import CardFooter from "./CardFooter";
+
+/** Models set on this chapter or its series (not the system defaults), in one short line. */
+const overrideLine = (c: Chapter): string | null => {
+  const parts: string[] = [];
+  const slot = (
+    name: string,
+    s?: {
+      provider?: string | null;
+      model?: string | null;
+      source?: string | null;
+    },
+  ) => {
+    if (!s || s.source === "global" || !s.provider) return;
+    parts.push(`${name} ${s.model || s.provider}`);
+  };
+  slot("OCR", c.resolvedOcr);
+  slot("TL", c.resolvedTranslation);
+  return parts.length ? parts.join(", ") : null;
+};
 
 interface ChapterCardGridProps {
   chapters: Chapter[];
@@ -84,27 +105,9 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
             sx={{ display: "flex" }}
           >
             <Card
-              sx={{
-                cursor: "pointer",
-                // The card fills its Grid cell so a row of mixed-length titles stays even.
-                width: "100%",
-                display: "flex",
-                flexDirection: "column",
-                bgcolor: "transparent",
-                boxShadow: "none",
-                borderRadius: 0,
-                overflow: "visible",
-                "&:hover .chapter-cover, &:focus-visible .chapter-cover": {
-                  outline: "2px solid",
-                  outlineColor: "primary.main",
-                  outlineOffset: 2,
-                },
-                "&:hover .chapter-tools, &:focus-within .chapter-tools": {
-                  opacity: 1,
-                },
-              }}
               role="link"
               tabIndex={0}
+              aria-label={`Chapter ${c.chapterNumber}${c.title ? `, ${c.title}` : ""}`}
               onKeyDown={(e) => {
                 if (e.key !== "Enter") return;
                 onSelectChapter(c);
@@ -118,116 +121,111 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
                   `/chapters/${c.id}/${toSlug(c.title || `chapter-${c.chapterNumber}`)}`,
                 );
               }}
+              sx={{
+                cursor: "pointer",
+                // The card fills its Grid cell so a row of mixed-length titles stays even.
+                width: "100%",
+                display: "flex",
+                flexDirection: "column",
+                borderRadius: "8px",
+                outline: "2px solid transparent",
+                outlineOffset: 2,
+                transition: "outline-color 0.12s ease",
+                "&:hover, &:focus-visible": { outlineColor: "primary.main" },
+              }}
             >
-              <Box
-                className="chapter-cover"
-                sx={{
-                  position: "relative",
-                  aspectRatio: "2 / 3",
-                  borderRadius: "6px",
-                  overflow: "hidden",
-                  bgcolor: "background.paper",
-                }}
-              >
-                {c.coverImageUrl || series.coverImageUrl ? (
-                  <LazyImage
-                    src={(c.coverImageUrl || series.coverImageUrl)!}
-                    alt={
-                      c.coverImageUrl
-                        ? c.title || `Chapter ${c.chapterNumber}`
-                        : "Fallback Cover"
-                    }
-                    sx={{
-                      display: "block",
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                    }}
-                  />
-                ) : (
-                  <Box
-                    sx={{
-                      height: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "text.secondary",
-                      fontWeight: 700,
-                      fontSize: 24,
-                    }}
-                  >
-                    {c.chapterNumber}
-                  </Box>
-                )}
-                <Box
-                  className="chapter-tools"
+              {c.coverImageUrl || series.coverImageUrl ? (
+                <LazyImage
+                  src={(c.coverImageUrl || series.coverImageUrl)!}
+                  alt={
+                    c.coverImageUrl
+                      ? c.title || `Chapter ${c.chapterNumber}`
+                      : "Fallback Cover"
+                  }
                   sx={{
-                    position: "absolute",
-                    top: 6,
-                    right: 6,
+                    display: "block",
+                    width: "100%",
+                    aspectRatio: "2 / 3",
+                    objectFit: "cover",
+                  }}
+                />
+              ) : (
+                <Box
+                  sx={{
+                    aspectRatio: "2 / 3",
                     display: "flex",
-                    gap: 0.5,
-                    opacity: 0,
-                    transition: "opacity 0.12s ease",
-                    "@media (hover: none)": { opacity: 1 },
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "text.secondary",
+                    bgcolor: "background.default",
+                    fontWeight: 700,
+                    fontSize: 24,
                   }}
                 >
-                  {[
-                    {
-                      title: "Edit Chapter",
-                      icon: <EditIcon sx={{ fontSize: 16 }} />,
-                      onClick: (e: React.MouseEvent) => onEditChapter(c, e),
-                    },
-                    {
-                      title: "Delete Chapter",
-                      icon: <DeleteIcon sx={{ fontSize: 16 }} />,
-                      onClick: (e: React.MouseEvent) =>
-                        onDeleteChapter(c.id, e),
-                    },
-                  ].map((tool) => (
-                    <IconButton
-                      key={tool.title}
-                      size="small"
-                      aria-label={tool.title}
-                      title={tool.title}
-                      onClick={tool.onClick}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      sx={{
-                        width: 30,
-                        height: 30,
-                        bgcolor: "rgba(0,0,0,0.7)",
-                        color: "#fff",
-                        "&:hover": { bgcolor: "rgba(0,0,0,0.85)" },
-                      }}
-                    >
-                      {tool.icon}
-                    </IconButton>
-                  ))}
+                  {c.chapterNumber}
                 </Box>
+              )}
+              <Box sx={{ px: 1, pt: 0.75, minWidth: 0 }}>
+                <Typography
+                  noWrap
+                  title={c.title || "Untitled"}
+                  sx={{
+                    fontSize: "0.875rem",
+                    fontWeight: 700,
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {c.chapterNumber}.{" "}
+                  <Box
+                    component="span"
+                    sx={{ fontWeight: 500 }}
+                  >
+                    {c.title || "Untitled"}
+                  </Box>
+                </Typography>
+                {overrideLine(c) && (
+                  <Typography
+                    noWrap
+                    title={overrideLine(c) ?? undefined}
+                    sx={{ fontSize: "0.6875rem", color: "text.secondary" }}
+                  >
+                    {overrideLine(c)}
+                  </Typography>
+                )}
               </Box>
-              <Typography
-                sx={{ mt: 1, fontWeight: 700, fontSize: "0.9375rem" }}
-              >
-                Chapter {c.chapterNumber}
-              </Typography>
-              <Typography
-                variant="body2"
-                noWrap
-                title={c.title || "Untitled"}
-              >
-                {c.title || "Untitled"}
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ color: "text.secondary", fontSize: "0.8125rem" }}
-              >
-                {[
-                  c.pageCount ? `${c.pageCount} pages` : "No pages",
-                  c.useContextMemory ? "page context on" : null,
-                ]
-                  .filter(Boolean)
-                  .join(", ")}
-              </Typography>
+              <CardFooter
+                info={[
+                  {
+                    key: "pages",
+                    icon: <DescriptionOutlinedIcon />,
+                    text: c.pageCount ?? 0,
+                    label: `${c.pageCount ?? 0} pages`,
+                  },
+                  ...(c.useContextMemory
+                    ? [
+                        {
+                          key: "context",
+                          icon: <HistoryIcon />,
+                          label:
+                            "Page context on: the previous page is sent along",
+                        },
+                      ]
+                    : []),
+                ]}
+                actions={[
+                  {
+                    title: "Edit Chapter",
+                    icon: <EditIcon />,
+                    onClick: (e) => onEditChapter(c, e),
+                  },
+                  {
+                    title: "Delete Chapter",
+                    icon: <DeleteIcon />,
+                    onClick: (e) => onDeleteChapter(c.id, e),
+                    danger: true,
+                  },
+                ]}
+              />
             </Card>
           </Grid>
         ))}

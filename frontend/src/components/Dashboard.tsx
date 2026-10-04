@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AddIcon from "@mui/icons-material/Add";
 import UploadIcon from "@mui/icons-material/Upload";
+import TranslateIcon from "@mui/icons-material/Translate";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import Alert from "@mui/material/Alert";
@@ -9,14 +11,17 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import FormControl from "@mui/material/FormControl";
-import IconButton from "@mui/material/IconButton";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import Typography from "@mui/material/Typography";
 import { useToast } from "./ToastContext";
 import type { User, Series } from "../types";
 import { safeFetch, toSlug } from "../utils";
-import { readingDirectionLabel } from "../utils/readingDirection";
+import {
+  readingDirectionLabel,
+  readingDirectionShort,
+} from "../utils/readingDirection";
+import CardFooter from "./CardFooter";
 import ConfirmModal from "./ConfirmModal";
 import CreateSeriesDialog from "./CreateSeriesDialog";
 import LazyImage from "./LazyImage";
@@ -273,10 +278,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
           display: "grid",
           gridTemplateColumns: {
             xs: "repeat(auto-fill, minmax(140px, 1fr))",
-            sm: "repeat(auto-fill, minmax(176px, 1fr))",
+            sm: "repeat(auto-fill, minmax(168px, 1fr))",
           },
-          columnGap: 2.5,
-          rowGap: 3,
+          gap: 2,
         }}
       >
         {sortedSeriesList.map((s) => (
@@ -291,127 +295,87 @@ export const Dashboard: React.FC<DashboardProps> = ({
             }}
             sx={{
               cursor: "pointer",
-              bgcolor: "transparent",
-              boxShadow: "none",
-              borderRadius: 0,
-              overflow: "visible",
-              outline: "none",
-              "&:hover .series-cover, &:focus-visible .series-cover": {
-                outline: "2px solid",
-                outlineColor: "primary.main",
-                outlineOffset: 2,
-              },
-              "&:hover .series-tools, &:focus-within .series-tools": {
-                opacity: 1,
-              },
+              display: "flex",
+              flexDirection: "column",
+              borderRadius: "8px",
+              outline: "2px solid transparent",
+              outlineOffset: 2,
+              transition: "outline-color 0.12s ease",
+              "&:hover, &:focus-visible": { outlineColor: "primary.main" },
             }}
           >
-            <Box
-              className="series-cover"
-              sx={{
-                position: "relative",
-                aspectRatio: "2 / 3",
-                borderRadius: "6px",
-                overflow: "hidden",
-                bgcolor: "background.paper",
-              }}
-            >
-              {s.coverImageUrl ? (
-                <LazyImage
-                  src={s.coverImageUrl}
-                  alt={s.title}
-                  sx={{
-                    display: "block",
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                  }}
-                />
-              ) : (
-                <Box
-                  sx={{
-                    height: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "text.secondary",
-                    fontWeight: 700,
-                    p: 2,
-                    textAlign: "center",
-                  }}
-                >
-                  No pages yet
-                </Box>
-              )}
-              <Box
-                className="series-tools"
+            {s.coverImageUrl ? (
+              <LazyImage
+                src={s.coverImageUrl}
+                alt={s.title}
                 sx={{
-                  position: "absolute",
-                  top: 6,
-                  right: 6,
+                  display: "block",
+                  width: "100%",
+                  aspectRatio: "2 / 3",
+                  objectFit: "cover",
+                }}
+              />
+            ) : (
+              <Box
+                sx={{
+                  aspectRatio: "2 / 3",
                   display: "flex",
-                  gap: 0.5,
-                  opacity: 0,
-                  transition: "opacity 0.12s ease",
-                  "@media (hover: none)": { opacity: 1 },
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "text.secondary",
+                  bgcolor: "background.default",
+                  fontWeight: 700,
+                  p: 2,
+                  textAlign: "center",
                 }}
               >
-                {[
-                  {
-                    title: "Edit Series",
-                    icon: <EditIcon sx={{ fontSize: 16 }} />,
-                    onClick: (e: React.MouseEvent) =>
-                      handleEditSeriesClick(s, e),
-                  },
-                  {
-                    title: "Delete Series",
-                    icon: <DeleteIcon sx={{ fontSize: 16 }} />,
-                    onClick: (e: React.MouseEvent) =>
-                      handleDeleteSeries(s.id, e),
-                  },
-                ].map((tool) => (
-                  <IconButton
-                    key={tool.title}
-                    size="small"
-                    aria-label={tool.title}
-                    title={tool.title}
-                    onClick={tool.onClick}
-                    onKeyDown={(e) => e.stopPropagation()}
-                    sx={{
-                      width: 30,
-                      height: 30,
-                      bgcolor: "rgba(0,0,0,0.7)",
-                      color: "#fff",
-                      "&:hover": { bgcolor: "rgba(0,0,0,0.85)" },
-                    }}
-                  >
-                    {tool.icon}
-                  </IconButton>
-                ))}
+                No pages yet
               </Box>
-            </Box>
+            )}
             <Typography
+              title={s.title}
               sx={{
-                mt: 1,
+                px: 1,
+                pt: 0.75,
                 fontWeight: 700,
-                fontSize: "0.9375rem",
+                fontSize: "0.875rem",
                 lineHeight: 1.3,
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
+                whiteSpace: "nowrap",
                 overflow: "hidden",
+                textOverflow: "ellipsis",
               }}
             >
               {s.title}
             </Typography>
-            <Typography
-              variant="body2"
-              sx={{ color: "text.secondary", mt: 0.25 }}
-            >
-              {s.sourceLanguage || s.originalLanguage || "ja"} →{" "}
-              {s.targetLanguage || "en"},{" "}
-              {readingDirectionLabel(s.readingDirection).toLowerCase()}
-            </Typography>
+            <CardFooter
+              info={[
+                {
+                  key: "languages",
+                  icon: <TranslateIcon />,
+                  text: `${s.sourceLanguage || s.originalLanguage || "ja"} → ${s.targetLanguage || "en"}`,
+                  label: "Translated from, into",
+                },
+                {
+                  key: "direction",
+                  icon: <SwapHorizIcon />,
+                  text: readingDirectionShort(s.readingDirection),
+                  label: `Reading direction: ${readingDirectionLabel(s.readingDirection).toLowerCase()}`,
+                },
+              ]}
+              actions={[
+                {
+                  title: "Edit Series",
+                  icon: <EditIcon />,
+                  onClick: (e) => handleEditSeriesClick(s, e),
+                },
+                {
+                  title: "Delete Series",
+                  icon: <DeleteIcon />,
+                  onClick: (e) => handleDeleteSeries(s.id, e),
+                  danger: true,
+                },
+              ]}
+            />
           </Card>
         ))}
       </Box>

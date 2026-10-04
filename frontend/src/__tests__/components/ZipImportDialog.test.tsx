@@ -1,5 +1,11 @@
 import JSZip from "jszip";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  act,
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ZipImportDialog } from "../../components/ZipImportDialog";
 import type { Series, User } from "../../types";
@@ -249,6 +255,59 @@ describe("ZipImportDialog", () => {
       "/api/series/new/chapters/import",
       expect.anything(),
     );
+  });
+
+  it("takes a file dropped anywhere while open as a new archive, without leaving the app", async () => {
+    render(
+      <ZipImportDialog
+        open
+        onClose={vi.fn()}
+        user={user}
+        series={series}
+        initialFile={await archiveFile()}
+        onImported={vi.fn()}
+      />,
+    );
+    await waitFor(() => screen.getByText("3 of 3 pages"));
+
+    const zip = new JSZip();
+    zip.file("a.png", "a");
+    zip.file("b.png", "b");
+    const replacement = new File(
+      [await zip.generateAsync({ type: "blob" })],
+      "Other chapter.zip",
+    );
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", {
+      value: { types: ["Files"], files: [replacement] },
+    });
+    window.dispatchEvent(drop);
+
+    expect(drop.defaultPrevented).toBe(true);
+    expect(await screen.findByText("2 of 2 pages")).toBeInTheDocument();
+    expect(screen.getByText("Other chapter.zip")).toBeInTheDocument();
+  });
+
+  it("says when a dropped file is not an archive", async () => {
+    render(
+      <ZipImportDialog
+        open
+        onClose={vi.fn()}
+        user={user}
+        series={series}
+        onImported={vi.fn()}
+      />,
+    );
+    // Let the dialog finish resetting itself after opening (it clears old errors).
+    await act(async () => {});
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", {
+      value: { types: ["Files"], files: [new File(["x"], "page.png")] },
+    });
+    window.dispatchEvent(drop);
+    expect(
+      await screen.findByText("Choose a .zip, .cbz or .epub file."),
+    ).toBeInTheDocument();
   });
 
   it("refuses a page-project archive and says where it goes instead", async () => {
