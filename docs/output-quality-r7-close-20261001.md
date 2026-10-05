@@ -216,7 +216,8 @@ differently in the export (the project.json elements above have none).
   marks too. Measure offline first (pages 1, 2, 14 of TELEA from `scene-assets`, the six fixtures),
   bump the generator id, then one labelled re-run.
   **2026-10-05:** (2) is in worker PR #52 (generator `v4-halo`). It only grows white or black
-  bands that stop evenly, skips plain balloons, and repaints a grown region with AOT. On the corpus
+  bands that stop evenly and skips plain balloons. In `auto` mode a grown region is repainted with
+  AOT (TELEA if AOT fails); a forced `telea` mode still uses TELEA. On the corpus
   (261 pages) it fired 26 times, all real outlines, with no region made worse; it fired 32 times
   on the 56-page halo set. About half the halo cases are still missed: [#228](https://github.com/sagniKdas53/manga-tl/issues/228).
   `CLEANUP_HALO_GROW=false` turns it off. Still open from this item: (1) close-and-fill, the
