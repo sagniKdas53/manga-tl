@@ -1,3 +1,4 @@
+import React from "react";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import ReaderRightSidebar, {
@@ -10,7 +11,9 @@ import {
   regionIssues,
   translationElementByRegion,
 } from "../../utils/regionIssues";
-import { IssueList, MergePanel } from "../../components/ReaderIssues";
+import { ReviewPanel, MergePanel } from "../../components/ReaderIssues";
+import { useReviewTally } from "../../hooks/useReviewTally";
+import type { RegionIssue } from "../../utils/regionIssues";
 import type { Layer, LayerElement, OcrRegion } from "../../types";
 
 const region = (id: string, order: number, extra: Partial<OcrRegion> = {}) =>
@@ -43,8 +46,10 @@ const element = (
     maxHeight: 10,
   }) as unknown as LayerElement;
 
-function sidebar(overrides: Partial<ReaderRightSidebarProps>) {
-  const props = {
+function sidebarProps(
+  overrides: Partial<ReaderRightSidebarProps>,
+): ReaderRightSidebarProps {
+  return {
     selectedItem: null,
     setSelectedItem: vi.fn(),
     activeLayerId: null,
@@ -96,6 +101,10 @@ function sidebar(overrides: Partial<ReaderRightSidebarProps>) {
     isMerging: false,
     ...overrides,
   } as ReaderRightSidebarProps;
+}
+
+function sidebar(overrides: Partial<ReaderRightSidebarProps>) {
+  const props = sidebarProps(overrides);
   render(<ReaderRightSidebar {...props} />);
   return props;
 }
@@ -368,14 +377,141 @@ describe("issues view", () => {
     const onSelect = vi.fn();
     const issue = regionIssue(region("a", 2), undefined, false)!;
     render(
-      <IssueList
-        issues={[issue]}
-        selectedRegionId={null}
+      <ReviewPanel
+        rows={[{ issue, settled: false }]}
         onSelect={onSelect}
       />,
     );
     fireEvent.click(screen.getByText("Not translated"));
     expect(onSelect).toHaveBeenCalledWith(issue);
+  });
+
+  it("shows one kind of issue at a time when asked", () => {
+    const a = regionIssue(region("a", 1), undefined, false)!;
+    const b = regionIssue(
+      region("b", 2),
+      element("eb", "b", "Hello there", true),
+      true,
+    )!;
+    expect(a.kind).not.toBe(b.kind);
+    render(
+      <ReviewPanel
+        rows={[
+          { issue: a, settled: false },
+          { issue: b, settled: false },
+        ]}
+        onSelect={vi.fn()}
+      />,
+    );
+    const list = screen.getByRole("list", { name: "Issues on this page" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: /^Not translated/ }));
+    expect(within(list).getAllByRole("listitem")).toHaveLength(1);
+    expect(within(list).getByText(a.title)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^All/ }));
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("says why there is nothing to review while no translation layer is shown", () => {
+    render(
+      <ReviewPanel
+        rows={[]}
+        hidden
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText("Show a translation layer to review this page."),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the tally while an issue is open in the inspector, and stays on Review once all are settled", () => {
+    // The real flow: the tally lives in the Reader, and the Review tab unmounts while the
+    // inspector shows the issue being settled.
+    const ra = region("a", 1);
+    const rb = region("b", 2);
+    const a = regionIssue(ra, undefined, false)!;
+    const b = regionIssue(rb, undefined, false)!;
+    const regionIds = new Set(["a", "b"]);
+    const Harness: React.FC<{
+      issues: RegionIssue[];
+      selectedItem: ReaderRightSidebarProps["selectedItem"];
+    }> = ({ issues, selectedItem }) => {
+      const tally = useReviewTally({
+        pageId: "p1",
+        issues,
+        regionIds,
+        reviewable: true,
+      });
+      return (
+        <ReaderRightSidebar
+          {...sidebarProps({
+            ocrRegions: [ra, rb],
+            issues,
+            reviewRows: tally.rows,
+            selectedItem,
+          })}
+        />
+      );
+    };
+    const open = (r: OcrRegion) => ({
+      id: `region-${r.id}`,
+      isConversation: false,
+      regions: [r],
+      bboxX: 0,
+      bboxY: 0,
+      bboxW: 10,
+      bboxH: 10,
+      originalRegion: r,
+    });
+    const { rerender } = render(
+      <Harness
+        issues={[a, b]}
+        selectedItem={null}
+      />,
+    );
+    // Layers is the default tab; the user opens Review.
+    expect(screen.getByRole("tab", { name: "Layers" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    fireEvent.click(screen.getByRole("tab", { name: /Review/ }));
+    expect(screen.getByText("2 to review")).toBeInTheDocument();
+
+    // #1 is opened in the inspector and settled there, then the inspector closes.
+    rerender(
+      <Harness
+        issues={[a, b]}
+        selectedItem={open(ra)}
+      />,
+    );
+    rerender(
+      <Harness
+        issues={[b]}
+        selectedItem={open(rb)}
+      />,
+    );
+    rerender(
+      <Harness
+        issues={[b]}
+        selectedItem={null}
+      />,
+    );
+    expect(screen.getByText("#1 settled")).toBeInTheDocument();
+    expect(screen.getByText("1 to review")).toBeInTheDocument();
+
+    // The last one: Review stays the open tab (the inspector came and went), and says so.
+    rerender(
+      <Harness
+        issues={[]}
+        selectedItem={null}
+      />,
+    );
+    expect(screen.getByRole("tab", { name: /Review/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByText("All 2 settled")).toBeInTheDocument();
   });
 
   it("merges only once two pieces are picked", () => {

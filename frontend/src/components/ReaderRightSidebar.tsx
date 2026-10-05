@@ -19,13 +19,17 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteIcon from "@mui/icons-material/Delete";
-import ColorizeIcon from "@mui/icons-material/Colorize";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import UndoIcon from "@mui/icons-material/Undo";
 import OpenWithIcon from "@mui/icons-material/OpenWith";
 import CropIcon from "@mui/icons-material/Crop";
-import LayersIcon from "@mui/icons-material/Layers";
+import TextFieldsIcon from "@mui/icons-material/TextFields";
+import type { ReviewRow } from "../hooks/useReviewTally";
+import CropSquareIcon from "@mui/icons-material/CropSquare";
+import CallMergeIcon from "@mui/icons-material/CallMerge";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
 import { ColorPicker } from "./ColorPicker";
 import SidebarSection from "./SidebarSection";
 import type { SystemStyleObject, Theme } from "@mui/system";
@@ -40,8 +44,8 @@ import {
 } from "../utils/regionIssues";
 import {
   IssueCard,
-  IssueList,
   MergePanel,
+  ReviewPanel,
   type MergePreview,
 } from "./ReaderIssues";
 
@@ -54,26 +58,6 @@ import {
 // of re-serialising the same declarations every time. Blocks that genuinely vary per render
 // (loop index, active/visible flags, interaction mode) stay inline below; a few of those split
 // their static parts out here too, merged in via the `sx` array form.
-
-const emptyStateContainerSx = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  gap: 1,
-  color: "var(--text-dim, var(--text-muted))",
-  textAlign: "center",
-  py: 3,
-  mb: 2,
-  borderBottom: "1px solid var(--border-color)",
-} as const;
-
-const emptyStateIconSx = { fontSize: 22, opacity: 0.5 } as const;
-
-const emptyStateTextSx = {
-  fontSize: "12.5px",
-  color: "var(--text-muted)",
-  maxWidth: 210,
-} as const;
 
 const layerHeaderActionsSx = {
   display: "flex",
@@ -195,53 +179,63 @@ const deleteLayerButtonSx = {
   "&:hover": { color: "var(--error)" },
 } as const;
 
-const editorToolRowSx = { display: "flex", gap: 1, mb: 1 } as const;
-
-const editorToolButtonSx = {
-  flex: 1,
-  py: 1,
-  fontSize: "11px",
-  fontWeight: 600,
-  color: "var(--text-main)",
-  borderColor: "var(--border-color)",
-  "&:hover": {
-    borderColor: "var(--primary)",
-    color: "var(--primary)",
-    backgroundColor: "var(--primary-glow)",
-  },
-} as const;
-
-const colorDropperButtonSx = {
-  color: "var(--text-main)",
-  borderColor: "var(--border-color)",
-  "&:hover": {
-    borderColor: "var(--primary)",
-    color: "var(--primary)",
-  },
-} as const;
-
 const inlineSpinnerSx = { color: "inherit" } as const;
 
-const redoOcrButtonSx = {
-  mb: 1,
-  color: "var(--warning)",
-  borderColor: "var(--warning)",
-  "&:hover": { backgroundColor: "var(--warning)", color: "#fff" },
+// The no-selection view is two tabs (reader review, 2026-10-04/05): Layers, open by default,
+// holds the tools, a scrolling layer list and the page actions; Review holds the issues.
+// Before, it was one long column of bordered cards under an empty-state banner, with Export
+// below the fold.
+type SidebarTab = "review" | "layers";
+
+const tabsSx = {
+  minHeight: 36,
+  mx: -2,
+  px: 1,
+  borderBottom: "1px solid var(--border-color)",
+  "& .MuiTab-root": {
+    minHeight: 36,
+    py: 0,
+    textTransform: "none",
+    fontSize: "13px",
+    fontWeight: 600,
+    color: "var(--text-muted)",
+  },
+  "& .MuiTab-root.Mui-selected": { color: "var(--text-main)" },
+  "& .MuiTabs-indicator": { backgroundColor: "var(--primary)" },
 } as const;
 
-const redoTranslationButtonSx = {
-  color: "var(--warning)",
-  borderColor: "var(--warning)",
-  "&:hover": { backgroundColor: "var(--warning)", color: "#fff" },
+const reviewCountSx = {
+  minWidth: 18,
+  height: 18,
+  px: 0.5,
+  borderRadius: "9px",
+  fontSize: "11px",
+  fontWeight: 700,
+  lineHeight: "18px",
+  textAlign: "center",
+  color: "var(--on-warning)",
+  backgroundColor: "var(--warning)",
 } as const;
 
-const exportSectionSx = { mb: 5 } as const;
+const toolGridSx = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 0.75,
+} as const;
 
-const exportButtonWithMarginSx = {
-  mb: 1,
-  color: "var(--primary)",
-  borderColor: "var(--primary)",
-  "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
+const toolButtonSx = {
+  justifyContent: "flex-start",
+  fontSize: "12px",
+  fontWeight: 600,
+  "& .MuiButton-startIcon svg": { fontSize: 17 },
+} as const;
+
+/** The layer list scrolls on its own, so the page actions below it stay in reach. */
+const layerListScrollSx = {
+  maxHeight: "min(42vh, 440px)",
+  overflowY: "auto",
+  mx: -0.5,
+  px: 0.5,
 } as const;
 
 const inspectorHeaderRowSx = {
@@ -254,11 +248,11 @@ const inspectorHeaderRowSx = {
 } as const;
 
 const inspectorTitleSx = {
-  fontSize: "10.5px",
-  fontWeight: 700,
-  letterSpacing: "0.08em",
-  color: "var(--text-dim, var(--text-muted))",
-  lineHeight: 1.2,
+  fontFamily: "var(--font-display)",
+  fontSize: "15px",
+  fontWeight: 600,
+  color: "var(--text-main)",
+  lineHeight: 1.3,
 } as const;
 
 const inspectorSubtitleSx = {
@@ -490,6 +484,10 @@ export interface ReaderRightSidebarProps {
   isRedoingRegionOcr: boolean;
   handleRedoRegion: (region: OcrRegion, type: "ocr" | "translation") => void;
   isRedoingRegionTl: boolean;
+  /** The page's review tally from the Reader: every issue seen here, settled or not. */
+  reviewRows?: ReviewRow[];
+  /** No translation layer is shown, so the Review tab has nothing to judge. */
+  reviewHidden?: boolean;
   /** Regions needing a person, in reading order. */
   issues: RegionIssue[];
   onSelectIssue: (issue: RegionIssue) => void;
@@ -519,6 +517,8 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
   const [expandedLayers, setExpandedLayers] = React.useState<Set<string>>(
     new Set(),
   );
+  // The tab the user picked; until then Review when the page has issues, else Layers.
+  const [pickedTab, setPickedTab] = React.useState<SidebarTab | null>(null);
   const toggleLayerExpanded = React.useCallback((layerId: string) => {
     setExpandedLayers((prev) => {
       const next = new Set(prev);
@@ -563,6 +563,8 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     handleRedoRegion,
     isRedoingRegionTl,
     issues,
+    reviewRows = [],
+    reviewHidden = false,
     onSelectIssue,
     onStepIssue,
     handleRegionAction,
@@ -589,20 +591,18 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     [ocrRegions],
   );
 
+  // Layers is the default (review, 2026-10-05); Review is one click away, and its badge and the
+  // top bar's "N to review" chip say when it has work. A picked tab stays across pages.
+  const tab: SidebarTab = pickedTab ?? "layers";
+
   return (
-    <Grid className="reader-right-sidebar-nhentai">
+    <Box
+      component="aside"
+      aria-label="Inspector"
+      className="reader-right-sidebar-nhentai"
+    >
       {!selectedItem && (
         <>
-          <Box sx={emptyStateContainerSx}>
-            <LayersIcon sx={emptyStateIconSx} />
-            <Typography
-              variant="body2"
-              sx={emptyStateTextSx}
-            >
-              Select an OCR region or a text layer to inspect and edit details.
-            </Typography>
-          </Box>
-
           {mergeMode && (
             <MergePanel
               regions={ocrRegions}
@@ -614,505 +614,555 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               onCancel={onToggleMergeMode}
             />
           )}
-          {!mergeMode && (
-            <IssueList
-              issues={issues}
-              selectedRegionId={null}
-              onSelect={onSelectIssue}
-            />
-          )}
 
-          {/* Translation Layers Section */}
-          <SidebarSection
-            title="Layers"
-            headerExtra={
-              <Box sx={layerHeaderActionsSx}>
-                <IconButton
-                  size="small"
-                  aria-label="Move layer up"
-                  title="Move layer up"
-                  disabled={
-                    !activeLayerId ||
-                    sortedLayers.findIndex(
-                      (l) => l.layer.id === activeLayerId,
-                    ) ===
-                      sortedLayers.length - 1
-                  }
-                  onClick={() =>
-                    activeLayerId && handleMoveLayer(activeLayerId, "up")
-                  }
-                  sx={layerMoveButtonSx}
-                >
-                  <KeyboardArrowUpIcon fontSize="small" />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  aria-label="Move layer down"
-                  title="Move layer down"
-                  disabled={
-                    !activeLayerId ||
-                    sortedLayers.findIndex(
-                      (l) => l.layer.id === activeLayerId,
-                    ) === 0
-                  }
-                  onClick={() =>
-                    activeLayerId && handleMoveLayer(activeLayerId, "down")
-                  }
-                  sx={layerMoveButtonSx}
-                >
-                  <KeyboardArrowDownIcon fontSize="small" />
-                </IconButton>
-                <Box sx={layerHeaderDividerSx} />
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<AddIcon sx={smallAddIconSx} />}
-                  onClick={handleCreateTranslationLayer}
-                  title="Add Translation Layer"
-                  sx={addLayerButtonSx}
-                >
-                  TL
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<AddIcon sx={smallAddIconSx} />}
-                  onClick={handleCreateSfxLayer}
-                  title="Add SFX Layer"
-                  sx={addLayerButtonSx}
-                >
-                  SFX
-                </Button>
-              </Box>
-            }
+          <Tabs
+            value={tab}
+            onChange={(_, value: SidebarTab) => setPickedTab(value)}
+            variant="fullWidth"
+            aria-label="Inspector views"
+            sx={tabsSx}
           >
-            {sortedLayers.length === 0 ? (
-              <Typography
-                variant="body2"
-                sx={noLayersTextSx}
-              >
-                No active layers.
-              </Typography>
-            ) : (
-              [...sortedLayers].reverse().map((lData, idx) => {
-                const isActive = lData.layer.id === activeLayerId;
-                const isVisible = lData.layer.visible;
-                const stackNumber = sortedLayers.length - idx;
-                const isExpanded = expandedLayers.has(lData.layer.id);
-                const hiddenCount = lData.elements.filter(
-                  (el) => !el.visible,
-                ).length;
-                return (
-                  <React.Fragment key={lData.layer.id}>
+            <Tab
+              value="review"
+              id="inspector-tab-review"
+              aria-controls="inspector-panel"
+              label={
+                <Box
+                  component="span"
+                  sx={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 0.75,
+                  }}
+                >
+                  Review
+                  {issues.length > 0 && (
                     <Box
-                      onClick={() => {
-                        setActiveLayerId(lData.layer.id);
-                        if (isInpaintingLayer(lData.layer)) {
-                          onInpaintingLayerClick?.(lData.layer.id);
-                        }
-                      }}
-                      sx={[
-                        layerRowBaseSx,
-                        {
-                          border: isActive
-                            ? "1px solid var(--primary)"
-                            : "1px solid var(--border-color)",
-                          backgroundColor: isActive
-                            ? "var(--primary-glow)"
-                            : "transparent",
-                          boxShadow: isActive
-                            ? "0 0 8px var(--primary-glow)"
-                            : "none",
-                          opacity: isVisible ? 1 : 0.5,
-                          "&:hover": {
-                            borderColor: isActive
-                              ? "var(--primary)"
-                              : "var(--text-dim, var(--text-muted))",
-                          },
-                        },
-                      ]}
+                      component="span"
+                      sx={reviewCountSx}
                     >
-                      <Box
-                        sx={[
-                          layerStackNumberBaseSx,
-                          {
-                            backgroundColor: isActive
-                              ? "var(--primary)"
-                              : "var(--bg-input, rgba(0,0,0,0.06))",
-                            color: isActive ? "#fff" : "var(--text-muted)",
-                          },
-                        ]}
-                      >
-                        {stackNumber}
-                      </Box>
-                      <Box sx={layerNameColumnSx}>
-                        <Typography
-                          component="span"
-                          sx={[
-                            layerNameBaseSx,
-                            {
-                              fontWeight: isActive ? 700 : 600,
-                              color: isActive
-                                ? "var(--primary-hover)"
-                                : "var(--text-main)",
-                            },
-                          ]}
-                        >
-                          {typeof lData.layer.metadataJson?.layer_name ===
-                          "string"
-                            ? lData.layer.metadataJson.layer_name
-                            : lData.layer.type === "translation"
-                              ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || "EN"})`
-                              : lData.layer.type === "sfx"
-                                ? "SFX Layer"
-                                : lData.layer.type === "ocr"
-                                  ? "OCR Layer"
-                                  : isInpaintingLayer(lData.layer)
-                                    ? "Inpainting"
-                                    : `Layer (${lData.layer.type})`}
-                        </Typography>
-                        <Typography
-                          component="span"
-                          sx={[
-                            layerElementCountSx,
-                            {
-                              cursor: lData.elements.length
-                                ? "pointer"
-                                : "default",
-                              userSelect: "none",
-                            },
-                          ]}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (lData.elements.length) {
-                              toggleLayerExpanded(lData.layer.id);
-                            }
-                          }}
-                          title={
-                            lData.elements.length
-                              ? "Show this layer's elements"
-                              : undefined
-                          }
-                        >
-                          {lData.elements.length > 0
-                            ? `${isExpanded ? "▾" : "▸"} `
-                            : ""}
-                          {lData.elements.length} elements
-                          {hiddenCount ? ` · ${hiddenCount} hidden` : ""}
-                          {!isVisible ? " · layer hidden" : ""}
-                        </Typography>
-                      </Box>
-                      <Box
-                        sx={layerActionsRowSx}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Tooltip
-                          title={isVisible ? "Hide layer" : "Show layer"}
-                        >
-                          <IconButton
-                            size="small"
-                            onClick={() =>
-                              handleToggleLayerVisibility(lData.layer.id)
-                            }
-                            sx={{
-                              color: isVisible
-                                ? "var(--primary)"
-                                : "var(--text-dim, var(--text-muted))",
-                            }}
-                          >
-                            {isVisible ? (
-                              <VisibilityIcon fontSize="small" />
-                            ) : (
-                              <VisibilityOffIcon fontSize="small" />
-                            )}
-                          </IconButton>
-                        </Tooltip>
-
-                        <Tooltip title="Clone layer (copies above, hides original as backup)">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleCloneLayer(lData.layer.id)}
-                            sx={cloneLayerButtonSx}
-                          >
-                            <ContentCopyIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-
-                        <Tooltip title="Delete layer">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDeleteLayer(lData.layer.id)}
-                            sx={deleteLayerButtonSx}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
+                      {issues.length}
                     </Box>
-                    {isExpanded && (
-                      <Box sx={elementListSx}>
-                        {inReadingOrder(lData.elements, regionById).map(
-                          (element) => {
-                            // AUDIT-F25. This was `!== false`, which made a null-visible element
-                            // read as visible here while the canvas, the hidden-count above and the
-                            // worker's renderer all treated it as hidden. The row then offered
-                            // "Hide element" for something already invisible, wrote `false`, and the
-                            // first click changed nothing on screen. `=== true` is the same rule the
-                            // other three readers use.
-                            const elementVisible = element.visible === true;
-                            const isSelectedElement =
-                              selectedItem?.id === element.id &&
-                              selectedItem?.isLayerElement;
-                            const region = element.regionId
-                              ? regionById.get(element.regionId)
-                              : undefined;
-                            const rowStatus = regionRowStatus(region, element);
-                            const label = isPatchElement(element)
-                              ? `Patch${region ? ` · ${(region.text || "").trim()}` : " · no region"}`
-                              : (element.text || "").trim() ||
-                                (region?.text || "").trim() ||
-                                "(no text)";
-                            return (
+                  )}
+                </Box>
+              }
+            />
+            <Tab
+              value="layers"
+              id="inspector-tab-layers"
+              aria-controls="inspector-panel"
+              label="Layers"
+            />
+          </Tabs>
+
+          <Box
+            id="inspector-panel"
+            role="tabpanel"
+            aria-labelledby={`inspector-tab-${tab}`}
+            sx={{ pt: 1.5 }}
+          >
+            {tab === "review" && (
+              <ReviewPanel
+                rows={reviewRows}
+                hidden={reviewHidden}
+                onSelect={onSelectIssue}
+              />
+            )}
+
+            {tab === "layers" && (
+              <>
+                <SidebarSection title="Tools">
+                  <Box sx={toolGridSx}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<TextFieldsIcon />}
+                      sx={toolButtonSx}
+                      onClick={() => handleAddNewElement("text")}
+                      disabled={!activeLayerId}
+                      title={
+                        activeLayerId
+                          ? "Add a new text element to the active layer"
+                          : "Select or create a layer first"
+                      }
+                    >
+                      Add text
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<CropSquareIcon />}
+                      sx={toolButtonSx}
+                      onClick={() => handleAddNewElement("mask")}
+                      disabled={!activeLayerId}
+                      title={
+                        activeLayerId
+                          ? "Add a new background mask to the active layer"
+                          : "Select or create a layer first"
+                      }
+                    >
+                      Add mask
+                    </Button>
+                    <Button
+                      variant={mergeMode ? "contained" : "outlined"}
+                      size="small"
+                      startIcon={<CallMergeIcon />}
+                      sx={[toolButtonSx, { gridColumn: "1 / -1" }]}
+                      onClick={onToggleMergeMode}
+                      disabled={ocrRegions.length < 2}
+                      title="Join fragments that belong to one text block, then clean and translate them as one"
+                    >
+                      {mergeMode ? "Cancel merge" : "Merge regions"}
+                    </Button>
+                  </Box>
+                </SidebarSection>
+
+                <SidebarSection
+                  title="Layers"
+                  headerExtra={
+                    <Box sx={layerHeaderActionsSx}>
+                      <IconButton
+                        size="small"
+                        aria-label="Move layer up"
+                        title="Move layer up"
+                        disabled={
+                          !activeLayerId ||
+                          sortedLayers.findIndex(
+                            (l) => l.layer.id === activeLayerId,
+                          ) ===
+                            sortedLayers.length - 1
+                        }
+                        onClick={() =>
+                          activeLayerId && handleMoveLayer(activeLayerId, "up")
+                        }
+                        sx={layerMoveButtonSx}
+                      >
+                        <KeyboardArrowUpIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        aria-label="Move layer down"
+                        title="Move layer down"
+                        disabled={
+                          !activeLayerId ||
+                          sortedLayers.findIndex(
+                            (l) => l.layer.id === activeLayerId,
+                          ) === 0
+                        }
+                        onClick={() =>
+                          activeLayerId &&
+                          handleMoveLayer(activeLayerId, "down")
+                        }
+                        sx={layerMoveButtonSx}
+                      >
+                        <KeyboardArrowDownIcon fontSize="small" />
+                      </IconButton>
+                      <Box sx={layerHeaderDividerSx} />
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<AddIcon sx={smallAddIconSx} />}
+                        onClick={handleCreateTranslationLayer}
+                        title="Add Translation Layer"
+                        sx={addLayerButtonSx}
+                      >
+                        TL
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<AddIcon sx={smallAddIconSx} />}
+                        onClick={handleCreateSfxLayer}
+                        title="Add SFX Layer"
+                        sx={addLayerButtonSx}
+                      >
+                        SFX
+                      </Button>
+                    </Box>
+                  }
+                >
+                  <Box sx={layerListScrollSx}>
+                    {sortedLayers.length === 0 ? (
+                      <Typography
+                        variant="body2"
+                        sx={noLayersTextSx}
+                      >
+                        No active layers.
+                      </Typography>
+                    ) : (
+                      [...sortedLayers].reverse().map((lData, idx) => {
+                        const isActive = lData.layer.id === activeLayerId;
+                        const isVisible = lData.layer.visible;
+                        const stackNumber = sortedLayers.length - idx;
+                        const isExpanded = expandedLayers.has(lData.layer.id);
+                        const hiddenCount = lData.elements.filter(
+                          (el) => !el.visible,
+                        ).length;
+                        return (
+                          <React.Fragment key={lData.layer.id}>
+                            <Box
+                              onClick={() => {
+                                setActiveLayerId(lData.layer.id);
+                                if (isInpaintingLayer(lData.layer)) {
+                                  onInpaintingLayerClick?.(lData.layer.id);
+                                }
+                              }}
+                              sx={[
+                                layerRowBaseSx,
+                                {
+                                  border: isActive
+                                    ? "1px solid var(--primary)"
+                                    : "1px solid var(--border-color)",
+                                  backgroundColor: isActive
+                                    ? "var(--primary-glow)"
+                                    : "transparent",
+                                  boxShadow: isActive
+                                    ? "0 0 8px var(--primary-glow)"
+                                    : "none",
+                                  opacity: isVisible ? 1 : 0.5,
+                                  "&:hover": {
+                                    borderColor: isActive
+                                      ? "var(--primary)"
+                                      : "var(--text-dim, var(--text-muted))",
+                                  },
+                                },
+                              ]}
+                            >
                               <Box
-                                key={element.id}
-                                onClick={() => {
-                                  setActiveLayerId(lData.layer.id);
-                                  setSelectedItem({
-                                    ...element,
-                                    isLayerElement: true,
-                                  });
-                                }}
                                 sx={[
-                                  elementRowSx,
+                                  layerStackNumberBaseSx,
                                   {
-                                    opacity: elementVisible ? 1 : 0.55,
-                                    backgroundColor: isSelectedElement
-                                      ? "var(--primary-glow)"
-                                      : "transparent",
+                                    backgroundColor: isActive
+                                      ? "var(--primary)"
+                                      : "var(--bg-input, rgba(0,0,0,0.06))",
+                                    color: isActive
+                                      ? "#fff"
+                                      : "var(--text-muted)",
                                   },
                                 ]}
                               >
-                                {region?.bubbleReadingOrder ? (
-                                  <Box
-                                    component="span"
-                                    sx={{
-                                      flex: "0 0 auto",
-                                      minWidth: "22px",
-                                      fontSize: "11px",
-                                      fontWeight: 700,
-                                      color: "var(--text-muted)",
-                                      fontVariantNumeric: "tabular-nums",
-                                    }}
-                                  >
-                                    #{region.bubbleReadingOrder}
-                                  </Box>
-                                ) : null}
+                                {stackNumber}
+                              </Box>
+                              <Box sx={layerNameColumnSx}>
                                 <Typography
                                   component="span"
-                                  sx={elementLabelSx}
-                                  title={label}
+                                  sx={[
+                                    layerNameBaseSx,
+                                    {
+                                      fontWeight: isActive ? 700 : 600,
+                                      color: isActive
+                                        ? "var(--primary-hover)"
+                                        : "var(--text-main)",
+                                    },
+                                  ]}
                                 >
-                                  {label}
+                                  {typeof lData.layer.metadataJson
+                                    ?.layer_name === "string"
+                                    ? lData.layer.metadataJson.layer_name
+                                    : lData.layer.type === "translation"
+                                      ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || "EN"})`
+                                      : lData.layer.type === "sfx"
+                                        ? "SFX Layer"
+                                        : lData.layer.type === "ocr"
+                                          ? "OCR Layer"
+                                          : isInpaintingLayer(lData.layer)
+                                            ? "Inpainting"
+                                            : `Layer (${lData.layer.type})`}
                                 </Typography>
-                                {rowStatus && (
-                                  <Box
-                                    component="span"
-                                    title={region?.qaFeedback || undefined}
-                                    sx={{
-                                      flex: "0 0 auto",
-                                      px: 0.75,
-                                      borderRadius: "999px",
-                                      fontSize: "10px",
-                                      fontWeight: 700,
-                                      lineHeight: "16px",
-                                      color:
-                                        rowStatus.tone === "warning"
-                                          ? "var(--warning)"
-                                          : "var(--text-muted)",
-                                      border: `1px solid ${
-                                        rowStatus.tone === "warning"
-                                          ? "var(--warning)"
-                                          : "var(--border-color)"
-                                      }`,
-                                    }}
-                                  >
-                                    {rowStatus.label}
-                                  </Box>
-                                )}
+                                <Typography
+                                  component="span"
+                                  sx={[
+                                    layerElementCountSx,
+                                    {
+                                      cursor: lData.elements.length
+                                        ? "pointer"
+                                        : "default",
+                                      userSelect: "none",
+                                    },
+                                  ]}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (lData.elements.length) {
+                                      toggleLayerExpanded(lData.layer.id);
+                                    }
+                                  }}
+                                  title={
+                                    lData.elements.length
+                                      ? "Show this layer's elements"
+                                      : undefined
+                                  }
+                                >
+                                  {lData.elements.length > 0
+                                    ? `${isExpanded ? "▾" : "▸"} `
+                                    : ""}
+                                  {lData.elements.length} elements
+                                  {hiddenCount
+                                    ? ` · ${hiddenCount} hidden`
+                                    : ""}
+                                  {!isVisible ? " · layer hidden" : ""}
+                                </Typography>
+                              </Box>
+                              <Box
+                                sx={layerActionsRowSx}
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <Tooltip
                                   title={
-                                    elementVisible
-                                      ? "Hide element"
-                                      : "Show element"
+                                    isVisible ? "Hide layer" : "Show layer"
                                   }
                                 >
                                   <IconButton
                                     size="small"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleSetElementVisibility(
-                                        element,
-                                        !elementVisible,
-                                      );
-                                    }}
+                                    onClick={() =>
+                                      handleToggleLayerVisibility(
+                                        lData.layer.id,
+                                      )
+                                    }
                                     sx={{
-                                      color: elementVisible
+                                      color: isVisible
                                         ? "var(--primary)"
                                         : "var(--text-dim, var(--text-muted))",
                                     }}
                                   >
-                                    {elementVisible ? (
+                                    {isVisible ? (
                                       <VisibilityIcon fontSize="small" />
                                     ) : (
                                       <VisibilityOffIcon fontSize="small" />
                                     )}
                                   </IconButton>
                                 </Tooltip>
+
+                                <Tooltip title="Clone layer (copies above, hides original as backup)">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() =>
+                                      handleCloneLayer(lData.layer.id)
+                                    }
+                                    sx={cloneLayerButtonSx}
+                                  >
+                                    <ContentCopyIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+
+                                <Tooltip title="Delete layer">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() =>
+                                      handleDeleteLayer(lData.layer.id)
+                                    }
+                                    sx={deleteLayerButtonSx}
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
                               </Box>
-                            );
-                          },
-                        )}
-                      </Box>
+                            </Box>
+                            {isExpanded && (
+                              <Box sx={elementListSx}>
+                                {inReadingOrder(lData.elements, regionById).map(
+                                  (element) => {
+                                    // AUDIT-F25. This was `!== false`, which made a null-visible element
+                                    // read as visible here while the canvas, the hidden-count above and the
+                                    // worker's renderer all treated it as hidden. The row then offered
+                                    // "Hide element" for something already invisible, wrote `false`, and the
+                                    // first click changed nothing on screen. `=== true` is the same rule the
+                                    // other three readers use.
+                                    const elementVisible =
+                                      element.visible === true;
+                                    const isSelectedElement =
+                                      selectedItem?.id === element.id &&
+                                      selectedItem?.isLayerElement;
+                                    const region = element.regionId
+                                      ? regionById.get(element.regionId)
+                                      : undefined;
+                                    const rowStatus = regionRowStatus(
+                                      region,
+                                      element,
+                                    );
+                                    const label = isPatchElement(element)
+                                      ? `Patch${region ? ` · ${(region.text || "").trim()}` : " · no region"}`
+                                      : (element.text || "").trim() ||
+                                        (region?.text || "").trim() ||
+                                        "(no text)";
+                                    return (
+                                      <Box
+                                        key={element.id}
+                                        onClick={() => {
+                                          setActiveLayerId(lData.layer.id);
+                                          setSelectedItem({
+                                            ...element,
+                                            isLayerElement: true,
+                                          });
+                                        }}
+                                        sx={[
+                                          elementRowSx,
+                                          {
+                                            opacity: elementVisible ? 1 : 0.55,
+                                            backgroundColor: isSelectedElement
+                                              ? "var(--primary-glow)"
+                                              : "transparent",
+                                          },
+                                        ]}
+                                      >
+                                        {region?.bubbleReadingOrder ? (
+                                          <Box
+                                            component="span"
+                                            sx={{
+                                              flex: "0 0 auto",
+                                              minWidth: "22px",
+                                              fontSize: "11px",
+                                              fontWeight: 700,
+                                              color: "var(--text-muted)",
+                                              fontVariantNumeric:
+                                                "tabular-nums",
+                                            }}
+                                          >
+                                            #{region.bubbleReadingOrder}
+                                          </Box>
+                                        ) : null}
+                                        <Typography
+                                          component="span"
+                                          sx={elementLabelSx}
+                                          title={label}
+                                        >
+                                          {label}
+                                        </Typography>
+                                        {rowStatus && (
+                                          <Box
+                                            component="span"
+                                            title={
+                                              region?.qaFeedback || undefined
+                                            }
+                                            sx={{
+                                              flex: "0 0 auto",
+                                              px: 0.75,
+                                              borderRadius: "999px",
+                                              fontSize: "10px",
+                                              fontWeight: 700,
+                                              lineHeight: "16px",
+                                              color:
+                                                rowStatus.tone === "warning"
+                                                  ? "var(--warning)"
+                                                  : "var(--text-muted)",
+                                              border: `1px solid ${
+                                                rowStatus.tone === "warning"
+                                                  ? "var(--warning)"
+                                                  : "var(--border-color)"
+                                              }`,
+                                            }}
+                                          >
+                                            {rowStatus.label}
+                                          </Box>
+                                        )}
+                                        <Tooltip
+                                          title={
+                                            elementVisible
+                                              ? "Hide element"
+                                              : "Show element"
+                                          }
+                                        >
+                                          <IconButton
+                                            size="small"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleSetElementVisibility(
+                                                element,
+                                                !elementVisible,
+                                              );
+                                            }}
+                                            sx={{
+                                              color: elementVisible
+                                                ? "var(--primary)"
+                                                : "var(--text-dim, var(--text-muted))",
+                                            }}
+                                          >
+                                            {elementVisible ? (
+                                              <VisibilityIcon fontSize="small" />
+                                            ) : (
+                                              <VisibilityOffIcon fontSize="small" />
+                                            )}
+                                          </IconButton>
+                                        </Tooltip>
+                                      </Box>
+                                    );
+                                  },
+                                )}
+                              </Box>
+                            )}
+                          </React.Fragment>
+                        );
+                      })
                     )}
-                  </React.Fragment>
-                );
-              })
+                  </Box>
+                </SidebarSection>
+
+                <SidebarSection title="This page">
+                  <Box sx={toolGridSx}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={
+                        isRedoingPageOcr ? (
+                          <CircularProgress
+                            size={12}
+                            sx={inlineSpinnerSx}
+                          />
+                        ) : (
+                          <RefreshIcon />
+                        )
+                      }
+                      onClick={handleRedoPageOcr}
+                      disabled={isRedoingPageOcr}
+                      title="Discard this page's OCR results and detect the text again"
+                      sx={toolButtonSx}
+                    >
+                      Redo OCR
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={
+                        isRedoingPageTranslation ? (
+                          <CircularProgress
+                            size={12}
+                            sx={inlineSpinnerSx}
+                          />
+                        ) : (
+                          <RefreshIcon />
+                        )
+                      }
+                      onClick={handleRedoPageTranslation}
+                      disabled={isRedoingPageTranslation}
+                      title="Discard this page's translation and translate it again"
+                      sx={toolButtonSx}
+                    >
+                      Redo translation
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<FileDownloadIcon />}
+                      onClick={handleExportPng}
+                      title="Download this page as a PNG"
+                      sx={toolButtonSx}
+                    >
+                      Export PNG
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<FileDownloadIcon />}
+                      onClick={handleExportZip}
+                      title="Download this page's layered project as a ZIP"
+                      sx={toolButtonSx}
+                    >
+                      Export ZIP
+                    </Button>
+                  </Box>
+                </SidebarSection>
+              </>
             )}
-          </SidebarSection>
-
-          {/* Editor Tools Section */}
-          <SidebarSection title="Editor Tools">
-            <Box sx={editorToolRowSx}>
-              <Button
-                variant="outlined"
-                size="small"
-                sx={editorToolButtonSx}
-                onClick={() => handleAddNewElement("text")}
-                disabled={!activeLayerId}
-                title={
-                  activeLayerId
-                    ? "Add a new text element to active layer"
-                    : "Select or create a layer first"
-                }
-              >
-                Add Text
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                sx={editorToolButtonSx}
-                onClick={() => handleAddNewElement("mask")}
-                disabled={!activeLayerId}
-                title={
-                  activeLayerId
-                    ? "Add a new background mask to active layer"
-                    : "Select or create a layer first"
-                }
-              >
-                Add Mask
-              </Button>
-            </Box>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<ColorizeIcon />}
-              fullWidth
-              sx={colorDropperButtonSx}
-              onClick={() => handleLaunchEyeDropper("backgroundColor")}
-              disabled={!selectedItem || !selectedItem.isLayerElement}
-              title="Sample color from screen to apply to selected element's background"
-            >
-              Color Dropper
-            </Button>
-            <Button
-              variant={mergeMode ? "contained" : "outlined"}
-              size="small"
-              fullWidth
-              sx={
-                mergeMode
-                  ? { mt: 1, boxShadow: "none" }
-                  : [colorDropperButtonSx, { mt: 1 }]
-              }
-              onClick={onToggleMergeMode}
-              disabled={ocrRegions.length < 2}
-              title="Join fragments that belong to one text block, then clean and translate them as one"
-            >
-              {mergeMode ? "Cancel merge" : "Merge regions"}
-            </Button>
-          </SidebarSection>
-
-          {/* Page Actions Section */}
-          <SidebarSection title="Page Actions">
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={
-                isRedoingPageOcr ? (
-                  <CircularProgress
-                    size={12}
-                    sx={inlineSpinnerSx}
-                  />
-                ) : (
-                  <RefreshIcon />
-                )
-              }
-              onClick={handleRedoPageOcr}
-              disabled={isRedoingPageOcr}
-              fullWidth
-              title="Discards this page's current OCR results and re-runs detection"
-              sx={redoOcrButtonSx}
-            >
-              Redo Page OCR
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={
-                isRedoingPageTranslation ? (
-                  <CircularProgress
-                    size={12}
-                    sx={inlineSpinnerSx}
-                  />
-                ) : (
-                  <RefreshIcon />
-                )
-              }
-              onClick={handleRedoPageTranslation}
-              disabled={isRedoingPageTranslation}
-              fullWidth
-              title="Discards this page's current translation and re-runs it"
-              sx={redoTranslationButtonSx}
-            >
-              Redo Page Translation
-            </Button>
-          </SidebarSection>
-
-          {/* Export Section */}
-          <SidebarSection
-            title="Export"
-            sx={exportSectionSx}
-          >
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FileDownloadIcon />}
-              onClick={handleExportPng}
-              fullWidth
-              sx={exportButtonWithMarginSx}
-            >
-              Export Page (PNG)
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FileDownloadIcon />}
-              onClick={handleExportZip}
-              fullWidth
-              sx={exportButtonWithMarginSx}
-            >
-              Export Project (ZIP)
-            </Button>
-          </SidebarSection>
+          </Box>
         </>
       )}
 
@@ -1149,8 +1199,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             <Box sx={inspectorHeaderRowSx}>
               <Box>
                 <Typography
-                  variant="overline"
-                  component="div"
+                  component="h2"
                   sx={inspectorTitleSx}
                 >
                   Element Inspector
@@ -1995,14 +2044,13 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               >
                 <Grid
                   style={{
-                    fontSize: "10px",
-                    fontWeight: 700,
+                    fontSize: "12px",
+                    fontWeight: 600,
                     color: "var(--text-muted)",
                     marginBottom: "4px",
-                    textTransform: "uppercase",
                   }}
                 >
-                  Region #{reg.bubbleReadingOrder ?? idx + 1} Original
+                  #{reg.bubbleReadingOrder ?? idx + 1} original
                 </Grid>
                 <Grid
                   className="ocr-text-preview"
@@ -2015,14 +2063,13 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   <>
                     <Grid
                       style={{
-                        fontSize: "10px",
-                        fontWeight: 700,
+                        fontSize: "12px",
+                        fontWeight: 600,
                         color: "var(--text-muted)",
                         marginBottom: "4px",
-                        textTransform: "uppercase",
                       }}
                     >
-                      Region #{reg.bubbleReadingOrder ?? idx + 1} Translation
+                      #{reg.bubbleReadingOrder ?? idx + 1} translation
                     </Grid>
                     <Grid
                       className="ocr-text-preview"
@@ -2040,7 +2087,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
           </Grid>
         </Grid>
       )}
-    </Grid>
+    </Box>
   );
 };
 

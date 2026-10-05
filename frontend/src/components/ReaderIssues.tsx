@@ -9,11 +9,14 @@ import Typography from "@mui/material/Typography";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
+import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import SidebarSection from "./SidebarSection";
+import type { ReviewRow } from "../hooks/useReviewTally";
 import type { OcrRegion } from "../types";
 import {
   ISSUE_ACTION_LABELS,
   type IssueAction,
+  type IssueKind,
   type RegionIssue,
 } from "../utils/regionIssues";
 
@@ -43,92 +46,272 @@ const smallTextSx = {
   m: 0,
 } as const;
 
-/** The sidebar's list of everything on the page that needs a person, in reading order. */
-export const IssueList: React.FC<{
-  issues: RegionIssue[];
-  selectedRegionId: string | null;
+const KIND_LABELS: Record<IssueKind, string> = {
+  cleanup: "No lettering",
+  qa: "QA flagged",
+  failed: "Failed",
+  untranslated: "Not translated",
+  overflow: "Doesn't fit",
+};
+
+/**
+ * The Review tab: everything on the page that needs a person, in reading order, numbered as the
+ * balloons are numbered on the page.
+ *
+ * Reader review (2026-10-04) asked for a better way through a page's issues. A settled issue
+ * used to vanish from the list, so after three fixes there was no telling how far you had got.
+ * The list now keeps what it has shown on this page, ticks off what you settle, and draws the
+ * page's progress as one segment per issue. The tally itself lives in the Reader
+ * (useReviewTally), because this tab unmounts while an issue is open in the inspector. J and K
+ * step through the open ones (Reader.tsx).
+ */
+export const ReviewPanel: React.FC<{
+  /** Every issue seen on this page, settled or not, in reading order (useReviewTally). */
+  rows: ReviewRow[];
+  /** No translation layer is shown, so nothing can be judged. */
+  hidden?: boolean;
   onSelect: (issue: RegionIssue) => void;
-}> = ({ issues, selectedRegionId, onSelect }) => {
-  if (issues.length === 0) return null;
-  return (
-    <SidebarSection
-      title="Issues"
-      headerExtra={
-        <Box
-          component="span"
-          sx={warningChipSx}
-        >
-          {issues.length}
-        </Box>
-      }
-    >
-      <Box
-        component="ul"
-        sx={{ listStyle: "none", m: 0, p: 0, display: "grid", gap: 0.5 }}
+}> = ({ rows, hidden = false, onSelect }) => {
+  const [kind, setKind] = React.useState<IssueKind | "all">("all");
+
+  const issues = rows.filter((r) => !r.settled).map((r) => r.issue);
+  const settledCount = rows.length - issues.length;
+  const kinds = [...new Set(issues.map((i) => i.kind))];
+  const activeKind = kind !== "all" && kinds.includes(kind) ? kind : "all";
+  const shown = rows.filter(
+    (r) => activeKind === "all" || r.issue.kind === activeKind,
+  );
+
+  if (hidden || rows.length === 0) {
+    return (
+      <Typography
+        component="p"
+        sx={{ ...smallTextSx, color: "var(--text-muted)", py: 1 }}
       >
-        {issues.map((issue) => {
-          const selected = issue.region.id === selectedRegionId;
-          return (
-            <li key={issue.region.id}>
+        {hidden
+          ? "Show a translation layer to review this page."
+          : "Nothing to review on this page."}
+      </Typography>
+    );
+  }
+
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
+      <Box>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "baseline",
+            justifyContent: "space-between",
+            gap: 1,
+            mb: 0.75,
+          }}
+        >
+          <Typography
+            component="p"
+            sx={{ m: 0, fontSize: "13px", fontWeight: 600 }}
+          >
+            {issues.length === 0
+              ? `All ${rows.length} settled`
+              : `${issues.length} to review`}
+            {settledCount > 0 && issues.length > 0 && (
+              <Box
+                component="span"
+                sx={{ fontWeight: 400, color: "var(--text-muted)" }}
+              >
+                , {settledCount} settled
+              </Box>
+            )}
+          </Typography>
+          {issues.length > 1 && (
+            <Typography
+              component="p"
+              sx={{ m: 0, fontSize: "12px", color: "var(--text-muted)" }}
+            >
+              <Kbd>J</Kbd> <Kbd>K</Kbd> to step
+            </Typography>
+          )}
+        </Box>
+        <Box
+          role="img"
+          aria-label={`${settledCount} of ${rows.length} issues on this page settled`}
+          sx={{ display: "flex", gap: "3px" }}
+        >
+          {rows.map((r) => (
+            <Box
+              key={r.issue.region.id}
+              sx={{
+                flex: 1,
+                height: 4,
+                borderRadius: "2px",
+                backgroundColor: r.settled
+                  ? "color-mix(in srgb, var(--text-muted) 55%, transparent)"
+                  : "var(--warning)",
+              }}
+            />
+          ))}
+        </Box>
+      </Box>
+
+      {kinds.length > 1 && (
+        <Box
+          role="group"
+          aria-label="Show issues of one kind"
+          sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}
+        >
+          {(["all", ...kinds] as const).map((k) => {
+            const count =
+              k === "all"
+                ? issues.length
+                : issues.filter((i) => i.kind === k).length;
+            const active = activeKind === k;
+            return (
               <ButtonBase
-                onClick={() => onSelect(issue)}
+                key={k}
+                aria-pressed={active}
+                onClick={() => setKind(k)}
                 sx={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                  p: "6px 8px",
-                  borderRadius: "8px",
-                  textAlign: "left",
-                  border: selected
-                    ? "1px solid var(--warning)"
-                    : "1px solid var(--border-color)",
-                  backgroundColor: selected
-                    ? "color-mix(in srgb, var(--warning) 10%, transparent)"
+                  px: 1,
+                  height: 24,
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  gap: 0.5,
+                  color: active ? "var(--text-main)" : "var(--text-muted)",
+                  backgroundColor: active
+                    ? "var(--bg-chip, var(--bg-input))"
                     : "transparent",
-                  "&:hover": { borderColor: "var(--warning)" },
+                  "&:hover": { color: "var(--text-main)" },
+                  "&.Mui-focusVisible": {
+                    outline: "2px solid var(--primary)",
+                  },
                 }}
               >
+                {k === "all" ? "All" : KIND_LABELS[k]}
                 <Box
                   component="span"
-                  sx={warningChipSx}
+                  sx={{ color: "var(--text-muted)", fontWeight: 400 }}
                 >
-                  #{issue.region.bubbleReadingOrder ?? "?"}
-                </Box>
-                <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography
-                    component="span"
-                    sx={{
-                      display: "block",
-                      fontSize: "12.5px",
-                      fontWeight: 600,
-                      color: "var(--text-main)",
-                    }}
-                  >
-                    {issue.title}
-                  </Typography>
-                  <Typography
-                    component="span"
-                    sx={{
-                      display: "block",
-                      fontSize: "11px",
-                      color: "var(--text-muted)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {issue.element?.text?.trim() || issue.region.text}
-                  </Typography>
+                  {count}
                 </Box>
               </ButtonBase>
+            );
+          })}
+        </Box>
+      )}
+
+      <Box
+        component="ul"
+        aria-label="Issues on this page"
+        sx={{ listStyle: "none", m: 0, p: 0, display: "grid", gap: "2px" }}
+      >
+        {shown.map(({ issue, settled }) => {
+          const number = issue.region.bubbleReadingOrder ?? "?";
+          const text = issue.element?.text?.trim() || issue.region.text;
+          const body = (
+            <>
+              <Box
+                component="span"
+                aria-hidden
+                sx={settled ? settledChipSx : warningChipSx}
+              >
+                {settled ? <CheckRoundedIcon sx={{ fontSize: 14 }} /> : number}
+              </Box>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography
+                  component="span"
+                  sx={{
+                    display: "block",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    color: settled ? "var(--text-muted)" : "var(--text-main)",
+                  }}
+                >
+                  {settled ? `#${number} settled` : issue.title}
+                </Typography>
+                <Typography
+                  component="span"
+                  sx={{
+                    display: "block",
+                    fontSize: "12px",
+                    color: "var(--text-muted)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {text}
+                </Typography>
+              </Box>
+            </>
+          );
+          return (
+            <li key={issue.region.id}>
+              {settled ? (
+                <Box sx={{ ...rowSx, opacity: 0.7 }}>{body}</Box>
+              ) : (
+                <ButtonBase
+                  onClick={() => onSelect(issue)}
+                  aria-label={`#${number}: ${issue.title}`}
+                  sx={{
+                    ...rowSx,
+                    "&:hover": {
+                      backgroundColor: "var(--bg-input, rgba(0,0,0,0.04))",
+                    },
+                    "&.Mui-focusVisible": {
+                      outline: "2px solid var(--primary)",
+                      outlineOffset: "-2px",
+                    },
+                  }}
+                >
+                  {body}
+                </ButtonBase>
+              )}
             </li>
           );
         })}
       </Box>
-    </SidebarSection>
+    </Box>
   );
 };
+
+const rowSx = {
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  gap: 1.25,
+  p: "7px 8px",
+  borderRadius: "6px",
+  textAlign: "left",
+  justifyContent: "flex-start",
+} as const;
+
+const settledChipSx = {
+  ...numberChipSx,
+  color: "var(--text-muted)",
+  backgroundColor: "var(--bg-input, rgba(0,0,0,0.04))",
+} as const;
+
+const Kbd: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <Box
+    component="kbd"
+    sx={{
+      display: "inline-block",
+      minWidth: 18,
+      px: 0.5,
+      borderRadius: "4px",
+      fontFamily: "inherit",
+      fontSize: "11px",
+      fontWeight: 600,
+      lineHeight: "18px",
+      textAlign: "center",
+      color: "var(--text-main)",
+      backgroundColor: "var(--bg-chip, var(--bg-input))",
+    }}
+  >
+    {children}
+  </Box>
+);
 
 /** The inspector card for one issue: what is wrong, and the quick ways to settle it. */
 export const IssueCard: React.FC<{
@@ -324,30 +507,16 @@ export const IssueCard: React.FC<{
                       })
                     : onAction(issue, action)
               }
-              sx={{
-                textTransform: "none",
-                boxShadow: "none",
-                ...(action === "delete"
-                  ? { color: "var(--error)" }
+              // The first action is the suggested one, in the review colour; the rest are the
+              // theme's quiet buttons, and Delete is a red text button.
+              color={
+                action === "delete"
+                  ? "error"
                   : index === 0
-                    ? {
-                        backgroundColor: "var(--warning)",
-                        color: "#1f1400",
-                        "&:hover": {
-                          backgroundColor: "var(--warning)",
-                          filter: "brightness(0.95)",
-                        },
-                      }
-                    : {
-                        color: "var(--warning)",
-                        borderColor: "var(--warning)",
-                        "&:hover": {
-                          borderColor: "var(--warning)",
-                          backgroundColor:
-                            "color-mix(in srgb, var(--warning) 12%, transparent)",
-                        },
-                      }),
-              }}
+                    ? "warning"
+                    : "inherit"
+              }
+              sx={{ textTransform: "none", boxShadow: "none" }}
             >
               {ISSUE_ACTION_LABELS[action]}
             </Button>
@@ -422,7 +591,14 @@ export const MergePanel: React.FC<{
     <Box ref={panelRef}>
       <SidebarSection
         title="Merge regions"
-        sx={{ borderColor: "var(--primary)" }}
+        sx={{
+          px: 1.25,
+          mb: 1.5,
+          borderTop: "none",
+          borderRadius: "8px",
+          backgroundColor: "var(--primary-glow)",
+          "&:first-of-type": { pt: 1.25 },
+        }}
       >
         <Typography
           component="p"

@@ -58,11 +58,18 @@ describe("ReaderRightSidebar", () => {
         isRedoingRegionOcr={false}
       />,
     );
+    // No banner asking for a selection: the space goes to the tabs. Layers opens first, with
+    // the page actions under the layer list.
     expect(
-      screen.getByText(
-        "Select an OCR region or a text layer to inspect and edit details.",
-      ),
-    ).toBeInTheDocument();
+      screen.queryByText(/Select an OCR region or a text layer/),
+    ).toBeNull();
+    expect(screen.getByRole("tab", { name: "Layers" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.queryByRole("tab", { name: "Page" })).toBeNull();
+    expect(screen.getByText("Export ZIP")).toBeInTheDocument();
+    expect(screen.getByText("Redo OCR")).toBeInTheDocument();
   });
 
   it("renders correctly with layers and active layer", () => {

@@ -2,20 +2,38 @@ import React from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
-import CardActions from "@mui/material/CardActions";
-import CardContent from "@mui/material/CardContent";
-import Chip from "@mui/material/Chip";
 import Grid from "@mui/material/Grid";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import IconButton from "@mui/material/IconButton";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import ImportExportIcon from "@mui/icons-material/ImportExport";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import HistoryIcon from "@mui/icons-material/History";
 import type { Series, Chapter, SystemSettingsDto } from "../types";
 import { toSlug } from "../utils";
 import LazyImage from "./LazyImage";
 import LoadMoreSentinel from "./LoadMoreSentinel";
+import CardFooter from "./CardFooter";
+
+/** Models set on this chapter or its series (not the system defaults), in one short line. */
+const overrideLine = (c: Chapter): string | null => {
+  const parts: string[] = [];
+  const slot = (
+    name: string,
+    s?: {
+      provider?: string | null;
+      model?: string | null;
+      source?: string | null;
+    },
+  ) => {
+    if (!s || s.source === "global" || !s.provider) return;
+    parts.push(`${name} ${s.model || s.provider}`);
+  };
+  slot("OCR", c.resolvedOcr);
+  slot("TL", c.resolvedTranslation);
+  return parts.length ? parts.join(", ") : null;
+};
 
 interface ChapterCardGridProps {
   chapters: Chapter[];
@@ -45,6 +63,13 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
   isLoadingMore,
   onLoadMore,
 }) => {
+  // One path for click and Enter, so the two can't drift apart.
+  const openChapter = (c: Chapter) => {
+    onSelectChapter(c);
+    onNavigate(
+      `/chapters/${c.id}/${toSlug(c.title || `chapter-${c.chapterNumber}`)}`,
+    );
+  };
   return (
     <>
       <Stack
@@ -64,12 +89,13 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
           Chapters ({chapters.length})
         </Typography>
         <Button
-          variant="outlined"
+          variant="text"
           size="small"
           startIcon={<ImportExportIcon />}
           onClick={onToggleSort}
+          sx={{ color: "text.secondary" }}
         >
-          Sort: {sortAsc ? "Ascending ↑" : "Descending ↓"}
+          Sort: {sortAsc ? "first to last" : "last to first"}
         </Button>
       </Stack>
 
@@ -86,175 +112,118 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
             sx={{ display: "flex" }}
           >
             <Card
+              role="link"
+              tabIndex={0}
+              aria-label={`Chapter ${c.chapterNumber}${c.title ? `, ${c.title}` : ""}`}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") openChapter(c);
+              }}
+              onClick={() => openChapter(c)}
               sx={{
                 cursor: "pointer",
                 // The card fills its Grid cell so a row of mixed-length titles stays even.
                 width: "100%",
                 display: "flex",
                 flexDirection: "column",
-                transition: "transform 0.2s, box-shadow 0.2s",
-                "&:hover": {
-                  transform: "translateY(-4px)",
-                  boxShadow: 4,
-                },
-              }}
-              onClick={() => {
-                onSelectChapter(c);
-                onNavigate(
-                  `/chapters/${c.id}/${toSlug(c.title || `chapter-${c.chapterNumber}`)}`,
-                );
+                borderRadius: "8px",
+                outline: "2px solid transparent",
+                outlineOffset: 2,
+                transition: "outline-color 0.12s ease",
+                "&:hover, &:focus-visible": { outlineColor: "primary.main" },
               }}
             >
-              {c.coverImageUrl ? (
+              {c.coverImageUrl || series.coverImageUrl ? (
                 <LazyImage
-                  src={c.coverImageUrl}
-                  alt={c.title || `Chapter ${c.chapterNumber}`}
+                  src={(c.coverImageUrl || series.coverImageUrl)!}
+                  alt={
+                    c.coverImageUrl
+                      ? c.title || `Chapter ${c.chapterNumber}`
+                      : "Fallback Cover"
+                  }
                   sx={{
                     display: "block",
                     width: "100%",
-                    aspectRatio: "2/3",
+                    aspectRatio: "2 / 3",
                     objectFit: "cover",
-                    bgcolor: "#000",
-                  }}
-                />
-              ) : series.coverImageUrl ? (
-                <LazyImage
-                  src={series.coverImageUrl}
-                  alt="Fallback Cover"
-                  sx={{
-                    display: "block",
-                    width: "100%",
-                    aspectRatio: "2/3",
-                    objectFit: "cover",
-                    bgcolor: "#000",
                   }}
                 />
               ) : (
                 <Box
                   sx={{
-                    aspectRatio: "2/3",
+                    aspectRatio: "2 / 3",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    bgcolor: "grey.900",
                     color: "text.secondary",
-                    fontFamily: '"Outfit", sans-serif',
+                    bgcolor: "background.default",
                     fontWeight: 700,
-                    p: 2,
-                    textAlign: "center",
                     fontSize: 24,
                   }}
                 >
-                  C{c.chapterNumber}
+                  {c.chapterNumber}
                 </Box>
               )}
-
-              <CardContent
-                sx={{ flex: 1, py: 1.5, pb: 1, "&:last-child": { pb: 1.5 } }}
-              >
+              <Box sx={{ px: 1, pt: 0.75, minWidth: 0 }}>
                 <Typography
-                  variant="subtitle2"
-                  sx={{
-                    color: "primary.main",
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                    fontSize: "0.75rem",
-                    mb: 0.5,
-                  }}
-                >
-                  Chapter {c.chapterNumber}
-                </Typography>
-                <Typography
-                  variant="h6"
                   noWrap
                   title={c.title || "Untitled"}
-                  sx={{ fontSize: "1rem", lineHeight: 1.2, mb: 1 }}
+                  sx={{
+                    fontSize: "0.875rem",
+                    fontWeight: 700,
+                    lineHeight: 1.3,
+                  }}
                 >
-                  {c.title || "Untitled"}
-                </Typography>
-
-                {(c.pageCount ||
-                  c.useContextMemory !== undefined ||
-                  c.resolvedOcr ||
-                  c.resolvedTranslation) && (
+                  {c.chapterNumber}.{" "}
                   <Box
-                    sx={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 0.5,
-                      mt: 0.5,
-                    }}
+                    component="span"
+                    sx={{ fontWeight: 500 }}
                   >
-                    {c.pageCount !== undefined && c.pageCount > 0 && (
-                      <Chip
-                        label={`${c.pageCount} pages`}
-                        size="small"
-                        variant="outlined"
-                        title="Total pages in this chapter"
-                      />
-                    )}
-                    {c.useContextMemory !== undefined && (
-                      <Chip
-                        label={c.useContextMemory ? "Context" : "No Context"}
-                        size="small"
-                        variant="outlined"
-                        color={c.useContextMemory ? "primary" : "default"}
-                        title={
-                          c.useContextMemory
-                            ? "Context memory enabled"
-                            : "Context memory disabled"
-                        }
-                      />
-                    )}
-                    {(c.resolvedOcr || c.resolvedTranslation) && (
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          color: "text.secondary",
-                          fontSize: "10px",
-                          lineHeight: "20px",
-                          width: "100%",
-                          mt: 0.5,
-                        }}
-                      >
-                        {c.resolvedOcr && c.resolvedOcr.source !== "global"
-                          ? `OCR: ${c.resolvedOcr.provider}${c.resolvedOcr.model ? " / " + c.resolvedOcr.model : ""} (${c.resolvedOcr.source})`
-                          : ""}
-                        {c.resolvedOcr &&
-                        c.resolvedOcr.source !== "global" &&
-                        c.resolvedTranslation &&
-                        c.resolvedTranslation.source !== "global"
-                          ? " | "
-                          : ""}
-                        {c.resolvedTranslation &&
-                        c.resolvedTranslation.source !== "global"
-                          ? `TL: ${c.resolvedTranslation.provider}${c.resolvedTranslation.model ? " / " + c.resolvedTranslation.model : ""} (${c.resolvedTranslation.source})`
-                          : ""}
-                      </Typography>
-                    )}
+                    {c.title || "Untitled"}
                   </Box>
+                </Typography>
+                {overrideLine(c) && (
+                  <Typography
+                    noWrap
+                    title={overrideLine(c) ?? undefined}
+                    sx={{ fontSize: "0.6875rem", color: "text.secondary" }}
+                  >
+                    {overrideLine(c)}
+                  </Typography>
                 )}
-              </CardContent>
-
-              <CardActions sx={{ justifyContent: "flex-end", pt: 0 }}>
-                <IconButton
-                  size="small"
-                  aria-label="Edit Chapter"
-                  title="Edit Chapter"
-                  onClick={(e) => onEditChapter(c, e)}
-                >
-                  <EditIcon fontSize="small" />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  aria-label="Delete Chapter"
-                  title="Delete Chapter"
-                  color="error"
-                  onClick={(e) => onDeleteChapter(c.id, e)}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </CardActions>
+              </Box>
+              <CardFooter
+                info={[
+                  {
+                    key: "pages",
+                    icon: <DescriptionOutlinedIcon />,
+                    text: c.pageCount ?? 0,
+                    label: `${c.pageCount ?? 0} pages`,
+                  },
+                  ...(c.useContextMemory
+                    ? [
+                        {
+                          key: "context",
+                          icon: <HistoryIcon />,
+                          label:
+                            "Page context on: the previous page is sent along",
+                        },
+                      ]
+                    : []),
+                ]}
+                actions={[
+                  {
+                    title: "Edit Chapter",
+                    icon: <EditIcon />,
+                    onClick: (e) => onEditChapter(c, e),
+                  },
+                  {
+                    title: "Delete Chapter",
+                    icon: <DeleteIcon />,
+                    onClick: (e) => onDeleteChapter(c.id, e),
+                    danger: true,
+                  },
+                ]}
+              />
             </Card>
           </Grid>
         ))}

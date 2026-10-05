@@ -313,7 +313,7 @@ describe("Reader Component", () => {
     await screen.findByText(/Test Series/);
 
     // By default both sidebars are true (visible)
-    expect(screen.getByText("Overlays")).toBeInTheDocument();
+    expect(screen.getByText("Show on page")).toBeInTheDocument();
 
     // Click left sidebar toggle to hide it
     const leftSidebarToggle = screen.getAllByRole("button", {
@@ -321,10 +321,12 @@ describe("Reader Component", () => {
     })[0]; // Assuming it's the first button with MenuOpenIcon/Settings
     fireEvent.click(leftSidebarToggle);
 
-    expect(screen.queryByText("Overlays")).not.toBeInTheDocument();
+    expect(screen.queryByText("Show on page")).not.toBeInTheDocument();
 
     // Click right sidebar toggle
-    const rightSidebarToggle = screen.getByLabelText(/Inspector/i);
+    const rightSidebarToggle = screen.getByRole("button", {
+      name: /Hide Inspector/i,
+    });
     fireEvent.click(rightSidebarToggle);
   });
 
@@ -355,13 +357,13 @@ describe("Reader Component", () => {
         ok: true,
         json: () => Promise.resolve([]),
       });
-      fireEvent.click(screen.getByText("Redo Page OCR"));
+      fireEvent.click(screen.getByText("Redo OCR"));
 
       mockSafeFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve([]),
       });
-      fireEvent.click(screen.getByText("Redo Page Translation"));
+      fireEvent.click(screen.getByText("Redo translation"));
 
       // Click layer creation buttons
       mockSafeFetch.mockResolvedValueOnce({

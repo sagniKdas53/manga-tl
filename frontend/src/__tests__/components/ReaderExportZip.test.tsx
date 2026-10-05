@@ -266,7 +266,7 @@ describe("Reader project ZIP export", () => {
 
     const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
     fireEvent.load(img);
-    fireEvent.click(await screen.findByText("Export Page (PNG)"));
+    fireEvent.click(await screen.findByText("Export PNG"));
 
     await waitFor(() => {
       expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
@@ -356,7 +356,7 @@ describe("Reader project ZIP export", () => {
     );
     const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
     fireEvent.load(img);
-    fireEvent.click(await screen.findByText("Export Page (PNG)"));
+    fireEvent.click(await screen.findByText("Export PNG"));
   }
 
   it("renders a page whose render is pending, then exports it", async () => {
@@ -410,7 +410,7 @@ describe("Reader project ZIP export", () => {
     });
     fireEvent.load(img);
 
-    fireEvent.click(await screen.findByText("Export Project (ZIP)"));
+    fireEvent.click(await screen.findByText("Export ZIP"));
 
     await waitFor(() => {
       expect(capturedZip).not.toBeNull();
@@ -479,7 +479,7 @@ describe("Reader project ZIP export", () => {
         configurable: true,
       });
       fireEvent.load(img);
-      fireEvent.click(await screen.findByText("Export Project (ZIP)"));
+      fireEvent.click(await screen.findByText("Export ZIP"));
       await waitFor(() => {
         expect(capturedZip).not.toBeNull();
       });
@@ -624,7 +624,7 @@ describe("Reader project ZIP export", () => {
     );
     const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
     fireEvent.load(img);
-    fireEvent.click(await screen.findByText("Export Project (ZIP)"));
+    fireEvent.click(await screen.findByText("Export ZIP"));
     await waitFor(() => expect(capturedZip).not.toBeNull());
 
     const zip = await JSZip.loadAsync(capturedZip!);
@@ -674,7 +674,7 @@ describe("Reader project ZIP export", () => {
 
     const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
     fireEvent.load(img);
-    fireEvent.click(await screen.findByText("Export Project (ZIP)"));
+    fireEvent.click(await screen.findByText("Export ZIP"));
 
     await waitFor(() => {
       expect(capturedZip).not.toBeNull();

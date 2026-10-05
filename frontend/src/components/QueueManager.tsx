@@ -1,33 +1,34 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Badge from "@mui/material/Badge";
 import Box from "@mui/material/Box";
-import Chip from "@mui/material/Chip";
+import Button from "@mui/material/Button";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
+import Popover from "@mui/material/Popover";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import ChecklistIcon from "@mui/icons-material/Checklist";
-import ClearAllIcon from "@mui/icons-material/ClearAll";
 import ClearIcon from "@mui/icons-material/Clear";
 import PauseIcon from "@mui/icons-material/Pause";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import LoopIcon from "@mui/icons-material/Loop";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import PlaylistRemoveIcon from "@mui/icons-material/PlaylistRemove";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { safeFetch } from "../utils";
 import { useNotifications } from "./useNotifications";
 import { useToast } from "./ToastContext";
 import ConfirmModal from "./ConfirmModal";
 import { useDependencyLogger } from "../hooks/useDependencyLogger";
 import { formatErrorMessage } from "../utils/jobErrorMessage";
+import { PipelineStrip } from "./QueueParts";
+import {
+  formatElapsed,
+  stageLabelOf,
+  type StripState,
+} from "../utils/queueStages";
 
 interface Job {
   id: string;
@@ -63,13 +64,14 @@ interface ParsedPayload {
   [key: string]: unknown;
 }
 
-const statusColor: Record<string, string> = {
-  PROCESSING: "#4caf50",
-  PENDING: "#2196f3",
-  COMPLETED: "#2196f3",
-  FAILED: "#f44336",
-  PAUSED: "#ffc107",
-};
+/**
+ * Width of a row's right column: three 28 px button slots (retry, pause/resume, remove).
+ * Fixed, so every row's strip has the same width; elapsed time sits on the title line.
+ */
+const ROW_TOOLS_WIDTH = 84;
+
+/** From this many jobs on, the running segment stops pulsing (one CSS animation per row). */
+const STRIP_ANIMATION_LIMIT = 100;
 
 /** How long a finished job stays visible before it is swept out of the drawer. */
 const COMPLETED_GRACE_MS = 10000;
@@ -98,212 +100,6 @@ const pipelineStages = [
   "qa",
 ];
 
-const stageLabels: Record<string, string> = {
-  "panel-detection": "Panel Detection",
-  ocr: "OCR",
-  layout: "Layout",
-  translation: "Translation",
-  render: "Render",
-  qa: "QA",
-};
-
-// --- AUDIT-F2: static sx literals hoisted to module scope --------------------
-//
-// This drawer re-renders on every job list/status change (job_update fires often while the
-// pipeline is active), so a static object literal recreated per render bought nothing but a
-// cache miss for Emotion. Blocks that genuinely depend on a per-job value (status color,
-// collapsed/visible flags) keep a small dynamic part inline, merged with a static base via the
-// `sx` array form.
-
-const drawerPaperSx = { width: 520 } as const;
-
-const drawerRootSx = {
-  display: "flex",
-  flexDirection: "column",
-  height: "100%",
-} as const;
-
-const drawerHeaderSx = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  px: 2,
-  py: 1,
-  borderBottom: 1,
-  borderColor: "divider",
-} as const;
-
-// Reused for both the drawer's own title row and each chapter group's header row.
-const flexRowGapHalfSx = {
-  display: "flex",
-  alignItems: "center",
-  gap: 0.5,
-} as const;
-
-const drawerTitleTextSx = { fontSize: "16px", fontWeight: 600 } as const;
-
-const infoIconSx = {
-  fontSize: 15,
-  color: "text.disabled",
-  cursor: "help",
-} as const;
-
-const drawerActionsRowSx = { display: "flex", gap: 1 } as const;
-
-const statusSummaryRowSx = {
-  display: "flex",
-  gap: 0.75,
-  flexWrap: "wrap",
-  px: 2,
-  py: 1,
-  borderBottom: 1,
-  borderColor: "divider",
-  backgroundColor: "action.hover",
-} as const;
-
-// Per-status color is dynamic; everything else about a summary chip is not.
-const statusChipBaseSx = {
-  height: 22,
-  fontSize: "11px",
-  fontWeight: 600,
-} as const;
-
-const emptyStateSx = {
-  flex: 1,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "text.secondary",
-} as const;
-
-const queueTableSx = { tableLayout: "fixed" } as const;
-const jobColumnHeaderSx = { px: 2, width: "45%" } as const;
-const statusColumnHeaderSx = { px: 2, width: "40%" } as const;
-const actionsColumnHeaderSx = { px: 2, width: "15%" } as const;
-
-const chapterRowSx = {
-  cursor: "pointer",
-  "&:hover": { backgroundColor: "action.selected" },
-} as const;
-
-const chapterCellSx = {
-  px: 1,
-  py: 0.5,
-  backgroundColor: "action.hover",
-  borderBottom: 0,
-} as const;
-
-// The collapse chevron's rotation is the only dynamic part.
-const chapterChevronBaseSx = {
-  fontSize: 16,
-  color: "text.secondary",
-  transition: "transform 0.15s ease",
-} as const;
-
-const chapterLabelSx = {
-  fontWeight: 600,
-  color: "text.secondary",
-  fontSize: "10.5px",
-  letterSpacing: 0.2,
-} as const;
-
-const chapterJobCountSx = { color: "text.disabled", fontSize: "10px" } as const;
-
-const jobRowSx = {
-  "&:last-child td, &:last-child th": { borderBottom: 0 },
-} as const;
-
-// Shared by the Job and Model & Status columns — both cells use the identical shape.
-const jobCellSx = {
-  px: 2,
-  py: 1.25,
-  verticalAlign: "top",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-} as const;
-
-const jobRowContentSx = {
-  display: "flex",
-  alignItems: "flex-start",
-  gap: 1,
-} as const;
-
-// Status color is dynamic; size/shape/position are not.
-const statusDotBaseSx = {
-  width: 8,
-  height: 8,
-  borderRadius: "50%",
-  flexShrink: 0,
-  mt: 0.4,
-} as const;
-
-const minWidthZeroSx = { minWidth: 0 } as const;
-const jobTitleRowSx = {
-  display: "flex",
-  alignItems: "center",
-  gap: 0.5,
-} as const;
-const jobTypeLabelSx = { fontWeight: 600, fontSize: "13px" } as const;
-const pageLabelSx = { color: "text.secondary", fontWeight: 400 } as const;
-const retryLoopIconSx = { fontSize: 13, color: "text.disabled" } as const;
-
-const providerModelBoxSx = { minHeight: 16 } as const;
-
-const providerModelTextSx = {
-  display: "block",
-  color: "text.primary",
-  fontSize: "11px",
-  fontWeight: 500,
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-} as const;
-
-const providerModelPlaceholderSx = {
-  display: "block",
-  color: "text.disabled",
-  fontSize: "11px",
-} as const;
-
-const statusRowSx = {
-  display: "flex",
-  alignItems: "center",
-  gap: 1,
-  mt: 0.5,
-  flexWrap: "wrap",
-} as const;
-
-// Per-status color is dynamic; everything else about the job's status chip is not.
-const jobStatusChipBaseSx = {
-  height: 20,
-  fontSize: "10px",
-  fontWeight: 700,
-  letterSpacing: 0.2,
-  "& .MuiChip-label": { px: 1 },
-} as const;
-
-// Reused for both the "Attempt N/M" and the last-updated timestamp captions.
-const mutedCaptionSx = { color: "text.disabled", fontSize: "10px" } as const;
-
-const errorBoxSx = { minHeight: 14, mt: 0.25 } as const;
-
-const errorTextSx = {
-  display: "block",
-  color: "error.main",
-  fontSize: "10px",
-} as const;
-
-const actionsCellSx = { px: 2, py: 1.25, verticalAlign: "top" } as const;
-const actionsRowSx = {
-  display: "flex",
-  gap: 0.5,
-  justifyContent: "flex-end",
-} as const;
-
-// Visibility is dynamic (depends on job status); the reserved footprint is not — the row
-// must not reflow as different jobs show different subsets of these three actions.
-const actionSlotBaseSx = { width: 28, height: 28 } as const;
-
 const nextPipelineStage = (type: string): string | null => {
   // The QA retry loop re-runs OCR over a few regions and then rejoins at translation, so it
   // is a detour rather than a position in the chain.
@@ -316,84 +112,17 @@ const nextPipelineStage = (type: string): string | null => {
 const isRetryLoopType = (jobType: string) =>
   jobType === "qa-re-ocr" || jobType === "region-redo";
 
-const pipelineStepperSx = {
-  display: "flex",
-  gap: 0.5,
-  mt: 0.75,
-  maxWidth: 140,
-} as const;
-
-const pipelineSegmentBaseSx = {
-  flex: 1,
-  height: 3,
-  borderRadius: 2,
-} as const;
-
-const PipelineStepper: React.FC<{
-  jobType: string;
-  jobStatus: string;
-  color: string;
-}> = ({ jobType, jobStatus, color }) => {
-  const isRetry = isRetryLoopType(jobType);
-  let currentIndex = pipelineStages.indexOf(jobType);
-  if (currentIndex === -1 && isRetry) currentIndex = 1; // re-ocr loops back to the OCR stage
-
-  const isComplete = jobStatus === "COMPLETED";
-  const isQaStage = jobType === "qa";
-
-  let stageName = "";
-  if (isComplete) {
-    stageName = "All stages complete";
-  } else if (isRetry) {
-    stageName = `QA retry loop · re-running ${stageLabels[pipelineStages[currentIndex]]} after a failed QA pass`;
-  } else if (isQaStage) {
-    stageName = `Stage ${currentIndex + 1} of ${pipelineStages.length} · QA — can loop back through re-OCR up to 2× on failure`;
-  } else if (currentIndex >= 0) {
-    stageName = `Stage ${currentIndex + 1} of ${pipelineStages.length} · ${stageLabels[pipelineStages[currentIndex]]}`;
-  }
-
-  return (
-    <Tooltip
-      title={stageName}
-      placement="top"
-    >
-      <Box sx={pipelineStepperSx}>
-        {pipelineStages.map((stage, i) => {
-          const isDone = isComplete || (currentIndex >= 0 && i < currentIndex);
-          const isCurrent = !isComplete && i === currentIndex;
-          return (
-            <Box
-              key={stage}
-              sx={[
-                pipelineSegmentBaseSx,
-                {
-                  backgroundColor:
-                    isDone || isCurrent ? color : "action.disabledBackground",
-                  backgroundImage:
-                    isCurrent && isRetry
-                      ? `repeating-linear-gradient(45deg, ${color} 0px, ${color} 2px, transparent 2px, transparent 4px)`
-                      : "none",
-                  opacity: isDone ? 0.4 : 1,
-                },
-              ]}
-            />
-          );
-        })}
-      </Box>
-    </Tooltip>
-  );
-};
-
 const formatJobType = (type: string) => {
   const map: Record<string, string> = {
-    "panel-detection": "Panel Detection",
-    ocr: "OCR Processing",
+    "panel-detection": "Panel detection",
+    ocr: "OCR",
+    cleanup: "Cleanup",
     translation: "Translation",
-    qa: "Quality Assurance",
-    "qa-re-ocr": "QA Re-OCR",
-    "region-redo": "Region Redo",
+    qa: "QA",
+    "qa-re-ocr": "QA re-OCR",
+    "region-redo": "Region redo",
   };
-  return map[type] || type.toUpperCase();
+  return map[type] || type;
 };
 
 interface JobLocation {
@@ -914,56 +643,93 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
   /**
    * The stage this row is waiting to be handed to, or null when nothing follows.
    *
-   * The previous rule relabelled *every* COMPLETED job as "TRANSITIONING...", which made the
-   * end of a pipeline unreadable: a finished `qa` — the whole chapter done — announced itself
-   * as mid-flight for the ten seconds before the row was pruned, as did the one-shot
-   * `region-redo-*` jobs that nothing follows.
+   * A finished job used to be relabelled "TRANSITIONING..." even at the end of the pipeline,
+   * so a finished `qa` (the whole chapter done) announced itself as mid-flight. Only a stage
+   * with a successor reads as a hand-off.
    */
   const getTransitionTarget = (job: Job): string | null =>
     job.status === "COMPLETED" ? nextPipelineStage(job.type) : null;
 
-  /** Coarse label for the summary chips, which group rows by state. */
-  const getSummaryLabel = (job: Job): string => {
-    if (isPaused && job.status === "PENDING") return "PAUSED";
-    return getTransitionTarget(job) ? "TRANSITIONING" : job.status;
+  type Bucket = "running" | "waiting" | "failed" | "done";
+  type Filter = "all" | "running" | "waiting" | "failed";
+  const [filter, setFilter] = useState<Filter>("all");
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  // The one row whose error is shown whole in a popover, opened by a tap or a key rather than
+  // hover. Rows keep their fixed height, so the full text cannot open in place.
+  const [errorPopover, setErrorPopover] = useState<{
+    jobId: string;
+    anchor: HTMLElement;
+  } | null>(null);
+
+  // A clock for the "in this stage for 3 min" text. Ticks only while the drawer is open.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!forceOpen) return;
+    const interval = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(interval);
+  }, [forceOpen]);
+
+  const bucketOf = (job: Job): Bucket => {
+    if (job.status === "PROCESSING") return "running";
+    if (job.status === "FAILED") return "failed";
+    if (job.status === "COMPLETED" && !getTransitionTarget(job)) return "done";
+    return "waiting";
   };
 
-  /** Per-row label: the summary label, plus the stage actually being waited on. */
-  const getDisplayStatus = (job: Job): string => {
-    const target = getTransitionTarget(job);
-    if (!target) return getSummaryLabel(job);
-    // stageLabels carries the human spelling, so this reads "PANEL DETECTION" rather than
-    // "PANEL-DETECTION"; upper-cased to sit alongside PENDING/PROCESSING in the same chip.
-    return `TRANSITIONING → ${(stageLabels[target] ?? target).toUpperCase()}`;
+  /** What the row says, in words, and how its strip is coloured. */
+  const describe = (job: Job): { text: string; state: StripState } => {
+    const stage = stageLabelOf(job.type);
+    if (job.status === "PROCESSING") return { text: stage, state: "running" };
+    if (job.status === "FAILED")
+      return { text: `Failed at ${stage}`, state: "failed" };
+    if (job.status === "PAUSED" || (isPaused && job.status === "PENDING"))
+      return { text: `Paused before ${stage}`, state: "paused" };
+    if (job.status === "COMPLETED") {
+      const target = getTransitionTarget(job);
+      return target
+        ? { text: `Waiting for ${stageLabelOf(target)}`, state: "waiting" }
+        : { text: "Done", state: "done" };
+    }
+    return { text: `Waiting for ${stage}`, state: "waiting" };
   };
 
-  const getJobStatusColor = (job: Job) => {
-    if (isPaused && job.status === "PENDING") return statusColor.PAUSED;
-    return statusColor[job.status] || "#9e9e9e";
-  };
-
-  const statusSummary = useMemo(
-    () =>
-      jobs.reduce(
-        (acc, job) => {
-          const label = getSummaryLabel(job);
-          const color = getJobStatusColor(job);
-          const existing = acc.find((s) => s.label === label);
-          if (existing) existing.count += 1;
-          else acc.push({ label, color, count: 1 });
-          return acc;
-        },
-        [] as { label: string; color: string; count: number }[],
-      ),
-    // getSummaryLabel and getJobStatusColor are redeclared every render; listing them would
-    // defeat the memo entirely. Must be `next-line` rather than `line` -- Prettier splits the
-    // dependency array onto its own line, which silently moved a trailing directive off it.
+  const counts = useMemo(() => {
+    const c = { running: 0, waiting: 0, failed: 0, done: 0 };
+    jobs.forEach((job) => {
+      c[bucketOf(job)] += 1;
+    });
+    return c;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [jobs, isPaused],
-  );
+  }, [jobs]);
 
-  // jobs is already sorted so that a chapter's jobs are always contiguous;
-  // this just folds consecutive same-chapter jobs into groups for rendering.
+  const groupSummary = (groupJobs: Job[]) => {
+    const c = { running: 0, waiting: 0, failed: 0, done: 0 };
+    groupJobs.forEach((job) => {
+      c[bucketOf(job)] += 1;
+    });
+    const parts: string[] = [];
+    if (c.running) parts.push(`${c.running} running`);
+    if (c.waiting) parts.push(`${c.waiting} waiting`);
+    if (c.failed) parts.push(`${c.failed} failed`);
+    if (c.done) parts.push(`${c.done} done`);
+    return parts.join(", ");
+  };
+
+  const statusLine = isPaused
+    ? "Paused. Nothing new starts until you resume."
+    : jobs.length === 0
+      ? "Idle"
+      : [
+          counts.running && `${counts.running} running`,
+          counts.waiting && `${counts.waiting} waiting`,
+          counts.failed && `${counts.failed} failed`,
+        ]
+          .filter(Boolean)
+          .join(", ") || "All done";
+
+  const matchesFilter = (job: Job) =>
+    filter === "all" ? true : bucketOf(job) === filter;
+
   const jobGroups = useMemo(() => {
     const result: {
       key: string;
@@ -992,6 +758,13 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
       return next;
     });
   };
+
+  const filters: { key: Filter; label: string; count: number }[] = [
+    { key: "all", label: "All", count: jobs.length },
+    { key: "running", label: "Running", count: counts.running },
+    { key: "waiting", label: "Waiting", count: counts.waiting },
+    { key: "failed", label: "Failed", count: counts.failed },
+  ];
 
   return (
     <>
@@ -1024,371 +797,588 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
         anchor="right"
         open={forceOpen}
         onClose={onClose}
-        slotProps={{ paper: { sx: drawerPaperSx } }}
+        slotProps={{
+          paper: {
+            sx: {
+              width: { xs: "100vw", sm: 460 },
+              bgcolor: "background.paper",
+              backgroundImage: "none",
+            },
+          },
+        }}
       >
-        <Box sx={drawerRootSx}>
-          <Box sx={drawerHeaderSx}>
-            <Box sx={flexRowGapHalfSx}>
+        <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          {/* Header: what the queue is doing, and the two queue-wide actions. */}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 1,
+              px: 2.5,
+              pt: 2,
+              pb: 1.5,
+            }}
+          >
+            <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography
                 variant="h6"
-                sx={drawerTitleTextSx}
+                component="h2"
+                sx={{ fontSize: "1.125rem" }}
               >
-                Queue Manager
+                Queue
               </Typography>
-              <Tooltip
-                title="QA can fail and loop back through re-OCR → translate → render → QA, up to 2 retries (14 queued jobs worst case, 17 in hybrid QA mode). Rows with a striped bar are part of that retry loop, not fresh forward progress."
-                placement="bottom-start"
+              <Typography
+                variant="body2"
+                sx={{ color: isPaused ? "warning.main" : "text.secondary" }}
               >
-                <InfoOutlinedIcon sx={infoIconSx} />
-              </Tooltip>
+                {statusLine}
+              </Typography>
             </Box>
-            <Box sx={drawerActionsRowSx}>
-              <Tooltip title="Force Clear Queue">
-                <IconButton
-                  size="small"
-                  onClick={handleForceClearQueue}
-                >
-                  <PlaylistRemoveIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Clear Pending/Failed Jobs">
-                <IconButton
-                  size="small"
-                  onClick={handleClearQueue}
-                >
-                  <ClearAllIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title={isPaused ? "Resume Queue" : "Pause Queue"}>
-                <IconButton
-                  size="small"
-                  onClick={handlePauseResumeQueue}
-                >
-                  {isPaused ? (
-                    <PlayArrowIcon fontSize="small" />
-                  ) : (
-                    <PauseIcon fontSize="small" />
-                  )}
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Close">
-                <IconButton
-                  size="small"
-                  onClick={onClose}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Box>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={handlePauseResumeQueue}
+              aria-label={isPaused ? "Resume Queue" : "Pause Queue"}
+              sx={{
+                minWidth: { xs: 36, sm: 64 },
+                "& .MuiButton-startIcon": {
+                  mr: { xs: 0, sm: 1 },
+                  ml: { xs: 0, sm: -0.5 },
+                },
+              }}
+              startIcon={
+                isPaused ? (
+                  <PlayArrowIcon fontSize="small" />
+                ) : (
+                  <PauseIcon fontSize="small" />
+                )
+              }
+            >
+              <Box
+                component="span"
+                sx={{ display: { xs: "none", sm: "inline" } }}
+              >
+                {isPaused ? "Resume" : "Pause all"}
+              </Box>
+            </Button>
+            <IconButton
+              size="small"
+              aria-label="Queue actions"
+              aria-haspopup="true"
+              onClick={(e) => setMenuAnchor(e.currentTarget)}
+            >
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+            <Menu
+              anchorEl={menuAnchor}
+              open={Boolean(menuAnchor)}
+              onClose={() => setMenuAnchor(null)}
+            >
+              <MenuItem
+                onClick={() => {
+                  setMenuAnchor(null);
+                  handleClearQueue();
+                }}
+              >
+                Clear waiting and failed jobs
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  setMenuAnchor(null);
+                  handleForceClearQueue();
+                }}
+                sx={{ color: "error.main" }}
+              >
+                Clear everything, including running jobs
+              </MenuItem>
+            </Menu>
+            <IconButton
+              size="small"
+              onClick={onClose}
+              aria-label="Close queue"
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
           </Box>
 
-          {jobs.length > 0 && (
-            <Box sx={statusSummaryRowSx}>
-              {statusSummary.map((s) => (
-                <Chip
-                  key={s.label}
-                  size="small"
-                  label={`${s.count} ${s.label.charAt(0)}${s.label.slice(1).toLowerCase()}`}
-                  sx={[
-                    statusChipBaseSx,
-                    {
-                      color: s.color,
-                      backgroundColor: `${s.color}1A`,
-                      border: `1px solid ${s.color}40`,
+          {/* Filters: the counts double as the summary. */}
+          <Box
+            role="tablist"
+            aria-label="Filter jobs"
+            sx={{
+              display: "flex",
+              gap: 0.5,
+              px: 2,
+              borderBottom: 1,
+              borderColor: "divider",
+            }}
+          >
+            {filters.map((f) => {
+              const active = filter === f.key;
+              return (
+                <Box
+                  key={f.key}
+                  component="button"
+                  role="tab"
+                  aria-selected={active}
+                  aria-label={`${f.label} ${f.count}`}
+                  onClick={() => setFilter(f.key)}
+                  sx={{
+                    all: "unset",
+                    cursor: "pointer",
+                    px: 1,
+                    py: 1,
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    color: active ? "text.primary" : "text.secondary",
+                    borderBottom: "2px solid",
+                    borderColor: active ? "primary.main" : "transparent",
+                    "&:focus-visible": {
+                      outline: "2px solid",
+                      outlineColor: "primary.main",
+                      outlineOffset: -2,
                     },
-                  ]}
-                />
-              ))}
-            </Box>
-          )}
-
-          {jobs.length === 0 ? (
-            <Box sx={emptyStateSx}>No active jobs</Box>
-          ) : (
-            <Table
-              size="small"
-              stickyHeader
-              sx={queueTableSx}
-            >
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={jobColumnHeaderSx}>Job</TableCell>
-                  <TableCell sx={statusColumnHeaderSx}>
-                    Model &amp; Status
-                  </TableCell>
-                  <TableCell
-                    sx={actionsColumnHeaderSx}
-                    align="right"
+                  }}
+                >
+                  {f.label}
+                  <Box
+                    component="span"
+                    sx={{
+                      ml: 0.75,
+                      color:
+                        f.key === "failed" && f.count > 0
+                          ? "error.main"
+                          : "text.secondary",
+                      fontWeight: 500,
+                    }}
                   >
-                    Actions
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {jobGroups.map((group) => {
-                  const isCollapsed = group.chapterPath
-                    ? collapsedChapters.has(group.key)
-                    : false;
-                  return (
-                    <React.Fragment key={group.key}>
-                      {group.chapterPath && (
-                        <TableRow
-                          onClick={() => toggleChapterCollapse(group.key)}
-                          sx={chapterRowSx}
+                    {f.count}
+                  </Box>
+                </Box>
+              );
+            })}
+          </Box>
+
+          <Box sx={{ flex: 1, overflowY: "auto" }}>
+            {jobs.length === 0 ? (
+              <Box sx={{ px: 3, py: 6, textAlign: "center" }}>
+                <Typography sx={{ fontWeight: 600 }}>
+                  Nothing in the queue
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ color: "text.secondary", mt: 0.5 }}
+                >
+                  Jobs appear here as soon as you upload pages.
+                </Typography>
+              </Box>
+            ) : (
+              jobGroups.map((group) => {
+                const visibleJobs = group.groupJobs.filter(matchesFilter);
+                if (visibleJobs.length === 0) return null;
+                const isCollapsed = group.chapterPath
+                  ? collapsedChapters.has(group.key)
+                  : false;
+                return (
+                  <Box
+                    key={group.key}
+                    component="section"
+                  >
+                    {group.chapterPath && (
+                      <Box
+                        component="button"
+                        onClick={() => toggleChapterCollapse(group.key)}
+                        aria-expanded={!isCollapsed}
+                        sx={{
+                          all: "unset",
+                          boxSizing: "border-box",
+                          cursor: "pointer",
+                          width: "100%",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1,
+                          px: 2,
+                          py: 1,
+                          position: "sticky",
+                          top: 0,
+                          zIndex: 1,
+                          bgcolor: "background.paper",
+                          borderBottom: 1,
+                          borderColor: "divider",
+                          "&:hover": { bgcolor: "action.hover" },
+                          "&:focus-visible": {
+                            outline: "2px solid",
+                            outlineColor: "primary.main",
+                            outlineOffset: -2,
+                          },
+                        }}
+                      >
+                        <ExpandMoreIcon
+                          sx={{
+                            fontSize: 18,
+                            color: "text.secondary",
+                            transition: "transform 0.15s ease",
+                            transform: isCollapsed ? "rotate(-90deg)" : "none",
+                          }}
+                        />
+                        <Typography
+                          sx={{
+                            fontSize: "0.875rem",
+                            fontWeight: 600,
+                            flex: 1,
+                            minWidth: 0,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
                         >
-                          <TableCell
-                            colSpan={3}
-                            sx={chapterCellSx}
-                          >
-                            <Box sx={flexRowGapHalfSx}>
-                              <ExpandMoreIcon
-                                sx={[
-                                  chapterChevronBaseSx,
-                                  {
-                                    transform: isCollapsed
-                                      ? "rotate(-90deg)"
-                                      : "rotate(0deg)",
-                                  },
-                                ]}
-                              />
-                              <Typography
-                                variant="caption"
-                                sx={chapterLabelSx}
-                              >
-                                {group.chapterPath}
-                              </Typography>
-                              {isCollapsed && (
-                                <Typography
-                                  variant="caption"
-                                  sx={chapterJobCountSx}
-                                >
-                                  · {group.groupJobs.length} job
-                                  {group.groupJobs.length !== 1 ? "s" : ""}
-                                </Typography>
-                              )}
-                            </Box>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                      {!isCollapsed &&
-                        group.groupJobs.map((job) => {
-                          const color = getJobStatusColor(job);
+                          {group.chapterPath}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: "text.secondary",
+                            flexShrink: 0,
+                            fontSize: "0.8125rem",
+                          }}
+                        >
+                          {groupSummary(group.groupJobs)}
+                        </Typography>
+                      </Box>
+                    )}
+                    {!isCollapsed && (
+                      <Box role="list">
+                        {visibleJobs.map((job) => {
                           const parsed = getParsed(job);
                           const { pageLabel } = renderJobLocation(parsed);
                           const providerModel = renderProviderModel(
                             job,
                             parsed,
                           );
-                          const isRetry = isRetryLoopType(job.type);
-
+                          const { text, state } = describe(job);
+                          const elapsed =
+                            job.status === "PROCESSING" && job.updatedAt
+                              ? formatElapsed(job.updatedAt, now)
+                              : null;
+                          const canPause =
+                            job.status === "PENDING" || job.status === "PAUSED";
+                          const pauseHint = isPaused
+                            ? "The whole queue is paused"
+                            : canPause
+                              ? job.status === "PAUSED"
+                                ? "Resume"
+                                : "Pause"
+                              : "Only pages waiting to start can be paused";
+                          const pauseDisabled = isPaused || !canPause;
+                          const errorOpen =
+                            !!job.error && errorPopover?.jobId === job.id;
+                          const openError = (anchor: HTMLElement) =>
+                            setErrorPopover({ jobId: job.id, anchor });
                           return (
-                            <TableRow
+                            <Box
                               key={job.id}
-                              sx={jobRowSx}
+                              role="listitem"
+                              aria-label={`${pageLabel ?? formatJobType(job.type)}: ${text}`}
+                              sx={{
+                                display: "grid",
+                                // Fixed tracks: the right column holds three button slots, and
+                                // every row has the same three lines (title, stages, details),
+                                // so no row is wider or taller than another (review, 2026-10-05).
+                                gridTemplateColumns: `1fr ${ROW_TOOLS_WIDTH}px`,
+                                gridTemplateRows: "20px 6px 16px",
+                                columnGap: 1.5,
+                                rowGap: 0.75,
+                                alignItems: "center",
+                                px: 2.5,
+                                py: 1.25,
+                                borderBottom: 1,
+                                borderColor: "divider",
+                              }}
                             >
-                              <TableCell sx={jobCellSx}>
-                                <Box sx={jobRowContentSx}>
-                                  <Box
-                                    sx={[
-                                      statusDotBaseSx,
-                                      {
-                                        backgroundColor: color,
-                                        boxShadow: `0 0 6px ${color}66`,
-                                      },
-                                    ]}
-                                  />
-                                  <Box sx={minWidthZeroSx}>
-                                    <Box sx={jobTitleRowSx}>
-                                      <Typography
-                                        variant="body2"
-                                        sx={jobTypeLabelSx}
-                                      >
-                                        {formatJobType(job.type)}
-                                        {pageLabel && (
-                                          <Box
-                                            component="span"
-                                            sx={pageLabelSx}
-                                          >
-                                            {" "}
-                                            · {pageLabel}
-                                          </Box>
-                                        )}
-                                      </Typography>
-                                      {isRetry && (
-                                        <Tooltip title="Part of the QA retry loop, re-running after a failed QA pass">
-                                          <LoopIcon sx={retryLoopIconSx} />
-                                        </Tooltip>
-                                      )}
-                                    </Box>
-                                    <PipelineStepper
-                                      jobType={job.type}
-                                      jobStatus={job.status}
-                                      color={color}
-                                    />
-                                  </Box>
-                                </Box>
-                              </TableCell>
-                              <TableCell sx={jobCellSx}>
-                                <Box sx={providerModelBoxSx}>
-                                  {providerModel ? (
-                                    <Tooltip title={providerModel}>
-                                      <Typography
-                                        variant="caption"
-                                        sx={providerModelTextSx}
-                                      >
-                                        {providerModel}
-                                      </Typography>
-                                    </Tooltip>
-                                  ) : (
-                                    <Typography
-                                      variant="caption"
-                                      sx={providerModelPlaceholderSx}
-                                    >
-                                      —
-                                    </Typography>
-                                  )}
-                                </Box>
-                                <Box sx={statusRowSx}>
-                                  <Chip
-                                    label={getDisplayStatus(job)}
-                                    size="small"
-                                    sx={[
-                                      jobStatusChipBaseSx,
-                                      {
-                                        color,
-                                        backgroundColor: `${color}1A`,
-                                        border: `1px solid ${color}55`,
-                                      },
-                                    ]}
-                                  />
-                                  {job.attempt > 1 && (
-                                    <Typography
-                                      variant="caption"
-                                      sx={mutedCaptionSx}
-                                    >
-                                      Attempt {job.attempt}/{job.maxAttempts}
-                                    </Typography>
-                                  )}
-                                  {job.updatedAt && (
-                                    <Typography
-                                      variant="caption"
-                                      sx={mutedCaptionSx}
-                                    >
-                                      {new Date(
-                                        job.updatedAt,
-                                      ).toLocaleTimeString([], {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })}
-                                    </Typography>
-                                  )}
-                                </Box>
-                                <Box sx={errorBoxSx}>
-                                  {job.error && (
-                                    <Tooltip title={job.error}>
-                                      <Typography
-                                        variant="caption"
-                                        sx={errorTextSx}
-                                      >
-                                        {formatErrorMessage(job.error)}
-                                      </Typography>
-                                    </Tooltip>
-                                  )}
-                                </Box>
-                              </TableCell>
-                              <TableCell
-                                sx={actionsCellSx}
-                                align="right"
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "baseline",
+                                  gap: 1,
+                                  minWidth: 0,
+                                }}
                               >
-                                <Box sx={actionsRowSx}>
-                                  <Box
-                                    sx={[
-                                      actionSlotBaseSx,
-                                      {
-                                        visibility:
-                                          job.status === "FAILED"
-                                            ? "visible"
-                                            : "hidden",
-                                      },
-                                    ]}
+                                <Typography
+                                  sx={{
+                                    fontSize: "0.875rem",
+                                    fontWeight: 600,
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {pageLabel ?? formatJobType(job.type)}
+                                </Typography>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    color:
+                                      state === "failed"
+                                        ? "error.main"
+                                        : state === "running"
+                                          ? "text.primary"
+                                          : "text.secondary",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {text}
+                                  {isRetryLoopType(job.type) &&
+                                    state !== "done" &&
+                                    ", retry after QA"}
+                                </Typography>
+                                {elapsed && (
+                                  <Typography
+                                    variant="body2"
+                                    sx={{
+                                      flexShrink: 0,
+                                      color: "text.secondary",
+                                      whiteSpace: "nowrap",
+                                      fontVariantNumeric: "tabular-nums",
+                                    }}
                                   >
-                                    <Tooltip title="Retry">
+                                    {elapsed}
+                                  </Typography>
+                                )}
+                              </Box>
+
+                              {/* Three fixed slots, always in place: Retry, Pause/Resume,
+                                  Remove. A slot that does not apply stays empty but keeps its
+                                  space, so the buttons never move between rows. */}
+                              <Box
+                                sx={{
+                                  gridColumn: 2,
+                                  gridRow: "1 / span 3",
+                                  display: "grid",
+                                  gridTemplateColumns: "repeat(3, 28px)",
+                                  justifyContent: "end",
+                                  alignItems: "center",
+                                }}
+                              >
+                                <Box>
+                                  {job.status === "FAILED" && (
+                                    <Tooltip
+                                      title="Retry"
+                                      describeChild
+                                    >
                                       <IconButton
                                         size="small"
+                                        aria-label="Retry"
                                         onClick={() => handleRetryJob(job.id)}
                                       >
                                         <RestartAltIcon fontSize="small" />
                                       </IconButton>
                                     </Tooltip>
-                                  </Box>
-                                  <Box
-                                    sx={[
-                                      actionSlotBaseSx,
-                                      {
-                                        visibility:
-                                          job.status === "PENDING" ||
-                                          job.status === "PAUSED"
-                                            ? "visible"
-                                            : "hidden",
-                                      },
-                                    ]}
-                                  >
+                                  )}
+                                </Box>
+                                <Box>
+                                  {/* Shown on every page still in the pipeline. A running page,
+                                      or one between stages, shows it disabled: the backend can
+                                      only pause a job that has not started (#225). */}
+                                  {state !== "done" &&
+                                    job.status !== "FAILED" && (
+                                      <Tooltip
+                                        describeChild
+                                        title={pauseHint}
+                                      >
+                                        {/* A disabled button takes no focus, so the wrapper does,
+                                            and keyboard users still get the reason. */}
+                                        <span
+                                          tabIndex={
+                                            pauseDisabled ? 0 : undefined
+                                          }
+                                        >
+                                          <IconButton
+                                            size="small"
+                                            aria-label={
+                                              job.status === "PAUSED"
+                                                ? "Resume"
+                                                : "Pause"
+                                            }
+                                            onClick={() =>
+                                              handleToggleJobPause(job)
+                                            }
+                                            disabled={pauseDisabled}
+                                          >
+                                            {job.status === "PAUSED" ? (
+                                              <PlayArrowIcon fontSize="small" />
+                                            ) : (
+                                              <PauseIcon fontSize="small" />
+                                            )}
+                                          </IconButton>
+                                        </span>
+                                      </Tooltip>
+                                    )}
+                                </Box>
+                                <Box>
+                                  {job.status !== "PROCESSING" && (
                                     <Tooltip
-                                      title={
-                                        isPaused
-                                          ? "Queue is globally paused"
-                                          : job.status === "PAUSED"
-                                            ? "Resume"
-                                            : "Pause"
-                                      }
+                                      title="Remove from queue"
+                                      describeChild
                                     >
                                       <IconButton
                                         size="small"
-                                        onClick={() =>
-                                          handleToggleJobPause(job)
-                                        }
-                                        disabled={isPaused}
-                                      >
-                                        {job.status === "PAUSED" || isPaused ? (
-                                          <PlayArrowIcon fontSize="small" />
-                                        ) : (
-                                          <PauseIcon fontSize="small" />
-                                        )}
-                                      </IconButton>
-                                    </Tooltip>
-                                  </Box>
-                                  <Box
-                                    sx={[
-                                      actionSlotBaseSx,
-                                      {
-                                        visibility:
-                                          job.status !== "PROCESSING"
-                                            ? "visible"
-                                            : "hidden",
-                                      },
-                                    ]}
-                                  >
-                                    <Tooltip title="Delete">
-                                      <IconButton
-                                        size="small"
-                                        color="error"
+                                        aria-label="Delete"
                                         onClick={() => handleDeleteJob(job.id)}
+                                        sx={{ color: "text.secondary" }}
                                       >
                                         <ClearIcon fontSize="small" />
                                       </IconButton>
                                     </Tooltip>
-                                  </Box>
+                                  )}
                                 </Box>
-                              </TableCell>
-                            </TableRow>
+                              </Box>
+
+                              <PipelineStrip
+                                jobType={job.type}
+                                state={state}
+                                allDone={state === "done"}
+                                retry={isRetryLoopType(job.type)}
+                                animate={jobs.length < STRIP_ANIMATION_LIMIT}
+                              />
+
+                              {/* One line of details on every row, empty when there are none.
+                                  A long error is cut short here; hover shows it whole, and a
+                                  tap, Enter or Space opens it whole in a popover. */}
+                              <Box
+                                title={job.error || undefined}
+                                {...(job.error
+                                  ? {
+                                      role: "button",
+                                      tabIndex: 0,
+                                      "aria-haspopup": "dialog" as const,
+                                      "aria-expanded": errorOpen,
+                                      onClick: (
+                                        e: React.MouseEvent<HTMLElement>,
+                                      ) => openError(e.currentTarget),
+                                      onKeyDown: (
+                                        e: React.KeyboardEvent<HTMLElement>,
+                                      ) => {
+                                        if (
+                                          e.key === "Enter" ||
+                                          e.key === " "
+                                        ) {
+                                          e.preventDefault();
+                                          openError(e.currentTarget);
+                                        }
+                                      },
+                                    }
+                                  : {})}
+                                sx={{
+                                  minWidth: 0,
+                                  fontSize: "0.75rem",
+                                  lineHeight: "16px",
+                                  color: "text.secondary",
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  cursor: job.error ? "pointer" : undefined,
+                                  "& > span + span": { ml: 1.5 },
+                                }}
+                              >
+                                {providerModel && <span>{providerModel}</span>}
+                                {job.attempt > 1 && (
+                                  <span>
+                                    Attempt {job.attempt} of {job.maxAttempts}
+                                  </span>
+                                )}
+                                {job.error && (
+                                  <Box
+                                    component="span"
+                                    sx={{ color: "error.main" }}
+                                  >
+                                    {formatErrorMessage(job.error)}
+                                  </Box>
+                                )}
+                              </Box>
+                              {errorOpen && (
+                                <Popover
+                                  open
+                                  anchorEl={errorPopover.anchor}
+                                  onClose={() => setErrorPopover(null)}
+                                  anchorOrigin={{
+                                    vertical: "bottom",
+                                    horizontal: "left",
+                                  }}
+                                  slotProps={{
+                                    paper: {
+                                      role: "dialog",
+                                      "aria-label": "Full error",
+                                      sx: {
+                                        p: 1.5,
+                                        maxWidth: 420,
+                                        maxHeight: 240,
+                                        overflow: "auto",
+                                        fontSize: "0.75rem",
+                                        whiteSpace: "pre-wrap",
+                                        overflowWrap: "anywhere",
+                                        color: "error.main",
+                                      },
+                                    },
+                                  }}
+                                >
+                                  {job.error}
+                                </Popover>
+                              )}
+                            </Box>
                           );
                         })}
-                    </React.Fragment>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
+                      </Box>
+                    )}
+                  </Box>
+                );
+              })
+            )}
+          </Box>
+
+          {/* Legend: what the strip's colours mean. Small, but the strip is new. */}
+          <Box
+            sx={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 2,
+              px: 2.5,
+              py: 1.25,
+              borderTop: 1,
+              borderColor: "divider",
+              fontSize: "0.75rem",
+              color: "text.secondary",
+            }}
+          >
+            {[
+              [
+                "Done",
+                "color-mix(in srgb, var(--text-muted) 55%, transparent)",
+              ],
+              ["Running", "var(--primary)"],
+              ["Failed", "var(--error)"],
+              ["Not started", "var(--bg-chip)"],
+            ].map(([label, color]) => (
+              <Box
+                key={label}
+                sx={{ display: "flex", alignItems: "center", gap: 0.75 }}
+              >
+                <Box
+                  sx={{
+                    width: 14,
+                    height: 6,
+                    borderRadius: "2px",
+                    bgcolor: color,
+                  }}
+                />
+                {label}
+              </Box>
+            ))}
+            <Box component="span">
+              Panels, OCR, cleanup, translation, render, QA
+            </Box>
+          </Box>
         </Box>
       </Drawer>
     </>

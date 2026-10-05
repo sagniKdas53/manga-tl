@@ -10,6 +10,21 @@ declare module "@mui/material/styles" {
   }
 }
 
+/**
+ * Dark-mode surfaces above `background.paper`, named once. `index.css` carries the same values
+ * as `--bg-raised` and `--bg-chip`, and theme.test.ts checks the two stay equal.
+ */
+export const DARK_SURFACES = {
+  /** Quiet buttons, menus. */
+  raised: "#313131",
+  /** Chips, and a raised surface under the pointer. */
+  chip: "#3b3b3b",
+  /** A disabled quiet button: between paper and raised. */
+  raisedDisabled: "#2b2b2b",
+  /** The loud button's fill under the pointer: one step darker than `primary.dark`. */
+  primaryFillHover: "#c22846",
+} as const;
+
 // AUDIT-F1: previously `themeObj(mode)`, rebuilt from scratch on every light/dark toggle via
 // `useMemo(() => themeObj(mode), [mode])` in App.tsx — a whole new MUI theme object (and a
 // re-render of every consumer, re-serialising every Emotion style in the tree) on each toggle.
@@ -50,42 +65,40 @@ export const theme = createTheme({
         conversation: { main: "#2563eb" },
       },
     },
-    // AUDIT-F21: the dark scheme was reported as harsh to read on a tablet at night, and it
-    // measured that way. `#fefefe` on `#0f0f0f` is **19.0:1** — WCAG AA asks 4.5:1 and AAA asks
-    // 7:1, so body text was at nearly triple the strictest legibility threshold. Past a point
-    // more contrast stops helping and starts hurting: glyph edges bloom on an emissive panel,
-    // which is what "harsh" describes. Every accent also sat at 84–100% saturation, and a
-    // saturated hue on a near-black field is the combination that appears to vibrate.
+    // AUDIT-F21 set the comfortable band this palette still honours: body text between 7:1 and
+    // 15:1, accents at or under 80 % saturation, paper at least 1.18:1 off the page. All of it is
+    // asserted in `theme.test.ts`.
     //
-    // So: lift the floor off pure black, pull white back to a warm off-white, and desaturate the
-    // accents ~20 points without moving their hue, so nothing changes identity. Body text lands
-    // at 13.7:1 — still above AAA with room, but out of the bloom range. Every pair below is
-    // asserted in `theme.test.ts`, with both an AA floor and a halation ceiling, so this cannot
-    // drift back by accident in either direction.
-    //
-    // Surfaces move together: `default` and `paper` were 1.15:1 apart, so a card barely read as
-    // a card. They are 1.20:1 apart now — Material's own dark baseline is 1.24:1, and going
-    // further starts making `paper` look grey rather than raised.
+    // 2026-10-04 (UI overhaul, #214): the surfaces lose their warm tint and become plain neutral
+    // greys, and the accent stops doing two jobs. A pink light enough to read as text on a dark
+    // surface (4.5:1) is too light to carry white text as a button fill, and no single colour
+    // passes both. So `primary.main` is the text/active pink, and filled primary buttons use
+    // `primary.dark` (white text at 4.78:1); see the MuiButton override below. Status colours
+    // are for text and the pipeline strip only, never for chip fills.
     dark: {
       palette: {
         mode: "dark",
-        primary: { main: "#df6d87" },
-        secondary: { main: "#e3b782" },
-        error: { main: "#df6d87" },
-        warning: { main: "#e3b782" },
-        success: { main: "#2bc591" },
-        info: { main: "#86c2ea" },
+        primary: { main: "#ea6d8b", dark: "#d6304f", contrastText: "#ffffff" },
+        secondary: { main: "#e6b98a" },
+        error: { main: "#eb8b65" },
+        warning: { main: "#e6b98a" },
+        success: { main: "#5fc495" },
+        info: { main: "#8cc3ea" },
         background: {
-          default: "#16161a",
-          paper: "#26262c",
+          default: "#171717",
+          paper: "#262626",
         },
         text: {
-          primary: "#e2e0dd",
-          secondary: "#a9a6a2",
-          disabled: "#8a8681",
+          primary: "#e6e6e6",
+          secondary: "#a3a3a3",
+          disabled: "#8c8c8c",
         },
-        divider: "rgba(226,224,221,0.14)",
-        conversation: { main: "#6797e4" },
+        divider: "rgba(255,255,255,0.09)",
+        action: {
+          hover: "rgba(255,255,255,0.06)",
+          selected: "rgba(255,255,255,0.10)",
+        },
+        conversation: { main: "#8cc3ea" },
       },
     },
   },
@@ -97,39 +110,137 @@ export const theme = createTheme({
   },
   typography: {
     fontFamily: '"Plus Jakarta Sans", "Roboto", system-ui, sans-serif',
-    h1: { fontFamily: '"Outfit", sans-serif' },
-    h2: { fontFamily: '"Outfit", sans-serif' },
-    h3: { fontFamily: '"Outfit", sans-serif' },
-    h4: { fontFamily: '"Outfit", sans-serif' },
-    h5: { fontFamily: '"Outfit", sans-serif' },
-    h6: { fontFamily: '"Outfit", sans-serif' },
+    fontSize: 14,
+    h1: {
+      fontFamily: '"Outfit", sans-serif',
+      fontSize: "1.75rem",
+      fontWeight: 700,
+      letterSpacing: "-0.01em",
+    },
+    h2: {
+      fontFamily: '"Outfit", sans-serif',
+      fontSize: "1.5rem",
+      fontWeight: 700,
+      letterSpacing: "-0.01em",
+    },
+    h3: {
+      fontFamily: '"Outfit", sans-serif',
+      fontSize: "1.375rem",
+      fontWeight: 700,
+    },
+    h4: {
+      fontFamily: '"Outfit", sans-serif',
+      fontSize: "1.625rem",
+      fontWeight: 700,
+      letterSpacing: "-0.01em",
+    },
+    h5: {
+      fontFamily: '"Outfit", sans-serif',
+      fontSize: "1.25rem",
+      fontWeight: 700,
+    },
+    h6: {
+      fontFamily: '"Outfit", sans-serif',
+      fontSize: "1rem",
+      fontWeight: 700,
+    },
+    button: { fontWeight: 600, letterSpacing: 0 },
   },
   shape: {
-    borderRadius: 8,
+    borderRadius: 6,
   },
   components: {
     MuiButton: {
+      defaultProps: { disableElevation: true },
       styleOverrides: {
-        root: {
+        // `t.vars`, not `t.palette`: with CSS variables on, `t.palette` holds the light scheme's
+        // values, so a dark-mode override built from it paints light-mode colours.
+        root: ({ theme: t }) => ({
           textTransform: "none",
-          borderRadius: 8,
-          transition:
-            "background-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out",
-        },
+          borderRadius: 6,
+          transition: "background-color 0.15s ease-in-out",
+          variants: [
+            // One loud button per view. In dark mode the fill is the deep accent, because the
+            // text-pink in `primary.main` cannot carry white text (see the palette note).
+            {
+              props: { variant: "contained", color: "primary" },
+              style: t.applyStyles("dark", {
+                backgroundColor: t.vars.palette.primary.dark,
+                "&:hover": { backgroundColor: DARK_SURFACES.primaryFillHover },
+              }),
+            },
+            // Every other action is quiet: a filled grey in dark mode instead of a pink
+            // outline. Outlined buttons were the main clutter: every header had four. Only the
+            // primary colour loses its tint; an outlined error, warning or success button
+            // elsewhere keeps its colour, because there the colour is the message.
+            {
+              props: { variant: "outlined" },
+              style: t.applyStyles("dark", {
+                backgroundColor: DARK_SURFACES.raised,
+                borderColor: "transparent",
+                "&:hover": {
+                  backgroundColor: DARK_SURFACES.chip,
+                  borderColor: "transparent",
+                },
+                "&.Mui-disabled": {
+                  borderColor: "transparent",
+                  backgroundColor: DARK_SURFACES.raisedDisabled,
+                },
+              }),
+            },
+            {
+              props: { variant: "outlined", color: "primary" },
+              style: t.applyStyles("dark", {
+                color: t.vars.palette.text.primary,
+              }),
+            },
+          ],
+        }),
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        // Metadata pills: one neutral style, no outline. Only the default colour is restyled:
+        // a coloured chip elsewhere (the Reader's review list, Settings) keeps its colour.
+        root: ({ theme: t }) => ({
+          borderRadius: 4,
+          fontWeight: 500,
+          variants: [
+            {
+              props: { color: "default" },
+              style: t.applyStyles("dark", {
+                backgroundColor: DARK_SURFACES.chip,
+                color: "#d9d9d9",
+                borderColor: "transparent",
+              }),
+            },
+          ],
+        }),
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
+          borderRadius: 10,
         },
       },
     },
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: 16,
+          borderRadius: 10,
         },
+      },
+    },
+    MuiMenu: {
+      styleOverrides: {
+        paper: ({ theme: t }) =>
+          t.applyStyles("dark", { backgroundColor: DARK_SURFACES.raised }),
+      },
+    },
+    MuiTooltip: {
+      styleOverrides: {
+        tooltip: { fontSize: "0.75rem", fontWeight: 500 },
       },
     },
     MuiPaper: {
@@ -138,12 +249,10 @@ export const theme = createTheme({
           backgroundImage: "none",
           boxShadow:
             "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)",
-          // AUDIT-F21: 0.4 black under a surface that is itself near-black mostly reads as
-          // grime rather than elevation. The surfaces carry the depth now (see the dark
-          // palette above); the shadow only has to soften the edge.
+          // No shadows in dark mode: a shadow under a near-black surface reads as grime. The
+          // surface steps (page, panel, raised) carry the depth.
           ...t.applyStyles("dark", {
-            boxShadow:
-              "0 1px 3px 0 rgb(0 0 0 / 0.28), 0 1px 2px -1px rgb(0 0 0 / 0.28)",
+            boxShadow: "none",
           }),
         }),
       },
@@ -154,7 +263,7 @@ export const theme = createTheme({
         // to be tunable did not reach the densest text in the app — the queue and job tables.
         // Both now follow `palette.divider`, which is a token and moves with the scheme.
         root: ({ theme: t }) => ({
-          borderBottom: `1px solid ${t.palette.divider}`,
+          borderBottom: `1px solid ${t.vars.palette.divider}`,
         }),
       },
     },

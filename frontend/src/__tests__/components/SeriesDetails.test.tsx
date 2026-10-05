@@ -120,7 +120,7 @@ describe("SeriesDetails", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("← Back to Library"));
+    fireEvent.click(screen.getByRole("button", { name: "Back to Library" }));
     expect(mockNavigate).toHaveBeenCalledWith("/");
   });
 
@@ -142,7 +142,7 @@ describe("SeriesDetails", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Add Chapter/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Add chapter/i }));
     expect(
       screen.getByRole("heading", { name: "Add Chapter" }),
     ).toBeInTheDocument();
@@ -166,9 +166,9 @@ describe("SeriesDetails", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Import Chapter/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Import chapter/i }));
     expect(
-      screen.getByRole("heading", { name: /Import Chapter/ }),
+      screen.getByRole("heading", { name: /Import chapter/i }),
     ).toBeInTheDocument();
   });
 
@@ -190,7 +190,7 @@ describe("SeriesDetails", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Edit Series/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Edit series/i }));
     expect(
       screen.getByRole("heading", { name: "Edit Series" }),
     ).toBeInTheDocument();
@@ -214,7 +214,7 @@ describe("SeriesDetails", () => {
       />,
     );
 
-    const deleteBtn = screen.getByRole("button", { name: /Delete Series/ });
+    const deleteBtn = screen.getByRole("button", { name: /Delete series/i });
     fireEvent.click(deleteBtn);
 
     expect(

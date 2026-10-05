@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, it, expect } from "vitest";
-import { theme } from "../theme";
+import { DARK_SURFACES, theme } from "../theme";
 
 /**
  * `colorSchemes` is typed `Partial<Record<SupportedColorScheme, ...>>` because a theme may define
@@ -199,6 +199,9 @@ describe("the two dark palettes agree (AUDIT-F21)", () => {
     ["text-muted", palette.text.secondary],
     ["text-dim", palette.text.disabled],
     ["primary", palette.primary.main],
+    ["primary-fill", palette.primary.dark],
+    ["bg-raised", DARK_SURFACES.raised],
+    ["bg-chip", DARK_SURFACES.chip],
   ])("--%s matches the theme", (name, expected) => {
     expect(cssVar(name)).toBe(expected);
   });

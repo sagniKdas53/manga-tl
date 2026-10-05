@@ -1021,7 +1021,7 @@ struct ImportFields {
 /// duplicates reuse existing images (cloning pipeline data), fresh ones enter the pipeline.
 pub async fn import_chapter(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Path(series_id): Path<Uuid>,
     mut multipart: Multipart,
 ) -> Response {
@@ -1264,8 +1264,17 @@ pub async fn import_chapter(
         }
 
         let image =
-            crate::clone::create_image(&state.pool, entry_name, &storage_path, &file_hash, None)
-                .await;
+            // The importer owns the image. Job events go only to an image's owner
+            // (`SseService::emit_event_for_image`), so an ownerless import never reached anyone's
+            // queue until a reload refetched `/api/jobs` (#212).
+            crate::clone::create_image(
+                &state.pool,
+                entry_name,
+                &storage_path,
+                &file_hash,
+                Some(user.id),
+            )
+            .await;
         let page = crate::clone::create_page_with_existing_image(
             &state.pool,
             &chapter,

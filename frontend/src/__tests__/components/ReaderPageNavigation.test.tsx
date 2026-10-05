@@ -86,6 +86,75 @@ describe("ReaderPageNavigation", () => {
   });
 });
 
+describe("typing a page number", () => {
+  const renderNav = (onJumpToPage = vi.fn()) => {
+    render(
+      <ReaderPageNavigation
+        currentPage={2}
+        totalPages={10}
+        onFirstPage={vi.fn()}
+        onPrevPage={vi.fn()}
+        onNextPage={vi.fn()}
+        onLastPage={vi.fn()}
+        onJumpToPage={onJumpToPage}
+      />,
+    );
+    return onJumpToPage;
+  };
+
+  it("goes to the page typed after a double-click", () => {
+    const onJump = renderNav();
+    fireEvent.doubleClick(screen.getByRole("button", { name: "Page 2 of 10" }));
+    const field = screen.getByRole("spinbutton", {
+      name: "Go to page, 1 to 10",
+    });
+    fireEvent.change(field, { target: { value: "7" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(onJump).toHaveBeenCalledWith(7);
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+  });
+
+  it("keeps the number inside the chapter", () => {
+    const onJump = renderNav();
+    fireEvent.doubleClick(screen.getByRole("button", { name: "Page 2 of 10" }));
+    const field = screen.getByRole("spinbutton");
+    fireEvent.change(field, { target: { value: "99" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(onJump).toHaveBeenCalledWith(10);
+  });
+
+  it("goes nowhere when what was typed is not a whole number", () => {
+    const onJump = renderNav();
+    for (const typed of ["7abc", "3.9", " "]) {
+      fireEvent.doubleClick(
+        screen.getByRole("button", { name: "Page 2 of 10" }),
+      );
+      const field = screen.getByRole("spinbutton");
+      fireEvent.change(field, { target: { value: typed } });
+      fireEvent.keyDown(field, { key: "Enter" });
+    }
+    expect(onJump).not.toHaveBeenCalled();
+  });
+
+  it("goes nowhere on Escape", () => {
+    const onJump = renderNav();
+    fireEvent.doubleClick(screen.getByRole("button", { name: "Page 2 of 10" }));
+    const field = screen.getByRole("spinbutton");
+    fireEvent.change(field, { target: { value: "5" } });
+    fireEvent.keyDown(field, { key: "Escape" });
+    expect(onJump).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Page 2 of 10" })).toBeVisible();
+  });
+
+  it("opens on a double-tap", () => {
+    renderNav();
+    const counter = screen.getByRole("button", { name: "Page 2 of 10" });
+    fireEvent.pointerUp(counter, { pointerType: "touch", timeStamp: 1000 });
+    fireEvent.pointerUp(counter, { pointerType: "touch", timeStamp: 1200 });
+    expect(screen.getByRole("spinbutton")).toBeInTheDocument();
+  });
+});
+
 describe("ReaderPrevNextChapters", () => {
   it("renders disabled buttons when no adjacent chapters exist", () => {
     render(
@@ -96,8 +165,10 @@ describe("ReaderPrevNextChapters", () => {
         onNextChapter={vi.fn()}
       />,
     );
-    expect(screen.getByText("Prev Ch").closest("button")).toBeDisabled();
-    expect(screen.getByText("Next Ch").closest("button")).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Previous chapter" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Next chapter" })).toBeDisabled();
   });
 
   it("calls callbacks when active buttons are clicked", () => {
@@ -112,8 +183,8 @@ describe("ReaderPrevNextChapters", () => {
       />,
     );
 
-    const prevBtn = screen.getByText("Prev Ch");
-    const nextBtn = screen.getByText("Next Ch");
+    const prevBtn = screen.getByRole("button", { name: "Previous chapter" });
+    const nextBtn = screen.getByRole("button", { name: "Next chapter" });
 
     expect(prevBtn.closest("button")).not.toBeDisabled();
     expect(nextBtn.closest("button")).not.toBeDisabled();

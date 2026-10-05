@@ -46,48 +46,49 @@ body,
    * The values themselves: body text was 17.2:1 here and 19.0:1 in the theme, against a 7:1 AAA
    * threshold, and every accent ran 84–100% saturation. Read the comment above `dark:` in
    * `theme.ts` for why that is a defect and not a virtue. */
-  --bg-base: #16161a;
-  --bg-surface: #26262c;
-  --bg-card: rgba(38, 38, 44, 0.8);
-  --border-color: rgba(226, 224, 221, 0.13);
+  --bg-base: #171717;
+  --bg-surface: #262626;
+  --bg-raised: #313131;
+  --bg-chip: #3b3b3b;
+  --bg-card: #262626;
+  --border-color: rgba(255, 255, 255, 0.09);
 
-  --primary: #df6d87;
-  --primary-hover: #ea8aa0;
-  --primary-glow: rgba(223, 109, 135, 0.15);
+  --primary: #ea6d8b;
+  --primary-fill: #d6304f;
+  --primary-hover: #f08aa2;
+  --primary-glow: rgba(234, 109, 139, 0.14);
 
-  --success: #2bc591;
-  --success-glow: rgba(43, 197, 145, 0.1);
-  --warning: #e3b782;
-  --error: #e07a7a;
+  --success: #5fc495;
+  --success-glow: rgba(95, 196, 149, 0.12);
+  --warning: #e6b98a;
+  --on-warning: #1f1400;
+  --error: #eb8b65;
 
-  --conversation: #6797e4;
-  --conversation-glow: rgba(103, 151, 228, 0.12);
-  --conversation-glow-selected: rgba(103, 151, 228, 0.25);
-  --conversation-glow-approved: rgba(103, 151, 228, 0.08);
+  --conversation: #8cc3ea;
+  --conversation-glow: rgba(140, 195, 234, 0.12);
+  --conversation-glow-selected: rgba(140, 195, 234, 0.24);
+  --conversation-glow-approved: rgba(140, 195, 234, 0.08);
 
-  --text-main: #e2e0dd;
-  --text-muted: #a9a6a2;
-  --text-dim: #8a8681;
+  --text-main: #e6e6e6;
+  --text-muted: #a3a3a3;
+  --text-dim: #8c8c8c;
 
-  /* Theme-dependent overlays & backgrounds */
-  --bg-nav: var(--bg-base);
+  /* Theme-dependent overlays & backgrounds. Neutral, untinted greys (UI overhaul, #214). */
+  --bg-nav: var(--bg-surface);
   --bg-overlay-glass: var(--bg-surface);
-  /* Lowered with the surfaces: an overlay tuned against a #111 field is heavier than it needs
-   * to be against a #16161a one, and hover was reading as a jump rather than a highlight. */
-  --bg-hover: rgba(226, 224, 221, 0.1);
-  --bg-hover-more: rgba(226, 224, 221, 0.15);
-  --bg-input: rgba(226, 224, 221, 0.03);
-  --bg-input-focus: rgba(226, 224, 221, 0.06);
-  --bg-card-content: rgba(38, 38, 44, 0.9);
-  --bg-chapter-info: rgba(38, 38, 44, 0.95);
+  --bg-hover: rgba(255, 255, 255, 0.07);
+  --bg-hover-more: rgba(255, 255, 255, 0.12);
+  --bg-input: rgba(255, 255, 255, 0.04);
+  --bg-input-focus: rgba(255, 255, 255, 0.07);
+  --bg-card-content: #262626;
+  --bg-chapter-info: #262626;
 
-  --primary-glow-selected: rgba(223, 109, 135, 0.22);
-  --primary-glow-approved: rgba(223, 109, 135, 0.08);
-  --success-glow: rgba(43, 197, 145, 0.12);
+  --primary-glow-selected: rgba(234, 109, 139, 0.22);
+  --primary-glow-approved: rgba(234, 109, 139, 0.08);
 
-  /* Reader canvas background — dark by default. Kept a shade below `--bg-surface`: this sits
-   * directly behind a manga page, and the page has to be the brightest thing on screen. */
-  --bg-canvas: #1c1c21;
+  /* Reader canvas background. A shade under the panel: the manga page has to be the brightest
+   * thing on screen. */
+  --bg-canvas: #1c1c1c;
 
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -107,9 +108,15 @@ body,
 
   --success: #10b981;
   --success-glow: rgba(16, 185, 129, 0.08);
+  /* The dark scheme's sand is unreadable on white; a review flag needs AA here too. */
+  --warning: #9a5b00;
+  --on-warning: #ffffff;
 
   --text-main: #343333;
-  --text-muted: #b0b0b0;
+  --text-muted: #5f5f5f;
+  --bg-raised: #ececec;
+  --bg-chip: #e8e8e8;
+  --primary-fill: #0197fc;
   --text-dim: #786e6a;
 
   --bg-nav: var(--bg-surface);
@@ -207,7 +214,6 @@ body {
   padding: 4px 8px;
   border-radius: 6px;
   border: 1px solid var(--border-color);
-  text-transform: uppercase;
   font-weight: 600;
   font-size: 11px;
 }
@@ -371,11 +377,10 @@ body {
 }
 
 .panel-section-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
   margin-bottom: 12px;
 }
 
@@ -1023,12 +1028,12 @@ input:checked + .slider:before {
 }
 
 .reader-left-sidebar-nhentai {
-  width: 280px;
+  width: 264px;
   border-right: 1px solid var(--border-color);
   background: var(--bg-surface);
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 12px 16px 24px;
   box-sizing: border-box;
   overflow-y: auto;
   z-index: 90;
@@ -1048,12 +1053,12 @@ input:checked + .slider:before {
 }
 
 .reader-right-sidebar-nhentai {
-  width: 320px;
+  width: 336px;
   border-left: 1px solid var(--border-color);
   background: var(--bg-surface);
   display: flex;
   flex-direction: column;
-  padding: 24px;
+  padding: 12px 16px 24px;
   box-sizing: border-box;
   overflow-y: auto;
   z-index: 90;

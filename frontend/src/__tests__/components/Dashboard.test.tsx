@@ -88,6 +88,40 @@ describe("Dashboard Component", () => {
     localStorage.clear();
   });
 
+  it("keeps New chapter, Import chapter and ZIP drops in place but leading nowhere yet", () => {
+    render(
+      <Dashboard
+        mode="dark"
+        user={mockUser}
+        seriesList={initialSeries}
+        setSeriesList={mockSetSeriesList}
+        sortBy="updatedAt"
+        setSortBy={mockSetSortBy}
+        sortDir="desc"
+        setSortDir={mockSetSortDir}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
+        onSelectSeries={mockOnSelectSeries}
+      />,
+    );
+    const notYet =
+      "Chapters without a series are coming later. For now, open a series and import there.";
+
+    fireEvent.click(screen.getByRole("button", { name: /New chapter/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Import chapter/ }));
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", {
+      value: { types: ["Files"], files: [new File(["z"], "chapter.zip")] },
+    });
+    window.dispatchEvent(drop);
+
+    expect(mockShowToast).toHaveBeenCalledTimes(3);
+    expect(mockShowToast).toHaveBeenLastCalledWith(notYet, "info");
+    expect(drop.defaultPrevented).toBe(true); // the browser must not open the file
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("renders the dashboard with list of series", () => {
     render(
       <Dashboard
@@ -106,7 +140,9 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    expect(screen.getByText("My Manga Library")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Library" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("One Piece")).toBeInTheDocument();
     expect(screen.getAllByText("Naruto").length).toBeGreaterThan(0);
   });
@@ -594,7 +630,7 @@ describe("Dashboard Component", () => {
       expect(screen.getByRole("listbox")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("option", { name: /Created Date ↓/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Newest first/ }));
 
     // AUDIT-T3: this test used to end at the click with no assertion at all — deleting the
     // Select's entire `onChange` would not have failed it. `Dashboard` owns exactly two

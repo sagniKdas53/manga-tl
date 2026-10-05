@@ -76,16 +76,16 @@ describe("SeriesHeader", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Add Chapter/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Add chapter/i }));
     expect(mockAddChapter).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: /Import Chapter/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Import chapter/i }));
     expect(mockImportChapter).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: /Edit Series/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Edit series/i }));
     expect(mockEditSeries).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: /Delete Series/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Delete series/i }));
     expect(mockDeleteSeries).toHaveBeenCalledTimes(1);
   });
 });

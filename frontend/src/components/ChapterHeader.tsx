@@ -2,23 +2,25 @@ import React, { useState, useEffect } from "react";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
-import Card from "@mui/material/Card";
-import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
-import Chip from "@mui/material/Chip";
-import Grid from "@mui/material/Grid";
-import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
 import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import UploadIcon from "@mui/icons-material/Upload";
 import DownloadIcon from "@mui/icons-material/Download";
-import DeleteIcon from "@mui/icons-material/Delete";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import type { Series, Chapter, User, SystemSettingsDto } from "../types";
-import LazyImage from "./LazyImage";
 import { safeFetch } from "../utils";
+import {
+  HeaderShell,
+  Inherited,
+  MetaRows,
+  ModelPill,
+  PillRow,
+} from "./DetailParts";
 
 export interface ChapterHeaderProps {
   user?: User;
@@ -94,408 +96,223 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
     selectedSeries.routingStrategy ||
     "lowest-cost";
 
+  const onOff = (on: boolean | null | undefined) => (on ? "On" : "Off");
+  const inheritedFrom = (source?: string | null) =>
+    source === "chapter" ? null : source === "series" ? "series" : "settings";
+
   return (
     <Box sx={{ mb: 4 }}>
       <Button
-        variant="outlined"
+        variant="text"
         size="small"
+        startIcon={<ArrowBackIcon fontSize="small" />}
         onClick={onBack}
-        sx={{ mb: 2 }}
+        aria-label="Back to series"
+        sx={{ mb: 1.5, color: "text.secondary", px: 1 }}
       >
-        ← Back to Series
+        {selectedSeries.title}
       </Button>
 
-      <Card elevation={3}>
-        <CardContent sx={{ p: 0, "&:last-child": { pb: 0 } }}>
-          <Grid
-            container
-            spacing={0}
-          >
-            {/* Cover/Thumbnail column matching Series header for uniformity */}
-            <Grid size={{ xs: 12, sm: 4, md: 3, lg: 2.5 }}>
-              <Box
-                sx={{
-                  width: "100%",
-                  height: "100%",
-                  minHeight: { xs: 200, sm: 250 },
-                  maxHeight: { xs: 300, sm: 350 },
-                  backgroundColor: "background.default",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRight: (theme) => ({
-                    sm: `1px solid ${theme.palette.divider}`,
-                  }),
-                  borderBottom: (theme) => ({
-                    xs: `1px solid ${theme.palette.divider}`,
-                    sm: "none",
-                  }),
-                  overflow: "hidden",
-                }}
-              >
-                {selectedChapter.coverImageUrl ? (
-                  <LazyImage
-                    src={selectedChapter.coverImageUrl}
-                    alt={
-                      selectedChapter.title ||
-                      `Chapter ${selectedChapter.chapterNumber}`
-                    }
-                    sx={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "contain",
-                    }}
-                  />
-                ) : (
-                  <Typography
-                    variant="body1"
-                    sx={{
-                      color: "text.secondary",
-                    }}
-                  >
-                    Chapter {selectedChapter.chapterNumber}
-                  </Typography>
-                )}
-              </Box>
-            </Grid>
+      <HeaderShell
+        coverUrl={selectedChapter.coverImageUrl}
+        coverAlt={
+          selectedChapter.title || `Chapter ${selectedChapter.chapterNumber}`
+        }
+        coverFallback={`Chapter ${selectedChapter.chapterNumber}`}
+      >
+        <Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <Typography
+              variant="h4"
+              component="h1"
+            >
+              Chapter {selectedChapter.chapterNumber}
+            </Typography>
+            <IconButton
+              onClick={onEditClick}
+              aria-label="Edit Chapter Name & Number"
+              title="Edit Chapter Name & Number"
+              size="small"
+              sx={{ color: "text.secondary" }}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Box>
+          {selectedChapter.title && (
+            <Typography
+              variant="body1"
+              sx={{ fontSize: "1.0625rem", mt: 0.25 }}
+            >
+              {selectedChapter.title}
+            </Typography>
+          )}
+        </Box>
 
-            {/* Info Column */}
-            <Grid size={{ xs: 12, sm: 8, md: 9, lg: 9.5 }}>
-              <Box
-                sx={{
-                  p: { xs: 2, sm: 3 },
-                  display: "flex",
-                  flexDirection: "column",
-                  height: "100%",
-                }}
-              >
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1,
-                    mb: 0.5,
-                  }}
-                >
-                  <Typography
-                    variant="h4"
-                    component="h1"
-                    sx={{
-                      fontWeight: "bold",
-                      fontFamily: '"Outfit", sans-serif',
-                    }}
-                  >
-                    Chapter {selectedChapter.chapterNumber}
-                  </Typography>
-                  <IconButton
-                    onClick={onEditClick}
-                    aria-label="Edit Chapter Name & Number"
-                    title="Edit Chapter Name & Number"
-                    size="small"
-                  >
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                </Box>
-                <Typography
-                  variant="body1"
-                  gutterBottom
-                  sx={{
-                    color: "text.secondary",
-                  }}
-                >
-                  {selectedSeries.title}{" "}
-                  {selectedChapter.title ? `/ ${selectedChapter.title}` : ""}
-                </Typography>
-
-                <Grid
-                  container
-                  spacing={2}
-                  sx={{ mt: 1, mb: 3 }}
-                >
-                  <Grid>
-                    <Typography
-                      variant="body2"
-                      gutterBottom
-                      sx={{
-                        color: "text.secondary",
-                      }}
-                    >
-                      Pages
-                    </Typography>
-                    <Typography
-                      variant="body1"
-                      sx={{ fontWeight: "medium" }}
-                    >
-                      {selectedChapter.pageCount || 0}
-                    </Typography>
-                  </Grid>
-                  <Grid>
-                    <Typography
-                      variant="body2"
-                      gutterBottom
-                      sx={{
-                        color: "text.secondary",
-                      }}
-                    >
-                      Context Injection
-                    </Typography>
-                    <Chip
-                      size="small"
-                      label={
-                        selectedChapter.useContextMemory
-                          ? "Enabled"
-                          : "Disabled"
-                      }
-                      color={
-                        selectedChapter.useContextMemory ? "success" : "default"
-                      }
+        <MetaRows
+          rows={[
+            { label: "Series", value: selectedSeries.title },
+            {
+              label: "Languages",
+              value: `${selectedSeries.sourceLanguage || selectedSeries.originalLanguage || "ja"} → ${selectedSeries.targetLanguage || "en"}`,
+            },
+            { label: "Pages", value: selectedChapter.pageCount || 0 },
+            {
+              label: "Page context",
+              value: selectedChapter.useContextMemory
+                ? "On, the previous page is sent along"
+                : "Off",
+            },
+            {
+              label: "Fallback models",
+              value: (
+                <Inherited
+                  value={onOff(selectedChapter.resolvedUseFallbackModels)}
+                  from={
+                    selectedChapter.useFallbackModels == null ? "series" : null
+                  }
+                />
+              ),
+            },
+            {
+              label: "Routing",
+              value: routingStrategy,
+              hidden: !usesOpenRouter || !routingStrategy,
+            },
+            {
+              label: "QA",
+              value: (
+                <Inherited
+                  value={selectedChapter.resolvedQa?.mode || "Not set"}
+                  from={
+                    selectedChapter.resolvedQa?.mode
+                      ? inheritedFrom(selectedChapter.resolvedQa?.source)
+                      : null
+                  }
+                />
+              ),
+            },
+            {
+              label: "Models",
+              value: (
+                <PillRow>
+                  {selectedChapter.resolvedOcr?.model && (
+                    <ModelPill
+                      role="OCR"
+                      model={selectedChapter.resolvedOcr.model}
+                      provider={selectedChapter.resolvedOcr.provider}
+                      source={selectedChapter.resolvedOcr.source}
+                      level="chapter"
                     />
-                  </Grid>
-                  <Grid>
-                    <Typography
-                      variant="body2"
-                      gutterBottom
-                      sx={{
-                        color: "text.secondary",
-                      }}
-                    >
-                      Fallback Models
-                    </Typography>
-                    <Chip
-                      size="small"
-                      label={
-                        selectedChapter.useFallbackModels === null
-                          ? selectedChapter.resolvedUseFallbackModels
-                            ? "Enabled (inherited)"
-                            : "Disabled (inherited)"
-                          : selectedChapter.resolvedUseFallbackModels
-                            ? "Enabled"
-                            : "Disabled"
-                      }
-                      color={
-                        selectedChapter.useFallbackModels === null
-                          ? "default"
-                          : selectedChapter.resolvedUseFallbackModels
-                            ? "success"
-                            : "warning"
-                      }
-                    />
-                  </Grid>
-                  {usesOpenRouter && (
-                    <Grid>
-                      <Typography
-                        variant="body2"
-                        gutterBottom
-                        sx={{
-                          color: "text.secondary",
-                        }}
-                      >
-                        Strategy
-                      </Typography>
-                      {routingStrategy ? (
-                        <Chip
-                          size="small"
-                          color="secondary"
-                          label={routingStrategy}
-                        />
-                      ) : (
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            color: "text.secondary",
-                          }}
-                        >
-                          N/A
-                        </Typography>
-                      )}
-                    </Grid>
                   )}
-                  <Grid>
-                    <Typography
-                      variant="body2"
-                      gutterBottom
-                      sx={{
-                        color: "text.secondary",
-                      }}
-                    >
-                      QA Mode
-                    </Typography>
-                    {selectedChapter.resolvedQa?.mode ? (
-                      <Chip
-                        size="small"
-                        label={`${selectedChapter.resolvedQa.mode} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`}
-                      />
-                    ) : (
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          color: "text.secondary",
-                        }}
-                      >
-                        N/A
-                      </Typography>
-                    )}
-                  </Grid>
-                </Grid>
-
-                {/* Models Info */}
-                <Box sx={{ mb: 3 }}>
-                  <Typography
-                    variant="subtitle2"
-                    gutterBottom
-                    sx={{
-                      color: "text.secondary",
-                    }}
-                  >
-                    Configured Models
-                  </Typography>
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    useFlexGap
-                    sx={{ mt: 1, flexWrap: "wrap" }}
-                  >
-                    {selectedChapter.resolvedOcr?.provider && (
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={`OCR Provider: ${selectedChapter.resolvedOcr.provider}`}
-                      />
-                    )}
-                    {selectedChapter.resolvedOcr?.model && (
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={`OCR: ${selectedChapter.resolvedOcr.model} ${selectedChapter.resolvedOcr.source === "chapter" ? "(overridden)" : "(inherited)"}`}
-                      />
-                    )}
-                    {selectedChapter.resolvedTranslation?.provider && (
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={`TL Provider: ${selectedChapter.resolvedTranslation.provider}`}
-                      />
-                    )}
-                    {selectedChapter.resolvedTranslation?.model && (
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={`Translation: ${selectedChapter.resolvedTranslation.model} ${selectedChapter.resolvedTranslation.source === "chapter" ? "(overridden)" : "(inherited)"}`}
-                      />
-                    )}
-
-                    {selectedChapter.resolvedQa?.llmModel && (
-                      <Chip
-                        size="small"
-                        variant="outlined"
+                  {selectedChapter.resolvedTranslation?.model && (
+                    <ModelPill
+                      role="Translation"
+                      model={selectedChapter.resolvedTranslation.model}
+                      provider={selectedChapter.resolvedTranslation.provider}
+                      source={selectedChapter.resolvedTranslation.source}
+                      level="chapter"
+                    />
+                  )}
+                  {selectedChapter.resolvedQa?.llmModel && (
+                    <ModelPill
+                      role="QA text"
+                      model={selectedChapter.resolvedQa.llmModel}
+                      source={selectedChapter.resolvedQa.source}
+                      disabled={
+                        selectedChapter.resolvedQa?.mode === "vlm" ||
+                        selectedChapter.resolvedQa?.mode === "none"
+                      }
+                      level="chapter"
+                    />
+                  )}
+                  {selectedChapter.resolvedQa?.vlmModel &&
+                    !qaVlmCapabilityMissing && (
+                      <ModelPill
+                        role="QA vision"
+                        model={selectedChapter.resolvedQa.vlmModel}
+                        source={selectedChapter.resolvedQa.source}
                         disabled={
-                          selectedChapter.resolvedQa?.mode === "vlm" ||
+                          selectedChapter.resolvedQa?.mode === "llm" ||
                           selectedChapter.resolvedQa?.mode === "none"
                         }
-                        label={`QA LLM: ${selectedChapter.resolvedQa.llmModel} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`}
+                        level="chapter"
                       />
                     )}
-                    {selectedChapter.resolvedQa?.vlmModel &&
-                      !qaVlmCapabilityMissing && (
-                        <Chip
-                          size="small"
-                          variant="outlined"
-                          disabled={
-                            selectedChapter.resolvedQa?.mode === "llm" ||
-                            selectedChapter.resolvedQa?.mode === "none"
-                          }
-                          label={`QA VLM: ${selectedChapter.resolvedQa.vlmModel} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`}
-                        />
-                      )}
-                  </Stack>
-                </Box>
+                </PillRow>
+              ),
+            },
+          ]}
+        />
 
-                <Box sx={{ flexGrow: 1 }} />
-                <Divider sx={{ mb: 2, mt: 1 }} />
+        <Stack
+          direction="row"
+          sx={{ flexWrap: "wrap", gap: 1, alignItems: "center", mt: 0.5 }}
+        >
+          <Button
+            variant="contained"
+            startIcon={<UploadIcon />}
+            onClick={onUploadClick}
+          >
+            Upload pages
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={onExportClick}
+          >
+            Export chapter (ZIP)
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<UploadIcon />}
+            onClick={onImportClick}
+            disabled={isImporting}
+          >
+            {isImporting ? "Importing…" : "Import project (ZIP)"}
+          </Button>
 
-                {/* Actions Row */}
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  sx={{ flexWrap: "wrap", gap: 1, alignItems: "center" }}
-                >
-                  <Button
-                    variant="contained"
-                    startIcon={<UploadIcon />}
-                    onClick={onUploadClick}
-                  >
-                    Upload Page
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<UploadIcon />}
-                    onClick={onImportClick}
-                    disabled={isImporting}
-                  >
-                    {isImporting ? "Importing..." : "Import Project (ZIP)"}
-                  </Button>
-
-                  <Button
-                    variant="outlined"
-                    startIcon={<DownloadIcon />}
-                    onClick={onExportClick}
-                  >
-                    Export Chapter (ZIP)
-                  </Button>
-
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    startIcon={<DeleteIcon />}
-                    onClick={onDeleteClick}
-                  >
-                    Delete Chapter
-                  </Button>
-
-                  <IconButton
-                    onClick={(e) => setOverflowAnchorEl(e.currentTarget)}
-                    size="small"
-                    aria-label="more actions"
-                    aria-controls={
-                      openOverflow ? "chapter-overflow-menu" : undefined
-                    }
-                    aria-haspopup="true"
-                    aria-expanded={openOverflow ? "true" : undefined}
-                  >
-                    <MoreVertIcon />
-                  </IconButton>
-                  <Menu
-                    id="chapter-overflow-menu"
-                    anchorEl={overflowAnchorEl}
-                    open={openOverflow}
-                    onClose={() => setOverflowAnchorEl(null)}
-                    slotProps={{
-                      list: { "aria-labelledby": "basic-button" },
-                    }}
-                  >
-                    <MenuItem
-                      onClick={() => {
-                        onReexportClick();
-                        setOverflowAnchorEl(null);
-                      }}
-                    >
-                      Force Re-export
-                    </MenuItem>
-                    <MenuItem
-                      onClick={() => {
-                        onClearExportsClick();
-                        setOverflowAnchorEl(null);
-                      }}
-                    >
-                      Clear Exports
-                    </MenuItem>
-                  </Menu>
-                </Stack>
-              </Box>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={<DeleteIcon />}
+            onClick={onDeleteClick}
+          >
+            Delete chapter
+          </Button>
+          <IconButton
+            onClick={(e) => setOverflowAnchorEl(e.currentTarget)}
+            aria-label="more actions"
+            aria-controls={openOverflow ? "chapter-overflow-menu" : undefined}
+            aria-haspopup="true"
+            aria-expanded={openOverflow ? "true" : undefined}
+          >
+            <MoreVertIcon />
+          </IconButton>
+          <Menu
+            id="chapter-overflow-menu"
+            anchorEl={overflowAnchorEl}
+            open={openOverflow}
+            onClose={() => setOverflowAnchorEl(null)}
+          >
+            <MenuItem
+              onClick={() => {
+                onReexportClick();
+                setOverflowAnchorEl(null);
+              }}
+            >
+              Build a new export
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                onClearExportsClick();
+                setOverflowAnchorEl(null);
+              }}
+            >
+              Delete saved exports
+            </MenuItem>
+          </Menu>
+        </Stack>
+      </HeaderShell>
     </Box>
   );
 };

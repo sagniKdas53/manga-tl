@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import Typography from "@mui/material/Typography";
 import CircularProgress from "@mui/material/CircularProgress";
 import { useToast } from "./ToastContext";
@@ -9,12 +10,12 @@ import type { User, Series, Chapter } from "../types";
 import { safeFetch } from "../utils";
 import ConfirmModal from "./ConfirmModal";
 import CreateChapterDialog from "./CreateChapterDialog";
-import {
-  fetchHighestChapterNumber,
-  insertChapterInOrder,
-} from "./chapterNumbering";
+import { insertChapterInOrder } from "./chapterNumbering";
 import EditSeriesDialog from "./EditSeriesDialog";
-import ImportChapterDialog from "./ImportChapterDialog";
+import ZipImportDialog from "./ZipImportDialog";
+import DropOverlay from "./DropOverlay";
+import { useArchiveDrop } from "../hooks/useArchiveDrop";
+import { isChapterArchiveFile } from "../utils/zipPages";
 import SeriesHeader from "./SeriesHeader";
 import ChapterCardGrid from "./ChapterCardGrid";
 
@@ -61,30 +62,20 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
 
   const [showImportModal, setShowImportModal] = useState(false);
 
-  // Same reasoning as `CreateChapterDialog`: the loaded `chapters` array is one page, so its
-  // maximum is not the series maximum. Falls back to the prefix guess until the server answers.
-  const [highestChapterNumber, setHighestChapterNumber] = useState<
-    number | null
-  >(null);
-  useEffect(() => {
-    if (!showImportModal || !selectedSeries) return;
-    let cancelled = false;
-    void fetchHighestChapterNumber(selectedSeries.id, user.token)
-      .then((highest) => {
-        if (!cancelled) setHighestChapterNumber(highest);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [showImportModal, selectedSeries, user.token]);
-
-  const importNextNum =
-    (highestChapterNumber ??
-      chapters.reduce(
-        (max, c) => (c.chapterNumber > max ? c.chapterNumber : max),
-        0,
-      )) + 1;
+  // An archive dropped anywhere on the series page opens the import dialog with it (#217).
+  // The dialog asks the server for the next chapter number itself (AUDIT-F18).
+  const [droppedArchive, setDroppedArchive] = useState<File | null>(null);
+  const draggingArchive = useArchiveDrop(
+    !showImportModal && Boolean(selectedSeries),
+    (file) => {
+      if (!isChapterArchiveFile(file)) {
+        showToast("Drop a .zip, .cbz or .epub to import a chapter.", "info");
+        return;
+      }
+      setDroppedArchive(file);
+      setShowImportModal(true);
+    },
+  );
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -242,11 +233,13 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     >
       <Button
         onClick={() => navigate("/")}
-        variant="outlined"
+        variant="text"
         size="small"
-        sx={{ mb: 2 }}
+        startIcon={<ArrowBackIcon fontSize="small" />}
+        aria-label="Back to Library"
+        sx={{ mb: 1.5, color: "text.secondary", px: 1 }}
       >
-        ← Back to Library
+        Library
       </Button>
 
       <SeriesHeader
@@ -296,15 +289,27 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         onSuccess={handleChapterSuccess}
         onError={handleChapterError}
       />
-      <ImportChapterDialog
+      <ZipImportDialog
         open={showImportModal}
-        onClose={() => setShowImportModal(false)}
-        onSuccess={(chapter) => {
-          setChapters((prev) => insertChapterInOrder(prev, chapter, sortAsc));
+        onClose={() => {
+          setShowImportModal(false);
+          setDroppedArchive(null);
         }}
+        initialFile={droppedArchive}
+        series={selectedSeries}
         user={user}
-        series={selectedSeries!}
-        nextNum={importNextNum}
+        onImported={(chapter, _series, pageCount) => {
+          setChapters((prev) => insertChapterInOrder(prev, chapter, sortAsc));
+          showToast(
+            `Imported ${pageCount} pages as chapter ${chapter.chapterNumber}. Follow it in the queue.`,
+            "success",
+          );
+        }}
+      />
+      <DropOverlay
+        visible={draggingArchive}
+        title={`Import into ${selectedSeries?.title ?? "this series"}`}
+        detail="Drop a ZIP, CBZ or ePub. You can check its pages before anything is uploaded."
       />
       <ConfirmModal
         isOpen={confirmModal.isOpen}
