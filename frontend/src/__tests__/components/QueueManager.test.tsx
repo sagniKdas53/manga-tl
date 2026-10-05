@@ -801,4 +801,96 @@ describe("QueueManager", () => {
       "Only pages waiting to start can be paused",
     );
   });
+
+  it("lets keyboard users reach the reason a disabled pause is off", async () => {
+    (safeFetch as Mock).mockImplementation((url: string) =>
+      url === "/api/jobs"
+        ? Promise.resolve({
+            ok: true,
+            json: async () => ({
+              isPaused: false,
+              jobs: [{ ...mockJobs[0], id: "run", status: "PROCESSING" }],
+            }),
+          })
+        : Promise.reject(new Error("Unknown URL")),
+    );
+    render(<QueueManagerWrapper />);
+    fireEvent.click(screen.getByTitle("Queue Manager"));
+    const wrapper = (await screen.findByLabelText("Pause")).parentElement!;
+    expect(wrapper).toHaveAttribute("tabindex", "0");
+    // jsdom never matches :focus-visible, which MUI's Tooltip needs before it opens on focus.
+    // Treat the focused element as keyboard-focused, as a browser does after Tab.
+    const matches = Element.prototype.matches;
+    const spy = vi
+      .spyOn(Element.prototype, "matches")
+      .mockImplementation(function (this: Element, selector: string) {
+        return selector === ":focus-visible"
+          ? this === document.activeElement
+          : matches.call(this, selector);
+      });
+    try {
+      act(() => wrapper.focus());
+      expect(await screen.findByRole("tooltip")).toHaveTextContent(
+        "Only pages waiting to start can be paused",
+      );
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("keeps an enabled pause to a single tab stop", async () => {
+    (safeFetch as Mock).mockImplementation((url: string) =>
+      url === "/api/jobs"
+        ? Promise.resolve({
+            ok: true,
+            json: async () => ({ isPaused: false, jobs: [mockJobs[0]] }),
+          })
+        : Promise.reject(new Error("Unknown URL")),
+    );
+    render(<QueueManagerWrapper />);
+    fireEvent.click(screen.getByTitle("Queue Manager"));
+    const pause = await screen.findByLabelText("Pause");
+    expect(pause).toBeEnabled();
+    expect(pause.parentElement).not.toHaveAttribute("tabindex");
+  });
+
+  it("opens a job's full error on tap or Enter, without hover", async () => {
+    const longError =
+      "TranslationError: " +
+      "the provider closed the stream early. ".repeat(6).trim();
+    (safeFetch as Mock).mockImplementation((url: string) =>
+      url === "/api/jobs"
+        ? Promise.resolve({
+            ok: true,
+            json: async () => ({
+              isPaused: false,
+              jobs: [{ ...mockJobs[1], error: longError }],
+            }),
+          })
+        : Promise.reject(new Error("Unknown URL")),
+    );
+    render(<QueueManagerWrapper />);
+    fireEvent.click(screen.getByTitle("Queue Manager"));
+    const details = await screen.findByTitle(longError);
+    expect(details).toHaveAttribute("role", "button");
+    expect(details).toHaveAttribute("aria-expanded", "false");
+    expect(details).not.toHaveTextContent(longError);
+
+    fireEvent.click(details);
+    const full = await screen.findByRole("dialog", { name: "Full error" });
+    expect(full).toHaveTextContent(longError);
+    expect(details).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.keyDown(full, { key: "Escape" });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "Full error" }),
+      ).not.toBeInTheDocument(),
+    );
+
+    fireEvent.keyDown(details, { key: "Enter" });
+    expect(
+      await screen.findByRole("dialog", { name: "Full error" }),
+    ).toHaveTextContent(longError);
+  });
 });

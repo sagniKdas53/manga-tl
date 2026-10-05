@@ -6,6 +6,7 @@ import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
+import Popover from "@mui/material/Popover";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import ChecklistIcon from "@mui/icons-material/Checklist";
@@ -653,6 +654,12 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
   type Filter = "all" | "running" | "waiting" | "failed";
   const [filter, setFilter] = useState<Filter>("all");
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  // The one row whose error is shown whole in a popover, opened by a tap or a key rather than
+  // hover. Rows keep their fixed height, so the full text cannot open in place.
+  const [errorPopover, setErrorPopover] = useState<{
+    jobId: string;
+    anchor: HTMLElement;
+  } | null>(null);
 
   // A clock for the "in this stage for 3 min" text. Ticks only while the drawer is open.
   const [now, setNow] = useState(() => Date.now());
@@ -1062,6 +1069,11 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                 ? "Resume"
                                 : "Pause"
                               : "Only pages waiting to start can be paused";
+                          const pauseDisabled = isPaused || !canPause;
+                          const errorOpen =
+                            !!job.error && errorPopover?.jobId === job.id;
+                          const openError = (anchor: HTMLElement) =>
+                            setErrorPopover({ jobId: job.id, anchor });
                           return (
                             <Box
                               key={job.id}
@@ -1175,7 +1187,13 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                         describeChild
                                         title={pauseHint}
                                       >
-                                        <span>
+                                        {/* A disabled button takes no focus, so the wrapper does,
+                                            and keyboard users still get the reason. */}
+                                        <span
+                                          tabIndex={
+                                            pauseDisabled ? 0 : undefined
+                                          }
+                                        >
                                           <IconButton
                                             size="small"
                                             aria-label={
@@ -1186,7 +1204,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                             onClick={() =>
                                               handleToggleJobPause(job)
                                             }
-                                            disabled={isPaused || !canPause}
+                                            disabled={pauseDisabled}
                                           >
                                             {job.status === "PAUSED" ? (
                                               <PlayArrowIcon fontSize="small" />
@@ -1225,10 +1243,33 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                 animate={jobs.length < STRIP_ANIMATION_LIMIT}
                               />
 
-                              {/* One line of details on every row, empty when there are none;
-                                  a long error is cut short here and shown whole on hover. */}
+                              {/* One line of details on every row, empty when there are none.
+                                  A long error is cut short here; hover shows it whole, and a
+                                  tap, Enter or Space opens it whole in a popover. */}
                               <Box
                                 title={job.error || undefined}
+                                {...(job.error
+                                  ? {
+                                      role: "button",
+                                      tabIndex: 0,
+                                      "aria-haspopup": "dialog" as const,
+                                      "aria-expanded": errorOpen,
+                                      onClick: (
+                                        e: React.MouseEvent<HTMLElement>,
+                                      ) => openError(e.currentTarget),
+                                      onKeyDown: (
+                                        e: React.KeyboardEvent<HTMLElement>,
+                                      ) => {
+                                        if (
+                                          e.key === "Enter" ||
+                                          e.key === " "
+                                        ) {
+                                          e.preventDefault();
+                                          openError(e.currentTarget);
+                                        }
+                                      },
+                                    }
+                                  : {})}
                                 sx={{
                                   minWidth: 0,
                                   fontSize: "0.75rem",
@@ -1237,6 +1278,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                   whiteSpace: "nowrap",
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
+                                  cursor: job.error ? "pointer" : undefined,
                                   "& > span + span": { ml: 1.5 },
                                 }}
                               >
@@ -1255,6 +1297,35 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                   </Box>
                                 )}
                               </Box>
+                              {errorOpen && (
+                                <Popover
+                                  open
+                                  anchorEl={errorPopover.anchor}
+                                  onClose={() => setErrorPopover(null)}
+                                  anchorOrigin={{
+                                    vertical: "bottom",
+                                    horizontal: "left",
+                                  }}
+                                  slotProps={{
+                                    paper: {
+                                      role: "dialog",
+                                      "aria-label": "Full error",
+                                      sx: {
+                                        p: 1.5,
+                                        maxWidth: 420,
+                                        maxHeight: 240,
+                                        overflow: "auto",
+                                        fontSize: "0.75rem",
+                                        whiteSpace: "pre-wrap",
+                                        overflowWrap: "anywhere",
+                                        color: "error.main",
+                                      },
+                                    },
+                                  }}
+                                >
+                                  {job.error}
+                                </Popover>
+                              )}
                             </Box>
                           );
                         })}
