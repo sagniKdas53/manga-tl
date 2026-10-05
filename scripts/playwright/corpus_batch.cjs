@@ -151,7 +151,9 @@ function parseArgs(argv) {
     },
     injectContext: false,
     out: "",
-    submitConcurrency: 4,
+    // 1, not more: uploading into ONE chapter is not safe to parallelise (see the note at the
+    // submission site). Uploads were never the bottleneck anyway — the pipeline is.
+    submitConcurrency: 1,
     captureConcurrency: 2,
     pollIntervalSec: 10,
     pageTimeoutSec: 3600,
@@ -555,6 +557,7 @@ async function ensureChapter(ctx, args, seriesId) {
   let chapterNumber = args.chapterNumber > 0 ? args.chapterNumber : 1;
   if (args.chapterNumber <= 0) while (used.has(chapterNumber)) chapterNumber++;
 
+  let lastError = null;
   for (let attempt = 0; attempt < 8; attempt++) {
     try {
       const body = await apiSend(ctx, "post", `/api/series/${seriesId}/chapters`, {
@@ -573,6 +576,7 @@ async function ensureChapter(ctx, args, seriesId) {
       // 409 means the number was taken between the list and the create. It may also mean a
       // concurrent run created OUR title, in which case reuse theirs rather than fighting.
       if (!/-> 409\b/.test(e.message)) throw e;
+      lastError = e.message;
       const raced = (await listChapters()).find((c) => c.title === args.chapterTitle);
       if (raced) {
         const id = raced.id || raced.chapterId;
@@ -582,7 +586,10 @@ async function ensureChapter(ctx, args, seriesId) {
       chapterNumber++;
     }
   }
-  throw new Error(`no free chapter number for "${args.chapterTitle}" after 8 attempts`);
+  throw new Error(
+    `no free chapter number for "${args.chapterTitle}" after 8 attempts ` +
+    `(existing: ${[...used].sort((a, b) => a - b).join(", ") || "none"}; last failure: ${lastError})`,
+  );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -619,7 +626,25 @@ async function uploadPage(ctx, chapterId, entry) {
       file: { name: entry.sample.sourceFile, mimeType, buffer: buf },
     },
   });
-  if (!res.ok()) throw new Error(`upload failed ${res.status()} ${await res.text().catch(() => "")}`);
+  if (!res.ok()) {
+    const body = await res.text().catch(() => "");
+    if (res.status() === 500) {
+      // This is the known concurrent-upload race, not a bad file. `insert_page` reads
+      // MAX(page_number)+1, clamps the requested number into that range, and only then inserts,
+      // with no lock between the read and the insert (routes/page.rs:330-348). Two uploads into
+      // one chapter at once can therefore pick the same slot, and the losing INSERT trips the
+      // (chapter_id, page_number) unique constraint on a `.expect(...)` -- which the catch-panic
+      // layer turns into this 500 with instance "/unknown". The service needs a fix; the fix on
+      // this side is --submit-concurrency 1, which is the default.
+      throw new Error(
+        `upload failed 500 (backend panic; no page was created)\n` +
+        `  requested page ${entry.pageNumber} into chapter ${chapterId}.\n` +
+        `  Concurrent uploads into one chapter race on the page-slot reservation -- re-run with\n` +
+        `  --submit-concurrency 1 (the default), or --resume to harvest what did land.`,
+      );
+    }
+    throw new Error(`upload failed ${res.status()} ${body}`);
+  }
   const body = await res.json().catch(() => ({}));
   if (!body.pageId) throw new Error(`upload returned no pageId (status=${body.status})`);
   entry.pageId = body.pageId;
@@ -1251,6 +1276,15 @@ Harvest
 
     if (pending.length) {
       console.log(`submitting ${pending.length} page(s), ${args.submitConcurrency} at a time`);
+      if (args.submitConcurrency > 1) {
+        console.warn(
+          `WARNING: --submit-concurrency ${args.submitConcurrency} uploads into ONE chapter at once.\n` +
+          "  The backend reserves a page slot with an unlocked read of MAX(page_number)+1 and\n" +
+          "  only then inserts (routes/page.rs:330-348), so parallel uploads can collide: the\n" +
+          "  loser 500s on the unique constraint, and the others can be silently clamped to a\n" +
+          "  different page number than requested. Expect both below.\n",
+        );
+      }
       let submitted = 0;
       await runQueue(pending, args.submitConcurrency, async () => async (entry) => {
         try {
@@ -1269,6 +1303,37 @@ Harvest
           entry.finishedAt = new Date().toISOString();
         }
       });
+      // Reconcile against what the backend actually created. Two things can make the number we
+      // asked for not be the number we got: the clamp in insert_page, and a page left behind by an
+      // earlier run. Without this an entry would poll for a page number that holds a different
+      // sample -- or that does not exist at all, in which case it waits out the full page timeout.
+      const landed = await chapterPageState(ctx, chapterId);
+      const numbersById = new Map();
+      for (let page = 0; page < Math.max(1, Math.ceil(landed.count / PAGE_LIST_SIZE)); page++) {
+        const body = await apiJson(
+          ctx,
+          `/api/chapters/${chapterId}/pages?size=${PAGE_LIST_SIZE}&page=${page}&sort=pageNumber,asc`,
+        );
+        for (const p of body.content || []) numbersById.set(String(p.id), Number(p.pageNumber));
+      }
+      for (const entry of pending) {
+        if (!entry.pageId || entry.terminal) continue;
+        const actual = numbersById.get(String(entry.pageId));
+        if (actual === undefined) {
+          entry.terminal = true;
+          entry.state = "upload-failed";
+          entry.error = `page ${entry.pageId} is not in chapter ${chapterId} after upload`;
+          entry.finishedAt = new Date().toISOString();
+          continue;
+        }
+        if (actual !== entry.pageNumber) {
+          console.warn(
+            `  ${entry.sample.sampleId}: requested page ${entry.pageNumber}, backend assigned ${actual}`,
+          );
+          entry.requestedPageNumber = entry.pageNumber;
+          entry.pageNumber = actual;
+        }
+      }
       manifest.counts = summarise(manifest);
       writeManifest(manifestPath, manifest);
     }
