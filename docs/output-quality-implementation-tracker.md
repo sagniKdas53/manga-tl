@@ -126,7 +126,8 @@ to Node 24.
 
 **Next, in order** (details in [the R7 close doc's follow-ups](output-quality-r7-close-20261001.md#follow-ups-in-order-of-output-value)):
 1. **A — cleanup masks** (white outline/glow blobs the automatic cleanup leaves; seen again on
-   page 31).
+   page 31). Halo grow is in worker PR #52 (2026-10-05). What it still misses is in #228:
+   bands that run on, translucent balloons, and leftover ink.
 2. **B — one balloon, one text unit** (`AUDIT-R21`).
 3. **C + G — typesetting, with editor and export matching one to one.** G collects what makes the
    editor differ from the export today: fonts not loaded before the first fit, `maskPolygon`
