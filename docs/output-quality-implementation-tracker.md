@@ -6,10 +6,13 @@ Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequ
 
 ## Status at a glance (2026-10-05 — B: one balloon, one text unit)
 
-**B is in** (worker `feat/one-balloon-grouping`, three changes, all on by default, each with an
-env switch to turn it off). It makes output better: fewer balloons whose text is translated and
-typeset in pieces. Measured offline with the worker's own OCR + YOLO on 207 dev-stack pages, then
-live on chrome-box's a-halo test stack (2026-10-05, $0.00 spent: free translation model, QA off).
+**B is in** (worker PR [#53](https://github.com/sagniKdas53/manga-tl-worker/pull/53), parent
+[#230](https://github.com/sagniKdas53/manga-tl/pull/230), both draft). Four changes, all on by
+default, each with an env switch that restores the old behaviour. It makes output better: fewer
+balloons whose text is translated and typeset in pieces, and joined text in reading order.
+Measured offline with the worker's own OCR + YOLO on 207 dev-stack pages, then live on
+chrome-box's a-halo test stack (2026-10-05, $0.076 spent: DeepSeek v4 Flash translation $0.069,
+QA $0.008).
 
 What broke a balloon into pieces, and what fixes each:
 1. **OCR broke a column in two** (ブラ | イダルなんて), so the owner veto saw the top piece beside
@@ -23,21 +26,31 @@ What broke a balloon into pieces, and what fixes each:
 3. **One break threw the whole balloon away.** A vetoed group became single pieces even when
    only one line was out of step (TELEA p. 2's aside 良くないけど). Fix: cut at the break, keep
    the runs either side, and decide each again (`OCR_SPLIT_VETOED_AT_BREAKS`).
+4. **Joined text was out of order.** `merge_ocr_regions` sorted pieces by -x then y, which
+   scrambles horizontal lines (Tests ch. 4 p. 63's caption read lines 1, 3, 2) and a broken column
+   whose lower piece is narrower (手ブラ | での read "での手ブラ"). Fix: put pieces into lines
+   first, then columns right to left and horizontal lines top to bottom (`OCR_LINE_READING_ORDER`).
+   This changes the text of every joined region, not only the ones B joins: over 523 joined
+   groups, 38 read differently, about 32 clearly better (ch. 3 p. 8's paragraphs were shuffled),
+   the rest OCR garbage, none clearly worse.
 
 Results:
 - **4Oct (21 pages):** only p. 3 and p. 17 change, each to exactly the user's hand merge
   (p. 3: 仕事とはいえ + the seven-piece sentence; p. 17: one region).
 - **Hand labels (2026-08-09, 6 pages, 357 pairs):** false splits 28 → 15, false merges 0 → 0.
 - **Tests (179 pages):** 34 balloons main's veto split; their regions go 163 → 138. Every changed
-  balloon (16 over all pages) was looked at. None merged across balloons; all but one became
-  their text units or got closer. The exception, t4_054 B0, is a shout whose column OCR read as
-  セ / フ: セ now joins the next column instead of standing alone, still inside the one balloon.
-- **Fixtures (sample177, 222, 99, 93, 83, 61 + sample7):** two balloons change, both inside one
-  balloon (sample7: ヘルタにだけは言われたくないんだけど!? joins and 追加!? stays apart; sample99:
-  a moan cloud goes 5 → 3). No merge across balloons.
-- **Live, chrome-box:** TELEA p. 2 balloon 1 is クソ兄貴のお手製フリップはまだいいとして： plus
-  **良くないけど on its own**; balloon 4 is its two blocks (was four pieces). 4Oct p. 3 and p. 17 as
-  above.
+  balloon (16 over all pages) was looked at, and its joined text read. None merged across
+  balloons; all but one became their text units or got closer. The exception, t4_054 B0, is a
+  shout whose column OCR read as セ / フ: セ now joins the next column, still inside the one balloon.
+- **Fixtures:** only sample7, sample93 and sample99 have detected balloons, so only they exercise
+  this (sample177, 222, 61 and 83 have none, and every change is on the in-balloon path). Two
+  balloons change, both inside one balloon (sample7: ヘルタにだけは言われたくないんだけど!? joins
+  and 追加!? stays apart; sample99: a moan cloud goes 5 → 3). No merge across balloons.
+- **Live, chrome-box (rendered and read):** 4Oct p. 17's yellow balloon is one text, "If you
+  want to date Yangyang, you'll have to defeat me!", and the duplicated "Beat me." is gone. 4Oct
+  p. 3 reads "Even though it's for work…" + "If I weren't an idol, I'd never have had anything to
+  do with something like a bridal shoot." TELEA p. 2 balloon 1 is one sentence with **良くないけど
+  its own region**; balloon 4 is its two blocks (was four pieces).
 
 Not fixed (decide later):
 - **Paragraph gaps inside one balloon** (4Oct p. 15: four balloons, each two sentences a little
@@ -47,24 +60,34 @@ Not fixed (decide later):
 - **`mixed-line-orientation` / `incoherent-oriented-lines` vetoes** (R21's other half). The ones
   looked at are OCR misreads (vertical text read sideways, "1111"), where keeping pieces apart is
   right; not all were checked.
-- **Reading order of joined horizontal lines.** `merge_ocr_regions` orders by x first, so a
-  horizontal group comes out scrambled (4Oct p. 3's watermark: "trainingAI学習禁止…"). It does not
-  affect vertical balloons like the ones above.
+- **The aside came back untranslated.** On chrome-box, TELEA p. 2's 良くないけど region got an
+  empty translation, so the render shows the source art there. That is the translation stage, not
+  grouping.
 
-Checklist of the tracker's items (☑ done, ☐ open):
-- ☑ Plan for 2026-10-03: I (`SELF_HOSTED_ADMIN`), G1, G3, G4, H2, item 6 (SQL script), corpus-v2
-  Phase 0 and 1.1–1.2, C + G packet written. ☐ prod deploy and prod SQL (dropped by the user: a
-  fresh prod stack after the tracker).
-- ☑ A (2): halo grow, worker #52. ☐ A (1) close-and-fill, ☐ the same for hand marks, ☐ the
-  labelled re-run, ☐ #228 (bands that run on, translucent balloons, leftover ink).
-- ☑ B Step 0 (measured on 207 pages + hand labels, causes ranked above). ☑ B cause 1 (split
-  columns). ☑ B cause 2 (narrow-balloon waist). ☑ B cause 3 (cut at the break). ☑ Gate: R21's
-  lateral-overlap cases on Tests. ☑ Gate: fixtures, no merge across balloons. ☑ Gate: 良くないけど
-  stays its own text. ☐ Paragraph gaps (p. 15). ☐ Mixed-orientation vetoes. ☐ Horizontal reading
-  order. ☐ Merge the worker PR and bump the parent's pin.
-- ☐ C + G: G2 + H1, the `background_color` split, M7's single text renderer
-  ([packet](output-quality-cg-packet-20261004.md)).
-- ☐ F (Photoshop-style layers). ☐ E (automatic angles, `AUDIT-R23`). ☐ M9 and the rest of corpus-v2.
+Checklist of the tracker's items:
+- [x] Plan for 2026-10-03: I (`SELF_HOSTED_ADMIN`), G1, G3, G4, H2, item 6 (SQL script),
+  corpus-v2 Phase 0 and 1.1–1.2, C + G packet written
+- [ ] Prod deploy and prod SQL run (dropped by the user: a fresh prod stack after the tracker)
+- [x] A (2): halo grow (worker #52)
+- [ ] A (1): close-and-fill the automatic mask; the same for hand marks; the labelled re-run
+- [ ] A: #228 (bands that run on, translucent balloons, leftover ink)
+- [x] B Step 0: causes measured on 207 pages + the hand labels
+- [x] B: split columns (cause 1)
+- [x] B: narrow-balloon waist veto (cause 2)
+- [x] B: cut a vetoed group at its break (cause 3)
+- [x] B: joined text in reading order (cause 4)
+- [x] B gate: R21's lateral-overlap cases on Tests
+- [x] B gate: fixtures, no merge across balloons
+- [x] B gate: 良くないけど stays its own text (live)
+- [x] B gate: 4Oct p. 3 and p. 17 match the hand merges (live)
+- [ ] B: paragraph gaps inside one balloon (4Oct p. 15)
+- [ ] B: mixed-orientation vetoes
+- [ ] B: merge worker #53, re-pin the parent to its merge commit, merge #230
+- [ ] C + G: G2 + H1, the `background_color` split, M7's single text renderer
+  ([packet](output-quality-cg-packet-20261004.md))
+- [ ] F: Photoshop-style layers
+- [ ] E: automatic angles (`AUDIT-R23`)
+- [ ] M9 and the rest of corpus-v2
 
 ## Plan for 2026-10-03 (user, 2026-10-02 late)
 
@@ -190,7 +213,7 @@ to Node 24.
 1. **A — cleanup masks** (white outline/glow blobs the automatic cleanup leaves; seen again on
    page 31). Halo grow is in worker PR #52 (2026-10-05). What it still misses is in #228:
    bands that run on, translucent balloons, and leftover ink.
-2. **B — one balloon, one text unit** (`AUDIT-R21`). **In 2026-10-05**, three of its causes; see
+2. **B — one balloon, one text unit** (`AUDIT-R21`). **In 2026-10-05**, four fixes; see
    [the 2026-10-05 status](#status-at-a-glance-2026-10-05--b-one-balloon-one-text-unit). Paragraph
    gaps inside one balloon remain.
 3. **C + G — typesetting, with editor and export matching one to one.** G collects what makes the

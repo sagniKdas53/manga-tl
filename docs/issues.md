@@ -1240,15 +1240,16 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   job. It applies on the next OCR, so redo OCR to regroup a page. It moves the Ch.1 p4 case (a
   paragraph whose lines are 8–9 px apart needs about 0.45). It does not move the continuity veto,
   which splits after grouping.
-- **Fixed 2026-10-05 (three causes; worker `feat/one-balloon-grouping`, on by default).**
+- **Fixed 2026-10-05 (worker #53, parent #230; on by default).**
   `OCR_JOIN_SPLIT_LINES` joins a column's pieces (same centre line) before the continuity test;
   `OCR_WAIST_ADJACENT_LINE_GAP=0.2` stops the clearance veto splitting two columns too close for a
   balloon wall (4Oct p. 17, a narrow balloon); `OCR_SPLIT_VETOED_AT_BREAKS` cuts a vetoed group at
-  its break instead of into single pieces (TELEA p. 2, the 良くないけど aside). Hand labels: false
-  splits 28 → 15, false merges 0. Live on chrome-box: 4Oct p. 3 and p. 17 come out as the user's
-  hand merges, and 良くないけど stays its own text. Numbers and what is still open (paragraph gaps
-  inside one balloon, mixed-orientation vetoes, horizontal reading order) are in the tracker's
-  2026-10-05 status.
+  its break instead of into single pieces (TELEA p. 2, the 良くないけど aside);
+  `OCR_LINE_READING_ORDER` joins text line by line, so horizontal lines and broken columns read in
+  order. Hand labels: false splits 28 → 15, false merges 0. Live on chrome-box: 4Oct p. 3 and
+  p. 17 come out as the user's hand merges (p. 17's duplicated "Beat me." is gone), and
+  良くないけど stays its own text. Numbers and what is still open (paragraph gaps inside one
+  balloon, mixed-orientation vetoes) are in the tracker's 2026-10-05 status.
 
 ### `AUDIT-R22` (feature): LaMa-mpe as a cleanup mode
 
