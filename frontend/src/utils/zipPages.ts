@@ -130,19 +130,27 @@ export interface ArchiveContents {
   isProjectArchive: boolean;
 }
 
+/**
+ * The name as stored in the archive. JSZip resolves `.`, `..` and `//` in `entry.name`, but
+ * archive.rs filters and sorts the stored name, so the preview must too: `chapter/./2.png`
+ * would otherwise show a page the backend drops (CodeRabbit on #222).
+ */
+const storedName = (entry: JSZip.JSZipObject): string =>
+  entry.unsafeOriginalName ?? entry.name;
+
 export const readArchivePages = async (
   file: Blob,
 ): Promise<ArchiveContents> => {
   const zip = await JSZip.loadAsync(file);
   const entries = Object.values(zip.files).filter(
-    (entry) => !entry.dir && keepEntry(entry.name),
+    (entry) => !entry.dir && keepEntry(storedName(entry)),
   );
   const isProjectArchive = entries.some((entry) =>
-    entry.name.toLowerCase().endsWith("project.json"),
+    storedName(entry).toLowerCase().endsWith("project.json"),
   );
   const images = entries
-    .filter((entry) => extensionOf(entry.name))
-    .sort((a, b) => naturalCompare(a.name, b.name));
+    .filter((entry) => extensionOf(storedName(entry)))
+    .sort((a, b) => naturalCompare(storedName(a), storedName(b)));
 
   // One copy per page in memory: JSZip's, plus a Blob behind each thumbnail. The bytes are not
   // also held as an array; `read` pulls them from the archive at import time.

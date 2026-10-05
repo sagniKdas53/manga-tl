@@ -89,6 +89,21 @@ describe("zipPages: the gallery shows what the backend would import", () => {
     expect(project.isProjectArchive).toBe(true);
   });
 
+  it("filters and orders by the stored name, as archive.rs does, not JSZip's resolved one", async () => {
+    // JSZip resolves `chapter/./2.png` to `chapter/2.png` and `ch//10.png` to `ch/10.png`.
+    // archive.rs reads the stored names: the first holds "/." so `keep` drops it, and the
+    // second sorts before `ch/2.png` because "/" is below "2" (CodeRabbit on #222).
+    const dotted = await readArchivePages(
+      await zipOf({ "chapter/./2.png": "two", "chapter/1.png": "one" }),
+    );
+    expect(dotted.pages.map((p) => p.id)).toEqual(["chapter/1.png"]);
+
+    const doubled = await readArchivePages(
+      await zipOf({ "ch/2.png": "two", "ch//10.png": "ten" }),
+    );
+    expect(doubled.pages.map((p) => p.id)).toEqual(["ch/10.png", "ch/2.png"]);
+  });
+
   it("rebuilds an archive whose names put the pages in the chosen order", async () => {
     const { pages } = await readArchivePages(
       await zipOf({ "a/1.png": "one", "a/2.jpg": "two", "a/3.webp": "three" }),
