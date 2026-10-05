@@ -215,6 +215,12 @@ differently in the export (the project.json elements above have none).
   ring's colour is consistent and differs from the far background, keep growing. Apply to hand
   marks too. Measure offline first (pages 1, 2, 14 of TELEA from `scene-assets`, the six fixtures),
   bump the generator id, then one labelled re-run.
+  **2026-10-05:** (2) is in worker PR #52 (generator `v4-halo`). It only grows white or black
+  bands that stop evenly, skips plain balloons, and repaints a grown region with AOT. On the corpus
+  (261 pages) it fired 26 times, all real outlines, with no region made worse; it fired 32 times
+  on the 56-page halo set. About half the halo cases are still missed: [#228](https://github.com/sagniKdas53/manga-tl/issues/228).
+  `CLEANUP_HALO_GROW=false` turns it off. Still open from this item: (1) close-and-fill, the
+  same for hand marks, and the labelled re-run.
 - **B — one balloon, one text unit (extends `AUDIT-R21`).** Regions sharing a bubble container are
   grouped in reading order and translated together. Gate: R21's 42 regions / 5 pages, the six
   fixtures with no cross-balloon merge, and page 2's handwritten aside 良くないけど, which should stay

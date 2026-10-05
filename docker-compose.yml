@@ -327,6 +327,9 @@ services:
       # Local ONNX models (YOLO, CTD, AOT): "auto" runs them on OpenVINO where the image has it,
       # "cpu" forces the stock provider. Same masks either way; see worker services/onnx_session.py.
       - ONNX_EXECUTION_PROVIDER=${ONNX_EXECUTION_PROVIDER:-auto}
+      # Cleanup grows the erase mask over the outline/glow round lettering on artwork. "false"
+      # turns that off everywhere and gives the masks cleanup made before it (worker config.py).
+      - CLEANUP_HALO_GROW=${CLEANUP_HALO_GROW:-true}
       # API Keys are loaded via DOCKER_SECRETS_JSON
       - DOCKER_SECRETS_JSON=/run/secrets/api_keys
       - PROVIDERS_CONFIG=/app/config/providers.json
