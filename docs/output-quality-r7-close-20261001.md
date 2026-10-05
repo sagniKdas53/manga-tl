@@ -226,6 +226,10 @@ differently in the export (the project.json elements above have none).
   grouped in reading order and translated together. Gate: R21's 42 regions / 5 pages, the six
   fixtures with no cross-balloon merge, and page 2's handwritten aside 良くないけど, which should stay
   its own text.
+  **2026-10-05:** done as three narrower fixes, not "group everything sharing a container": the
+  user's own merges on 4Oct p. 3 kept 仕事とはいえ apart, and YOLO fuses touching balloons into one
+  container (4Oct p. 7, p. 19, p. 20). The gate passed live on chrome-box, 良くないけど included.
+  Details and what remains in the tracker's 2026-10-05 status.
 - **C — text style (rest of 7 and 8).** Split `background_color` into an outline colour and a plate
   colour (migration, golden OpenAPI hand-edit, frontend types). Consider Torii's contrast halo:
   `strokeColor #ffffff` for black text at `lineWidth` 6–8 on 31–42 px. Then M7's one text renderer.

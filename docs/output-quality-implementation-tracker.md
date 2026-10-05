@@ -2,7 +2,69 @@
 
 Start with the [2026-10-04 handoff](output-quality-next-session-20261004.md) and the plan below. The [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md) is background. The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
 
-Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section, and the [plan for 2026-10-03](#plan-for-2026-10-03-user-2026-10-02-late) is done except its afternoon item; **start with the [2026-10-04 handoff](output-quality-next-session-20261004.md)**. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25-ocr-threshold-added-2026-09-26). The [2026-09-29 handoff](output-quality-next-session-20260929.md) is history now. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section, and the [plan for 2026-10-03](#plan-for-2026-10-03-user-2026-10-02-late) is done; A's halo grow and B landed 2026-10-05 ([status and checklist](#status-at-a-glance-2026-10-05--b-one-balloon-one-text-unit)); the [2026-10-04 handoff](output-quality-next-session-20261004.md) has the rest of the order. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25-ocr-threshold-added-2026-09-26). The [2026-09-29 handoff](output-quality-next-session-20260929.md) is history now. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+
+## Status at a glance (2026-10-05 — B: one balloon, one text unit)
+
+**B is in** (worker `feat/one-balloon-grouping`, three changes, all on by default, each with an
+env switch to turn it off). It makes output better: fewer balloons whose text is translated and
+typeset in pieces. Measured offline with the worker's own OCR + YOLO on 207 dev-stack pages, then
+live on chrome-box's a-halo test stack (2026-10-05, $0.00 spent: free translation model, QA off).
+
+What broke a balloon into pieces, and what fixes each:
+1. **OCR broke a column in two** (ブラ | イダルなんて), so the owner veto saw the top piece beside
+   the next column and split the whole balloon. Fix: join a column's pieces first
+   (`OCR_JOIN_SPLIT_LINES`). Pieces must share a centre line, or the columns of two stacked
+   balloons in one YOLO blob join end to end (Tests ch. 6 p. 5).
+2. **The waist veto in a narrow balloon.** 4Oct p. 17's yellow shout balloon is about one
+   character deep everywhere, so no pair inside it could pass. Fix: lines side by side, sharing
+   half their length and under 0.2 characters apart, are exempt (`OCR_WAIST_ADJACENT_LINE_GAP`).
+   This was not a proximity miss: the columns are 9 px apart.
+3. **One break threw the whole balloon away.** A vetoed group became single pieces even when
+   only one line was out of step (TELEA p. 2's aside 良くないけど). Fix: cut at the break, keep
+   the runs either side, and decide each again (`OCR_SPLIT_VETOED_AT_BREAKS`).
+
+Results:
+- **4Oct (21 pages):** only p. 3 and p. 17 change, each to exactly the user's hand merge
+  (p. 3: 仕事とはいえ + the seven-piece sentence; p. 17: one region).
+- **Hand labels (2026-08-09, 6 pages, 357 pairs):** false splits 28 → 15, false merges 0 → 0.
+- **Tests (179 pages):** 34 balloons main's veto split; their regions go 163 → 138. Every changed
+  balloon (16 over all pages) was looked at. None merged across balloons; all but one became
+  their text units or got closer. The exception, t4_054 B0, is a shout whose column OCR read as
+  セ / フ: セ now joins the next column instead of standing alone, still inside the one balloon.
+- **Fixtures (sample177, 222, 99, 93, 83, 61 + sample7):** two balloons change, both inside one
+  balloon (sample7: ヘルタにだけは言われたくないんだけど!? joins and 追加!? stays apart; sample99:
+  a moan cloud goes 5 → 3). No merge across balloons.
+- **Live, chrome-box:** TELEA p. 2 balloon 1 is クソ兄貴のお手製フリップはまだいいとして： plus
+  **良くないけど on its own**; balloon 4 is its two blocks (was four pieces). 4Oct p. 3 and p. 17 as
+  above.
+
+Not fixed (decide later):
+- **Paragraph gaps inside one balloon** (4Oct p. 15: four balloons, each two sentences a little
+  more than 0.35 characters apart). A bigger budget inside balloons is not safe: at 0.5 it makes 2
+  false merges on the hand labels, and from 0.6 the 怎么样 aside on p. 5 drags its balloon apart.
+  The manual merge, or raising *OCR Grouping Threshold* per chapter, still works.
+- **`mixed-line-orientation` / `incoherent-oriented-lines` vetoes** (R21's other half). The ones
+  looked at are OCR misreads (vertical text read sideways, "1111"), where keeping pieces apart is
+  right; not all were checked.
+- **Reading order of joined horizontal lines.** `merge_ocr_regions` orders by x first, so a
+  horizontal group comes out scrambled (4Oct p. 3's watermark: "trainingAI学習禁止…"). It does not
+  affect vertical balloons like the ones above.
+
+Checklist of the tracker's items (☑ done, ☐ open):
+- ☑ Plan for 2026-10-03: I (`SELF_HOSTED_ADMIN`), G1, G3, G4, H2, item 6 (SQL script), corpus-v2
+  Phase 0 and 1.1–1.2, C + G packet written. ☐ prod deploy and prod SQL (dropped by the user: a
+  fresh prod stack after the tracker).
+- ☑ A (2): halo grow, worker #52. ☐ A (1) close-and-fill, ☐ the same for hand marks, ☐ the
+  labelled re-run, ☐ #228 (bands that run on, translucent balloons, leftover ink).
+- ☑ B Step 0 (measured on 207 pages + hand labels, causes ranked above). ☑ B cause 1 (split
+  columns). ☑ B cause 2 (narrow-balloon waist). ☑ B cause 3 (cut at the break). ☑ Gate: R21's
+  lateral-overlap cases on Tests. ☑ Gate: fixtures, no merge across balloons. ☑ Gate: 良くないけど
+  stays its own text. ☐ Paragraph gaps (p. 15). ☐ Mixed-orientation vetoes. ☐ Horizontal reading
+  order. ☐ Merge the worker PR and bump the parent's pin.
+- ☐ C + G: G2 + H1, the `background_color` split, M7's single text renderer
+  ([packet](output-quality-cg-packet-20261004.md)).
+- ☐ F (Photoshop-style layers). ☐ E (automatic angles, `AUDIT-R23`). ☐ M9 and the rest of corpus-v2.
 
 ## Plan for 2026-10-03 (user, 2026-10-02 late)
 
@@ -128,7 +190,9 @@ to Node 24.
 1. **A — cleanup masks** (white outline/glow blobs the automatic cleanup leaves; seen again on
    page 31). Halo grow is in worker PR #52 (2026-10-05). What it still misses is in #228:
    bands that run on, translucent balloons, and leftover ink.
-2. **B — one balloon, one text unit** (`AUDIT-R21`).
+2. **B — one balloon, one text unit** (`AUDIT-R21`). **In 2026-10-05**, three of its causes; see
+   [the 2026-10-05 status](#status-at-a-glance-2026-10-05--b-one-balloon-one-text-unit). Paragraph
+   gaps inside one balloon remain.
 3. **C + G — typesetting, with editor and export matching one to one.** G collects what makes the
    editor differ from the export today: fonts not loaded before the first fit, `maskPolygon`
    missing from the scene, elliptical pipeline elements, and the export ZIP's fallback plate.
