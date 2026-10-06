@@ -4,6 +4,77 @@ Start with the [2026-10-04 handoff](output-quality-next-session-20261004.md) and
 
 Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section, and the [plan for 2026-10-03](#plan-for-2026-10-03-user-2026-10-02-late) is done; A's halo grow and B landed 2026-10-05 ([status and checklist](#status-at-a-glance-2026-10-05--b-one-balloon-one-text-unit)); the [2026-10-04 handoff](output-quality-next-session-20261004.md) has the rest of the order. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25-ocr-threshold-added-2026-09-26). The [2026-09-29 handoff](output-quality-next-session-20260929.md) is history now. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
 
+## Status at a glance (2026-10-06 — B stack: B1–B3b)
+
+**B1–B3b are in**, stacked PRs, each with an env switch that restores the old behaviour. Plan and
+cause tables: [b-plan-20261006.md](b-plan-20261006.md).
+
+| Step | Worker / parent | Makes output better by |
+|---|---|---|
+| #53 / #230 | `feat/one-balloon-grouping` | the four causes from 2026-10-05 (below) |
+| B1 | #54 / #233 | joined text reads in the right order on every series |
+| B2 | #55 / #234 | a spread's two pages never share a region |
+| B3 | #56 / #235 | a balloon set as two offset paragraphs is one text |
+| models | #57 / #236 | GLM 5.3 Flash translates, Gemini 3.5 Flash Lite judges QA, slow hosts skipped |
+| B3b | #59 / #240 | a balloon's columns join across a 1–2 character gap or a missed column |
+
+**Live on chrome-box** (*Redo OCR* on the 22 ja test pages, worker `df87949`): 11 pages change,
+every joined region translated as one sentence. The owner reviewed it: p9 (sample218's joined
+balloons) is right.
+
+**Fixes apply to pages OCR'd after the deploy.** Grouping runs inside the OCR job, so a page keeps
+its old regions until *Redo OCR*, which re-groups, re-cleans and re-translates it. Before a
+re-run of hand-edited pages, check what it replaces.
+
+### Thresholds B tuned: risk and remedy
+
+Every threshold below was set from a handful of pages. The full corpus run is the check. Each row
+says what a wrong value would look like and how to change it without a code change where
+possible. All env values are read by the worker at start-up: change `.env`, recreate the worker,
+*Redo OCR* the page.
+
+| Setting (default) | Fitted on, margin | If it is wrong, the corpus run shows | Remedy |
+|---|---|---|---|
+| `OCR_BALLOON_JOIN_BUDGET` (1.5 chars) | gaps of 0.8–2 chars on sample27/25/258; 30 held-out corpus pages: 12 joins, all right | two balloons in one YOLO blob, with no outline stroke between them, become one region | lower to 0.8 (keeps the small-gap joins; loses sample27 p1/p3, 25, 258, 242 and the missed-column joins on 153 b7 and 136); `0` turns B3b off |
+| `OCR_BALLOON_WALL_STROKE` (2.5 chars) | sample24 b4's bracket 4.3 vs at most 1.1 on every wanted join: wide margin | a fused pair whose outline between them is broken or tone-filled joins; or a long ink line inside one balloon (a long ー, art) blocks a join | raise or lower; the replay script below prints the stroke a join had |
+| `OCR_BALLOON_JOIN_MAX_LINES` (8) | **one counterexample** (sample9's three balloons, 16 lines) vs sample258's 8: no margin at the top | one real balloon of more than 8 lines stays split; or connected balloons of separate paragraphs, 8 lines or fewer, become one region | raise / lower; if it bites often, the better test is per-group size (each side a paragraph of 3+ lines) |
+| `OCR_STAGGERED_LINES`, `_STAGGERED_MAX_GAP` (0.5 lines, code) | sample78; TELEA p. 2's aside sits 0.64 lines away: **thin margin** | an aside set close beside a column joins the sentence | lower `_STAGGERED_MAX_GAP`; `OCR_STAGGERED_LINES=false` |
+| `OCR_SPREAD_SEAM_COVERAGE` (0.85), `OCR_SPREAD_MIN_ASPECT` (1.2) | sample93 0.96 vs sample92's checked wall 0.81: **thin margin** | text on a wide single illustration split at a centre edge that is art | raise coverage to 0.9; `OCR_SPREAD_GUTTER=false` |
+| `OCR_WAIST_ADJACENT_LINE_GAP` (0.2 chars) | 4Oct p. 17's 9 px columns; keeps sample9's one correct catch | two touching balloons whose facing columns are under 0.2 chars apart join | `0` |
+| `OCR_JOIN_SPLIT_LINES`, `_SPLIT_LINE_*` (code) | 4Oct p. 3, Tests ch. 6 p. 5 (centre offset 0.15) | two balloons stacked end to end in one blob join | lower `_SPLIT_LINE_MAX_CENTRE_OFFSET`; `OCR_JOIN_SPLIT_LINES=false` |
+| `OCR_SPLIT_VETOED_AT_BREAKS` | TELEA p. 2 | a vetoed group keeps a run that holds two speakers | `false` (vetoed groups become single pieces again) |
+| `OCR_LINE_READING_ORDER` | 523 joined groups read, 38 changed, none worse | joined text in the wrong order | `false` |
+| `OPENROUTER_IGNORE_PROVIDERS`, `OPENROUTER_QUANTIZATIONS` | hosts measured 2026-10-06 | a model slow or empty again (`via <host>` and `reasoning=` in the worker log) | hosts drift: re-measure one host at a time before editing the list |
+
+**If the full corpus run finds a wrong grouping:**
+1. Find the setting: the region's `ownership_provenance.ownerDecision.reason` and the capture
+   (`OCR_CAPTURE_DIR`) say which veto or pass made the group.
+2. Replay offline before touching a deployment:
+   `scripts/replay_balloon_join.py --worker worker --captures <dir> --run <run.json> --out <dir>`
+   (or `--probe ~/.cache/manga-library/region_probe --corpus corpus/samples/ja` for the 40
+   cached pages), with `--budget`, `--wall`, `--max-lines` to try values. It lists every balloon
+   that changes, with a crop.
+3. Check a new value on the pages it was fitted on (sample24 b4 must stay apart; sample25, 27, 77,
+   153, 136 must stay joined) and on held-out pages, then change `.env`.
+4. If failures cluster in one series or art style, expose the setting per series/chapter (a
+   setting whose default changes nothing) instead of moving the global value.
+
+### What is left in B
+
+- [x] B1, B2, B3, B3b (live, reviewed)
+- [x] CodeRabbit round on #55–#57 / #234–#236 (2026-10-06 evening)
+- [ ] B4: lines in different directions in one group (sample83, sample4 = p18 "grouped too much",
+  sample104 = p19 overlapping captions)
+- [ ] B5: text outside balloons. p9 (sample218): YOLO missed the left balloon on the dark page, so
+  its three lines took the no-balloon path and chained with four misreads of the art (お, 谷 at
+  0.16, `(gftgs grgitgt`, BOFE) into one 1140 × 1995 region; the text is typeset in that box,
+  under the balloon. B5's cut at line breaks would keep the three lines apart from the junk.
+- [ ] p2 (sample219): two paragraphs overlap 0.12 along the line, under the owner veto's 0.25
+- [ ] p21 (sample9) 別に: the detector's outline cuts through the column (detection)
+- [ ] The untranslated aside (sample9, sample136)
+- [ ] Fixture sample99 and 4Oct p. 17 with B3/B3b running
+- [ ] Merge the stack bottom-up; re-pin each parent to the worker merge commit
+
 ## Status at a glance (2026-10-05 — B: one balloon, one text unit)
 
 **B is in** (worker PR [#53](https://github.com/sagniKdas53/manga-tl-worker/pull/53), parent
