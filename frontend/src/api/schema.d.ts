@@ -1373,6 +1373,10 @@ export interface components {
             /** Format: int32 */
             height?: number;
             maskPolygon?: string;
+            /** @description How the region's OCR pieces were grouped (#243): `fragments[]`, each with `provenance.sourceQuad` (page pixels), `provenance.geometry` and `provenance.ownerDecision` (`state`, `reason`, `diagnostics`), plus `containerResolution`. Stored as given and returned on the page's regions. */
+            ownershipProvenance?: {
+                [key: string]: unknown;
+            };
             /** Format: int32 */
             panelReadingOrder?: number;
             /** Format: double */

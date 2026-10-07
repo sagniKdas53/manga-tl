@@ -26,6 +26,7 @@ import {
 import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
 import { paintLayerMask } from "../utils/maskPaint";
 import { elementFit } from "../utils/elementFit";
+import { ocrFragmentLabel, ocrFragmentsOf } from "../utils/ocrFragments";
 import { useFontsVersion } from "../hooks/useFontsVersion";
 import { STROKE_WIDTH_RATIO } from "@manga-library/page-scene";
 import {
@@ -396,6 +397,12 @@ export const Reader: React.FC<ReaderProps> = ({
     true,
   );
   const [showOcr, setShowOcr] = usePersistedState("manga_show_ocr", true);
+  // #243: draw each region's OCR pieces under Show debug, to tell a detection miss from a
+  // grouping miss.
+  const [showOcrFragments, setShowOcrFragments] = usePersistedState(
+    "manga_show_ocr_fragments",
+    false,
+  );
   const [showTranslations] = useState(false);
   const [showLeftSidebar, setShowLeftSidebar] = usePersistedState(
     "manga_show_left_sidebar",
@@ -4170,6 +4177,8 @@ export const Reader: React.FC<ReaderProps> = ({
             setShowPanels={setShowPanels}
             showOcr={showOcr}
             setShowOcr={setShowOcr}
+            showOcrFragments={showOcrFragments}
+            setShowOcrFragments={setShowOcrFragments}
             cleanScanlationView={cleanScanlationView}
             setCleanScanlationView={setCleanScanlationView}
             setManuallyShownOcrLayers={setManuallyShownOcrLayers}
@@ -4437,6 +4446,23 @@ export const Reader: React.FC<ReaderProps> = ({
                           : item.regions.find((r) => r.qaStatus === "passed")
                             ? "passed"
                             : null;
+                    const stroke = isSelected
+                      ? item.isConversation
+                        ? "var(--conversation)"
+                        : "var(--primary)"
+                      : qaStatus === "failed"
+                        ? "#ef4444"
+                        : qaStatus === "review"
+                          ? "var(--warning)"
+                          : qaStatus === "direct_fix"
+                            ? "#f59e0b"
+                            : isApproved
+                              ? item.isConversation
+                                ? "var(--conversation)"
+                                : "var(--primary)"
+                              : item.isConversation
+                                ? "var(--conversation)"
+                                : "var(--success)";
                     return (
                       <g
                         key={item.id}
@@ -4471,23 +4497,7 @@ export const Reader: React.FC<ReaderProps> = ({
                                 : item.isConversation
                                   ? "var(--conversation-glow)"
                                   : "var(--success-glow)",
-                            stroke: isSelected
-                              ? item.isConversation
-                                ? "var(--conversation)"
-                                : "var(--primary)"
-                              : qaStatus === "failed"
-                                ? "#ef4444"
-                                : qaStatus === "review"
-                                  ? "var(--warning)"
-                                  : qaStatus === "direct_fix"
-                                    ? "#f59e0b"
-                                    : isApproved
-                                      ? item.isConversation
-                                        ? "var(--conversation)"
-                                        : "var(--primary)"
-                                      : item.isConversation
-                                        ? "var(--conversation)"
-                                        : "var(--success)",
+                            stroke,
                             strokeWidth:
                               isSelected || isApproved
                                 ? 2.5
@@ -4501,6 +4511,35 @@ export const Reader: React.FC<ReaderProps> = ({
                                 : undefined,
                           }}
                         />
+                        {showOcrFragments &&
+                          item.regions.map((region) => {
+                            const fragments = ocrFragmentsOf(region);
+                            return fragments.map((fragment, position) => (
+                              <polygon
+                                key={`${region.id}-fragment-${fragment.index}`}
+                                data-ocr-fragment={region.id}
+                                points={fragment.quad
+                                  .map(([x, y]) => `${x},${y}`)
+                                  .join(" ")}
+                                style={{
+                                  fill: "none",
+                                  stroke,
+                                  strokeWidth: 1,
+                                  strokeDasharray: "3 2",
+                                  vectorEffect: "non-scaling-stroke",
+                                  pointerEvents: "visibleStroke",
+                                }}
+                              >
+                                <title>
+                                  {ocrFragmentLabel(
+                                    fragment,
+                                    position,
+                                    fragments.length,
+                                  )}
+                                </title>
+                              </polygon>
+                            ));
+                          })}
                         <g
                           transform={`translate(${item.bboxX + 10}, ${item.bboxY + 10})`}
                         >

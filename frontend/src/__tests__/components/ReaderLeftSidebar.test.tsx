@@ -27,6 +27,8 @@ describe("ReaderLeftSidebar Component", () => {
     setShowPanels: vi.fn(),
     showOcr: true,
     setShowOcr: vi.fn(),
+    showOcrFragments: false,
+    setShowOcrFragments: vi.fn(),
     cleanScanlationView: false,
     setCleanScanlationView: vi.fn(),
     setManuallyShownOcrLayers: vi.fn(),
@@ -49,6 +51,28 @@ describe("ReaderLeftSidebar Component", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("offers OCR fragments under Show debug, inert while Show debug is off (#243)", () => {
+    const { rerender } = render(<ReaderLeftSidebar {...defaultProps} />);
+    const fragments = screen.getByRole("switch", { name: "OCR fragments" });
+    expect(fragments).not.toBeChecked();
+    fireEvent.click(screen.getByText("OCR fragments"));
+    expect(defaultProps.setShowOcrFragments).toHaveBeenCalledWith(true);
+
+    vi.clearAllMocks();
+    rerender(
+      <ReaderLeftSidebar
+        {...defaultProps}
+        showOcr={false}
+        showOcrFragments={true}
+      />,
+    );
+    const inert = screen.getByRole("switch", { name: "OCR fragments" });
+    expect(inert).toBeDisabled();
+    expect(inert).not.toBeChecked();
+    fireEvent.click(screen.getByText("OCR fragments"));
+    expect(defaultProps.setShowOcrFragments).not.toHaveBeenCalled();
   });
 
   it("calls handleDeletePage when delete button is clicked and confirmed", async () => {

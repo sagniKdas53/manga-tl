@@ -29,6 +29,8 @@ interface ReaderLeftSidebarProps {
   setShowPanels: (val: boolean) => void;
   showOcr: boolean;
   setShowOcr: (val: boolean) => void;
+  showOcrFragments: boolean;
+  setShowOcrFragments: (val: boolean) => void;
   cleanScanlationView: boolean;
   setCleanScanlationView: (val: boolean) => void;
   setManuallyShownOcrLayers: (val: Set<string>) => void;
@@ -64,12 +66,15 @@ const ToggleRow: React.FC<{
   label: string;
   checked: boolean;
   onChange: (val: boolean) => void;
-}> = ({ label, checked, onChange }) => (
+  /** A sub-option of the row above it: indented, and inert while `disabled`. */
+  nested?: boolean;
+  disabled?: boolean;
+}> = ({ label, checked, onChange, nested = false, disabled = false }) => (
   <Box
     component="label"
     onClick={(e) => {
       e.preventDefault();
-      onChange(!checked);
+      if (!disabled) onChange(!checked);
     }}
     sx={{
       display: "flex",
@@ -78,19 +83,26 @@ const ToggleRow: React.FC<{
       minHeight: 32,
       px: 0.75,
       mx: -0.75,
+      pl: nested ? 2.5 : 0.75,
       borderRadius: "6px",
-      cursor: "pointer",
-      "&:hover": { backgroundColor: "var(--bg-input, rgba(0,0,0,0.04))" },
+      cursor: disabled ? "default" : "pointer",
+      "&:hover": disabled
+        ? undefined
+        : { backgroundColor: "var(--bg-input, rgba(0,0,0,0.04))" },
     }}
   >
     <Typography
       variant="body2"
-      sx={{ fontSize: "13px", color: "var(--text-main)" }}
+      sx={{
+        fontSize: "13px",
+        color: disabled ? "var(--text-muted)" : "var(--text-main)",
+      }}
     >
       {label}
     </Typography>
     <Switch
       checked={checked}
+      disabled={disabled}
       onChange={(e) => onChange(e.target.checked)}
       onClick={(e) => e.stopPropagation()}
       size="small"
@@ -221,6 +233,13 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo(
               label="Show debug"
               checked={props.showOcr}
               onChange={props.setShowOcr}
+            />
+            <ToggleRow
+              label="OCR fragments"
+              nested
+              disabled={!props.showOcr}
+              checked={props.showOcr && props.showOcrFragments}
+              onChange={props.setShowOcrFragments}
             />
             <ToggleRow
               label="Clean scanlation"

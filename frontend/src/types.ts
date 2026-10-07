@@ -148,6 +148,8 @@ export interface OcrRegion {
   safeTextH?: number | null;
   /** Set when the region has a worker (or plain-plate) cleanup patch; see tracker R7. */
   cleanupPatchSha256?: string | null;
+  /** How OCR's pieces were grouped into this region; read with `ocrFragmentsOf` (#243). */
+  ownershipProvenance?: Record<string, unknown> | null;
 }
 
 export interface ConversationRegion {

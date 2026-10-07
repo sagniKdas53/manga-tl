@@ -334,6 +334,76 @@ describe("Reader Inpainting layer (tracker R7)", () => {
     }
   });
 
+  it("draws a region's OCR pieces only with Show debug and OCR fragments on, never over the reading views (#243)", async () => {
+    const quad = (x: number) => [
+      [x, 60],
+      [x + 50, 60],
+      [x + 50, 140],
+      [x, 140],
+    ];
+    const base = mockSafeFetch.getMockImplementation()!;
+    mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (/\/api\/pages\/[^/]+$/.test(url)) {
+        const details = pageDetails();
+        Object.assign(details.ocrRegions[0], {
+          ownershipProvenance: {
+            fragments: [0, 1].map((index) => ({
+              index,
+              provenance: {
+                sourceQuad: quad(50 + index * 60),
+                geometry: { majorAxisDegrees: 90 },
+                ownerDecision: {
+                  state: "assigned",
+                  reason: "validated-container-continuous-lines",
+                },
+              },
+            })),
+          },
+        });
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(details),
+        });
+      }
+      return base(url, init);
+    });
+    const pieces = () =>
+      document.querySelectorAll('.svg-overlay [data-ocr-fragment="r1"]');
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    try {
+      localStorage.setItem("manga_clean_view", "false");
+      localStorage.setItem("manga_show_ocr", "true");
+      localStorage.setItem("manga_show_ocr_fragments", "true");
+      await renderReader();
+      await waitFor(() => expect(pieces()).toHaveLength(2));
+      expect(pieces()[1].getAttribute("points")).toBe(
+        "110,60 160,60 160,140 110,140",
+      );
+      expect(pieces()[0].querySelector("title")?.textContent).toBe(
+        "OCR piece 1 of 2\nvalidated-container-continuous-lines (assigned)\n90°",
+      );
+      cleanup();
+
+      for (const [debug, fragments, clean] of [
+        ["true", "false", "false"],
+        ["false", "true", "false"],
+        ["true", "true", "true"],
+      ]) {
+        localStorage.setItem("manga_show_ocr", debug);
+        localStorage.setItem("manga_show_ocr_fragments", fragments);
+        localStorage.setItem("manga_clean_view", clean);
+        await renderReader();
+        await act(settle);
+        expect(pieces()).toHaveLength(0);
+        cleanup();
+      }
+    } finally {
+      localStorage.removeItem("manga_show_ocr");
+      localStorage.removeItem("manga_show_ocr_fragments");
+      localStorage.removeItem("manga_clean_view");
+    }
+  });
+
   it("paints the patch after the page image and before any text, as the export does", async () => {
     await renderReader();
     const overlay = document.querySelector(".svg-overlay")!;
