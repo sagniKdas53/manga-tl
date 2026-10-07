@@ -69,6 +69,7 @@ def _pages_from_probe(probe, corpus):
             np.array(image.resize((width, height), Image.LANCZOS)),
             frags,
             [b["mask_polygon"] for b in det["bubbles"]],
+            None,
         )
 
 
@@ -88,6 +89,7 @@ def _pages_from_captures(captures, run_path):
             gray,
             frags,
             [m["points"] for m in capture["detector_masks"]],
+            capture["grouping"],
         )
 
 
@@ -122,7 +124,7 @@ def main():
     from worker.handlers.ocr import grouping_config, owner_aware_grouping_context
     from worker.services.balloon_join import balloon_join
     from worker.services.bubble_geometry import bubble_grouping_context, gap_wall
-    from worker.services.fragment_grouping import group_fragments
+    from worker.services.fragment_grouping import GroupingConfig, group_fragments
 
     from worker import config
 
@@ -140,7 +142,10 @@ def main():
     os.makedirs(args.out, exist_ok=True)
 
     changed = 0
-    for sid, gray, frags, outlines in pages:
+    for sid, gray, frags, outlines, recorded in pages:
+        # A capture records the grouping configuration the live run used (direction, threshold);
+        # the probe cache has none, and its pages are right-to-left at the default threshold.
+        grouping = GroupingConfig(**recorded) if recorded else grouping_config("rtl")
         height, width = gray.shape
         masks = []
         for outline in outlines:
@@ -163,7 +168,6 @@ def main():
             base = bubble_grouping_context(mask, outline)
             if base is not None:
                 base = replace(base, page_area=float(width * height))
-            grouping = grouping_config("rtl")
             context = owner_aware_grouping_context(
                 base, [{"format": "polygon", "id": "balloon", "points": outline}]
             )
