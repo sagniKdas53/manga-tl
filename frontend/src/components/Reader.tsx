@@ -536,6 +536,9 @@ export const Reader: React.FC<ReaderProps> = ({
   // Set by a layer undo or redo: once the page's layers reload, element undo steps whose element
   // the layer step removed are dropped (they would only fail).
   const pruneElementUndoRef = useRef(false);
+  // Re-reads the layer history; the handlers defined before it call it through this ref after a
+  // recorded layer action settles on the server.
+  const refreshLayerHistoryRef = useRef<() => void>(() => {});
 
   // Conversation and Layout enhancements
   const [groupByConversation, setGroupByConversation] = usePersistedState(
@@ -1826,7 +1829,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
         // Fire async requests. One batch id makes them one layer undo step (F4).
         const batch = newLayerOpBatch();
-        updates.forEach((lData) => {
+        const requests = updates.map((lData) =>
           safeFetch(`/api/layers/${lData.layer.id}`, {
             method: "PUT",
             headers: {
@@ -1837,8 +1840,11 @@ export const Reader: React.FC<ReaderProps> = ({
             body: JSON.stringify({ zOrder: lData.layer.zOrder }),
           }).catch((err) =>
             console.error("Failed to update layer zOrder:", err),
-          );
-        });
+          ),
+        );
+        void Promise.allSettled(requests).then(() =>
+          refreshLayerHistoryRef.current(),
+        );
 
         return updatedLayersData;
       });
@@ -2549,6 +2555,7 @@ export const Reader: React.FC<ReaderProps> = ({
       const newLayer = await res.json();
       setLayers((prev) => [...prev, { layer: newLayer, elements: [] }]);
       setActiveLayerId(newLayer.id);
+      refreshLayerHistoryRef.current();
     } catch (err) {
       console.error(err);
       alert("Error creating layer.");
@@ -2876,6 +2883,9 @@ export const Reader: React.FC<ReaderProps> = ({
   useEffect(() => {
     Promise.resolve().then(refreshLayerHistory);
   }, [refreshLayerHistory, cacheEpoch]);
+  useEffect(() => {
+    refreshLayerHistoryRef.current = () => void refreshLayerHistory();
+  }, [refreshLayerHistory]);
 
   const stepLayerHistory = useCallback(
     async (which: "undo" | "redo") => {
@@ -2909,6 +2919,8 @@ export const Reader: React.FC<ReaderProps> = ({
 
   useEffect(() => {
     if (!pruneElementUndoRef.current) return;
+    // Wait for the reloaded layers, not the empty list shown while they load.
+    if (!selectedPageId || loadedImageId !== selectedPageId) return;
     pruneElementUndoRef.current = false;
     const present = new Set(
       layers.flatMap(({ elements }) => elements.map((el) => el.id)),
@@ -2919,7 +2931,7 @@ export const Reader: React.FC<ReaderProps> = ({
       setUndoStack(keep);
       setRedoStack(keep);
     });
-  }, [layers]);
+  }, [layers, loadedImageId, selectedPageId]);
 
   const topZOrder = () =>
     layers.reduce((top, l) => Math.max(top, l.layer.zOrder), 0) + 1;
@@ -2964,6 +2976,7 @@ export const Reader: React.FC<ReaderProps> = ({
     renameLayer: async (layerId, name) => {
       try {
         await layerRequest(`/api/layers/${layerId}`, "PUT", { name });
+        void refreshLayerHistory();
         setLayers((prev) =>
           prev.map((l) =>
             l.layer.id === layerId
@@ -3101,7 +3114,7 @@ export const Reader: React.FC<ReaderProps> = ({
       isOpen: true,
       title: "Delete Layer",
       message:
-        "Are you sure you want to delete this layer? This action cannot be undone.",
+        "Are you sure you want to delete this layer? You can bring it back with the layer Undo button.",
       confirmText: "Delete Layer",
       isDangerous: true,
       onConfirm: async () => {
@@ -3121,6 +3134,7 @@ export const Reader: React.FC<ReaderProps> = ({
               refreshAfterOverlayChange();
             }
             renderCurrentPage();
+            refreshLayerHistoryRef.current();
             showToast("Layer deleted successfully", "success");
           } else if (res.status === 403) {
             showToast(
@@ -3297,6 +3311,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
       // Make the cloned layer active
       setActiveLayerId(newLayer.id);
+      refreshLayerHistoryRef.current();
     } catch (err) {
       console.error("Clone layer failed:", err);
       alert("Error cloning layer. Please try again.");

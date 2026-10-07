@@ -484,19 +484,19 @@ pub async fn delete_hidden_texts(
             return error::internal_error(DELETE_HIDDEN);
         }
     };
-    let row: Option<(Uuid, Option<Value>)> =
-        match sqlx::query_as("SELECT page_id, metadata_json FROM layers WHERE id = $1 FOR UPDATE")
-            .bind(id)
-            .fetch_optional(&mut *tx)
-            .await
-        {
-            Ok(row) => row,
-            Err(err) => {
-                tracing::error!("Could not read layer {id}: {err}");
-                return error::internal_error(DELETE_HIDDEN);
-            }
-        };
-    let Some((page_id, metadata)) = row else {
+    // The page's history lock first, then the layer row, the order every layer action takes.
+    let page_id: Option<Uuid> = match sqlx::query_scalar("SELECT page_id FROM layers WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+    {
+        Ok(page_id) => page_id,
+        Err(err) => {
+            tracing::error!("Could not read layer {id}: {err}");
+            return error::internal_error(DELETE_HIDDEN);
+        }
+    };
+    let Some(page_id) = page_id else {
         return StatusCode::NOT_FOUND.into_response();
     };
     let recorder = match Recorder::start(&mut tx, page_id).await {
@@ -506,6 +506,24 @@ pub async fn delete_hidden_texts(
             let _ = tx.rollback().await;
             return error::internal_error(DELETE_HIDDEN);
         }
+    };
+    let metadata: Option<Option<Value>> =
+        match sqlx::query_scalar("SELECT metadata_json FROM layers WHERE id = $1 FOR UPDATE")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+        {
+            Ok(metadata) => metadata,
+            Err(err) => {
+                tracing::error!("Could not read layer {id}: {err}");
+                let _ = tx.rollback().await;
+                return error::internal_error(DELETE_HIDDEN);
+            }
+        };
+    // Deleted while this request waited for the lock.
+    let Some(metadata) = metadata else {
+        let _ = tx.rollback().await;
+        return StatusCode::NOT_FOUND.into_response();
     };
     let recorded: Vec<Uuid> = metadata
         .as_ref()
