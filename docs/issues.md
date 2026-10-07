@@ -306,7 +306,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 | [`AUDIT-R16`](#audit-r16-medium-a-narrow-box-is-capped-by-its-widest-unbreakable-token) | Medium | Render | Portrait balloons: the type is width-bound and the spare height cannot be spent | Measured; needs a decision |
 | [`AUDIT-R19`](#audit-r19-medium-a-free-standing-caption-gets-a-synthetic-rounded-plate-a-third-larger-than-its-text) | Medium | Worker/Frontend | Text with no detected balloon gets a rounded-rectangle plate padded 18% of its short side with 22%-radius corners; the editor box is 10px inside it and reshape only edits the plate | **Fixed in R2 (2026-09-19)**: no plate for free text, `box_shape` from detection; verified on the p5 caption live |
 | [`AUDIT-R20`](archive/history.md#audit-r20-high-a-balloon-is-emitted-as-one-region-per-column) | High | Worker | The live owner veto splits a balloon into one region per column/line when the detector's container does not enclose every column; each piece is translated and typeset alone | **Closed 2026-09-19** — R6 live gate passed; follow-on split filed as `AUDIT-R21` |
-| [`AUDIT-R21`](#audit-r21-medium-the-line-continuity-veto-splits-a-balloon-whose-column-ocr-broke-in-two) | Medium | Worker | The line-continuity veto splits a balloon when OCR broke one column in two; page-4 line gaps miss the 0.35 budget | Grouping phase (user decision 2026-09-25); manual merge is the workaround |
+| [`AUDIT-R21`](#audit-r21-medium-the-line-continuity-veto-splits-a-balloon-whose-column-ocr-broke-in-two) | Medium | Worker | The line-continuity veto splits a balloon when OCR broke one column in two; page-4 line gaps miss the 0.35 budget | **Fixed 2026-10-05** for split columns, narrow balloons and one-break vetoes; paragraph gaps inside one balloon remain (manual merge) |
 | [`AUDIT-R22`](#audit-r22-feature-lama-mpe-as-a-cleanup-mode) | Feature | Worker | LaMa-mpe beat AOT by 1.2 dB but its model/code are gone; needs a clean-room network before it can be a cleanup mode | Filed 2026-09-25 |
 | [`AUDIT-R23`](#audit-r23-medium-ocr-throws-away-the-text-angle-it-detects) | Medium | Worker/Backend | Tilted lettering (signs, slanted captions) is typeset level: OCR has the angle in its quads and writes `rotation: 0` | Filed 2026-09-26; typesetting phase |
 | [`AUDIT-R24`](#audit-r24-medium-cleanup-smears-the-art-when-text-crosses-a-figure) | Medium | Worker | Text lettered over a figure: the patch rebuilds the arm as blocky shapes (sample83); no metric sees damage inside a patch | Filed 2026-09-26 (R3 close); Torii is worse here |
@@ -1240,6 +1240,16 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   job. It applies on the next OCR, so redo OCR to regroup a page. It moves the Ch.1 p4 case (a
   paragraph whose lines are 8–9 px apart needs about 0.45). It does not move the continuity veto,
   which splits after grouping.
+- **Fixed 2026-10-05 (worker #53, parent #230; on by default).**
+  `OCR_JOIN_SPLIT_LINES` joins a column's pieces (same centre line) before the continuity test;
+  `OCR_WAIST_ADJACENT_LINE_GAP=0.2` stops the clearance veto splitting two columns too close for a
+  balloon wall (4Oct p. 17, a narrow balloon); `OCR_SPLIT_VETOED_AT_BREAKS` cuts a vetoed group at
+  its break instead of into single pieces (TELEA p. 2, the 良くないけど aside);
+  `OCR_LINE_READING_ORDER` joins text line by line, so horizontal lines and broken columns read in
+  order. Hand labels: false splits 28 → 15, false merges 0. Live on chrome-box: 4Oct p. 3 and
+  p. 17 come out as the user's hand merges (p. 17's duplicated "Beat me." is gone), and
+  良くないけど stays its own text. Numbers and what is still open (paragraph gaps inside one
+  balloon, mixed-orientation vetoes) are in the tracker's 2026-10-05 status.
 
 ### `AUDIT-R22` (feature): LaMa-mpe as a cleanup mode
 

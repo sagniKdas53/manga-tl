@@ -67,6 +67,16 @@ class DevSetupTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             dev_setup.resolve_models(catalog, keys, {"QA_VLM_FALLBACK_MODELS": "missing"})
 
+    def test_tl_fallback_passes_through_only_when_catalogued(self):
+        catalog = json.loads((self.root / "config/providers.json").read_text())
+        catalog["providers"]["test"]["models"]["tl"].append({"id": "second"})
+        keys = {"TEST_API_KEY": "k"}
+        resolved = dev_setup.resolve_models(catalog, keys, {"TL_FALLBACK_MODEL": " second "})
+        self.assertEqual(resolved["TL_FALLBACK_MODEL"], "second")
+        self.assertNotIn("TL_FALLBACK_MODEL", dev_setup.resolve_models(catalog, keys, {}))
+        with self.assertRaises(ValueError):
+            dev_setup.resolve_models(catalog, keys, {"TL_FALLBACK_MODEL": "missing"})
+
     def test_explicit_overrides_and_fallbacks_remain_explicit(self):
         overrides = {"QA_MODE": "llm", "TL_LLM_MODEL_LIST": "text,other"}
         result = dev_setup.resolve_models(

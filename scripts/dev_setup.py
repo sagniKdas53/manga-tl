@@ -138,6 +138,20 @@ def resolve_models(catalog: dict, keys: dict, overrides: dict) -> dict[str, str]
                 + ", ".join(unknown)
             )
         result["QA_VLM_FALLBACK_MODELS"] = ",".join(m.strip() for m in fallbacks.split(","))
+    # The translation model a job already on TL_LLM_MODEL falls back to. Opt-in; it must be a
+    # catalog translation model of the same provider.
+    tl_fallback = overrides.get("TL_FALLBACK_MODEL", "").strip()
+    if tl_fallback:
+        tl_provider = result.get("TL_MODEL_PROVIDER", "")
+        tl_ids = {
+            entry["id"]
+            for entry in providers.get(tl_provider, {}).get("models", {}).get("tl") or []
+        }
+        if tl_fallback not in tl_ids:
+            raise ValueError(
+                f"TL_FALLBACK_MODEL is not in the {tl_provider} translation catalog: {tl_fallback}"
+            )
+        result["TL_FALLBACK_MODEL"] = tl_fallback
     result["QA_MODE"] = overrides.get("QA_MODE") or (
         "auto" if result.get("QA_LLM_MODEL") or result.get("QA_VLM_MODEL") else "none"
     )

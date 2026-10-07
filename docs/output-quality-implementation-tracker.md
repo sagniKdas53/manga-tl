@@ -2,7 +2,191 @@
 
 Start with the [2026-10-04 handoff](output-quality-next-session-20261004.md) and the plan below. The [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md) is background. The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
 
-Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section, and the [plan for 2026-10-03](#plan-for-2026-10-03-user-2026-10-02-late) is done except its afternoon item; **start with the [2026-10-04 handoff](output-quality-next-session-20261004.md)**. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25-ocr-threshold-added-2026-09-26). The [2026-09-29 handoff](output-quality-next-session-20260929.md) is history now. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section, and the [plan for 2026-10-03](#plan-for-2026-10-03-user-2026-10-02-late) is done; A's halo grow and B landed 2026-10-05 ([status and checklist](#status-at-a-glance-2026-10-05--b-one-balloon-one-text-unit)); the [2026-10-04 handoff](output-quality-next-session-20261004.md) has the rest of the order. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25-ocr-threshold-added-2026-09-26). The [2026-09-29 handoff](output-quality-next-session-20260929.md) is history now. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+
+## Status at a glance (2026-10-06 — B stack: B1–B5)
+
+**B1–B5 are in**, stacked PRs, each with an env switch that restores the old behaviour. Plan and
+cause tables: [b-plan-20261006.md](b-plan-20261006.md).
+
+| Step | Worker / parent | Makes output better by |
+|---|---|---|
+| #53 / #230 | `feat/one-balloon-grouping` | the four causes from 2026-10-05 (below) |
+| B1 | #54 / #233 | joined text reads in the right order on every series |
+| B2 | #55 / #234 | a spread's two pages never share a region |
+| B3 | #56 / #235 | a balloon set as two offset paragraphs is one text |
+| models | #57 / #236 | GLM 5.3 Flash translates, Gemini 3.5 Flash Lite judges QA, slow hosts skipped |
+| B3b | #59 / #240 | a balloon's columns join across a 1–2 character gap or a missed column |
+| B4 + B5 | #60 / #241 | text no balloon holds stops chaining speech with misreads of the art; a caption beside a tall title stays one text |
+
+**Live on chrome-box** (*Redo OCR* on the 22 ja test pages, worker `df87949`): 11 pages change,
+every joined region translated as one sentence. The owner reviewed it: p9 (sample218's joined
+balloons) is right.
+
+**Fixes apply to pages OCR'd after the deploy.** Grouping runs inside the OCR job, so a page keeps
+its old regions until *Redo OCR*, which re-groups, re-cleans and re-translates it. Before a
+re-run of hand-edited pages, check what it replaces.
+
+### Thresholds B tuned: risk and remedy
+
+Every threshold below was set from a handful of pages. The full corpus run is the check. Each row
+says what a wrong value would look like and how to change it without a code change where
+possible. All env values are read by the worker at start-up: change `.env`, recreate the worker,
+*Redo OCR* the page.
+
+| Setting (default) | Fitted on, margin | If it is wrong, the corpus run shows | Remedy |
+|---|---|---|---|
+| `OCR_BALLOON_JOIN_BUDGET` (1.5 chars) | gaps of 0.8–2 chars on sample27/25/258; 30 held-out corpus pages: 12 joins, all right | two balloons in one YOLO blob, with no outline stroke between them, become one region | lower to 0.8 (keeps the small-gap joins; loses sample27 p1/p3, 25, 258, 242 and the missed-column joins on 153 b7 and 136); `0` turns B3b off |
+| `OCR_BALLOON_WALL_STROKE` (3.0 chars) | one connected stroke along the gap: sample24 b4's bracket 5.2–6.4 vs at most 2.1 on every wanted join (sample218 b4, owner-approved), the rest at most 1.0 | a fused pair whose outline between them is broken or tone-filled joins; or a long ink line inside one balloon (a long ー, art) blocks a join | raise or lower; a wanted join near 2.1 means sample218-style balloons sit close to the line |
+| `OCR_BALLOON_JOIN_MAX_LINES` (8) | **one counterexample** (sample9's three balloons, 16 lines) vs sample258's 8: no margin at the top | one real balloon of more than 8 lines stays split; or connected balloons of separate paragraphs, 8 lines or fewer, become one region | raise / lower; if it bites often, the better test is per-group size (each side a paragraph of 3+ lines) |
+| `OCR_STAGGERED_LINES`, `_STAGGERED_MAX_GAP` (0.5 lines, code) | sample78; TELEA p. 2's aside sits 0.64 lines away: **thin margin** | an aside set close beside a column joins the sentence | lower `_STAGGERED_MAX_GAP`; `OCR_STAGGERED_LINES=false` |
+| `OCR_SPREAD_SEAM_COVERAGE` (0.85), `OCR_SPREAD_MIN_ASPECT` (1.2) | sample93 0.96 vs sample92's checked wall 0.81: **thin margin** | text on a wide single illustration split at a centre edge that is art | raise coverage to 0.9; `OCR_SPREAD_GUTTER=false` |
+| `OCR_WAIST_ADJACENT_LINE_GAP` (0.2 chars) | 4Oct p. 17's 9 px columns; keeps sample9's one correct catch | two touching balloons whose facing columns are under 0.2 chars apart join | `0` |
+| `OCR_JOIN_SPLIT_LINES`, `_SPLIT_LINE_*` (code) | 4Oct p. 3, Tests ch. 6 p. 5 (centre offset 0.15) | two balloons stacked end to end in one blob join | lower `_SPLIT_LINE_MAX_CENTRE_OFFSET`; `OCR_JOIN_SPLIT_LINES=false` |
+| `OCR_SPLIT_VETOED_AT_BREAKS` | TELEA p. 2 | a vetoed group keeps a run that holds two speakers | `false` (vetoed groups become single pieces again) |
+| `OCR_LINE_READING_ORDER` | 523 joined groups read, 38 changed, none worse | joined text in the wrong order | `false` |
+| `OCR_NO_BALLOON_VETO` (on) | sample218 p. 9, sample4, sample83, sample104; fixtures unchanged (sample99 loses a junk pair); hand labels unchanged; 40 cached pages: 1 change | real text outside balloons split into pieces (a caption, a sign, a narration box, UI text) | `false` restores distance alone on the no-balloon path. Line-stacking reasons (`_NO_BALLOON_LAYOUT_REASONS` in `handlers/ocr.py`) deliberately do not cut there; removing `insufficient-lateral-line-overlap` from that set cuts p18's two radar labels off (live, first version) but cuts UI text into chunks on a page with no detected panels (sample61 replayed as one partition) |
+| `OCR_NO_BALLOON_SIZE_RATIO` (2.2x) | widest size spread inside one hand-labelled text 1.8x; sample218's speech to its misreads 2.57x. **Ruby was not in the labels** | ruby (furigana) or a small aside comes apart from its text outside balloons; or a misread of the art stays chained (jump under 2.2x) | raise to 2.6 for ruby; `0` turns the size cut off |
+| `character_size` measures the bounding box (code) | CodeRabbit on #60 asked for the quad's short edge; replayed on 67 live captures that changed 6 pages, none for the better (skewed misreads of the art look smaller and rejoin speech; a 36 px speech pair split) | a line set at an angle is cut from flat text of the same size (its bounding box reads larger) | measure the quad's short edge in `character_size` (`owner_assignment.py`) and re-run the replay; it costs the junk separation above |
+| `_ROTATED_LINE_DEGREES` (10°, code) | sample104's title tiles at 62–77°; captions tilted 7° stay straight | a tilted caption (8–10°) gets line checks it cannot pass and falls apart; or a slightly tilted junk chain skips them | change the constant in `owner_assignment.py` |
+| `OPENROUTER_IGNORE_PROVIDERS`, `OPENROUTER_QUANTIZATIONS` | hosts measured 2026-10-06 | a model slow or empty again (`via <host>` and `reasoning=` in the worker log) | hosts drift: re-measure one host at a time before editing the list |
+
+**If the full corpus run finds a wrong grouping:**
+1. Find the setting: the region's `ownership_provenance.ownerDecision.reason` and the capture
+   (`OCR_CAPTURE_DIR`) say which veto or pass made the group.
+2. Replay offline before touching a deployment:
+   `scripts/replay_balloon_join.py --worker worker --captures <dir> --run <run.json> --out <dir>`
+   (or `--probe ~/.cache/manga-library/region_probe --corpus corpus/samples/ja` for the 40
+   cached pages), with `--budget`, `--wall`, `--max-lines` to try values. It lists every balloon
+   that changes, with a crop.
+3. Check a new value on the pages it was fitted on (sample24 b4 must stay apart; sample25, 27, 77,
+   153, 136 must stay joined) and on held-out pages, then change `.env`.
+4. If failures cluster in one series or art style, expose the setting per series/chapter (a
+   setting whose default changes nothing) instead of moving the global value.
+
+### What is left in B
+
+- [x] B1, B2, B3, B3b (live, reviewed)
+- [x] CodeRabbit round on #55–#57 / #234–#236 (2026-10-06 evening)
+- [x] B4 + B5 (worker #60 / parent #241): text no balloon holds gets the owner decision's
+  direction and angle checks plus a character-size check, without the balloon; a group is cut by
+  size, then direction, then square pieces, then at line breaks; square pieces never vote on angle,
+  and tilted text only gets the size check. Lines that do not stack neatly do not cut (a free
+  layout). The first version let them cut: live it was the same on sample61 (its five panels
+  partition the text first) and better on p18, but replayed as one partition (a page whose panels
+  are not detected) it cut sample61's UI paragraphs into chunks, so the conservative rule ships.
+  - p9 (sample218): YOLO missed the left balloon, so its three columns chained with four misreads
+    of the art (お, 谷, `(gftgs grgitgt`, BOFE: 262–407 px against the speech's 94–102 px) into one
+    1140 × 1995 region typeset under the balloon. The size cut separates them; a cut at line
+    breaks alone would not (measured: it only splits off BOFE).
+  - p18 (sample4): **partly.** The vertical label 战智社 splits off; the horizontal labels 台词量 and
+    黑幕度, 15 px from the stat column, stay with it (only a line-stacking check would cut them).
+  - sample93 (p22): live, the shout 「IN およン おんぽ様」 separates from the speech.
+  - p19 (sample104): the caption's four lines stay one text (they were halved to singles inside an
+    oversized group with 祝発売); the tilted title stays one text.
+  - sample83: its two columns stay one text beside a square "M". Its scrambled reading order is
+    not touched by this: still open.
+- [ ] Rows of side-by-side pieces outside balloons: a check that reads a UI row (label + value) as
+  one line would let the stacking checks back in, and cut p18's two radar labels off the stat
+  paragraph without cutting UI text on pages whose panels are not detected.
+- [ ] p2 (sample219): two paragraphs overlap 0.12 along the line, under the owner veto's 0.25
+- [ ] p21 (sample9) 別に: the detector's outline cuts through the column (detection)
+- [ ] Fixture sample99's ぬるぬるで: the OCR detector never found it (moved to I, #245)
+- [ ] The untranslated aside (sample9, sample136)
+- [ ] Fixture sample99 and 4Oct p. 17 with B3/B3b running
+- [x] Merge the worker stack: #53–#61 as one merge commit (642d184, 2026-10-07); the parent pins it
+- [ ] Merge the parent stack #230–#242
+
+## Status at a glance (2026-10-05 — B: one balloon, one text unit)
+
+**B is in** (worker PR [#53](https://github.com/sagniKdas53/manga-tl-worker/pull/53), parent
+[#230](https://github.com/sagniKdas53/manga-tl/pull/230), both draft). Four changes, all on by
+default, each with an env switch that restores the old behaviour. It makes output better: fewer
+balloons whose text is translated and typeset in pieces, and joined text in reading order.
+Measured offline with the worker's own OCR + YOLO on 207 dev-stack pages, then live on
+chrome-box's a-halo test stack (2026-10-05, $0.076 spent: DeepSeek v4 Flash translation $0.069,
+QA $0.008).
+
+What broke a balloon into pieces, and what fixes each:
+1. **OCR broke a column in two** (ブラ | イダルなんて), so the owner veto saw the top piece beside
+   the next column and split the whole balloon. Fix: join a column's pieces first
+   (`OCR_JOIN_SPLIT_LINES`). Pieces must share a centre line, or the columns of two stacked
+   balloons in one YOLO blob join end to end (Tests ch. 6 p. 5).
+2. **The waist veto in a narrow balloon.** 4Oct p. 17's yellow shout balloon is about one
+   character deep everywhere, so no pair inside it could pass. Fix: lines side by side, sharing
+   half their length and under 0.2 characters apart, are exempt (`OCR_WAIST_ADJACENT_LINE_GAP`).
+   This was not a proximity miss: the columns are 9 px apart.
+3. **One break threw the whole balloon away.** A vetoed group became single pieces even when
+   only one line was out of step (TELEA p. 2's aside 良くないけど). Fix: cut at the break, keep
+   the runs either side, and decide each again (`OCR_SPLIT_VETOED_AT_BREAKS`).
+4. **Joined text was out of order.** `merge_ocr_regions` sorted pieces by -x then y, which
+   scrambles horizontal lines (Tests ch. 4 p. 63's caption read lines 1, 3, 2) and a broken column
+   whose lower piece is narrower (手ブラ | での read "での手ブラ"). Fix: put pieces into lines
+   first, then columns right to left and horizontal lines top to bottom (`OCR_LINE_READING_ORDER`).
+   This changes the text of every joined region, not only the ones B joins: over 523 joined
+   groups, 38 read differently, about 32 clearly better (ch. 3 p. 8's paragraphs were shuffled),
+   the rest OCR garbage, none clearly worse.
+
+Results:
+- **4Oct (21 pages):** only p. 3 and p. 17 change, each to exactly the user's hand merge
+  (p. 3: 仕事とはいえ + the seven-piece sentence; p. 17: one region).
+- **Hand labels (2026-08-09, 6 pages, 357 pairs):** false splits 28 → 15, false merges 0 → 0.
+- **Tests (179 pages):** 34 balloons main's veto split; their regions go 163 → 138. Every changed
+  balloon (16 over all pages) was looked at, and its joined text read. None merged across
+  balloons; all but one became their text units or got closer. The exception, t4_054 B0, is a
+  shout whose column OCR read as セ / フ: セ now joins the next column, still inside the one balloon.
+- **Fixtures:** only sample7, sample93 and sample99 have detected balloons, so only they exercise
+  this (sample177, 222, 61 and 83 have none, and every change is on the in-balloon path). Two
+  balloons change, both inside one balloon (sample7: ヘルタにだけは言われたくないんだけど!? joins
+  and 追加!? stays apart; sample99: a moan cloud goes 5 → 3). No merge across balloons.
+- **Live, chrome-box (rendered and read):** 4Oct p. 17's yellow balloon is one text, "If you
+  want to date Yangyang, you'll have to defeat me!", and the duplicated "Beat me." is gone. 4Oct
+  p. 3 reads "Even though it's for work…" + "If I weren't an idol, I'd never have had anything to
+  do with something like a bridal shoot." TELEA p. 2 balloon 1 is one sentence with **良くないけど
+  its own region**; balloon 4 is its two blocks (was four pieces).
+
+Not fixed (decide later):
+- **Paragraph gaps inside one balloon** (4Oct p. 15: four balloons, each two sentences a little
+  more than 0.35 characters apart). A bigger budget inside balloons is not safe: at 0.5 it makes 2
+  false merges on the hand labels, and from 0.6 the 怎么样 aside on p. 5 drags its balloon apart.
+  The manual merge, or raising *OCR Grouping Threshold* per chapter, still works.
+- **`mixed-line-orientation` / `incoherent-oriented-lines` vetoes** (R21's other half). The ones
+  looked at are OCR misreads (vertical text read sideways, "1111"), where keeping pieces apart is
+  right; not all were checked.
+- **The aside came back untranslated.** On chrome-box, TELEA p. 2's 良くないけど region got an
+  empty translation, so the render shows the source art there. That is the translation stage, not
+  grouping.
+
+Checklist of the tracker's items:
+- [x] Plan for 2026-10-03: I (`SELF_HOSTED_ADMIN`), G1, G3, G4, H2, item 6 (SQL script),
+  corpus-v2 Phase 0 and 1.1–1.2, C + G packet written
+- [ ] Prod deploy and prod SQL run (dropped by the user: a fresh prod stack after the tracker)
+- [x] A (2): halo grow (worker #52)
+- [ ] A (1): close-and-fill the automatic mask; the same for hand marks; the labelled re-run
+- [ ] A: #228 (bands that run on, translucent balloons, leftover ink)
+- [x] B Step 0: causes measured on 207 pages + the hand labels
+- [x] B: split columns (cause 1)
+- [x] B: narrow-balloon waist veto (cause 2)
+- [x] B: cut a vetoed group at its break (cause 3)
+- [x] B: joined text in reading order (cause 4)
+- [x] B gate: R21's lateral-overlap cases on Tests
+- [x] B gate: fixtures, no merge across balloons
+- [x] B gate: 良くないけど stays its own text (live)
+- [x] B gate: 4Oct p. 3 and p. 17 match the hand merges (live)
+- [ ] B: paragraph gaps inside one balloon (4Oct p. 15)
+- [ ] B: mixed-orientation vetoes
+- [ ] B: merge worker #53, re-pin the parent to its merge commit, merge #230 (worker merged and
+  pinned 2026-10-07; the parent stack #230–#242 is next)
+- [ ] C + G: G2 + H1, the `background_color` split, M7's single text renderer
+  ([packet](output-quality-cg-packet-20261004.md))
+- [ ] F: Photoshop-style layers (#178), grouped with the OCR fragment debug toggle (#243) and
+  text boxes sized to the balloon instead of the OCR column (#244), and hiding a region hides its
+  cleanup patch (#237) (owner, 2026-10-07)
+- [ ] E: automatic angles (`AUDIT-R23`)
+- [ ] I: text the OCR detector never finds stays untranslated (#245; fixture sample99's
+  ぬるぬるで sits inside a found balloon with no OCR piece over it). Before M9. Not the 2026-10-03
+  "I" (`SELF_HOSTED_ADMIN`, done)
+- [ ] M9 and the rest of corpus-v2
 
 ## Plan for 2026-10-03 (user, 2026-10-02 late)
 
@@ -128,7 +312,9 @@ to Node 24.
 1. **A — cleanup masks** (white outline/glow blobs the automatic cleanup leaves; seen again on
    page 31). Halo grow is in worker PR #52 (2026-10-05). What it still misses is in #228:
    bands that run on, translucent balloons, and leftover ink.
-2. **B — one balloon, one text unit** (`AUDIT-R21`).
+2. **B — one balloon, one text unit** (`AUDIT-R21`). **In 2026-10-05**, four fixes; see
+   [the 2026-10-05 status](#status-at-a-glance-2026-10-05--b-one-balloon-one-text-unit). Paragraph
+   gaps inside one balloon remain.
 3. **C + G — typesetting, with editor and export matching one to one.** G collects what makes the
    editor differ from the export today: fonts not loaded before the first fit, `maskPolygon`
    missing from the scene, elliptical pipeline elements, and the export ZIP's fallback plate.

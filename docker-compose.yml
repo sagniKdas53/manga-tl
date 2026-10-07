@@ -349,6 +349,12 @@ services:
       - QA_LLM_MODEL_LIST=${QA_LLM_MODEL_LIST:-}
       - QA_VLM_MODEL_LIST=${QA_VLM_MODEL_LIST:-}
       - QA_VLM_FALLBACK_MODELS=${QA_VLM_FALLBACK_MODELS:-}
+      - TL_FALLBACK_MODEL=${TL_FALLBACK_MODEL:-}
+      # OpenRouter hosts to skip (2026-10-06: fp4 builds, Relace, OpenInference and Wafer ignored the
+      # reasoning budget or crawled). Unset keeps these; set one empty to turn that filter off.
+      - OPENROUTER_QUANTIZATIONS=${OPENROUTER_QUANTIZATIONS-fp8,mxfp8,fp16,bf16,fp32,unknown}
+      - OPENROUTER_IGNORE_PROVIDERS=${OPENROUTER_IGNORE_PROVIDERS-relace,open-inference,wafer}
+      - OPENROUTER_REQUIRE_PARAMETERS=${OPENROUTER_REQUIRE_PARAMETERS:-true}
       # AUDIT-W2: unset, i.e. unlimited. Every provider in config/providers.json carries its own
       # `rateLimits`; this is only the fallback for one that does not, and it used to default to
       # 10 RPM, so such a provider silently inherited one call every 6 seconds.

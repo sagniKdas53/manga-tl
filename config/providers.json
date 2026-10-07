@@ -2,9 +2,9 @@
   "version": 1,
   "defaults": {
     "provider": "openrouter",
-    "tl": "deepseek/deepseek-v4-pro",
-    "qaLLM": "deepseek/deepseek-v4-pro",
-    "qaVLM": "google/gemini-3.1-flash-lite",
+    "tl": "z-ai/glm-5.3-flash",
+    "qaLLM": "z-ai/glm-5.3-flash",
+    "qaVLM": "google/gemini-3.5-flash-lite",
     "ocr": "qwen/qwen3.7-plus",
     "qaMode": "auto",
     "useFallbackModels": true,
@@ -215,18 +215,6 @@
             }
           },
           {
-            "id": "z-ai/glm-5.2:free",
-            "name": "Z.ai: GLM 5.2 (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
             "id": "thinkingmachines/inkling-small:free",
             "name": "Thinking Machines: Inkling Small (free)",
             "free": true,
@@ -309,6 +297,44 @@
               "completionPerMillion": 0.0
             },
             "managedBy": "provider-catalog-refresh"
+          },
+          {
+            "id": "deepseek/deepseek-v4.1-flash",
+            "name": "DeepSeek: DeepSeek V4.1 Flash",
+            "free": false,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.003,
+              "completionPerMillion": 2.4,
+              "cacheReadPerMillion": 0.003
+            }
+          },
+          {
+            "id": "xiaomi/mimo-v2.6-flash",
+            "name": "Xiaomi: MiMo-V2.6-Flash",
+            "free": false,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.14,
+              "completionPerMillion": 0.28,
+              "cacheReadPerMillion": 0.0028
+            },
+            "pinned": true
+          },
+          {
+            "id": "z-ai/glm-5.3-flash",
+            "name": "Z.ai: GLM 5.3 Flash",
+            "free": false,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.15,
+              "completionPerMillion": 0.5,
+              "cacheReadPerMillion": 0.03
+            },
+            "pinned": true
           }
         ],
         "qaLLM": [
@@ -463,18 +489,6 @@
             }
           },
           {
-            "id": "z-ai/glm-5.2:free",
-            "name": "Z.ai: GLM 5.2 (free)",
-            "free": true,
-            "pricing": {
-              "currency": "USD",
-              "source": "openrouter",
-              "promptPerMillion": 0.0,
-              "completionPerMillion": 0.0
-            },
-            "managedBy": "provider-catalog-refresh"
-          },
-          {
             "id": "thinkingmachines/inkling-small:free",
             "name": "Thinking Machines: Inkling Small (free)",
             "free": true,
@@ -557,6 +571,43 @@
               "completionPerMillion": 0.0
             },
             "managedBy": "provider-catalog-refresh"
+          },
+          {
+            "id": "deepseek/deepseek-v4.1-flash",
+            "name": "DeepSeek: DeepSeek V4.1 Flash",
+            "free": false,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.003,
+              "completionPerMillion": 2.4,
+              "cacheReadPerMillion": 0.003
+            }
+          },
+          {
+            "id": "xiaomi/mimo-v2.6-flash",
+            "name": "Xiaomi: MiMo-V2.6-Flash",
+            "free": false,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.14,
+              "completionPerMillion": 0.28,
+              "cacheReadPerMillion": 0.0028
+            }
+          },
+          {
+            "id": "z-ai/glm-5.3-flash",
+            "name": "Z.ai: GLM 5.3 Flash",
+            "free": false,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.15,
+              "completionPerMillion": 0.5,
+              "cacheReadPerMillion": 0.03
+            },
+            "pinned": true
           }
         ],
         "qaVLM": [
@@ -768,6 +819,43 @@
               "completionPerMillion": 0.0
             },
             "managedBy": "provider-catalog-refresh"
+          },
+          {
+            "id": "xiaomi/mimo-v2.6-flash",
+            "name": "Xiaomi: MiMo-V2.6-Flash",
+            "free": false,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.14,
+              "completionPerMillion": 0.28,
+              "cacheReadPerMillion": 0.0028
+            }
+          },
+          {
+            "id": "deepseek/deepseek-v4.1-flash",
+            "name": "DeepSeek: DeepSeek V4.1 Flash",
+            "free": false,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.003,
+              "completionPerMillion": 2.4,
+              "cacheReadPerMillion": 0.003
+            }
+          },
+          {
+            "id": "google/gemini-3.5-flash-lite",
+            "name": "Google: Gemini 3.5 Flash Lite",
+            "free": false,
+            "pricing": {
+              "currency": "USD",
+              "source": "openrouter",
+              "promptPerMillion": 0.3,
+              "completionPerMillion": 2.5,
+              "cacheReadPerMillion": 0.03
+            },
+            "pinned": true
           }
         ],
         "ocr": [
@@ -992,9 +1080,9 @@
           }
         ]
       },
-      "defaultTLModel": "deepseek/deepseek-v4-pro",
-      "defaultQALLMModel": "deepseek/deepseek-v4-pro",
-      "defaultQAVLMModel": "google/gemini-3.1-flash-lite",
+      "defaultTLModel": "z-ai/glm-5.3-flash",
+      "defaultQALLMModel": "z-ai/glm-5.3-flash",
+      "defaultQAVLMModel": "google/gemini-3.5-flash-lite",
       "defaultOCRModel": "qwen/qwen3.7-flash"
     },
     "nvidia": {

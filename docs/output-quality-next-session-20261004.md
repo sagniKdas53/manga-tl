@@ -82,7 +82,8 @@ Details are in [the R7 close doc](output-quality-r7-close-20261001.md#follow-ups
   [ocr-grouping-research-20261003.md](ocr-grouping-research-20261003.md), with the measured
   owner-veto numbers and the A/B data location added. Start with its Step 0 (measure which cause is
   real) before changing defaults. Gate: R21's 42 regions on 5 pages, the six fixtures with no
-  cross-balloon merge, and page 2's 良くないけど staying its own text.
+  cross-balloon merge, and page 2's 良くないけど staying its own text. **Done 2026-10-05** (tracker,
+  2026-10-05 status); paragraph gaps inside one balloon remain.
 - **F — Photoshop-style layers (output, editor).** Add layer, merge down or visible, groups, undo of
   a merge that survives a reload.
 - **E — automatic angles (output, `AUDIT-R23`).** OCR has the text angle in its quads but writes
