@@ -287,6 +287,82 @@ describe("Reader Inpainting layer (tracker R7)", () => {
     vi.restoreAllMocks();
   });
 
+  it("undoes a layer action on the server and reloads the page; a reorder is one step (F4)", async () => {
+    const base = mockSafeFetch.getMockImplementation()!;
+    const entry = {
+      id: "op-1",
+      kind: "merge",
+      label: "merge 2 layers",
+      createdAt: "2026-10-08T00:00:00Z",
+      blocked: null,
+    };
+    let undone = false;
+    const history = () => ({
+      undo: undone ? null : entry,
+      redo: undone ? entry : null,
+      undoCount: undone ? 0 : 1,
+      redoCount: undone ? 1 : 0,
+      depth: 20,
+    });
+    mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (/\/layer-history$/.test(url)) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(history()),
+        });
+      }
+      if (/\/layer-history\/undo$/.test(url)) {
+        undone = true;
+        const body = JSON.stringify({
+          ...history(),
+          applied: "merge 2 layers",
+        });
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(body),
+          json: () => Promise.resolve(JSON.parse(body)),
+        });
+      }
+      return base(url, init);
+    });
+    await renderReader();
+    const undo = await screen.findByRole("button", {
+      name: "Undo layer action",
+    });
+    await waitFor(() => expect(undo).toBeEnabled());
+    const pageLoads = calls("GET", /\/api\/pages\/[^/]+$/).length;
+    fireEvent.click(undo);
+    await waitFor(() =>
+      expect(calls("POST", /\/layer-history\/undo$/)).toHaveLength(1),
+    );
+    // The page's layers are read again: the undo moved rows on the server.
+    await waitFor(() =>
+      expect(calls("GET", /\/api\/pages\/[^/]+$/).length).toBeGreaterThan(
+        pageLoads,
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Redo layer action" }),
+      ).toBeEnabled(),
+    );
+
+    // Moving a layer changes two z orders in two requests, under one batch id.
+    fireEvent.click(screen.getAllByText("Translation (EN)")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Move layer down" }));
+    await waitFor(() =>
+      expect(calls("PUT", /\/api\/layers\/[^/]+$/).length).toBe(2),
+    );
+    const batches = calls("PUT", /\/api\/layers\/[^/]+$/).map(
+      ([, init]) =>
+        ((init as RequestInit).headers as Record<string, string>)[
+          "X-Layer-Op-Batch"
+        ],
+    );
+    expect(batches[0]).toBeTruthy();
+    expect(batches[1]).toBe(batches[0]);
+  });
+
   it("marks a flagged region only while Show debug is on, never over the reading views", async () => {
     // 2026-09-30: with the debug boxes off, flagged regions still got amber outlines, and Clean
     // Scanlation drew them over the finished page. Debug on is where they show (in the box

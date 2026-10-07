@@ -107,6 +107,18 @@ pub fn bad_request(detail: &str, instance: &str) -> Response {
     )
 }
 
+/// The request is valid but the resource's state refuses it now → 409 (F4: an undo whose rows
+/// changed since).
+pub fn conflict(detail: &str, instance: &str) -> Response {
+    problem_response(
+        StatusCode::CONFLICT,
+        "Conflict",
+        detail,
+        instance,
+        Some(json!({ "timestamp": java_instant_now() })),
+    )
+}
+
 /// MethodArgumentNotValidException → 400 + per-field messages from @Valid.
 /// Messages mirror the jakarta annotations on the Java DTOs exactly.
 pub fn validation_failed(instance: &str, field_errors: Vec<(&str, &str)>) -> Response {

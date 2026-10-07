@@ -28,7 +28,7 @@ import { paintLayerMask } from "../utils/maskPaint";
 import { elementFit } from "../utils/elementFit";
 import { ocrFragmentLabel, ocrFragmentsOf } from "../utils/ocrFragments";
 import { isGroupLayer, isLayerShown } from "../utils/layerTree";
-import type { LayerActions } from "./LayerPanelMenus";
+import type { LayerActions, LayerHistory } from "./LayerPanelMenus";
 import { useFontsVersion } from "../hooks/useFontsVersion";
 import { STROKE_WIDTH_RATIO } from "@manga-library/page-scene";
 import {
@@ -154,6 +154,12 @@ const AUTOSAVE_IDLE_MS = 30_000;
  * text), restored together.
  */
 type UndoEntry = LayerElement & { op?: "delete"; with?: LayerElement[] };
+
+/** F4: one id for the requests of one layer action, so the server records them as one step. */
+const newLayerOpBatch = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 /** A step's own element, without the step fields, and its companions. */
 function splitStep(step: UndoEntry): [LayerElement, LayerElement[]] {
@@ -525,6 +531,11 @@ export const Reader: React.FC<ReaderProps> = ({
   >(new Set());
   const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
   const [redoStack, setRedoStack] = useState<UndoEntry[]>([]);
+  // F4 (#178): the server's layer history (what the layer Undo and Redo buttons would do).
+  const [layerHistory, setLayerHistory] = useState<LayerHistory | null>(null);
+  // Set by a layer undo or redo: once the page's layers reload, element undo steps whose element
+  // the layer step removed are dropped (they would only fail).
+  const pruneElementUndoRef = useRef(false);
 
   // Conversation and Layout enhancements
   const [groupByConversation, setGroupByConversation] = usePersistedState(
@@ -1813,13 +1824,15 @@ export const Reader: React.FC<ReaderProps> = ({
           return !old || old.layer.zOrder !== l.layer.zOrder;
         });
 
-        // Fire async requests
+        // Fire async requests. One batch id makes them one layer undo step (F4).
+        const batch = newLayerOpBatch();
         updates.forEach((lData) => {
           safeFetch(`/api/layers/${lData.layer.id}`, {
             method: "PUT",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${user.token}`,
+              "X-Layer-Op-Batch": batch,
             },
             body: JSON.stringify({ zOrder: lData.layer.zOrder }),
           }).catch((err) =>
@@ -2836,6 +2849,78 @@ export const Reader: React.FC<ReaderProps> = ({
     renderCurrentPage();
   }, [refreshAfterOverlayChange, renderCurrentPage]);
 
+  const selectedPageId = selectedPage?.id;
+  const selectedPageIdRef = useRef(selectedPageId);
+  useEffect(() => {
+    selectedPageIdRef.current = selectedPageId;
+  }, [selectedPageId]);
+  const refreshLayerHistory = useCallback(async () => {
+    if (!selectedPageId) {
+      setLayerHistory(null);
+      return;
+    }
+    try {
+      const res = await safeFetch(
+        `/api/pages/${selectedPageId}/layer-history`,
+        { headers: { Authorization: `Bearer ${user.token}` } },
+      );
+      if (!res.ok) return;
+      const history = (await res.json()) as LayerHistory;
+      // A page change while this was in flight answers for the old page.
+      if (selectedPageIdRef.current === selectedPageId)
+        setLayerHistory(history);
+    } catch {
+      // The buttons keep what they last showed; a click re-checks on the server anyway.
+    }
+  }, [selectedPageId, user.token]);
+  useEffect(() => {
+    Promise.resolve().then(refreshLayerHistory);
+  }, [refreshLayerHistory, cacheEpoch]);
+
+  const stepLayerHistory = useCallback(
+    async (which: "undo" | "redo") => {
+      if (!selectedPageId) return;
+      try {
+        const result = (await layerRequest(
+          `/api/pages/${selectedPageId}/layer-history/${which}`,
+          "POST",
+        )) as LayerHistory;
+        setLayerHistory(result);
+        pruneElementUndoRef.current = true;
+        showToast(
+          `${which === "undo" ? "Undid" : "Redid"}: ${result.applied ?? "layer action"}.`,
+          "success",
+        );
+        afterLayerChange();
+      } catch (err) {
+        showError(`Could not ${which}: ${(err as Error).message}`);
+        void refreshLayerHistory();
+      }
+    },
+    [
+      selectedPageId,
+      layerRequest,
+      showToast,
+      showError,
+      afterLayerChange,
+      refreshLayerHistory,
+    ],
+  );
+
+  useEffect(() => {
+    if (!pruneElementUndoRef.current) return;
+    pruneElementUndoRef.current = false;
+    const present = new Set(
+      layers.flatMap(({ elements }) => elements.map((el) => el.id)),
+    );
+    const keep = (stack: UndoEntry[]) =>
+      stack.filter((entry) => present.has(splitStep(entry)[0].id));
+    Promise.resolve().then(() => {
+      setUndoStack(keep);
+      setRedoStack(keep);
+    });
+  }, [layers]);
+
   const topZOrder = () =>
     layers.reduce((top, l) => Math.max(top, l.layer.zOrder), 0) + 1;
 
@@ -2955,6 +3040,9 @@ export const Reader: React.FC<ReaderProps> = ({
       }
     },
     deleteHiddenTexts: handleDeleteHiddenTexts,
+    undoLayerAction: () => void stepLayerHistory("undo"),
+    redoLayerAction: () => void stepLayerHistory("redo"),
+    refreshLayerHistory: () => void refreshLayerHistory(),
     ungroup: async (groupId) => {
       try {
         await layerRequest(`/api/layers/${groupId}`, "DELETE");
@@ -3066,7 +3154,8 @@ export const Reader: React.FC<ReaderProps> = ({
     const newZOrder = sourceIndex + 1;
 
     try {
-      // Step 1: Shift layers above source up by +1 and fix any gaps
+      // Step 1: Shift layers above source up by +1 and fix any gaps (one layer undo step, F4)
+      const batch = newLayerOpBatch();
       for (let i = 0; i < sorted.length; i++) {
         const lData = sorted.at(i);
         if (!lData) continue;
@@ -3077,6 +3166,7 @@ export const Reader: React.FC<ReaderProps> = ({
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${user.token}`,
+              "X-Layer-Op-Batch": batch,
             },
             body: JSON.stringify({ zOrder: targetZOrder }),
           });
@@ -5526,6 +5616,7 @@ export const Reader: React.FC<ReaderProps> = ({
         {showRightSidebar && !inpaintingView && (
           <ReaderRightSidebar
             {...rightSidebarHandlers}
+            layerHistory={layerHistory}
             reviewRows={reviewTally.rows}
             reviewHidden={!reviewable}
             selectedItem={selectedItem}

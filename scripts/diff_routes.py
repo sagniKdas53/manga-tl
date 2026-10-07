@@ -80,6 +80,10 @@ PORTED = {
     # F3 (#178): merging layers.
     "POST /api/pages/{pageId}/layers/merge",
     "POST /api/layers/{id}/delete-hidden-texts",
+    # F4 (#178): layer undo and redo that survive a reload.
+    "GET /api/pages/{pageId}/layer-history",
+    "POST /api/pages/{pageId}/layer-history/undo",
+    "POST /api/pages/{pageId}/layer-history/redo",
     "GET /api/settings",
     "PUT /api/settings",
     "GET /api/settings/validate",

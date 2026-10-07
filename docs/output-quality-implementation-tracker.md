@@ -181,7 +181,9 @@ Checklist of the tracker's items:
   ([packet](output-quality-cg-packet-20261004.md))
 - [ ] F: Photoshop-style layers (#178; [F and E plan](fe-plan-20261007.md)), grouped with the OCR fragment debug toggle (#243) and
   text boxes sized to the balloon instead of the OCR column (#244), and hiding a region hides its
-  cleanup patch (#237) (owner, 2026-10-07)
+  cleanup patch (#237) (owner, 2026-10-07). Built as a stack: F1 #247, F2 #248 (+ worker #64),
+  F3 #250, F4 (layer Undo/Redo kept on the server, `layer_ops`, last 20 per page). The stack merges
+  after F4 lands (owner, 2026-10-08); F5 (#244) moves under E, after E2.
 - [ ] E: automatic angles (`AUDIT-R23`, #180; reshape fix #179 first; [plan](fe-plan-20261007.md))
 - [ ] I: text the OCR detector never finds stays untranslated (#245; fixture sample99's
   ぬるぬるで sits inside a found balloon with no OCR piece over it). Before M9. Not the 2026-10-03

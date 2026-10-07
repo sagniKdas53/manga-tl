@@ -15,7 +15,10 @@ import Divider from "@mui/material/Divider";
 import AddIcon from "@mui/icons-material/Add";
 import CallMergeIcon from "@mui/icons-material/CallMerge";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
+import UndoIcon from "@mui/icons-material/Undo";
+import RedoIcon from "@mui/icons-material/Redo";
 import type { Layer, LayerElement } from "../types";
+import type { components } from "../api/schema";
 import {
   groupMergeSets,
   hiddenLooseLayers,
@@ -38,7 +41,16 @@ export interface LayerActions {
   deleteHiddenTexts: (layerId: string) => void;
   /** Deletes a group and keeps its layers. */
   ungroup: (groupId: string) => void;
+  /** F4: undo or redo the page's newest layer action, on the server, so it survives a reload. */
+  undoLayerAction: () => void;
+  redoLayerAction: () => void;
+  /** F4: re-reads what Undo and Redo would do (the reason either is blocked can change any time). */
+  refreshLayerHistory: () => void;
 }
+
+/** F4: the page's layer history, as `GET /api/pages/{pageId}/layer-history` answers. */
+export type LayerHistory = components["schemas"]["LayerHistory"];
+type LayerHistoryEntry = components["schemas"]["LayerHistoryEntry"];
 
 // The header's old "+ TL" / "+ SFX" look.
 const menuButtonSx = {
@@ -325,5 +337,73 @@ export const GroupRowMenu: React.FC<{
         </MenuItem>
       </Menu>
     </>
+  );
+};
+
+/** What a history button says: the action, or why it cannot run. */
+function historyTitle(
+  verb: "Undo" | "Redo",
+  entry: LayerHistoryEntry | null | undefined,
+): string {
+  if (!entry) return `Nothing to ${verb.toLowerCase()} in the layers`;
+  if (entry.blocked)
+    return `Can't ${verb.toLowerCase()} "${entry.label}": ${entry.blocked}`;
+  return `${verb} ${entry.label}`;
+}
+
+/**
+ * F4 (#178): Undo and Redo for layer actions (add, delete, rename, reorder, group, ungroup, merge,
+ * delete hidden texts). They act on the server's record of the last 20, so they work after a
+ * reload; Ctrl+Z stays the undo of element edits. Hovering re-reads the history, so a reason to
+ * refuse (an edit since, a layer shown or hidden since) is current when it is read.
+ */
+export const LayerHistoryButtons: React.FC<{
+  history: LayerHistory | null | undefined;
+  actions?: Partial<LayerActions>;
+}> = ({ history, actions }) => {
+  if (!actions?.undoLayerAction || !actions.redoLayerAction) return null;
+  const undo = history?.undo;
+  const redo = history?.redo;
+  const button = (
+    verb: "Undo" | "Redo",
+    entry: LayerHistoryEntry | null | undefined,
+    run: () => void,
+    icon: React.ReactNode,
+  ) => (
+    // A disabled button takes no pointer, so the span carries the reason.
+    <span title={historyTitle(verb, entry)}>
+      <IconButton
+        size="small"
+        aria-label={`${verb} layer action`}
+        disabled={!entry || Boolean(entry.blocked)}
+        onClick={(event) => {
+          event.stopPropagation();
+          run();
+        }}
+        sx={{ p: 0.25, color: "var(--text-muted)" }}
+      >
+        {icon}
+      </IconButton>
+    </span>
+  );
+  return (
+    <span
+      data-testid="layer-history"
+      style={{ display: "inline-flex" }}
+      onMouseEnter={() => actions.refreshLayerHistory?.()}
+    >
+      {button(
+        "Undo",
+        undo,
+        actions.undoLayerAction,
+        <UndoIcon sx={{ fontSize: 16 }} />,
+      )}
+      {button(
+        "Redo",
+        redo,
+        actions.redoLayerAction,
+        <RedoIcon sx={{ fontSize: 16 }} />,
+      )}
+    </span>
   );
 };

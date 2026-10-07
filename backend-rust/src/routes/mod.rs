@@ -15,6 +15,7 @@ pub mod auth;
 pub mod health;
 pub mod internal;
 pub mod jobs;
+pub mod layer_history;
 pub mod layer_merge;
 pub mod layers;
 pub mod layers_ops;
@@ -197,6 +198,19 @@ fn layer_routes() -> Router<AppState> {
         .route(
             "/layers/{id}/delete-hidden-texts",
             axum::routing::post(layer_merge::delete_hidden_texts),
+        )
+        // F4 (#178).
+        .route(
+            "/pages/{pageId}/layer-history",
+            axum::routing::get(layer_history::layer_history),
+        )
+        .route(
+            "/pages/{pageId}/layer-history/undo",
+            axum::routing::post(layer_history::undo),
+        )
+        .route(
+            "/pages/{pageId}/layer-history/redo",
+            axum::routing::post(layer_history::redo),
         )
 }
 

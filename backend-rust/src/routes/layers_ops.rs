@@ -34,11 +34,28 @@ pub async fn delete_layer(
             return error::internal_error("/api/layers/{id}");
         }
     };
-    let page_id: Option<Uuid> = sqlx::query_scalar("SELECT page_id FROM layers WHERE id = $1")
-        .bind(id)
-        .fetch_optional(&mut *tx)
-        .await
-        .unwrap_or(None);
+    let row: Option<(Uuid, String)> =
+        sqlx::query_as("SELECT page_id, type FROM layers WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .unwrap_or(None);
+    let page_id = row.as_ref().map(|(page_id, _)| *page_id);
+    // F4: the delete (an ungroup, for a group) is one undoable step with what it gives back.
+    let recorder = match page_id {
+        None => None,
+        Some(page_id) => match crate::layer_ops::Recorder::start(&mut tx, page_id).await {
+            Ok(recorder) => Some(recorder),
+            Err(err) => {
+                tracing::error!("Could not start recording on {page_id}: {err}");
+                let _ = tx.rollback().await;
+                return error::internal_error("/api/layers/{id}");
+            }
+        },
+    };
+    let is_group = row
+        .as_ref()
+        .is_some_and(|(_, kind)| kind.eq_ignore_ascii_case(crate::layer_tree::GROUP_TYPE));
     if let Err(err) = crate::jobs::coordinator::sync_superseded_elements(&mut tx, id, false).await {
         tracing::error!(
             "Could not restore what overlay {id} superseded, refusing to delete: {err}"
@@ -71,6 +88,21 @@ pub async fn delete_layer(
                     return error::internal_error("/api/layers/{id}");
                 }
             }
+            if let Some(recorder) = recorder {
+                let (kind, label) = if is_group {
+                    ("ungroup", "ungroup")
+                } else {
+                    ("delete", "delete a layer")
+                };
+                if let Err(err) = recorder
+                    .finish(&mut tx, kind, label, &user.email, None)
+                    .await
+                {
+                    tracing::error!("Could not record deleting layer {id}: {err}");
+                    let _ = tx.rollback().await;
+                    return error::internal_error("/api/layers/{id}");
+                }
+            }
             if let Err(err) = advance_page_revision_by_hand(&mut tx, page_id).await {
                 tracing::error!("Could not advance page revision for deleted layer {id}: {err}");
                 let _ = tx.rollback().await;
@@ -98,6 +130,7 @@ pub async fn update_layer(
     State(state): State<AppState>,
     user: AuthUser,
     Path(id): Path<Uuid>,
+    headers: axum::http::HeaderMap,
     body: Result<Json<serde_json::Value>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
     if let Some(denied) = deny_viewer(&user, "/api/layers/{id}") {
@@ -141,6 +174,57 @@ pub async fn update_layer(
             return error::internal_error("/api/layers/{id}");
         }
     };
+
+    // F4: renaming, moving in or out of a group and reordering are undoable. Showing or hiding a
+    // layer is not recorded (it is a view switch), though it still counts as a later change.
+    let recorded = if name.is_some() {
+        Some(("rename", "rename a layer"))
+    } else if let Some(group) = parent {
+        Some(if group.is_some() {
+            ("group-move", "move a layer into a group")
+        } else {
+            ("group-move", "take a layer out of its group")
+        })
+    } else if z_order.is_some() {
+        Some(("reorder", "reorder layers"))
+    } else {
+        None
+    };
+    let recorder = match recorded {
+        None => None,
+        Some(_) => {
+            let page_id: Option<Uuid> =
+                match sqlx::query_scalar("SELECT page_id FROM layers WHERE id = $1")
+                    .bind(id)
+                    .fetch_optional(&mut *tx)
+                    .await
+                {
+                    Ok(page_id) => page_id,
+                    Err(err) => {
+                        tracing::error!("Could not read layer {id}: {err}");
+                        let _ = tx.rollback().await;
+                        return error::internal_error("/api/layers/{id}");
+                    }
+                };
+            let Some(page_id) = page_id else {
+                let _ = tx.rollback().await;
+                return StatusCode::NOT_FOUND.into_response();
+            };
+            match crate::layer_ops::Recorder::start(&mut tx, page_id).await {
+                Ok(recorder) => Some(recorder),
+                Err(err) => {
+                    tracing::error!("Could not start recording on {page_id}: {err}");
+                    let _ = tx.rollback().await;
+                    return error::internal_error("/api/layers/{id}");
+                }
+            }
+        }
+    };
+    // The requests of one reorder carry one batch id and make one undo step.
+    let batch = headers
+        .get("x-layer-op-batch")
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.chars().take(64).collect::<String>());
 
     if let Some(Some(parent_id)) = parent {
         match check_parent(&mut tx, id, parent_id).await {
@@ -201,6 +285,15 @@ pub async fn update_layer(
         return error::internal_error("/api/layers/{id}");
     }
 
+    if let (Some(recorder), Some((kind, label))) = (recorder, recorded)
+        && let Err(err) = recorder
+            .finish(&mut tx, kind, label, &user.email, batch.as_deref())
+            .await
+    {
+        tracing::error!("Could not record the update to layer {id}: {err}");
+        let _ = tx.rollback().await;
+        return error::internal_error("/api/layers/{id}");
+    }
     if let Err(err) = advance_page_revision_by_hand(&mut tx, page_id).await {
         tracing::error!("Could not advance page revision for layer {id}: {err}");
         let _ = tx.rollback().await;

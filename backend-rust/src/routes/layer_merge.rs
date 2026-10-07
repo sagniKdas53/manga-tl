@@ -24,6 +24,7 @@ use uuid::Uuid;
 
 use crate::auth::AuthUser;
 use crate::error;
+use crate::layer_ops::Recorder;
 use crate::layer_tree::MergeKind;
 use crate::models::Layer;
 use crate::page_freshness::advance_page_revision_by_hand;
@@ -70,8 +71,26 @@ pub async fn merge_layers(
             return error::internal_error(MERGE);
         }
     };
+    // F4: the merge is one undoable step.
+    let recorder = match Recorder::start(&mut tx, page_id).await {
+        Ok(recorder) => recorder,
+        Err(err) => {
+            tracing::error!("Could not start recording a merge on {page_id}: {err}");
+            let _ = tx.rollback().await;
+            return error::internal_error(MERGE);
+        }
+    };
     match merge_in(&mut tx, page_id, &ids).await {
         Ok(Ok(outcome)) => {
+            let label = format!("merge {} layers", ids.len());
+            if let Err(err) = recorder
+                .finish(&mut tx, "merge", &label, &user.email, None)
+                .await
+            {
+                tracing::error!("Could not record a merge on {page_id}: {err}");
+                let _ = tx.rollback().await;
+                return error::internal_error(MERGE);
+            }
             if let Err(err) = advance_page_revision_by_hand(&mut tx, page_id).await {
                 tracing::error!(
                     "Could not advance page revision after a merge on {page_id}: {err}"
@@ -480,6 +499,14 @@ pub async fn delete_hidden_texts(
     let Some((page_id, metadata)) = row else {
         return StatusCode::NOT_FOUND.into_response();
     };
+    let recorder = match Recorder::start(&mut tx, page_id).await {
+        Ok(recorder) => recorder,
+        Err(err) => {
+            tracing::error!("Could not start recording on {page_id}: {err}");
+            let _ = tx.rollback().await;
+            return error::internal_error(DELETE_HIDDEN);
+        }
+    };
     let recorded: Vec<Uuid> = metadata
         .as_ref()
         .and_then(|meta| meta.get("merge_hidden"))
@@ -517,6 +544,15 @@ pub async fn delete_hidden_texts(
             return error::internal_error(DELETE_HIDDEN);
         }
     };
+    let label = format!("delete {deleted} hidden texts");
+    if let Err(err) = recorder
+        .finish(&mut tx, "delete-hidden-texts", &label, &user.email, None)
+        .await
+    {
+        tracing::error!("Could not record deleting hidden texts on {page_id}: {err}");
+        let _ = tx.rollback().await;
+        return error::internal_error(DELETE_HIDDEN);
+    }
     if let Err(err) = advance_page_revision_by_hand(&mut tx, page_id).await {
         tracing::error!("Could not advance page revision for layer {id}: {err}");
         let _ = tx.rollback().await;
