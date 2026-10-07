@@ -94,7 +94,8 @@ possible. All env values are read by the worker at start-up: change `.env`, recr
 - [ ] Fixture sample99's ぬるぬるで: the OCR detector never found it (moved to I, #245)
 - [ ] The untranslated aside (sample9, sample136)
 - [ ] Fixture sample99 and 4Oct p. 17 with B3/B3b running
-- [x] Merge the stack: worker #53–#61 as one merge commit (642d184, 2026-10-07), the parent pinned to it, then #230–#242
+- [x] Merge the worker stack: #53–#61 as one merge commit (642d184, 2026-10-07); the parent pins it
+- [ ] Merge the parent stack #230–#242
 
 ## Status at a glance (2026-10-05 — B: one balloon, one text unit)
 
@@ -174,11 +175,13 @@ Checklist of the tracker's items:
 - [x] B gate: 4Oct p. 3 and p. 17 match the hand merges (live)
 - [ ] B: paragraph gaps inside one balloon (4Oct p. 15)
 - [ ] B: mixed-orientation vetoes
-- [x] B: merge worker #53, re-pin the parent to its merge commit, merge #230 (the whole B stack, 2026-10-07)
+- [ ] B: merge worker #53, re-pin the parent to its merge commit, merge #230 (worker merged and
+  pinned 2026-10-07; the parent stack #230–#242 is next)
 - [ ] C + G: G2 + H1, the `background_color` split, M7's single text renderer
   ([packet](output-quality-cg-packet-20261004.md))
 - [ ] F: Photoshop-style layers (#178), grouped with the OCR fragment debug toggle (#243) and
-  text boxes sized to the balloon instead of the OCR column (#244) (owner, 2026-10-07)
+  text boxes sized to the balloon instead of the OCR column (#244), and hiding a region hides its
+  cleanup patch (#237) (owner, 2026-10-07)
 - [ ] E: automatic angles (`AUDIT-R23`)
 - [ ] I: text the OCR detector never finds stays untranslated (#245; fixture sample99's
   ぬるぬるで sits inside a found balloon with no OCR piece over it). Before M9. Not the 2026-10-03
