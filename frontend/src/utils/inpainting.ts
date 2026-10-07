@@ -67,6 +67,55 @@ export function regionAllowsPatch(
   );
 }
 
+const TEXT_LAYER_TYPES = ["translation", "sfx"];
+
+/**
+ * #237: the patches that follow one text element being shown or hidden from its eye button, with
+ * their new state. Hiding a region's last visible text hides its patches, marked
+ * `hiddenWithText`; showing a text brings back only patches so marked, so a patch the user hid by
+ * itself stays hidden. The rule lives in this action, not in `regionAllowsPatch`: a redo overlay
+ * hides the text it supersedes, and the patch must keep following the newer element. Hiding a
+ * whole text layer keeps every patch (R7-D4).
+ */
+export function patchesFollowingText(
+  element: LayerElement,
+  visible: boolean,
+  layers: LayerData[],
+): LayerElement[] {
+  const regionId = element.regionId;
+  if (!regionId || isPatchElement(element)) return [];
+  const owner = layers.find(({ layer }) => layer.id === element.layerId);
+  if (!owner || !TEXT_LAYER_TYPES.includes(owner.layer.type.toLowerCase())) {
+    return [];
+  }
+  if (!visible) {
+    const otherVisibleText = layers.some(
+      ({ layer, elements }) =>
+        layer.visible === true &&
+        TEXT_LAYER_TYPES.includes(layer.type.toLowerCase()) &&
+        elements.some(
+          (other) =>
+            other.id !== element.id &&
+            other.regionId === regionId &&
+            other.visible !== false &&
+            hasText(other.text),
+        ),
+    );
+    if (otherVisibleText) return [];
+  }
+  return layers
+    .flatMap(({ elements }) => elements)
+    .filter(
+      (patch) =>
+        isPatchElement(patch) &&
+        patch.regionId === regionId &&
+        (visible
+          ? patch.visible !== true && patch.hiddenWithText === true
+          : patch.visible === true),
+    )
+    .map((patch) => ({ ...patch, visible, hiddenWithText: !visible }));
+}
+
 /** Whether the region has a worker cleanup patch. */
 export const regionHasPatch = (region: OcrRegion | null | undefined): boolean =>
   Boolean(region?.cleanupPatchSha256);

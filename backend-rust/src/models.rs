@@ -298,6 +298,11 @@ pub struct LayerElement {
     #[sqlx(default)]
     #[serde(default)]
     pub opacity: Option<f64>,
+    /// #237: an Inpainting element hidden by hiding its region's text; showing the text again
+    /// shows it. The editor sets it; nothing renders from it.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub hidden_with_text: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

@@ -865,6 +865,22 @@ async fn a_patch_element_can_only_name_this_pages_assets_and_a_sane_opacity() {
         "an update never repoints a patch"
     );
 
+    // #237: the editor marks a patch it hid with its region's text, and clears the mark.
+    for hidden in [true, false] {
+        let (status, body) = send(
+            &app,
+            "PUT",
+            &format!("/tlhub/api/layer-elements/{id}"),
+            &token,
+            serde_json::json!({"visible": !hidden, "hiddenWithText": hidden}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let updated: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(updated["hiddenWithText"], hidden);
+        assert_eq!(updated["visible"], !hidden);
+    }
+
     cleanup_series(&pool, series_id).await;
 }
 

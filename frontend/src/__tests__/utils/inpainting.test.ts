@@ -5,6 +5,7 @@ import {
   loadSceneAssetUrl,
   peekSceneAssetUrl,
   paintedPatches,
+  patchesFollowingText,
   regionAllowsPatch,
   regionHasPatch,
 } from "../../utils/inpainting";
@@ -217,6 +218,89 @@ describe("the region decides (R7-D4)", () => {
       false,
     );
     expect(regionHasPatch(undefined)).toBe(false);
+  });
+});
+
+describe("a region's eye button takes its patch along (#237)", () => {
+  const text = (
+    id: string,
+    over: Partial<LayerElement> = {},
+  ): LayerElement => ({
+    ...patch(id, "T", 0),
+    cleanupRef: null,
+    regionId: "r",
+    text: "Hello",
+    ...over,
+  });
+  const page = (texts: LayerElement[], patches: LayerElement[]) => [
+    { layer: layer("L"), elements: patches },
+    { layer: layer("T", { type: "translation" }), elements: texts },
+  ];
+
+  it("hiding a region's text hides its patches, marked as hidden with it", () => {
+    const t = text("t");
+    const layers = page([t], [patch("p", "L", 0, { regionId: "r" })]);
+    const hidden = patchesFollowingText(t, false, layers);
+    expect(hidden).toEqual([
+      expect.objectContaining({
+        id: "p",
+        visible: false,
+        hiddenWithText: true,
+      }),
+    ]);
+    // With the marked patch, the hidden region now paints nothing.
+    const after = page([{ ...t, visible: false }], hidden);
+    expect(paintedPatches(after, [region("r")])).toHaveLength(0);
+  });
+
+  it("showing the text brings back only a patch it hid", () => {
+    const t = text("t", { visible: false });
+    const layers = page(
+      [t],
+      [
+        patch("withText", "L", 0, {
+          regionId: "r",
+          visible: false,
+          hiddenWithText: true,
+        }),
+        patch("byHand", "L", 1, { regionId: "r", visible: false }),
+      ],
+    );
+    expect(patchesFollowingText(t, true, layers)).toEqual([
+      expect.objectContaining({
+        id: "withText",
+        visible: true,
+        hiddenWithText: false,
+      }),
+    ]);
+  });
+
+  it("keeps the patch while another text for the region is still shown (a redo overlay)", () => {
+    const superseded = text("old");
+    const newer = text("new");
+    const layers = page(
+      [superseded, newer],
+      [patch("p", "L", 0, { regionId: "r" })],
+    );
+    expect(patchesFollowingText(superseded, false, layers)).toEqual([]);
+  });
+
+  it("leaves patches alone for a patch, a region-less text, or an OCR element", () => {
+    const p = patch("p", "L", 0, { regionId: "r" });
+    const layers = [
+      ...page([text("t")], [p]),
+      {
+        layer: layer("O", { type: "ocr" }),
+        elements: [{ ...text("o"), layerId: "O" }],
+      },
+    ];
+    expect(patchesFollowingText(p, false, layers)).toEqual([]);
+    expect(
+      patchesFollowingText(text("t", { regionId: null }), false, layers),
+    ).toEqual([]);
+    expect(
+      patchesFollowingText({ ...text("o"), layerId: "O" }, false, layers),
+    ).toEqual([]);
   });
 });
 

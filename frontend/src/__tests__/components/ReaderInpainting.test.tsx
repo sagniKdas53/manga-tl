@@ -706,6 +706,95 @@ describe("Reader Inpainting layer (tracker R7)", () => {
     );
   });
 
+  it("hides a region's patch with its text, as one undo step that saves both, then renders once (#237)", async () => {
+    await renderReader();
+    const renders = () => calls("POST", /\/api\/pages\/p1\/render$/).length;
+    const body = (id: string) =>
+      JSON.parse(
+        (
+          calls("PUT", new RegExp(`/api/layer-elements/${id}$`)).at(
+            -1,
+          )![1] as RequestInit
+        ).body as string,
+      );
+    fireEvent.click(screen.getByText(/3 elements/));
+    fireEvent.click(screen.getAllByLabelText("Hide element")[0]);
+
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-cleanup-id="cleanup-patch-el"]'),
+      ).toBeNull(),
+    );
+    await waitFor(() => expect(renders()).toBe(1));
+    expect(body("el-1")).toMatchObject({ visible: false });
+    expect(body("patch-el")).toMatchObject({
+      visible: false,
+      hiddenWithText: true,
+    });
+    // The region's other neighbours are untouched.
+    expect(calls("PUT", /\/api\/layer-elements\/el-2$/)).toHaveLength(0);
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    });
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-cleanup-id="cleanup-patch-el"]'),
+      ).not.toBeNull(),
+    );
+    expect(body("el-1")).toMatchObject({ visible: true });
+    expect(body("patch-el")).toMatchObject({
+      visible: true,
+      hiddenWithText: false,
+    });
+    await waitFor(() => expect(renders()).toBe(2));
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "y", ctrlKey: true });
+    });
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-cleanup-id="cleanup-patch-el"]'),
+      ).toBeNull(),
+    );
+    expect(body("patch-el")).toMatchObject({
+      visible: false,
+      hiddenWithText: true,
+    });
+    await waitFor(() => expect(renders()).toBe(3));
+  });
+
+  it("leaves a patch hidden by itself hidden when its text is shown again (#237)", async () => {
+    await renderReader();
+    fireEvent.click(
+      document.querySelector('[data-cleanup-id="cleanup-patch-el"]')!,
+    );
+    fireEvent.click(await screen.findByText("Hide patch"));
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-cleanup-id="cleanup-patch-el"]'),
+      ).toBeNull(),
+    );
+    const patchSaves = () =>
+      calls("PUT", /\/api\/layer-elements\/patch-el$/).length;
+    expect(patchSaves()).toBe(1);
+    fireEvent.click(screen.getByRole("button", { name: "Deselect" }));
+
+    fireEvent.click(screen.getByText(/3 elements/));
+    fireEvent.click(screen.getAllByLabelText("Hide element")[0]);
+    await waitFor(() =>
+      expect(calls("PUT", /\/api\/layer-elements\/el-1$/)).toHaveLength(1),
+    );
+    fireEvent.click(screen.getByLabelText("Show element"));
+    await waitFor(() =>
+      expect(calls("PUT", /\/api\/layer-elements\/el-1$/)).toHaveLength(2),
+    );
+    expect(patchSaves()).toBe(1);
+    expect(
+      document.querySelector('[data-cleanup-id="cleanup-patch-el"]'),
+    ).toBeNull();
+  });
+
   it("keeps a hidden OCR layer's regions selectable without painting its Japanese", async () => {
     // OCR layers are created hidden (2026-09-28). The region tools follow the newest OCR pass and
     // its redo overlays whatever their visibility; an older pass stays out.
