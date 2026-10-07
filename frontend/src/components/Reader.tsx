@@ -3508,6 +3508,7 @@ export const Reader: React.FC<ReaderProps> = ({
     if (
       (e.target as HTMLElement).closest(".svg-ocr-box") ||
       (e.target as HTMLElement).closest(".svg-conv-box") ||
+      (e.target as HTMLElement).closest("[data-ocr-fragment]") ||
       (e.target as HTMLElement).closest(".bubble-popover") ||
       (e.target as HTMLElement).closest(".floating-reader-toolbar") ||
       (e.target as HTMLElement).closest(".vertical-zoom-toolbar") ||
@@ -3572,6 +3573,7 @@ export const Reader: React.FC<ReaderProps> = ({
     if (
       target.closest(".svg-ocr-box") ||
       target.closest(".svg-conv-box") ||
+      target.closest("[data-ocr-fragment]") ||
       target.closest(".bubble-popover") ||
       target.closest(".floating-reader-toolbar") ||
       target.closest(".vertical-zoom-toolbar") ||
@@ -4154,6 +4156,42 @@ export const Reader: React.FC<ReaderProps> = ({
     );
   }
 
+  // Show debug's box colour for an item: selected, then its QA state, then approved. The OCR
+  // pieces (#243) are drawn in their region's colour.
+  const debugBoxColour = (item: (typeof renderItems)[number]) => {
+    const isSelected = selectedItem?.id === item.id;
+    const qaStatus = item.regions.find((r) => r.qaStatus === "failed")
+      ? "failed"
+      : item.regions.find(
+            (r) =>
+              r.qaStatus === "cleanup_review" || r.qaStatus === "manual_review",
+          )
+        ? "review"
+        : item.regions.find((r) => r.qaStatus === "direct_fix")
+          ? "direct_fix"
+          : item.regions.find((r) => r.qaStatus === "passed")
+            ? "passed"
+            : null;
+    const stroke = isSelected
+      ? item.isConversation
+        ? "var(--conversation)"
+        : "var(--primary)"
+      : qaStatus === "failed"
+        ? "#ef4444"
+        : qaStatus === "review"
+          ? "var(--warning)"
+          : qaStatus === "direct_fix"
+            ? "#f59e0b"
+            : item.approved
+              ? item.isConversation
+                ? "var(--conversation)"
+                : "var(--primary)"
+              : item.isConversation
+                ? "var(--conversation)"
+                : "var(--success)";
+    return { qaStatus, stroke };
+  };
+
   return (
     <div className="reader-container-nhentai">
       <ReaderTopNav
@@ -4431,38 +4469,7 @@ export const Reader: React.FC<ReaderProps> = ({
                   renderItems.map((item) => {
                     const isSelected = selectedItem?.id === item.id;
                     const isApproved = item.approved;
-                    const qaStatus = item.regions.find(
-                      (r) => r.qaStatus === "failed",
-                    )
-                      ? "failed"
-                      : item.regions.find(
-                            (r) =>
-                              r.qaStatus === "cleanup_review" ||
-                              r.qaStatus === "manual_review",
-                          )
-                        ? "review"
-                        : item.regions.find((r) => r.qaStatus === "direct_fix")
-                          ? "direct_fix"
-                          : item.regions.find((r) => r.qaStatus === "passed")
-                            ? "passed"
-                            : null;
-                    const stroke = isSelected
-                      ? item.isConversation
-                        ? "var(--conversation)"
-                        : "var(--primary)"
-                      : qaStatus === "failed"
-                        ? "#ef4444"
-                        : qaStatus === "review"
-                          ? "var(--warning)"
-                          : qaStatus === "direct_fix"
-                            ? "#f59e0b"
-                            : isApproved
-                              ? item.isConversation
-                                ? "var(--conversation)"
-                                : "var(--primary)"
-                              : item.isConversation
-                                ? "var(--conversation)"
-                                : "var(--success)";
+                    const { qaStatus, stroke } = debugBoxColour(item);
                     return (
                       <g
                         key={item.id}
@@ -4511,35 +4518,6 @@ export const Reader: React.FC<ReaderProps> = ({
                                 : undefined,
                           }}
                         />
-                        {showOcrFragments &&
-                          item.regions.map((region) => {
-                            const fragments = ocrFragmentsOf(region);
-                            return fragments.map((fragment, position) => (
-                              <polygon
-                                key={`${region.id}-fragment-${fragment.index}`}
-                                data-ocr-fragment={region.id}
-                                points={fragment.quad
-                                  .map(([x, y]) => `${x},${y}`)
-                                  .join(" ")}
-                                style={{
-                                  fill: "none",
-                                  stroke,
-                                  strokeWidth: 1,
-                                  strokeDasharray: "3 2",
-                                  vectorEffect: "non-scaling-stroke",
-                                  pointerEvents: "visibleStroke",
-                                }}
-                              >
-                                <title>
-                                  {ocrFragmentLabel(
-                                    fragment,
-                                    position,
-                                    fragments.length,
-                                  )}
-                                </title>
-                              </polygon>
-                            ));
-                          })}
                         <g
                           transform={`translate(${item.bboxX + 10}, ${item.bboxY + 10})`}
                         >
@@ -5104,6 +5082,73 @@ export const Reader: React.FC<ReaderProps> = ({
                     );
                   });
                 })}
+
+                {/* #243: each region's OCR pieces, above the text layers so a piece under English
+                    can still be hovered. The dashed outline takes no pointer; a wide transparent
+                    band along it carries the hover label and the click, so the inside of a piece
+                    (usually under a text box) still reaches the text element. */}
+                {showOcr &&
+                  showOcrFragments &&
+                  !cleanScanlationView &&
+                  !inpaintingView && (
+                    <g data-testid="ocr-fragments">
+                      {renderItems.flatMap((item) => {
+                        const { stroke } = debugBoxColour(item);
+                        return item.regions.flatMap((region) => {
+                          const fragments = ocrFragmentsOf(region);
+                          return fragments.map((fragment, position) => {
+                            const points = fragment.quad
+                              .map(([x, y]) => `${x},${y}`)
+                              .join(" ");
+                            return (
+                              <g
+                                key={`${region.id}-fragment-${fragment.index}`}
+                                onClick={() => {
+                                  setSelectedItem(item);
+                                  setActiveRegion(region);
+                                }}
+                              >
+                                <polygon
+                                  points={points}
+                                  style={{
+                                    fill: "none",
+                                    stroke,
+                                    strokeWidth: 1,
+                                    strokeDasharray: "3 2",
+                                    vectorEffect: "non-scaling-stroke",
+                                    pointerEvents: "none",
+                                  }}
+                                />
+                                <polygon
+                                  data-ocr-fragment={region.id}
+                                  points={points}
+                                  style={{
+                                    fill: "none",
+                                    stroke: "transparent",
+                                    strokeWidth: 8,
+                                    vectorEffect: "non-scaling-stroke",
+                                    cursor: "pointer",
+                                    pointerEvents:
+                                      interactionMode !== "none"
+                                        ? "none"
+                                        : "stroke",
+                                  }}
+                                >
+                                  <title>
+                                    {ocrFragmentLabel(
+                                      fragment,
+                                      position,
+                                      fragments.length,
+                                    )}
+                                  </title>
+                                </polygon>
+                              </g>
+                            );
+                          });
+                        });
+                      })}
+                    </g>
+                  )}
 
                 {/* Issues are shown by the debug boxes (Show debug colours a flagged region) and by
                     the Issues list in the sidebar. The amber outlines that used to mark them with

@@ -382,6 +382,17 @@ describe("Reader Inpainting layer (tracker R7)", () => {
       expect(pieces()[0].querySelector("title")?.textContent).toBe(
         "OCR piece 1 of 2\nvalidated-container-continuous-lines (assigned)\n90°",
       );
+      // Above the text layers, so a piece under English can still be hovered: its band comes
+      // after every element's hit box, and only the band takes the pointer.
+      const handles = document.querySelectorAll(
+        ".svg-overlay .element-drag-handle",
+      );
+      expect(handles.length).toBeGreaterThan(0);
+      expect(
+        handles[handles.length - 1].compareDocumentPosition(pieces()[0]) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect((pieces()[0] as SVGElement).style.pointerEvents).toBe("stroke");
       cleanup();
 
       for (const [debug, fragments, clean] of [
