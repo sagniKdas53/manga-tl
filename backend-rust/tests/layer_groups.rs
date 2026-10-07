@@ -849,3 +849,55 @@ async fn a_patch_whose_order_is_not_a_number_is_left_alone_by_a_merge() {
 
     cleanup_series(&pool, series_id).await;
 }
+
+#[tokio::test]
+async fn layers_in_a_hidden_group_merge_only_with_the_same_own_switch() {
+    let Some((app, pool, _state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    let token = translator(&pool).await;
+    let (series_id, page_id, _image, _ocr, _base) = seed_page(&pool).await;
+    let group = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) \
+         VALUES ($1, 'group', FALSE, 9, '{}'::jsonb, $2, now())",
+    )
+    .bind(group)
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("group");
+    let mut held = Vec::new();
+    for (z, own) in [(3, true), (4, false)] {
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, parent_id, created_at) \
+             VALUES ($1, 'translation', 'en', $2, $3, '{}'::jsonb, $4, $5, now())",
+        )
+        .bind(id)
+        .bind(own)
+        .bind(z)
+        .bind(page_id)
+        .bind(group)
+        .execute(&pool)
+        .await
+        .expect("layer");
+        held.push(id);
+    }
+    // Both are hidden while the group is, but showing the group would show only one of them.
+    let (status, body) = send(
+        &app,
+        "POST",
+        &format!("/tlhub/api/pages/{page_id}/layers/merge"),
+        &token,
+        serde_json::json!({"layerIds": held}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert!(body.contains("own switches differ"), "{body}");
+
+    cleanup_series(&pool, series_id).await;
+}

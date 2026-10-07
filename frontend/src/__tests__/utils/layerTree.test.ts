@@ -101,6 +101,15 @@ describe("layer groups (F3)", () => {
       layer("g", 9, { type: "group" }),
     ];
     expect(ids(groupMergeSets("g", straddling))).toEqual([]);
+    // In a hidden group, layers merge only with ones whose own switch matches.
+    const hiddenGroup = [
+      layer("on1", 1, { parentId: "h" }),
+      layer("off", 2, { parentId: "h", visible: false }),
+      layer("on2", 3, { parentId: "h" }),
+      layer("h", 9, { type: "group", visible: false }),
+    ];
+    expect(ids(groupMergeSets("h", hiddenGroup))).toEqual([["on1", "on2"]]);
+    expect(mergeDownTarget(hiddenGroup[1], hiddenGroup)).toBeNull();
     expect(
       mergeSkipsShownLayer(
         straddling.slice(0, 1).concat(straddling[2]),

@@ -17,10 +17,24 @@ Exit status is 1 if any archive could not be converted. Nothing is overwritten.
 import argparse
 import json
 import os
+import shutil
 import sys
 import tempfile
 import zipfile
 from pathlib import Path
+
+
+def publish(partial: Path, target: Path) -> None:
+    """Put the finished file at `target`, failing if something is already there (even one made
+    since the check in `convert`): a hard link is created atomically and never replaces a file. Where
+    hard links are not supported, an exclusive create and a copy."""
+    try:
+        os.link(partial, target)
+    except FileExistsError:
+        raise ValueError(f"{target} already exists; not overwriting it") from None
+    except OSError:
+        with open(target, "xb") as out, open(partial, "rb") as source:
+            shutil.copyfileobj(source, out)
 
 
 def convert(source: Path, target: Path) -> str:
@@ -38,8 +52,11 @@ def convert(source: Path, target: Path) -> str:
             return "already version 3, skipped"
         if version != 2:
             raise ValueError(f"schemaVersion {version!r} cannot be converted (only 2 is)")
+        layers = project.get("layers") or []
+        if not isinstance(layers, list) or not all(isinstance(layer, dict) for layer in layers):
+            raise ValueError("project.json's layers must be a list of objects")
         project["schemaVersion"] = 3
-        for layer in project.get("layers") or []:
+        for layer in layers:
             layer.pop("parentId", None)
         # Written beside the target and moved into place only once every entry is copied, so a
         # failure (a bad CRC in a later entry) leaves no partial file to block the next attempt.
@@ -51,12 +68,12 @@ def convert(source: Path, target: Path) -> str:
                     if info.filename == project_names[0]:
                         out.writestr(info.filename, json.dumps(project, indent=2, ensure_ascii=False))
                     else:
-                        out.writestr(info, archive.read(info.filename))
+                        # By its ZipInfo, so two entries with one name keep their own bytes.
+                        out.writestr(info, archive.read(info))
             os.chmod(partial, 0o644)  # mkstemp makes it owner-only
-            os.replace(partial, target)
-        except BaseException:
+            publish(Path(partial), target)
+        finally:
             Path(partial).unlink(missing_ok=True)
-            raise
     return f"converted -> {target}"
 
 

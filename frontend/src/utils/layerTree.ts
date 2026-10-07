@@ -145,7 +145,10 @@ export function mergeDownTarget(
   const index = siblings.findIndex(({ layer }) => layer.id === data.layer.id);
   const below = index > 0 ? siblings[index - 1] : undefined;
   if (!below || mergeKindOf(below.layer) !== kind) return null;
-  if (isLayerShown(below.layer, layers) !== isLayerShown(data.layer, layers))
+  if (
+    isLayerShown(below.layer, layers) !== isLayerShown(data.layer, layers) ||
+    (below.layer.visible === true) !== (data.layer.visible === true)
+  )
     return null;
   return mergeSkipsShownLayer([below, data], layers) ? null : below;
 }
@@ -164,8 +167,9 @@ export function shownLayersOf(
 
 /**
  * What merging a group merges: its like layers by kind, split into the shown ones and the hidden
- * ones (a hidden layer never merges into a shown one), bottom first. A set that would skip a shown
- * like layer outside the group is left out, as the server would refuse it.
+ * ones (a hidden layer never merges into a shown one), and by their own switches, bottom first. A
+ * set that would skip a shown like layer outside the group is left out, as the server would
+ * refuse it.
  */
 export function groupMergeSets(
   groupId: string,
@@ -174,11 +178,22 @@ export function groupMergeSets(
   const held = layers
     .filter(({ layer }) => layer.parentId === groupId)
     .sort(byStack);
+  // Split by what shows and by each layer's own switch: in a hidden group the switches can still
+  // differ, and the merged layer keeps only one, so showing the group would change the page.
+  const states = [
+    [true, true],
+    [false, true],
+    [false, false],
+  ] as const;
   return (["text", "patches"] as const)
     .flatMap((kind) => {
       const like = held.filter(({ layer }) => mergeKindOf(layer) === kind);
-      return [true, false].map((shown) =>
-        like.filter(({ layer }) => isLayerShown(layer, layers) === shown),
+      return states.map(([shown, own]) =>
+        like.filter(
+          ({ layer }) =>
+            isLayerShown(layer, layers) === shown &&
+            (layer.visible === true) === own,
+        ),
       );
     })
     .filter((set) => set.length > 1 && !mergeSkipsShownLayer(set, layers));

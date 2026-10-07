@@ -134,6 +134,15 @@ async fn merge_in(
             "show or hide all the layers first: merging a hidden layer into a shown one would show it",
         ));
     }
+    // In a hidden group, every layer is hidden whatever its own switch says; the merged layer
+    // keeps only the lowest one's switch, so showing the group would then change what shows.
+    let own = |layer: &Layer| layer.visible.unwrap_or(false);
+    if layers.iter().any(|layer| own(layer) != own(&layers[0])) {
+        return Ok(Err(
+            "show or hide all the layers first: their own switches differ, and the merged layer \
+             keeps only one",
+        ));
+    }
     if shown[0] && skips_shown_layer(tx, page_id, ids, kind, &layers).await? {
         return Ok(Err(
             "a shown layer of the same kind lies between these layers: merging would move it over \
@@ -312,6 +321,14 @@ async fn renumber_patches(
     Ok(())
 }
 
+/// What marks a layer as a region-redo overlay (`coordinator::create_region_overlay_layer`).
+const OVERLAY_KEYS: &[&str] = &[
+    "overlay",
+    "region_id",
+    "supersedes_layer",
+    "superseded_elements",
+];
+
 /// The merged layer's metadata: the top layer's pipeline record, the bottom layer's name, and every
 /// other layer's record under `merged_from` (oldest merge first).
 fn merged_metadata(bottom_to_top: &[Layer], hidden: &[Uuid]) -> Value {
@@ -322,6 +339,12 @@ fn merged_metadata(bottom_to_top: &[Layer], hidden: &[Uuid]) -> Value {
     let target = &bottom_to_top[0];
     let top = bottom_to_top.last().expect("two or more layers");
     let mut merged = as_object(top);
+    // The merged layer is a whole layer, not a redo overlay: kept, these marks would make deleting
+    // or hiding it "give back" one region's old text, and the export would skip it as an overlay.
+    // An overlay's record is kept under `merged_from` like any other.
+    for key in OVERLAY_KEYS {
+        merged.remove(*key);
+    }
     let mut merged_from: Vec<Value> = Vec::new();
     for layer in bottom_to_top {
         let mut record = as_object(layer);
@@ -330,7 +353,7 @@ fn merged_metadata(bottom_to_top: &[Layer], hidden: &[Uuid]) -> Value {
             merged_from.extend(earlier);
         }
         record.remove("merge_hidden");
-        if layer.id != top.id {
+        if layer.id != top.id || record.contains_key("overlay") {
             merged_from.push(json!({
                 "layerId": layer.id,
                 "type": layer.layer_type,
@@ -496,6 +519,25 @@ mod tests {
         assert_eq!(from.len(), 1);
         assert_eq!(from[0]["metadata"]["cost"]["estimated_cost"], 0.01);
         assert_eq!(merged["merge_hidden"], json!([Uuid::from_u128(9)]));
+    }
+
+    #[test]
+    fn a_merged_redo_overlay_is_no_longer_an_overlay() {
+        let bottom = layer(1, Some("Translation (EN)"), json!({}));
+        let overlay = layer(
+            2,
+            Some("Translation (region redo)"),
+            json!({"overlay": true, "region_id": "r", "supersedes_layer": "l",
+                   "superseded_elements": ["e"], "qa": {"status": "new"}}),
+        );
+        let merged = merged_metadata(&[bottom, overlay], &[]);
+        for key in OVERLAY_KEYS {
+            assert!(merged.get(*key).is_none(), "{key} kept");
+        }
+        assert_eq!(merged["qa"]["status"], "new");
+        let from = merged["merged_from"].as_array().unwrap();
+        assert_eq!(from.len(), 2, "the overlay's record is kept");
+        assert_eq!(from[1]["metadata"]["overlay"], true);
     }
 
     #[test]
