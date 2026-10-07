@@ -27,7 +27,7 @@ import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
 import { paintLayerMask } from "../utils/maskPaint";
 import { elementFit } from "../utils/elementFit";
 import { ocrFragmentLabel, ocrFragmentsOf } from "../utils/ocrFragments";
-import { isLayerShown } from "../utils/layerTree";
+import { isGroupLayer, isLayerShown } from "../utils/layerTree";
 import type { LayerActions } from "./LayerPanelMenus";
 import { useFontsVersion } from "../hooks/useFontsVersion";
 import { STROKE_WIDTH_RATIO } from "@manga-library/page-scene";
@@ -2997,7 +2997,9 @@ export const Reader: React.FC<ReaderProps> = ({
         },
         body: JSON.stringify({ visible: nextVisible }),
       });
-      if (isRedoOverlay(layerData.layer)) {
+      // A group's switch re-applies the overlays of every layer in it on the server, which
+      // can show or hide text on other layers, so reload them too.
+      if (isRedoOverlay(layerData.layer) || isGroupLayer(layerData.layer)) {
         refreshAfterOverlayChange();
       }
       if (res.ok) renderCurrentPage();

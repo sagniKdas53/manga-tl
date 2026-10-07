@@ -819,11 +819,14 @@ describe("ReaderRightSidebar", () => {
         "top",
       ]);
 
-      // Merge down from the top layer goes into the layer below it at the top level.
+      // Merge down from the top layer is refused: retry, shown, sits between it and base, and
+      // the merge would move top's text under it.
       const rowMenus = screen.getAllByRole("button", { name: "Layer actions" });
       fireEvent.click(rowMenus[0]);
-      fireEvent.click(screen.getByText("Merge down"));
-      expect(actions.mergeLayers).toHaveBeenLastCalledWith(["top", "base"]);
+      expect(
+        screen.getByText("Merge down").closest('[role="menuitem"]'),
+      ).toHaveAttribute("aria-disabled", "true");
+      fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
 
       // The merge's hidden lower texts can be deleted from the merged layer's row.
       expect(

@@ -6,6 +6,7 @@ import {
   isLayerShown,
   layerDisplayName,
   mergeDownTarget,
+  mergeSkipsShownLayer,
   panelRows,
   shownLayersOf,
 } from "../../utils/layerTree";
@@ -59,7 +60,16 @@ describe("layer groups (F3)", () => {
   });
 
   it("merges down only into a like layer below, in the same group, shown alike", () => {
-    expect(mergeDownTarget(page[5], page)?.layer.id).toBe("base");
+    // retry2, shown, sits between sfx and base: merging would move sfx's text under it.
+    expect(mergeDownTarget(page[5], page)).toBeNull();
+    const retry2Hidden = page.map((d) =>
+      d.layer.id === "retry2"
+        ? { ...d, layer: { ...d.layer, visible: false } }
+        : d,
+    );
+    expect(mergeDownTarget(retry2Hidden[5], retry2Hidden)?.layer.id).toBe(
+      "base",
+    );
     // retry2's neighbour in its group is hidden while retry2 is shown.
     expect(mergeDownTarget(page[3], page)).toBeNull();
     // base's neighbour below is OCR, which never merges.
@@ -73,9 +83,30 @@ describe("layer groups (F3)", () => {
       "retry2",
       "sfx",
     ]);
+    const ids = (sets: { layer: Layer }[][]) =>
+      sets.map((set) => set.map((d) => d.layer.id));
+    // retry is hidden and retry2 shown: a hidden layer never merges into a shown one.
+    expect(ids(groupMergeSets("g", page))).toEqual([]);
+    const bothHidden = page.map((d) =>
+      d.layer.id === "retry2"
+        ? { ...d, layer: { ...d.layer, visible: false } }
+        : d,
+    );
+    expect(ids(groupMergeSets("g", bothHidden))).toEqual([["retry", "retry2"]]);
+    // Two shown layers of the group with a shown loose layer between them stay apart.
+    const straddling = [
+      layer("a", 1, { parentId: "g" }),
+      layer("loose", 2),
+      layer("b", 3, { parentId: "g" }),
+      layer("g", 9, { type: "group" }),
+    ];
+    expect(ids(groupMergeSets("g", straddling))).toEqual([]);
     expect(
-      groupMergeSets("g", page).map((set) => set.map((d) => d.layer.id)),
-    ).toEqual([["retry", "retry2"]]);
+      mergeSkipsShownLayer(
+        straddling.slice(0, 1).concat(straddling[2]),
+        straddling,
+      ),
+    ).toBe(true);
     expect(hiddenLooseLayers(page).map((d) => d.layer.id)).toEqual(["ocr"]);
     expect(layerDisplayName(page[4].layer)).toBe("Re-runs");
     expect(layerDisplayName(page[1].layer)).toBe("Translation (EN)");

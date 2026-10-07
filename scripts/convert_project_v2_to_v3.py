@@ -16,7 +16,9 @@ Exit status is 1 if any archive could not be converted. Nothing is overwritten.
 
 import argparse
 import json
+import os
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -24,7 +26,7 @@ from pathlib import Path
 def convert(source: Path, target: Path) -> str:
     """Write the version 3 copy of `source` to `target`; returns what was done."""
     if target.exists():
-        raise SystemExit(f"{target} already exists; not overwriting it")
+        raise ValueError(f"{target} already exists; not overwriting it")
     with zipfile.ZipFile(source) as archive:
         names = archive.namelist()
         project_names = [name for name in names if name == "project.json" or name.endswith("/project.json")]
@@ -39,12 +41,21 @@ def convert(source: Path, target: Path) -> str:
         project["schemaVersion"] = 3
         for layer in project.get("layers") or []:
             layer.pop("parentId", None)
-        with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as out:
-            for info in archive.infolist():
-                if info.filename == project_names[0]:
-                    out.writestr(info.filename, json.dumps(project, indent=2, ensure_ascii=False))
-                else:
-                    out.writestr(info, archive.read(info.filename))
+        # Written beside the target and moved into place only once every entry is copied, so a
+        # failure (a bad CRC in a later entry) leaves no partial file to block the next attempt.
+        handle, partial = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".part", dir=target.parent)
+        os.close(handle)
+        try:
+            with zipfile.ZipFile(partial, "w", zipfile.ZIP_DEFLATED) as out:
+                for info in archive.infolist():
+                    if info.filename == project_names[0]:
+                        out.writestr(info.filename, json.dumps(project, indent=2, ensure_ascii=False))
+                    else:
+                        out.writestr(info, archive.read(info.filename))
+            os.replace(partial, target)
+        except BaseException:
+            Path(partial).unlink(missing_ok=True)
+            raise
     return f"converted -> {target}"
 
 
@@ -60,7 +71,7 @@ def main() -> int:
         target = args.output or source.with_suffix(".v3.zip")
         try:
             print(f"{source}: {convert(source, target)}")
-        except (ValueError, zipfile.BadZipFile, json.JSONDecodeError) as err:
+        except (ValueError, OSError, zipfile.BadZipFile, json.JSONDecodeError) as err:
             failed += 1
             print(f"{source}: not converted: {err}", file=sys.stderr)
     return 1 if failed else 0

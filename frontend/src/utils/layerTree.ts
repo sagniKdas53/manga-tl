@@ -98,9 +98,36 @@ export function panelRows(layers: LayerData[]): PanelRow[] {
 }
 
 /**
+ * Whether merging `set` would skip a shown like layer lying between its lowest and highest layer
+ * in the stack: the merged elements would then move under it and the page would change. Only a
+ * shown set can: a hidden merge paints nothing. The server refuses the same case.
+ */
+export function mergeSkipsShownLayer(
+  set: LayerData[],
+  layers: LayerData[],
+): boolean {
+  if (set.length < 2) return false;
+  const kind = mergeKindOf(set[0].layer);
+  if (!kind || !isLayerShown(set[0].layer, layers)) return false;
+  const sorted = [...set].sort(byStack);
+  const lowest = sorted[0];
+  const highest = sorted[sorted.length - 1];
+  const ids = new Set(set.map(({ layer }) => layer.id));
+  return layers.some(
+    (data) =>
+      !ids.has(data.layer.id) &&
+      mergeKindOf(data.layer) === kind &&
+      isLayerShown(data.layer, layers) &&
+      byStack(lowest, data) < 0 &&
+      byStack(data, highest) < 0,
+  );
+}
+
+/**
  * The layer "Merge down" merges `data` into: the nearest layer below it in the stack, in the same
- * group (or also at the top level), if that one merges with it and is shown or hidden alike.
- * Null when there is none; the server refuses the same cases.
+ * group (or also at the top level), if that one merges with it, is shown or hidden alike, and no
+ * shown like layer of another group lies between them. Null when there is none; the server
+ * refuses the same cases.
  */
 export function mergeDownTarget(
   data: LayerData,
@@ -118,9 +145,9 @@ export function mergeDownTarget(
   const index = siblings.findIndex(({ layer }) => layer.id === data.layer.id);
   const below = index > 0 ? siblings[index - 1] : undefined;
   if (!below || mergeKindOf(below.layer) !== kind) return null;
-  return isLayerShown(below.layer, layers) === isLayerShown(data.layer, layers)
-    ? below
-    : null;
+  if (isLayerShown(below.layer, layers) !== isLayerShown(data.layer, layers))
+    return null;
+  return mergeSkipsShownLayer([below, data], layers) ? null : below;
 }
 
 /** The shown layers of one kind, bottom first: what "Merge visible" merges. */
@@ -135,7 +162,11 @@ export function shownLayersOf(
     .sort(byStack);
 }
 
-/** The like layers inside a group, by kind, bottom first: what merging a group merges. */
+/**
+ * What merging a group merges: its like layers by kind, split into the shown ones and the hidden
+ * ones (a hidden layer never merges into a shown one), bottom first. A set that would skip a shown
+ * like layer outside the group is left out, as the server would refuse it.
+ */
 export function groupMergeSets(
   groupId: string,
   layers: LayerData[],
@@ -144,8 +175,13 @@ export function groupMergeSets(
     .filter(({ layer }) => layer.parentId === groupId)
     .sort(byStack);
   return (["text", "patches"] as const)
-    .map((kind) => held.filter(({ layer }) => mergeKindOf(layer) === kind))
-    .filter((set) => set.length > 1);
+    .flatMap((kind) => {
+      const like = held.filter(({ layer }) => mergeKindOf(layer) === kind);
+      return [true, false].map((shown) =>
+        like.filter(({ layer }) => isLayerShown(layer, layers) === shown),
+      );
+    })
+    .filter((set) => set.length > 1 && !mergeSkipsShownLayer(set, layers));
 }
 
 /** Hidden layers outside any group: what "Group hidden layers" folds away (re-run history). */

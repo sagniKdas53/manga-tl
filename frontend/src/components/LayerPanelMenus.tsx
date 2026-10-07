@@ -223,7 +223,7 @@ export const LayerRowMenu: React.FC<{
           title={
             below
               ? `Into ${layerDisplayName(below.layer)}`
-              : "No like layer below it, or one shown while the other is hidden"
+              : "No like layer below it, one shown while the other is hidden, or a shown like layer between them"
           }
           onClick={pick(() => {
             if (below) actions.mergeLayers?.([data.layer.id, below.layer.id]);

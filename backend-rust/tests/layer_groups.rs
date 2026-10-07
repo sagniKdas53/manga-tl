@@ -726,3 +726,126 @@ async fn merged_patch_layers_keep_every_patch_in_paint_order() {
 
     cleanup_series(&pool, series_id).await;
 }
+
+#[tokio::test]
+async fn a_merge_that_would_skip_a_shown_like_layer_is_refused() {
+    let Some((app, pool, _state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    let token = translator(&pool).await;
+    let (series_id, page_id, _image, _ocr, base) = seed_page(&pool).await;
+    let mut above = Vec::new();
+    for z in [3, 4] {
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) \
+             VALUES ($1, 'translation', 'en', TRUE, $2, '{}'::jsonb, $3, now())",
+        )
+        .bind(id)
+        .bind(z)
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .expect("layer");
+        above.push(id);
+    }
+    let (middle, top) = (above[0], above[1]);
+    let merge = |ids: Vec<Uuid>| {
+        let app = app.clone();
+        let token = token.clone();
+        async move {
+            send(
+                &app,
+                "POST",
+                &format!("/tlhub/api/pages/{page_id}/layers/merge"),
+                &token,
+                serde_json::json!({ "layerIds": ids }),
+            )
+            .await
+        }
+    };
+
+    // top's text would move under middle's.
+    let (status, body) = merge(vec![base, top]).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert!(body.contains("lies between"), "{body}");
+
+    // With middle hidden it paints nothing, so the merge changes nothing on the page.
+    sqlx::query("UPDATE layers SET visible = FALSE WHERE id = $1")
+        .bind(middle)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (status, body) = merge(vec![base, top]).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    cleanup_series(&pool, series_id).await;
+}
+
+#[tokio::test]
+async fn a_patch_whose_order_is_not_a_number_is_left_alone_by_a_merge() {
+    let Some((app, pool, state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    let token = translator(&pool).await;
+    let (series_id, page_id, _image, ocr, base) = seed_page(&pool).await;
+    let one = seed_region(
+        &pool,
+        page_id,
+        (ocr, base),
+        1,
+        (10, 10, 60, 40),
+        "いち",
+        "one",
+        None,
+    )
+    .await;
+    let two = seed_region(
+        &pool,
+        page_id,
+        (ocr, base),
+        2,
+        (20, 20, 60, 40),
+        "に",
+        "two",
+        None,
+    )
+    .await;
+    give_patch(&state, page_id, one, &sha('1'), &sha('a'), (10, 10, 60, 40)).await;
+    give_patch(&state, page_id, two, &sha('2'), &sha('b'), (20, 20, 60, 40)).await;
+    let lower = record_pass(&state, page_id, &[one]).await.unwrap();
+    let upper = record_pass(&state, page_id, &[two]).await.unwrap();
+    let bad = patch_element(&pool, upper).await;
+    sqlx::query(
+        "UPDATE layer_elements SET cleanup_ref = jsonb_set(cleanup_ref, '{order}', '\"x\"') WHERE id = $1",
+    )
+    .bind(bad)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let (status, body) = send(
+        &app,
+        "POST",
+        &format!("/tlhub/api/pages/{page_id}/layers/merge"),
+        &token,
+        serde_json::json!({"layerIds": [lower, upper]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let order: Option<String> =
+        sqlx::query_scalar("SELECT cleanup_ref->>'order' FROM layer_elements WHERE id = $1")
+            .bind(bad)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(order.as_deref(), Some("x"), "the ref is kept, not nulled");
+
+    cleanup_series(&pool, series_id).await;
+}

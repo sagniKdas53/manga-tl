@@ -134,6 +134,12 @@ async fn merge_in(
             "show or hide all the layers first: merging a hidden layer into a shown one would show it",
         ));
     }
+    if shown[0] && skips_shown_layer(tx, page_id, ids, kind, &layers).await? {
+        return Ok(Err(
+            "a shown layer of the same kind lies between these layers: merging would move it over \
+             the upper layer's elements; merge it too, or hide it first",
+        ));
+    }
 
     let target = &layers[0];
     let sources = &layers[1..];
@@ -188,6 +194,43 @@ async fn merge_in(
     })))
 }
 
+/// Whether a shown like layer that is not being merged lies between the lowest and the highest
+/// layer in the stack (`bottom_to_top`'s order). The merged elements would move under it, and the
+/// page would change. Patches always paint under text, so only like layers matter.
+async fn skips_shown_layer(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    page_id: Uuid,
+    ids: &[Uuid],
+    kind: MergeKind,
+    bottom_to_top: &[Layer],
+) -> Result<bool, sqlx::Error> {
+    let lowest = &bottom_to_top[0];
+    let highest = bottom_to_top.last().expect("two or more layers");
+    let types: &[&str] = match kind {
+        MergeKind::Text => &["translation", "sfx"],
+        MergeKind::Patches => &["inpainting"],
+    };
+    sqlx::query_scalar(concat!(
+        "SELECT EXISTS (SELECT 1 FROM layers l WHERE l.page_id = $1 AND NOT (l.id = ANY($2)) \
+           AND LOWER(l.type) = ANY($3) \
+           AND (l.z_order, l.created_at, l.id) > ($4, $5, $6) \
+           AND (l.z_order, l.created_at, l.id) < ($7, $8, $9) AND ",
+        crate::layer_shown!("l"),
+        ")"
+    ))
+    .bind(page_id)
+    .bind(ids)
+    .bind(types)
+    .bind(lowest.z_order)
+    .bind(lowest.created_at)
+    .bind(lowest.id)
+    .bind(highest.z_order)
+    .bind(highest.created_at)
+    .bind(highest.id)
+    .fetch_one(&mut **tx)
+    .await
+}
+
 /// Hides the lower layers' text wherever an upper layer has visible text for the same region, and
 /// returns what it hid. "Visible" is the scene builder's rule: an element shows unless it is
 /// FALSE, and it has text.
@@ -233,7 +276,9 @@ async fn hide_covered_text(
     Ok(hidden)
 }
 
-/// Renumbers each upper layer's patches to paint after every patch below it.
+/// Renumbers each upper layer's patches to paint after every patch below it. Only patches whose
+/// `cleanup_ref.order` is a whole number are renumbered: any other would fail the cast, or turn the
+/// whole ref NULL through `jsonb_set`.
 async fn renumber_patches(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     bottom_to_top: &[Layer],
@@ -242,7 +287,7 @@ async fn renumber_patches(
     for layer in bottom_to_top {
         let (lowest, highest): (Option<i64>, Option<i64>) = sqlx::query_as(
             "SELECT MIN((cleanup_ref->>'order')::bigint), MAX((cleanup_ref->>'order')::bigint) \
-             FROM layer_elements WHERE layer_id = $1 AND cleanup_ref IS NOT NULL",
+             FROM layer_elements WHERE layer_id = $1 AND cleanup_ref->>'order' ~ '^-?[0-9]+$'",
         )
         .bind(layer.id)
         .fetch_one(&mut **tx)
@@ -255,7 +300,7 @@ async fn renumber_patches(
             sqlx::query(
                 "UPDATE layer_elements SET cleanup_ref = jsonb_set(cleanup_ref, '{order}', \
                    to_jsonb((cleanup_ref->>'order')::bigint + $2)) \
-                 WHERE layer_id = $1 AND cleanup_ref IS NOT NULL",
+                 WHERE layer_id = $1 AND cleanup_ref->>'order' ~ '^-?[0-9]+$'",
             )
             .bind(layer.id)
             .bind(shift)
