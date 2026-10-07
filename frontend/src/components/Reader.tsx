@@ -1522,7 +1522,7 @@ export const Reader: React.FC<ReaderProps> = ({
     ) => {
       const id = element.id;
       pendingSavesRef.current.delete(id);
-      await saveElementChanges(
+      const saved = await saveElementChanges(
         element,
         showAlert,
         user.token,
@@ -1540,6 +1540,7 @@ export const Reader: React.FC<ReaderProps> = ({
           console.error("Render request failed", err),
         );
       }
+      return saved;
     },
     [user.token, showToast, showError, selectedPage, requestRenderNow],
   );
@@ -1705,12 +1706,14 @@ export const Reader: React.FC<ReaderProps> = ({
         await handleSaveElementChanges(element, false);
         return;
       }
-      await Promise.all(
+      // Rendered only once every element saved: a failed save has its own Retry, and a render
+      // of half a step would show the text and its patch out of step.
+      const saved = await Promise.all(
         [element, ...companions].map((el) =>
           handleSaveElementChanges(el, false, false),
         ),
       );
-      renderCurrentPage();
+      if (saved.every(Boolean)) renderCurrentPage();
     },
     [handleSaveElementChanges, renderCurrentPage],
   );
@@ -1904,7 +1907,9 @@ export const Reader: React.FC<ReaderProps> = ({
         [updated, ...patches].map((el) =>
           handleSaveElementChanges(el, false, false),
         ),
-      ).then(renderCurrentPage);
+      ).then((saved) => {
+        if (saved.every(Boolean)) renderCurrentPage();
+      });
     },
     [layers, pushToHistoryStack, handleSaveElementChanges, renderCurrentPage],
   );
