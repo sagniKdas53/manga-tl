@@ -44,6 +44,9 @@ possible. All env values are read by the worker at start-up: change `.env`, recr
 | `OCR_JOIN_SPLIT_LINES`, `_SPLIT_LINE_*` (code) | 4Oct p. 3, Tests ch. 6 p. 5 (centre offset 0.15) | two balloons stacked end to end in one blob join | lower `_SPLIT_LINE_MAX_CENTRE_OFFSET`; `OCR_JOIN_SPLIT_LINES=false` |
 | `OCR_SPLIT_VETOED_AT_BREAKS` | TELEA p. 2 | a vetoed group keeps a run that holds two speakers | `false` (vetoed groups become single pieces again) |
 | `OCR_LINE_READING_ORDER` | 523 joined groups read, 38 changed, none worse | joined text in the wrong order | `false` |
+| `OCR_NO_BALLOON_VETO` (on) | sample218 p. 9, sample4, sample83, sample104; fixtures unchanged (sample99 loses a junk pair); hand labels unchanged; 40 cached pages: 1 change | real text outside balloons split into pieces (a caption, a sign, a narration box, UI text) | `false` restores distance alone on the no-balloon path. Line-stacking reasons (`_NO_BALLOON_LAYOUT_REASONS` in `handlers/ocr.py`) deliberately do not cut there; removing `insufficient-lateral-line-overlap` from that set cuts p18's two radar labels off (live, first version) but cuts UI text into chunks on a page with no detected panels (sample61 replayed as one partition) |
+| `OCR_NO_BALLOON_SIZE_RATIO` (2.2x) | widest size spread inside one hand-labelled text 1.8x; sample218's speech to its misreads 2.57x. **Ruby was not in the labels** | ruby (furigana) or a small aside comes apart from its text outside balloons; or a misread of the art stays chained (jump under 2.2x) | raise to 2.6 for ruby; `0` turns the size cut off |
+| `_ROTATED_LINE_DEGREES` (10°, code) | sample104's title tiles at 62–77°; captions tilted 7° stay straight | a tilted caption (8–10°) gets line checks it cannot pass and falls apart; or a slightly tilted junk chain skips them | change the constant in `owner_assignment.py` |
 | `OPENROUTER_IGNORE_PROVIDERS`, `OPENROUTER_QUANTIZATIONS` | hosts measured 2026-10-06 | a model slow or empty again (`via <host>` and `reasoning=` in the worker log) | hosts drift: re-measure one host at a time before editing the list |
 
 **If the full corpus run finds a wrong grouping:**
@@ -63,12 +66,27 @@ possible. All env values are read by the worker at start-up: change `.env`, recr
 
 - [x] B1, B2, B3, B3b (live, reviewed)
 - [x] CodeRabbit round on #55–#57 / #234–#236 (2026-10-06 evening)
-- [ ] B4: lines in different directions in one group (sample83, sample4 = p18 "grouped too much",
-  sample104 = p19 overlapping captions)
-- [ ] B5: text outside balloons. p9 (sample218): YOLO missed the left balloon on the dark page, so
-  its three lines took the no-balloon path and chained with four misreads of the art (お, 谷 at
-  0.16, `(gftgs grgitgt`, BOFE) into one 1140 × 1995 region; the text is typeset in that box,
-  under the balloon. B5's cut at line breaks would keep the three lines apart from the junk.
+- [x] B4 + B5 (worker #60 / parent #241): text no balloon holds gets the owner decision's
+  direction and angle checks plus a character-size check, without the balloon; a group is cut by
+  size, then direction, then square pieces, then at line breaks; square pieces never vote on angle,
+  and tilted text only gets the size check. Lines that do not stack neatly do not cut (a free
+  layout). The first version let them cut: live it was the same on sample61 (its five panels
+  partition the text first) and better on p18, but replayed as one partition (a page whose panels
+  are not detected) it cut sample61's UI paragraphs into chunks, so the conservative rule ships.
+  - p9 (sample218): YOLO missed the left balloon, so its three columns chained with four misreads
+    of the art (お, 谷, `(gftgs grgitgt`, BOFE: 262–407 px against the speech's 94–102 px) into one
+    1140 × 1995 region typeset under the balloon. The size cut separates them; a cut at line
+    breaks alone would not (measured: it only splits off BOFE).
+  - p18 (sample4): **partly.** The vertical label 战智社 splits off; the horizontal labels 台词量 and
+    黑幕度, 15 px from the stat column, stay with it (only a line-stacking check would cut them).
+  - sample93 (p22): live, the shout 「IN およン おんぽ様」 separates from the speech.
+  - p19 (sample104): the caption's four lines stay one text (they were halved to singles inside an
+    oversized group with 祝発売); the tilted title stays one text.
+  - sample83: its two columns stay one text beside a square "M". Its scrambled reading order is
+    not touched by this: still open.
+- [ ] Rows of side-by-side pieces outside balloons: a check that reads a UI row (label + value) as
+  one line would let the stacking checks back in, and cut p18's two radar labels off the stat
+  paragraph without cutting UI text on pages whose panels are not detected.
 - [ ] p2 (sample219): two paragraphs overlap 0.12 along the line, under the owner veto's 0.25
 - [ ] p21 (sample9) 別に: the detector's outline cuts through the column (detection)
 - [ ] The untranslated aside (sample9, sample136)
