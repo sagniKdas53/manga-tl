@@ -393,6 +393,14 @@ describe("Reader Inpainting layer (tracker R7)", () => {
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
       expect((pieces()[0] as SVGElement).style.pointerEvents).toBe("stroke");
+      // A click on a piece selects its region.
+      const box = () =>
+        document.querySelector<SVGElement>(".svg-overlay .svg-ocr-box")!;
+      expect(box().style.fill).not.toBe("var(--primary-glow-selected)");
+      fireEvent.click(pieces()[0]);
+      await waitFor(() =>
+        expect(box().style.fill).toBe("var(--primary-glow-selected)"),
+      );
       cleanup();
 
       for (const [debug, fragments, clean] of [
