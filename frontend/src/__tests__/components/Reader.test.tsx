@@ -371,14 +371,18 @@ describe("Reader Component", () => {
         json: () =>
           Promise.resolve({ id: "l1", type: "translation", name: "TL Layer" }),
       });
-      fireEvent.click(screen.getByTitle("Add Translation Layer"));
+      // F3: "+ TL" and "+ SFX" are entries of the Add layer menu now.
+      fireEvent.click(screen.getByTitle("Add a layer"));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Text layer" }));
 
       mockSafeFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
           Promise.resolve({ id: "l2", type: "sfx", name: "SFX Layer" }),
       });
-      fireEvent.click(screen.getByTitle("Add SFX Layer"));
+      // F3: "+ TL" and "+ SFX" are entries of the Add layer menu now.
+      fireEvent.click(screen.getByTitle("Add a layer"));
+      fireEvent.click(screen.getByRole("menuitem", { name: "SFX layer" }));
     },
   );
 

@@ -270,7 +270,10 @@ CREATE TABLE public.layers (
     type character varying(255) NOT NULL,
     visible boolean,
     z_order integer NOT NULL,
-    page_id uuid NOT NULL
+    page_id uuid NOT NULL,
+    -- F3 (#178): the group (a layer of type `group`, which holds no elements) this layer sits in.
+    -- A layer is shown only while it and its group are visible. Groups do not nest.
+    parent_id uuid
 );
 
 
@@ -862,6 +865,14 @@ ALTER TABLE ONLY public.conversations
 
 ALTER TABLE ONLY public.layers
     ADD CONSTRAINT fkau8kwbguf2qow98iracihu77n FOREIGN KEY (page_id) REFERENCES public.pages(id) ON DELETE CASCADE;
+
+
+--
+-- Name: layers layers_parent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: tladmin
+--
+
+ALTER TABLE ONLY public.layers
+    ADD CONSTRAINT layers_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.layers(id) ON DELETE SET NULL;
 
 
 --

@@ -77,6 +77,9 @@ PORTED = {
     "PUT /api/layers/{id}",
     "DELETE /api/layers/{id}",
     "POST /api/layers/{layerId}/elements",
+    # F3 (#178): merging layers.
+    "POST /api/pages/{pageId}/layers/merge",
+    "POST /api/layers/{id}/delete-hidden-texts",
     "GET /api/settings",
     "PUT /api/settings",
     "GET /api/settings/validate",

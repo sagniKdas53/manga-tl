@@ -308,7 +308,24 @@ async fn insert_layer(
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
     let z_order = z_order_of(payload.get("zOrder")).unwrap_or(0);
-    let metadata = payload.get("metadataJson").cloned();
+    let mut metadata = payload.get("metadataJson").cloned();
+    // F3 (#178): a name given here is the panel's `layer_name`.
+    if let Some(name) = payload
+        .get("name")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
+        let mut object = match metadata.take() {
+            Some(serde_json::Value::Object(object)) => object,
+            _ => serde_json::Map::new(),
+        };
+        object.insert(
+            "layer_name".into(),
+            serde_json::Value::String(name.chars().take(120).collect()),
+        );
+        metadata = Some(serde_json::Value::Object(object));
+    }
 
     sqlx::query_as(
         "INSERT INTO layers (id, created_at, metadata_json, target_language, type, visible, z_order, page_id) \
@@ -351,6 +368,37 @@ pub async fn create_page_layer(
 
     let mut tx = state.pool.begin().await.expect("page layer transaction");
     let layer = insert_layer(&mut tx, page_id, &payload).await;
+    // F3 (#178): a group is created with the layers it holds, in one step. Groups do not nest.
+    if layer
+        .layer_type
+        .eq_ignore_ascii_case(crate::layer_tree::GROUP_TYPE)
+    {
+        let children: Vec<Uuid> = payload
+            .get("childIds")
+            .and_then(|v| v.as_array())
+            .map(|list| {
+                list.iter()
+                    .filter_map(|v| v.as_str())
+                    .filter_map(|s| Uuid::parse_str(s).ok())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let moved: Vec<Uuid> = sqlx::query_scalar(
+            "UPDATE layers SET parent_id = $1 \
+             WHERE id = ANY($2) AND page_id = $3 AND LOWER(type) <> 'group' RETURNING id",
+        )
+        .bind(layer.id)
+        .bind(&children)
+        .bind(page_id)
+        .fetch_all(&mut *tx)
+        .await
+        .expect("group members");
+        for member in moved {
+            crate::layer_tree::sync_overlays(&mut tx, member)
+                .await
+                .expect("overlay sync for a grouped layer");
+        }
+    }
     crate::page_freshness::advance_page_revision_by_hand(&mut tx, page_id)
         .await
         .expect("page revision advance");

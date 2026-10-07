@@ -306,6 +306,10 @@ async fn build_chapter_meta(
             if let Some(lang) = &layer.target_language {
                 layer_meta["targetLanguage"] = json!(lang);
             }
+            // F3 (#178): the group the layer sits in.
+            if let Some(parent) = layer.parent_id {
+                layer_meta["parentId"] = json!(parent.to_string());
+            }
             if let Some(meta) = &layer.metadata_json {
                 layer_meta["metadataJson"] = meta.clone();
             }
@@ -365,30 +369,41 @@ async fn build_chapter_meta(
                     }
                 };
 
-                if let Some(cost) = meta.get("cost") {
-                    absorb(
-                        cost,
-                        models_used
-                            .entry(layer.layer_type.to_lowercase())
-                            .or_default(),
-                    );
-                }
-                if let Some(qa_cost) = meta
-                    .get("qa")
-                    .and_then(|qa| qa.get("cost"))
-                    .filter(|c| !c.is_null())
-                {
-                    absorb(qa_cost, models_used.entry("qa".into()).or_default());
-                }
-                if let Some(tl_cost) = meta
-                    .get("tl")
-                    .and_then(|tl| tl.get("cost"))
-                    .filter(|c| !c.is_null())
-                {
-                    absorb(
-                        tl_cost,
-                        models_used.entry("translation".into()).or_default(),
-                    );
+                // F3 (#178): a merged layer keeps the layers it absorbed, costs included, under
+                // `merged_from`.
+                let absorbed: Vec<&serde_json::Map<String, Value>> = meta
+                    .get("merged_from")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|record| record.get("metadata")?.as_object())
+                    .collect();
+                for meta in std::iter::once(meta).chain(absorbed) {
+                    if let Some(cost) = meta.get("cost") {
+                        absorb(
+                            cost,
+                            models_used
+                                .entry(layer.layer_type.to_lowercase())
+                                .or_default(),
+                        );
+                    }
+                    if let Some(qa_cost) = meta
+                        .get("qa")
+                        .and_then(|qa| qa.get("cost"))
+                        .filter(|c| !c.is_null())
+                    {
+                        absorb(qa_cost, models_used.entry("qa".into()).or_default());
+                    }
+                    if let Some(tl_cost) = meta
+                        .get("tl")
+                        .and_then(|tl| tl.get("cost"))
+                        .filter(|c| !c.is_null())
+                    {
+                        absorb(
+                            tl_cost,
+                            models_used.entry("translation".into()).or_default(),
+                        );
+                    }
                 }
 
                 if cost_found {
