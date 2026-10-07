@@ -52,6 +52,7 @@ def convert(source: Path, target: Path) -> str:
                         out.writestr(info.filename, json.dumps(project, indent=2, ensure_ascii=False))
                     else:
                         out.writestr(info, archive.read(info.filename))
+            os.chmod(partial, 0o644)  # mkstemp makes it owner-only
             os.replace(partial, target)
         except BaseException:
             Path(partial).unlink(missing_ok=True)
