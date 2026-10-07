@@ -93,7 +93,7 @@ possible. All env values are read by the worker at start-up: change `.env`, recr
 - [ ] p21 (sample9) 別に: the detector's outline cuts through the column (detection)
 - [ ] The untranslated aside (sample9, sample136)
 - [ ] Fixture sample99 and 4Oct p. 17 with B3/B3b running
-- [ ] Merge the stack bottom-up; re-pin each parent to the worker merge commit
+- [x] Merge the stack: worker #53–#61 as one merge commit (642d184, 2026-10-07), the parent pinned to it, then #230–#242
 
 ## Status at a glance (2026-10-05 — B: one balloon, one text unit)
 
