@@ -809,7 +809,7 @@ async fn a_patch_element_can_only_name_this_pages_assets_and_a_sane_opacity() {
         let token = token.clone();
         async move {
             send(&app, "POST", &format!("/tlhub/api/layers/{layer}/elements"), &token,
-                serde_json::json!({"x": 1, "y": 2, "maxWidth": 64, "maxHeight": 44, "opacity": 0.25, "cleanupRef": reference})).await
+                serde_json::json!({"x": 1, "y": 2, "maxWidth": 64, "maxHeight": 44, "opacity": 0.25, "hiddenWithText": true, "cleanupRef": reference})).await
         }
     };
     // Undoing a delete re-creates the element from its snapshot.
@@ -818,6 +818,8 @@ async fn a_patch_element_can_only_name_this_pages_assets_and_a_sane_opacity() {
     let created: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(created["opacity"], 0.25);
     assert_eq!(created["cleanupRef"]["patchSha256"], patch.as_str());
+    // #237: a patch hidden with its text keeps that mark through Undo of a delete.
+    assert_eq!(created["hiddenWithText"], true);
 
     let (status, _) = create(tl, reference.clone()).await;
     assert_eq!(

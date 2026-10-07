@@ -1622,6 +1622,7 @@ export const Reader: React.FC<ReaderProps> = ({
           opacity: snapshot.opacity ?? undefined,
           regionId: snapshot.regionId ?? undefined,
           cleanupRef: snapshot.cleanupRef,
+          hiddenWithText: snapshot.hiddenWithText === true,
         }),
       });
       if (!res.ok) {
@@ -3343,7 +3344,12 @@ export const Reader: React.FC<ReaderProps> = ({
               qaScore: el.region?.qaScore,
               qaFeedback: el.region?.qaFeedback,
               ...(el.cleanupRef
-                ? { cleanupRef: el.cleanupRef, opacity: el.opacity ?? null }
+                ? {
+                    cleanupRef: el.cleanupRef,
+                    opacity: el.opacity ?? null,
+                    // #237: so showing the region's text after an import still brings it back.
+                    hiddenWithText: el.hiddenWithText === true,
+                  }
                 : {}),
             })),
           };

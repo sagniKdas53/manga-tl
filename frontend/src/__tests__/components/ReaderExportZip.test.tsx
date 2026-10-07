@@ -526,6 +526,7 @@ describe("Reader project ZIP export", () => {
           overflow: false,
           isManuallyEdited: false,
           opacity: 0.5,
+          hiddenWithText: true,
           cleanupRef: {
             patchSha256: patchSha,
             patchByteLength: 3,
@@ -648,6 +649,8 @@ describe("Reader project ZIP export", () => {
       maxHeight: 500,
       visible: false,
       opacity: 0.5,
+      // #237: the importer keeps it, so the region's text can still bring the patch back.
+      hiddenWithText: true,
       cleanupRef: { patchSha256: patchSha, maskSha256: maskSha, order: 0 },
     });
     // The region's verdicts are baked in: an imported page has no regions to ask.
