@@ -124,6 +124,17 @@ export function mergeSkipsShownLayer(
 }
 
 /**
+ * Whether the layers can share one target language: at most one language among those that name
+ * one (an SFX layer names none). The server refuses English and French text in one layer.
+ */
+export function languagesAgree(set: LayerData[]): boolean {
+  const named = set
+    .map(({ layer }) => layer.targetLanguage?.trim().toLowerCase())
+    .filter((language): language is string => Boolean(language));
+  return new Set(named).size <= 1;
+}
+
+/**
  * The layer "Merge down" merges `data` into: the nearest layer below it in the stack, in the same
  * group (or also at the top level), if that one merges with it, is shown or hidden alike, and no
  * shown like layer of another group lies between them. Null when there is none; the server
@@ -150,6 +161,7 @@ export function mergeDownTarget(
     (below.layer.visible === true) !== (data.layer.visible === true)
   )
     return null;
+  if (!languagesAgree([below, data])) return null;
   return mergeSkipsShownLayer([below, data], layers) ? null : below;
 }
 
@@ -196,7 +208,12 @@ export function groupMergeSets(
         ),
       );
     })
-    .filter((set) => set.length > 1 && !mergeSkipsShownLayer(set, layers));
+    .filter(
+      (set) =>
+        set.length > 1 &&
+        languagesAgree(set) &&
+        !mergeSkipsShownLayer(set, layers),
+    );
 }
 
 /** Hidden layers outside any group: what "Group hidden layers" folds away (re-run history). */

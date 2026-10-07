@@ -125,6 +125,12 @@ async fn merge_in(
             "only like layers merge: text with text, patches with patches",
         ));
     }
+    // A region redo picks a page's translation by its language, so English and French text must
+    // not end up in one layer. A layer with no language (an SFX layer) merges with any.
+    let language = match merge_language(&layers) {
+        Ok(language) => language,
+        Err(problem) => return Ok(Err(problem)),
+    };
     let mut shown = Vec::with_capacity(layers.len());
     for layer in &layers {
         shown.push(crate::layer_tree::is_shown(tx, layer.id).await?);
@@ -179,11 +185,15 @@ async fn merge_in(
         .await?;
 
     let metadata = merged_metadata(&layers, &hidden);
-    sqlx::query("UPDATE layers SET metadata_json = $2 WHERE id = $1")
-        .bind(target.id)
-        .bind(&metadata)
-        .execute(&mut **tx)
-        .await?;
+    sqlx::query(
+        "UPDATE layers SET metadata_json = $2, \
+           target_language = COALESCE(target_language, $3) WHERE id = $1",
+    )
+    .bind(target.id)
+    .bind(&metadata)
+    .bind(language)
+    .execute(&mut **tx)
+    .await?;
     // The sources hold no elements now, so nothing cascades. Their overlay records, if any, stay
     // in `merged_from`; the text they superseded stays hidden under the merged layer's text.
     sqlx::query("DELETE FROM layers WHERE id = ANY($1)")
@@ -238,6 +248,29 @@ async fn skips_shown_layer(
     .bind(highest.id)
     .fetch_one(&mut **tx)
     .await
+}
+
+/// The one target language the layers share, ignoring layers with none (lower case), or a refusal
+/// when two of them name different languages.
+fn merge_language(layers: &[Layer]) -> Result<Option<String>, &'static str> {
+    let mut found: Option<String> = None;
+    for layer in layers {
+        let Some(language) = layer.target_language.as_deref().map(str::trim) else {
+            continue;
+        };
+        if language.is_empty() {
+            continue;
+        }
+        let language = language.to_ascii_lowercase();
+        match &found {
+            Some(seen) if *seen != language => {
+                return Err("only text layers in one target language merge");
+            }
+            Some(_) => {}
+            None => found = Some(language),
+        }
+    }
+    Ok(found)
 }
 
 /// Hides the lower layers' text wherever an upper layer has visible text for the same region, and
@@ -538,6 +571,21 @@ mod tests {
         let from = merged["merged_from"].as_array().unwrap();
         assert_eq!(from.len(), 2, "the overlay's record is kept");
         assert_eq!(from[1]["metadata"]["overlay"], true);
+    }
+
+    #[test]
+    fn layers_in_two_languages_do_not_merge_but_one_without_a_language_does() {
+        let lang = |id: u128, language: Option<&str>| {
+            let mut l = layer(id, None, json!({}));
+            l.target_language = language.map(str::to_string);
+            l
+        };
+        assert_eq!(
+            merge_language(&[lang(1, None), lang(2, Some("EN")), lang(3, Some("en"))]),
+            Ok(Some("en".into()))
+        );
+        assert_eq!(merge_language(&[lang(1, None), lang(2, None)]), Ok(None));
+        assert!(merge_language(&[lang(1, Some("en")), lang(2, Some("fr"))]).is_err());
     }
 
     #[test]

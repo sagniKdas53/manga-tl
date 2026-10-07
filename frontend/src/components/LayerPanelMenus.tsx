@@ -23,6 +23,7 @@ import {
   layerDisplayName,
   mergeDownTarget,
   shownLayersOf,
+  languagesAgree,
 } from "../utils/layerTree";
 
 type LayerData = { layer: Layer; elements: LayerElement[] };
@@ -147,7 +148,12 @@ export const MergeMenu: React.FC<{
         onClose={menu.close}
       >
         <MenuItem
-          disabled={shownText.length < 2}
+          disabled={shownText.length < 2 || !languagesAgree(shownText)}
+          title={
+            languagesAgree(shownText)
+              ? undefined
+              : "The visible text layers are in more than one language"
+          }
           onClick={pick(() =>
             actions.mergeLayers?.(shownText.map(({ layer }) => layer.id)),
           )}

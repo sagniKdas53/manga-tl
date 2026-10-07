@@ -4,6 +4,7 @@ import {
   groupMergeSets,
   hiddenLooseLayers,
   isLayerShown,
+  languagesAgree,
   layerDisplayName,
   mergeDownTarget,
   mergeSkipsShownLayer,
@@ -110,6 +111,15 @@ describe("layer groups (F3)", () => {
     ];
     expect(ids(groupMergeSets("h", hiddenGroup))).toEqual([["on1", "on2"]]);
     expect(mergeDownTarget(hiddenGroup[1], hiddenGroup)).toBeNull();
+    // English and French text never share a layer; an SFX layer (no language) merges with either.
+    const languages = [
+      layer("en", 1, { targetLanguage: "en" }),
+      layer("fr", 2, { targetLanguage: "FR" }),
+      layer("sfx2", 3, { type: "sfx" }),
+    ];
+    expect(mergeDownTarget(languages[1], languages)).toBeNull();
+    expect(mergeDownTarget(languages[2], languages)?.layer.id).toBe("fr");
+    expect(languagesAgree(languages)).toBe(false);
     expect(
       mergeSkipsShownLayer(
         straddling.slice(0, 1).concat(straddling[2]),
