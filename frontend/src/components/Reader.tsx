@@ -2974,6 +2974,8 @@ export const Reader: React.FC<ReaderProps> = ({
               // Tracker R7: a patch copy draws the same patch.
               cleanupRef: el.cleanupRef ?? undefined,
               opacity: el.opacity ?? undefined,
+              // F1: a copy of a patch its text hid stays tied to that text.
+              hiddenWithText: el.hiddenWithText === true,
               // id intentionally omitted — fresh UUIDs, standalone copies
             }),
           },
