@@ -5103,10 +5103,9 @@ export const Reader: React.FC<ReaderProps> = ({
                             return (
                               <g
                                 key={`${region.id}-fragment-${fragment.index}`}
-                                onClick={() => {
-                                  setSelectedItem(item);
-                                  setActiveRegion(region);
-                                }}
+                                // The piece's own region, even when its box is a whole
+                                // conversation.
+                                onClick={() => selectRegionForReview(region)}
                               >
                                 <polygon
                                   points={points}
