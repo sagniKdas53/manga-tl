@@ -5093,8 +5093,15 @@ export const Reader: React.FC<ReaderProps> = ({
                   !inpaintingView && (
                     <g data-testid="ocr-fragments">
                       {renderItems.flatMap((item) => {
-                        const { stroke } = debugBoxColour(item);
                         return item.regions.flatMap((region) => {
+                          // Coloured by the piece's own region (its QA state, and whether it
+                          // is the one selected), even inside a conversation box.
+                          const { stroke } = debugBoxColour({
+                            ...item,
+                            id: `region-${region.id}`,
+                            regions: [region],
+                            approved: region.approved === true,
+                          });
                           const fragments = ocrFragmentsOf(region);
                           return fragments.map((fragment, position) => {
                             const points = fragment.quad
