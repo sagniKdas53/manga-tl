@@ -4,9 +4,9 @@ Start with the [2026-10-04 handoff](output-quality-next-session-20261004.md) and
 
 Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section, and the [plan for 2026-10-03](#plan-for-2026-10-03-user-2026-10-02-late) is done; A's halo grow and B landed 2026-10-05 ([status and checklist](#status-at-a-glance-2026-10-05--b-one-balloon-one-text-unit)); the [2026-10-04 handoff](output-quality-next-session-20261004.md) has the rest of the order. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25-ocr-threshold-added-2026-09-26). The [2026-09-29 handoff](output-quality-next-session-20260929.md) is history now. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
 
-## Status at a glance (2026-10-06 — B stack: B1–B3b)
+## Status at a glance (2026-10-06 — B stack: B1–B5)
 
-**B1–B3b are in**, stacked PRs, each with an env switch that restores the old behaviour. Plan and
+**B1–B5 are in**, stacked PRs, each with an env switch that restores the old behaviour. Plan and
 cause tables: [b-plan-20261006.md](b-plan-20261006.md).
 
 | Step | Worker / parent | Makes output better by |
@@ -17,6 +17,7 @@ cause tables: [b-plan-20261006.md](b-plan-20261006.md).
 | B3 | #56 / #235 | a balloon set as two offset paragraphs is one text |
 | models | #57 / #236 | GLM 5.3 Flash translates, Gemini 3.5 Flash Lite judges QA, slow hosts skipped |
 | B3b | #59 / #240 | a balloon's columns join across a 1–2 character gap or a missed column |
+| B4 + B5 | #60 / #241 | text no balloon holds stops chaining speech with misreads of the art; a caption beside a tall title stays one text |
 
 **Live on chrome-box** (*Redo OCR* on the 22 ja test pages, worker `df87949`): 11 pages change,
 every joined region translated as one sentence. The owner reviewed it: p9 (sample218's joined
@@ -46,6 +47,7 @@ possible. All env values are read by the worker at start-up: change `.env`, recr
 | `OCR_LINE_READING_ORDER` | 523 joined groups read, 38 changed, none worse | joined text in the wrong order | `false` |
 | `OCR_NO_BALLOON_VETO` (on) | sample218 p. 9, sample4, sample83, sample104; fixtures unchanged (sample99 loses a junk pair); hand labels unchanged; 40 cached pages: 1 change | real text outside balloons split into pieces (a caption, a sign, a narration box, UI text) | `false` restores distance alone on the no-balloon path. Line-stacking reasons (`_NO_BALLOON_LAYOUT_REASONS` in `handlers/ocr.py`) deliberately do not cut there; removing `insufficient-lateral-line-overlap` from that set cuts p18's two radar labels off (live, first version) but cuts UI text into chunks on a page with no detected panels (sample61 replayed as one partition) |
 | `OCR_NO_BALLOON_SIZE_RATIO` (2.2x) | widest size spread inside one hand-labelled text 1.8x; sample218's speech to its misreads 2.57x. **Ruby was not in the labels** | ruby (furigana) or a small aside comes apart from its text outside balloons; or a misread of the art stays chained (jump under 2.2x) | raise to 2.6 for ruby; `0` turns the size cut off |
+| `character_size` measures the bounding box (code) | CodeRabbit on #60 asked for the quad's short edge; replayed on 67 live captures that changed 6 pages, none for the better (skewed misreads of the art look smaller and rejoin speech; a 36 px speech pair split) | a line set at an angle is cut from flat text of the same size (its bounding box reads larger) | measure the quad's short edge in `character_size` (`owner_assignment.py`) and re-run the replay; it costs the junk separation above |
 | `_ROTATED_LINE_DEGREES` (10°, code) | sample104's title tiles at 62–77°; captions tilted 7° stay straight | a tilted caption (8–10°) gets line checks it cannot pass and falls apart; or a slightly tilted junk chain skips them | change the constant in `owner_assignment.py` |
 | `OPENROUTER_IGNORE_PROVIDERS`, `OPENROUTER_QUANTIZATIONS` | hosts measured 2026-10-06 | a model slow or empty again (`via <host>` and `reasoning=` in the worker log) | hosts drift: re-measure one host at a time before editing the list |
 
