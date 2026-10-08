@@ -149,7 +149,9 @@ async fn merge_in(
              keeps only one",
         ));
     }
-    if shown[0] && skips_shown_layer(tx, page_id, ids, kind, &layers).await? {
+    // Layers hidden only by their group show again with it, so they keep the check; only layers
+    // whose own switch is off may merge across a shown one.
+    if own(&layers[0]) && skips_shown_layer(tx, page_id, ids, kind, &layers).await? {
         return Ok(Err(
             "a shown layer of the same kind lies between these layers: merging would move it over \
              the upper layer's elements; merge it too, or hide it first",
@@ -274,8 +276,8 @@ fn merge_language(layers: &[Layer]) -> Result<Option<String>, &'static str> {
 }
 
 /// Hides the lower layers' text wherever an upper layer has visible text for the same region, and
-/// returns what it hid. "Visible" is the scene builder's rule: an element shows unless it is
-/// FALSE, and it has text.
+/// returns what it hid. "Visible" is the canvas's rule (AUDIT-F25): an element shows only when it
+/// is TRUE, so a null covers nothing, and it has text.
 async fn hide_covered_text(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     bottom_to_top: &[Layer],
@@ -283,7 +285,7 @@ async fn hide_covered_text(
     let rows: Vec<(Uuid, Uuid, Uuid)> = sqlx::query_as(
         "SELECT id, layer_id, region_id FROM layer_elements \
          WHERE layer_id = ANY($1) AND region_id IS NOT NULL \
-           AND COALESCE(visible, TRUE) AND COALESCE(TRIM(text), '') <> ''",
+           AND visible IS TRUE AND COALESCE(TRIM(text), '') <> ''",
     )
     .bind(
         bottom_to_top

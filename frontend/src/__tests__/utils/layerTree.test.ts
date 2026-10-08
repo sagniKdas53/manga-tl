@@ -126,6 +126,22 @@ describe("layer groups (F3)", () => {
         straddling,
       ),
     ).toBe(true);
+    // Hidden only by their group, they would show again with it, under the loose layer between.
+    const groupHidden = [
+      layer("a", 1, { parentId: "h" }),
+      layer("between", 2),
+      layer("b", 3, { parentId: "h" }),
+      layer("h", 9, { type: "group", visible: false }),
+    ];
+    expect(
+      mergeSkipsShownLayer([groupHidden[0], groupHidden[2]], groupHidden),
+    ).toBe(true);
+    expect(mergeDownTarget(groupHidden[2], groupHidden)).toBeNull();
+    // With their own switches off they stay hidden either way, so they may merge across it.
+    const ownOff = groupHidden.map((d) =>
+      d.layer.parentId ? { ...d, layer: { ...d.layer, visible: false } } : d,
+    );
+    expect(mergeSkipsShownLayer([ownOff[0], ownOff[2]], ownOff)).toBe(false);
     expect(hiddenLooseLayers(page).map((d) => d.layer.id)).toEqual(["ocr"]);
     expect(layerDisplayName(page[4].layer)).toBe("Re-runs");
     expect(layerDisplayName(page[1].layer)).toBe("Translation (EN)");

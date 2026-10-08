@@ -901,3 +901,131 @@ async fn layers_in_a_hidden_group_merge_only_with_the_same_own_switch() {
 
     cleanup_series(&pool, series_id).await;
 }
+
+#[tokio::test]
+async fn layers_hidden_only_by_their_group_may_not_skip_a_shown_like_layer() {
+    let Some((app, pool, _state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    let token = translator(&pool).await;
+    let (series_id, page_id, _image, _ocr, _base) = seed_page(&pool).await;
+    let group = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) \
+         VALUES ($1, 'group', FALSE, 9, '{}'::jsonb, $2, now())",
+    )
+    .bind(group)
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("group");
+    let mut held = Vec::new();
+    for (z, parent) in [(3, Some(group)), (4, None), (5, Some(group))] {
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, parent_id, created_at) \
+             VALUES ($1, 'translation', 'en', TRUE, $2, '{}'::jsonb, $3, $4, now())",
+        )
+        .bind(id)
+        .bind(z)
+        .bind(page_id)
+        .bind(parent)
+        .execute(&pool)
+        .await
+        .expect("layer");
+        if parent.is_some() {
+            held.push(id);
+        }
+    }
+    let merge = || {
+        let (app, token, held) = (app.clone(), token.clone(), held.clone());
+        async move {
+            send(
+                &app,
+                "POST",
+                &format!("/tlhub/api/pages/{page_id}/layers/merge"),
+                &token,
+                serde_json::json!({ "layerIds": held }),
+            )
+            .await
+        }
+    };
+
+    // Showing the group would put the upper layer's text under the loose layer between them.
+    let (status, body) = merge().await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert!(body.contains("lies between"), "{body}");
+
+    // With their own switches off, showing the group shows neither, so the merge may go ahead.
+    sqlx::query("UPDATE layers SET visible = FALSE WHERE id = ANY($1)")
+        .bind(&held)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (status, body) = merge().await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    cleanup_series(&pool, series_id).await;
+}
+
+#[tokio::test]
+async fn text_the_canvas_hides_covers_nothing_in_a_merge() {
+    let Some((app, pool, _state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    let token = translator(&pool).await;
+    let (series_id, page_id, _image, ocr, base) = seed_page(&pool).await;
+    let region = seed_region(
+        &pool,
+        page_id,
+        (ocr, base),
+        1,
+        (10, 10, 60, 40),
+        "いち",
+        "one",
+        None,
+    )
+    .await;
+    let upper = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) \
+         VALUES ($1, 'translation', 'en', TRUE, 3, '{}'::jsonb, $2, now())",
+    )
+    .bind(upper)
+    .bind(page_id)
+    .execute(&pool)
+    .await
+    .expect("layer");
+    // A null switch is hidden (AUDIT-F25): the canvas, the hidden count and the worker skip it.
+    sqlx::query(
+        "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) \
+         VALUES (uuid_generate_v4(), 'one again', 10, 10, 60, 40, NULL, $1, $2)",
+    )
+    .bind(upper)
+    .bind(region)
+    .execute(&pool)
+    .await
+    .expect("element");
+    let lower = element_of(&pool, base, region).await;
+
+    let (status, body) = send(
+        &app,
+        "POST",
+        &format!("/tlhub/api/pages/{page_id}/layers/merge"),
+        &token,
+        serde_json::json!({ "layerIds": [base, upper] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let merged: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(merged["hiddenTexts"], 0);
+    assert_eq!(visible(&pool, lower).await, Some(true));
+
+    cleanup_series(&pool, series_id).await;
+}

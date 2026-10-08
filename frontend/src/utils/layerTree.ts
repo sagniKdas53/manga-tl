@@ -99,8 +99,9 @@ export function panelRows(layers: LayerData[]): PanelRow[] {
 
 /**
  * Whether merging `set` would skip a shown like layer lying between its lowest and highest layer
- * in the stack: the merged elements would then move under it and the page would change. Only a
- * shown set can: a hidden merge paints nothing. The server refuses the same case.
+ * in the stack: the merged elements would then move under it and the page would change. A set
+ * hidden only by its group counts too, since showing the group shows it; only a set whose own
+ * switch is off may merge across. The server refuses the same case.
  */
 export function mergeSkipsShownLayer(
   set: LayerData[],
@@ -108,7 +109,7 @@ export function mergeSkipsShownLayer(
 ): boolean {
   if (set.length < 2) return false;
   const kind = mergeKindOf(set[0].layer);
-  if (!kind || !isLayerShown(set[0].layer, layers)) return false;
+  if (!kind || set[0].layer.visible !== true) return false;
   const sorted = [...set].sort(byStack);
   const lowest = sorted[0];
   const highest = sorted[sorted.length - 1];
