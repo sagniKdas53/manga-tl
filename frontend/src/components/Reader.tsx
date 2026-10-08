@@ -2890,6 +2890,16 @@ export const Reader: React.FC<ReaderProps> = ({
   const stepLayerHistory = useCallback(
     async (which: "undo" | "redo") => {
       if (!selectedPageId) return;
+      // Pending text edits go first, so the server's "edited since" check sees them. One whose
+      // save keeps failing holds the undo back: retried later, it would land on the rows the undo
+      // put back (CodeRabbit on #253).
+      await flushPendingSaves();
+      if (pendingSavesRef.current.size > 0) {
+        showError(
+          `Could not ${which}: an edit is still unsaved. Save it first, then try again.`,
+        );
+        return;
+      }
       try {
         const result = (await layerRequest(
           `/api/pages/${selectedPageId}/layer-history/${which}`,
@@ -2909,6 +2919,7 @@ export const Reader: React.FC<ReaderProps> = ({
     },
     [
       selectedPageId,
+      flushPendingSaves,
       layerRequest,
       showToast,
       showError,
