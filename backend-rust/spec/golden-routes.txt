@@ -56,6 +56,9 @@ DELETE  /api/pages/{pageId}  [pageId]
 GET     /api/pages/{pageId}  [pageId] 
 POST    /api/pages/{pageId}/layers  [pageId] body
 POST    /api/pages/{pageId}/layers/merge  [pageId] body
+GET     /api/pages/{pageId}/layer-history  [pageId] 
+POST    /api/pages/{pageId}/layer-history/redo  [pageId] 
+POST    /api/pages/{pageId}/layer-history/undo  [pageId] 
 PATCH   /api/pages/{pageId}/number  [pageId] body
 POST    /api/pages/{pageId}/render  [pageId] 
 GET     /api/pages/{pageId}/rendered  [pageId] 

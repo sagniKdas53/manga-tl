@@ -42,7 +42,9 @@ import {
   GroupRowMenu,
   LayerRowMenu,
   MergeMenu,
+  LayerHistoryButtons,
   type LayerActions,
+  type LayerHistory,
 } from "./LayerPanelMenus";
 import {
   isGroupLayer,
@@ -444,6 +446,8 @@ export interface LayerData {
 }
 
 export interface ReaderRightSidebarProps extends Partial<LayerActions> {
+  /** F4: what the layer Undo and Redo buttons would do. */
+  layerHistory?: LayerHistory | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   selectedItem: any; // Fallback to any to avoid complex type mismatch for now
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -601,6 +605,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     mergeLayers: props.mergeLayers,
     deleteHiddenTexts: props.deleteHiddenTexts,
     ungroup: props.ungroup,
+    undoLayerAction: props.undoLayerAction,
+    redoLayerAction: props.redoLayerAction,
+    refreshLayerHistory: props.refreshLayerHistory,
   };
   // Stack numbers count layers, bottom first; groups hold no elements and take none.
   const stackNumbers = new Map(
@@ -794,6 +801,10 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       />
                       <MergeMenu
                         layers={sortedLayers}
+                        actions={layerActions}
+                      />
+                      <LayerHistoryButtons
+                        history={props.layerHistory}
                         actions={layerActions}
                       />
                     </Box>

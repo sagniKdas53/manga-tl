@@ -1032,3 +1032,573 @@ async fn text_the_canvas_hides_covers_nothing_in_a_merge() {
 
     cleanup_series(&pool, series_id).await;
 }
+
+// ---------------------------------------------------------------------------------------------
+// F4 (#178): layer undo and redo that survive a reload.
+// ---------------------------------------------------------------------------------------------
+
+/// Every layer and element row of the page, without what the pipeline rewrites on its own
+/// (`size`, `metadata_json.last_modified`), keyed by table and id.
+async fn page_rows(
+    pool: &sqlx::PgPool,
+    page_id: Uuid,
+) -> std::collections::BTreeMap<String, serde_json::Value> {
+    let rows: Vec<(String, serde_json::Value)> = sqlx::query_as(
+        "SELECT 'layer:' || l.id, to_jsonb(l) #- '{metadata_json,last_modified}' \
+         FROM layers l WHERE l.page_id = $1 \
+         UNION ALL \
+         SELECT 'element:' || e.id, to_jsonb(e) - 'size' \
+         FROM layer_elements e JOIN layers l ON l.id = e.layer_id WHERE l.page_id = $1",
+    )
+    .bind(page_id)
+    .fetch_all(pool)
+    .await
+    .unwrap();
+    rows.into_iter().collect()
+}
+
+async fn history(app: &Router, token: &str, page_id: Uuid) -> serde_json::Value {
+    let (status, body) = send(
+        app,
+        "GET",
+        &format!("/tlhub/api/pages/{page_id}/layer-history"),
+        token,
+        serde_json::json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    serde_json::from_str(&body).unwrap()
+}
+
+async fn step(app: &Router, token: &str, page_id: Uuid, which: &str) -> (StatusCode, String) {
+    send(
+        app,
+        "POST",
+        &format!("/tlhub/api/pages/{page_id}/layer-history/{which}"),
+        token,
+        serde_json::json!({}),
+    )
+    .await
+}
+
+async fn add_text_layer(pool: &sqlx::PgPool, page_id: Uuid, z: i32) -> Uuid {
+    let id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) \
+         VALUES ($1, 'translation', 'en', TRUE, $2, '{}'::jsonb, $3, now())",
+    )
+    .bind(id)
+    .bind(z)
+    .bind(page_id)
+    .execute(pool)
+    .await
+    .expect("layer");
+    id
+}
+
+#[tokio::test]
+async fn undo_puts_a_merge_back_row_for_row_and_redo_merges_again() {
+    let Some((app, pool, state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    let token = translator(&pool).await;
+    let (series_id, page_id, _image, ocr, base) = seed_page(&pool).await;
+    let one = seed_region(
+        &pool,
+        page_id,
+        (ocr, base),
+        1,
+        (10, 10, 60, 40),
+        "いち",
+        "one",
+        None,
+    )
+    .await;
+    let two = seed_region(
+        &pool,
+        page_id,
+        (ocr, base),
+        2,
+        (100, 10, 60, 40),
+        "に",
+        "two",
+        None,
+    )
+    .await;
+    // A re-translation over region one: merging hides base's lower text.
+    let upper = add_text_layer(&pool, page_id, 3).await;
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES (uuid_generate_v4(),'one again',10,10,60,40,TRUE,$1,$2)")
+        .bind(upper).bind(one).execute(&pool).await.unwrap();
+    // A null switch, which the merge writes down as hidden: undo must put the null back.
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id) VALUES (uuid_generate_v4(),'never shown',200,10,60,40,NULL,$1)")
+        .bind(upper).execute(&pool).await.unwrap();
+    // A redo overlay over region two, superseding base's text.
+    let base_two = element_of(&pool, base, two).await;
+    let overlay = Uuid::new_v4();
+    sqlx::query("INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) VALUES ($1,'translation',TRUE,7,$2,$3,now())")
+        .bind(overlay)
+        .bind(serde_json::json!({"overlay": true, "region_id": two.to_string(), "superseded_elements": [base_two.to_string()]}))
+        .bind(page_id)
+        .execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES (uuid_generate_v4(),'two redone',100,10,60,40,TRUE,$1,$2)")
+        .bind(overlay).bind(two).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE layer_elements SET visible = FALSE WHERE id = $1")
+        .bind(base_two)
+        .execute(&pool)
+        .await
+        .unwrap();
+    // Two patch layers.
+    give_patch(&state, page_id, one, &sha('1'), &sha('a'), (10, 10, 60, 40)).await;
+    give_patch(
+        &state,
+        page_id,
+        two,
+        &sha('2'),
+        &sha('b'),
+        (100, 10, 60, 40),
+    )
+    .await;
+    let lower_patches = record_pass(&state, page_id, &[one]).await.unwrap();
+    let upper_patches = record_pass(&state, page_id, &[two]).await.unwrap();
+
+    let start = page_rows(&pool, page_id).await;
+    let scene_start = texts(&scene(&state, page_id).await);
+    let merge = |ids: Vec<Uuid>| {
+        let app = app.clone();
+        let token = token.clone();
+        async move {
+            send(
+                &app,
+                "POST",
+                &format!("/tlhub/api/pages/{page_id}/layers/merge"),
+                &token,
+                serde_json::json!({ "layerIds": ids }),
+            )
+            .await
+        }
+    };
+    let (status, body) = merge(vec![base, upper, overlay]).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let text_merged = page_rows(&pool, page_id).await;
+    let never_shown: Option<bool> = sqlx::query_scalar(
+        "SELECT visible FROM layer_elements WHERE layer_id = $1 AND text = 'never shown'",
+    )
+    .bind(base)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(never_shown, Some(false), "the merge wrote the null down");
+    let (status, body) = merge(vec![lower_patches, upper_patches]).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let both_merged = page_rows(&pool, page_id).await;
+
+    // What the render callback and an element save do on their own: not edits.
+    sqlx::query("UPDATE layer_elements SET size = 33 WHERE layer_id = $1")
+        .bind(base)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE layers SET metadata_json = jsonb_set(metadata_json, '{last_modified}', '\"later\"') WHERE id = $1")
+        .bind(base).execute(&pool).await.unwrap();
+
+    let sized: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM layer_elements e JOIN layers l ON l.id = e.layer_id WHERE l.page_id = $1 AND e.size = 33")
+        .bind(page_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let status_now = history(&app, &token, page_id).await;
+    assert_eq!(status_now["undo"]["label"], "merge 2 layers");
+    assert_eq!(status_now["undo"]["blocked"], serde_json::Value::Null);
+    assert_eq!(status_now["undoCount"], 2);
+
+    let (status, body) = step(&app, &token, page_id, "undo").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        page_rows(&pool, page_id).await,
+        text_merged,
+        "the patch merge is undone"
+    );
+    let (status, body) = step(&app, &token, page_id, "undo").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        page_rows(&pool, page_id).await,
+        start,
+        "every layer and element is back as it was"
+    );
+    assert_eq!(texts(&scene(&state, page_id).await), scene_start);
+    // What the pipeline wrote since is kept: undo puts back what the action changed, not the fit.
+    let still_sized: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM layer_elements e JOIN layers l ON l.id = e.layer_id WHERE l.page_id = $1 AND e.size = 33")
+            .bind(page_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(still_sized, sized, "undo kept the render callback's sizes");
+    let modified: Option<String> =
+        sqlx::query_scalar("SELECT metadata_json->>'last_modified' FROM layers WHERE id = $1")
+            .bind(base)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(modified.as_deref(), Some("later"));
+    let (status, body) = step(&app, &token, page_id, "undo").await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(body.contains("no layer action to undo"), "{body}");
+
+    let (status, body) = step(&app, &token, page_id, "redo").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(page_rows(&pool, page_id).await, text_merged);
+    let (status, body) = step(&app, &token, page_id, "redo").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        page_rows(&pool, page_id).await,
+        both_merged,
+        "redo merges again"
+    );
+    let status_now = history(&app, &token, page_id).await;
+    assert_eq!(status_now["redo"], serde_json::Value::Null);
+
+    cleanup_series(&pool, series_id).await;
+}
+
+#[tokio::test]
+async fn an_action_whose_rows_changed_since_says_why_it_cannot_be_undone() {
+    let Some((app, pool, _state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    let token = translator(&pool).await;
+    let (series_id, page_id, _image, ocr, base) = seed_page(&pool).await;
+    let one = seed_region(
+        &pool,
+        page_id,
+        (ocr, base),
+        1,
+        (10, 10, 60, 40),
+        "いち",
+        "one",
+        None,
+    )
+    .await;
+    let upper = add_text_layer(&pool, page_id, 3).await;
+    // Text for region one on the upper layer, so the merge moves it and hides base's.
+    let moved = Uuid::new_v4();
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES ($1,'one again',10,10,60,40,TRUE,$2,$3)")
+        .bind(moved).bind(upper).bind(one).execute(&pool).await.unwrap();
+    let (status, body) = send(
+        &app,
+        "POST",
+        &format!("/tlhub/api/pages/{page_id}/layers/merge"),
+        &token,
+        serde_json::json!({"layerIds": [base, upper]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // Showing or hiding the merged layer: switch it back and the undo works again.
+    for visible in [false, true] {
+        let (status, _) = send(
+            &app,
+            "PUT",
+            &format!("/tlhub/api/layers/{base}"),
+            &token,
+            serde_json::json!({"visible": visible}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let blocked = history(&app, &token, page_id).await["undo"]["blocked"].clone();
+        if visible {
+            assert_eq!(blocked, serde_json::Value::Null);
+        } else {
+            assert!(
+                blocked.as_str().unwrap().contains("shown or hidden since"),
+                "{blocked}"
+            );
+        }
+    }
+    // An edit to a text the merge moved.
+    let element = moved;
+    let (status, body) = send(
+        &app,
+        "PUT",
+        &format!("/tlhub/api/layer-elements/{element}"),
+        &token,
+        serde_json::json!({"text": "edited"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let blocked = history(&app, &token, page_id).await["undo"]["blocked"].clone();
+    assert!(
+        blocked.as_str().unwrap().contains("edited since"),
+        "{blocked}"
+    );
+    let (status, body) = step(&app, &token, page_id, "undo").await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(body.contains("edited since"), "{body}");
+
+    // A layer added, then given content: undoing the add would delete that content.
+    let (status, body) = send(&app, "POST", &format!("/tlhub/api/pages/{page_id}/layers"), &token, serde_json::json!({"type": "translation", "targetLanguage": "en", "zOrder": 9, "visible": true})).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let added: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        history(&app, &token, page_id).await["undo"]["label"],
+        "add a layer"
+    );
+    let added = added["id"].as_str().unwrap().to_string();
+    let (status, body) = send(
+        &app,
+        "POST",
+        &format!("/tlhub/api/layers/{added}/elements"),
+        &token,
+        serde_json::json!({"text": "new", "x": 1.0, "y": 1.0, "maxWidth": 10, "maxHeight": 10}),
+    )
+    .await;
+    assert!(status.is_success(), "{status} {body}");
+    let blocked = history(&app, &token, page_id).await["undo"]["blocked"].clone();
+    assert!(
+        blocked.as_str().unwrap().contains("content added since"),
+        "{blocked}"
+    );
+
+    cleanup_series(&pool, series_id).await;
+}
+
+#[tokio::test]
+async fn the_history_keeps_twenty_actions_and_one_reorder_is_one() {
+    let Some((app, pool, _state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    let token = translator(&pool).await;
+    let (series_id, page_id, _image, ocr, base) = seed_page(&pool).await;
+    for n in 0..22 {
+        let (status, _) = send(
+            &app,
+            "PUT",
+            &format!("/tlhub/api/layers/{base}"),
+            &token,
+            serde_json::json!({"name": format!("TL {n}")}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+    }
+    let now = history(&app, &token, page_id).await;
+    assert_eq!(now["undoCount"], 20);
+    assert_eq!(now["undo"]["label"], "rename a layer");
+    // A visibility switch is not an action.
+    let (status, _) = send(
+        &app,
+        "PUT",
+        &format!("/tlhub/api/layers/{ocr}"),
+        &token,
+        serde_json::json!({"visible": false}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(history(&app, &token, page_id).await["undoCount"], 20);
+
+    // A swap sent as two requests with one batch id is one step.
+    let put_z = |layer: Uuid, z: i32| {
+        let app = app.clone();
+        let token = token.clone();
+        async move {
+            let request = Request::builder()
+                .method("PUT")
+                .uri(format!("/tlhub/api/layers/{layer}"))
+                .header("Content-Type", "application/json")
+                .header("Authorization", format!("Bearer {token}"))
+                .header("X-Layer-Op-Batch", "swap-1")
+                .body(Body::from(serde_json::json!({"zOrder": z}).to_string()))
+                .unwrap();
+            finish(app.oneshot(request).await.unwrap()).await
+        }
+    };
+    let z_of = |layer: Uuid| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query_scalar::<_, i32>("SELECT z_order FROM layers WHERE id = $1")
+                .bind(layer)
+                .fetch_one(&pool)
+                .await
+                .unwrap()
+        }
+    };
+    let (ocr_z, base_z) = (z_of(ocr).await, z_of(base).await);
+    assert_eq!(put_z(ocr, base_z).await.0, StatusCode::OK);
+    assert_eq!(put_z(base, ocr_z).await.0, StatusCode::OK);
+    let now = history(&app, &token, page_id).await;
+    assert_eq!(now["undo"]["label"], "reorder layers");
+    assert_eq!(now["undoCount"], 20);
+    let (status, body) = step(&app, &token, page_id, "undo").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        (z_of(ocr).await, z_of(base).await),
+        (ocr_z, base_z),
+        "both layers move back"
+    );
+    // A new action drops what was undone.
+    assert_eq!(history(&app, &token, page_id).await["redoCount"], 1);
+    let (status, _) = send(
+        &app,
+        "PUT",
+        &format!("/tlhub/api/layers/{base}"),
+        &token,
+        serde_json::json!({"name": "after"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(history(&app, &token, page_id).await["redoCount"], 0);
+
+    cleanup_series(&pool, series_id).await;
+}
+
+#[tokio::test]
+async fn undoing_an_overlay_delete_hides_the_text_it_had_given_back() {
+    let Some((app, pool, state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    let token = translator(&pool).await;
+    let (series_id, page_id, _image, ocr, base) = seed_page(&pool).await;
+    let two = seed_region(
+        &pool,
+        page_id,
+        (ocr, base),
+        1,
+        (100, 10, 60, 40),
+        "に",
+        "two",
+        None,
+    )
+    .await;
+    let base_two = element_of(&pool, base, two).await;
+    let overlay = Uuid::new_v4();
+    sqlx::query("INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) VALUES ($1,'translation',TRUE,7,$2,$3,now())")
+        .bind(overlay)
+        .bind(serde_json::json!({"overlay": true, "region_id": two.to_string(), "superseded_elements": [base_two.to_string()]}))
+        .bind(page_id)
+        .execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES (uuid_generate_v4(),'two redone',100,10,60,40,TRUE,$1,$2)")
+        .bind(overlay).bind(two).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE layer_elements SET visible = FALSE WHERE id = $1")
+        .bind(base_two)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let start = page_rows(&pool, page_id).await;
+
+    let (status, _) = send(
+        &app,
+        "DELETE",
+        &format!("/tlhub/api/layers/{overlay}"),
+        &token,
+        serde_json::json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        texts(&scene(&state, page_id).await),
+        ["two"],
+        "the delete gave base's text back"
+    );
+    assert_eq!(
+        history(&app, &token, page_id).await["undo"]["label"],
+        "delete a layer"
+    );
+
+    let (status, body) = step(&app, &token, page_id, "undo").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(page_rows(&pool, page_id).await, start);
+    assert_eq!(texts(&scene(&state, page_id).await), ["two redone"]);
+    assert_eq!(visible(&pool, base_two).await, Some(false));
+
+    cleanup_series(&pool, series_id).await;
+}
+
+#[tokio::test]
+async fn a_switch_that_lands_during_an_undo_is_never_written_over() {
+    let Some((app, pool, _state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    let token = translator(&pool).await;
+    let (series_id, page_id, _image, ocr, base) = seed_page(&pool).await;
+    let one = seed_region(
+        &pool,
+        page_id,
+        (ocr, base),
+        1,
+        (10, 10, 60, 40),
+        "いち",
+        "one",
+        None,
+    )
+    .await;
+    let upper = add_text_layer(&pool, page_id, 3).await;
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES (uuid_generate_v4(),'one again',10,10,60,40,TRUE,$1,$2)")
+        .bind(upper).bind(one).execute(&pool).await.unwrap();
+    let (status, body) = send(
+        &app,
+        "POST",
+        &format!("/tlhub/api/pages/{page_id}/layers/merge"),
+        &token,
+        serde_json::json!({"layerIds": [base, upper]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // A show/hide (no history lock) is in flight when the undo starts.
+    let mut switch = pool.begin().await.unwrap();
+    sqlx::query("UPDATE layers SET visible = FALSE WHERE id = $1")
+        .bind(base)
+        .execute(&mut *switch)
+        .await
+        .unwrap();
+    let switch_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *switch)
+        .await
+        .unwrap();
+    let undo = {
+        let (app, token) = (app.clone(), token.clone());
+        tokio::spawn(async move { step(&app, &token, page_id, "undo").await })
+    };
+    // Commit only once the undo is seen waiting on the switch's row lock.
+    let mut waited = false;
+    for _ in 0..100 {
+        waited = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid)))",
+        )
+        .bind(switch_pid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        if waited {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(waited, "the undo never waited on the switch");
+    switch.commit().await.unwrap();
+    let (status, body) = undo.await.unwrap();
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(body.contains("shown or hidden since"), "{body}");
+    let visible: Option<bool> = sqlx::query_scalar("SELECT visible FROM layers WHERE id = $1")
+        .bind(base)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(visible, Some(false), "the switch stands");
+
+    cleanup_series(&pool, series_id).await;
+}

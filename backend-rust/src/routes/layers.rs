@@ -367,6 +367,10 @@ pub async fn create_page_layer(
     }
 
     let mut tx = state.pool.begin().await.expect("page layer transaction");
+    // F4: adding a layer (or a group with its layers) is one undoable step.
+    let recorder = crate::layer_ops::Recorder::start(&mut tx, page_id)
+        .await
+        .expect("layer history recorder");
     let layer = insert_layer(&mut tx, page_id, &payload).await;
     // F3 (#178): a group is created with the layers it holds, in one step. Groups do not nest.
     if layer
@@ -393,11 +397,26 @@ pub async fn create_page_layer(
         .fetch_all(&mut *tx)
         .await
         .expect("group members");
+        let count = moved.len();
         for member in moved {
             crate::layer_tree::sync_overlays(&mut tx, member)
                 .await
                 .expect("overlay sync for a grouped layer");
         }
+        let label = if count == 0 {
+            "add a group".to_string()
+        } else {
+            format!("group {count} layers")
+        };
+        recorder
+            .finish(&mut tx, "group", &label, &user.email, None)
+            .await
+            .expect("layer history record");
+    } else {
+        recorder
+            .finish(&mut tx, "add", "add a layer", &user.email, None)
+            .await
+            .expect("layer history record");
     }
     crate::page_freshness::advance_page_revision_by_hand(&mut tx, page_id)
         .await

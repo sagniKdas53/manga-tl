@@ -1159,6 +1159,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/pages/{pageId}/layer-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description F4 (#178): the page's layer history, newest first, at most 20 actions: what Undo and Redo would do next, and why either cannot run (`blocked`). */
+        get: operations["getLayerHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pages/{pageId}/layer-history/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description F4 (#178): undoes the newest layer action (add, delete, rename, reorder, group, ungroup, move to a group, merge, delete hidden texts), writing back every row it changed. Answers the new history with `applied` (the action's label). */
+        post: operations["undoLayerAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pages/{pageId}/layer-history/redo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description F4 (#178): redoes the newest undone layer action. Answers the new history with `applied` (the action's label). */
+        post: operations["redoLayerAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1680,6 +1731,27 @@ export interface components {
             /** @description Catalog task key: ocr, tl, qaLLM or qaVLM. */
             task: string;
             id: string;
+        };
+        LayerHistoryEntry: {
+            /** Format: uuid */
+            id: string;
+            /** @description add, delete, rename, reorder, group, ungroup, group-move, merge or delete-hidden-texts */
+            kind: string;
+            /** @description What the action did, e.g. `merge 3 layers` */
+            label: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @description Why it cannot be applied now; null when it can */
+            blocked?: string | null;
+        } | null;
+        LayerHistory: {
+            undo: components["schemas"]["LayerHistoryEntry"] | null;
+            redo: components["schemas"]["LayerHistoryEntry"] | null;
+            undoCount: number;
+            redoCount: number;
+            depth: number;
+            /** @description After Undo or Redo: the label of the action applied */
+            applied?: string;
         };
     };
     responses: never;
@@ -4139,6 +4211,86 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["CustomModel"][];
                 };
+            };
+        };
+    };
+    getLayerHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LayerHistory"];
+                };
+            };
+        };
+    };
+    undoLayerAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LayerHistory"];
+                };
+            };
+            /** @description Nothing to undo, or a row the action touched changed since (the detail says which) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    redoLayerAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LayerHistory"];
+                };
+            };
+            /** @description Nothing to redo, or a row the action touched changed since (the detail says which) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -259,6 +259,30 @@ CREATE TABLE public.layer_elements (
 ALTER TABLE public.layer_elements OWNER TO tladmin;
 
 --
+-- Name: layer_ops; Type: TABLE; Schema: public; Owner: tladmin
+--
+
+-- F4 (#178): the page's layer history, for Undo and Redo that survive a reload. One row per layer
+-- action, newest last by `seq`, at most 20 per page. `changes` holds the rows the action changed,
+-- as [{table, id, before, after}] (to_jsonb rows; null where the row did not exist). See
+-- backend-rust/src/layer_ops.rs.
+CREATE TABLE public.layer_ops (
+    id uuid NOT NULL,
+    page_id uuid NOT NULL,
+    seq bigint GENERATED ALWAYS AS IDENTITY,
+    kind character varying(32) NOT NULL,
+    label text NOT NULL,
+    batch character varying(64),
+    created_by character varying(255),
+    created_at timestamp(6) with time zone DEFAULT now() NOT NULL,
+    undone boolean DEFAULT false NOT NULL,
+    changes jsonb NOT NULL
+);
+
+
+ALTER TABLE public.layer_ops OWNER TO tladmin;
+
+--
 -- Name: layers; Type: TABLE; Schema: public; Owner: tladmin
 --
 
@@ -873,6 +897,29 @@ ALTER TABLE ONLY public.layers
 
 ALTER TABLE ONLY public.layers
     ADD CONSTRAINT layers_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.layers(id) ON DELETE SET NULL;
+
+
+--
+-- Name: layer_ops layer_ops_pkey; Type: CONSTRAINT; Schema: public; Owner: tladmin
+--
+
+ALTER TABLE ONLY public.layer_ops
+    ADD CONSTRAINT layer_ops_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: layer_ops layer_ops_page_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: tladmin
+--
+
+ALTER TABLE ONLY public.layer_ops
+    ADD CONSTRAINT layer_ops_page_id_fkey FOREIGN KEY (page_id) REFERENCES public.pages(id) ON DELETE CASCADE;
+
+
+--
+-- Name: idx_layer_ops_page_seq; Type: INDEX; Schema: public; Owner: tladmin
+--
+
+CREATE INDEX idx_layer_ops_page_seq ON public.layer_ops USING btree (page_id, seq);
 
 
 --

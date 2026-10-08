@@ -841,6 +841,55 @@ describe("ReaderRightSidebar", () => {
       expect(actions.ungroup).toHaveBeenCalledWith("g");
     });
 
+    it("offers layer Undo and Redo from the server's history, and says why one is refused (F4)", () => {
+      const undoLayerAction = vi.fn();
+      const redoLayerAction = vi.fn();
+      const refreshLayerHistory = vi.fn();
+      renderSidebar({
+        renameLayer: vi.fn(),
+        mergeLayers: vi.fn(),
+        undoLayerAction,
+        redoLayerAction,
+        refreshLayerHistory,
+        layerHistory: {
+          undo: {
+            id: "a",
+            kind: "merge",
+            label: "merge 3 layers",
+            createdAt: "2026-10-08T00:00:00Z",
+            blocked: null,
+          },
+          redo: {
+            id: "b",
+            kind: "rename",
+            label: "rename a layer",
+            createdAt: "2026-10-08T00:00:00Z",
+            blocked: "Translation (EN) changed since",
+          },
+          undoCount: 1,
+          redoCount: 1,
+          depth: 20,
+        },
+      });
+      const undo = screen.getByRole("button", { name: "Undo layer action" });
+      const redo = screen.getByRole("button", { name: "Redo layer action" });
+      expect(undo).toBeEnabled();
+      expect(undo.parentElement).toHaveAttribute(
+        "title",
+        "Undo merge 3 layers",
+      );
+      expect(redo).toBeDisabled();
+      expect(redo.parentElement).toHaveAttribute(
+        "title",
+        'Can\'t redo "rename a layer": Translation (EN) changed since',
+      );
+      fireEvent.click(undo);
+      expect(undoLayerAction).toHaveBeenCalledTimes(1);
+      // Hovering re-reads the history, so a reason is current when it is read.
+      fireEvent.mouseEnter(screen.getByTestId("layer-history"));
+      expect(refreshLayerHistory).toHaveBeenCalled();
+    });
+
     it("says how many of a layer's elements are hidden", () => {
       renderSidebar();
       expect(screen.getByText(/1 hidden/)).toBeInTheDocument();

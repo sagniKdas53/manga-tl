@@ -1282,6 +1282,80 @@
             "type": "string"
           }
         }
+      },
+      "LayerHistoryEntry": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "description": "add, delete, rename, reorder, group, ungroup, group-move, merge or delete-hidden-texts"
+          },
+          "label": {
+            "type": "string",
+            "description": "What the action did, e.g. `merge 3 layers`"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "blocked": {
+            "type": "string",
+            "nullable": true,
+            "description": "Why it cannot be applied now; null when it can"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "createdAt"
+        ]
+      },
+      "LayerHistory": {
+        "type": "object",
+        "properties": {
+          "undo": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LayerHistoryEntry"
+              }
+            ],
+            "nullable": true
+          },
+          "redo": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LayerHistoryEntry"
+              }
+            ],
+            "nullable": true
+          },
+          "undoCount": {
+            "type": "integer"
+          },
+          "redoCount": {
+            "type": "integer"
+          },
+          "depth": {
+            "type": "integer"
+          },
+          "applied": {
+            "type": "string",
+            "description": "After Undo or Redo: the label of the action applied"
+          }
+        },
+        "required": [
+          "undo",
+          "redo",
+          "undoCount",
+          "redoCount",
+          "depth"
+        ]
       }
     }
   },
@@ -5128,6 +5202,108 @@
             }
           }
         }
+      }
+    },
+    "/api/pages/{pageId}/layer-history": {
+      "get": {
+        "description": "F4 (#178): the page's layer history, newest first, at most 20 actions: what Undo and Redo would do next, and why either cannot run (`blocked`).",
+        "operationId": "getLayerHistory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pageId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LayerHistory"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "layer-controller"
+        ]
+      }
+    },
+    "/api/pages/{pageId}/layer-history/undo": {
+      "post": {
+        "description": "F4 (#178): undoes the newest layer action (add, delete, rename, reorder, group, ungroup, move to a group, merge, delete hidden texts), writing back every row it changed. Answers the new history with `applied` (the action's label).",
+        "operationId": "undoLayerAction",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pageId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LayerHistory"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "description": "Nothing to undo, or a row the action touched changed since (the detail says which)"
+          }
+        },
+        "tags": [
+          "layer-controller"
+        ]
+      }
+    },
+    "/api/pages/{pageId}/layer-history/redo": {
+      "post": {
+        "description": "F4 (#178): redoes the newest undone layer action. Answers the new history with `applied` (the action's label).",
+        "operationId": "redoLayerAction",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pageId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LayerHistory"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "description": "Nothing to redo, or a row the action touched changed since (the detail says which)"
+          }
+        },
+        "tags": [
+          "layer-controller"
+        ]
       }
     }
   },

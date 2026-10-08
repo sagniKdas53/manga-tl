@@ -24,6 +24,7 @@ use uuid::Uuid;
 
 use crate::auth::AuthUser;
 use crate::error;
+use crate::layer_ops::Recorder;
 use crate::layer_tree::MergeKind;
 use crate::models::Layer;
 use crate::page_freshness::advance_page_revision_by_hand;
@@ -70,8 +71,26 @@ pub async fn merge_layers(
             return error::internal_error(MERGE);
         }
     };
+    // F4: the merge is one undoable step.
+    let recorder = match Recorder::start(&mut tx, page_id).await {
+        Ok(recorder) => recorder,
+        Err(err) => {
+            tracing::error!("Could not start recording a merge on {page_id}: {err}");
+            let _ = tx.rollback().await;
+            return error::internal_error(MERGE);
+        }
+    };
     match merge_in(&mut tx, page_id, &ids).await {
         Ok(Ok(outcome)) => {
+            let label = format!("merge {} layers", ids.len());
+            if let Err(err) = recorder
+                .finish(&mut tx, "merge", &label, &user.email, None)
+                .await
+            {
+                tracing::error!("Could not record a merge on {page_id}: {err}");
+                let _ = tx.rollback().await;
+                return error::internal_error(MERGE);
+            }
             if let Err(err) = advance_page_revision_by_hand(&mut tx, page_id).await {
                 tracing::error!(
                     "Could not advance page revision after a merge on {page_id}: {err}"
@@ -465,19 +484,45 @@ pub async fn delete_hidden_texts(
             return error::internal_error(DELETE_HIDDEN);
         }
     };
-    let row: Option<(Uuid, Option<Value>)> =
-        match sqlx::query_as("SELECT page_id, metadata_json FROM layers WHERE id = $1 FOR UPDATE")
+    // The page's history lock first, then the layer row, the order every layer action takes.
+    let page_id: Option<Uuid> = match sqlx::query_scalar("SELECT page_id FROM layers WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+    {
+        Ok(page_id) => page_id,
+        Err(err) => {
+            tracing::error!("Could not read layer {id}: {err}");
+            return error::internal_error(DELETE_HIDDEN);
+        }
+    };
+    let Some(page_id) = page_id else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let recorder = match Recorder::start(&mut tx, page_id).await {
+        Ok(recorder) => recorder,
+        Err(err) => {
+            tracing::error!("Could not start recording on {page_id}: {err}");
+            let _ = tx.rollback().await;
+            return error::internal_error(DELETE_HIDDEN);
+        }
+    };
+    let metadata: Option<Option<Value>> =
+        match sqlx::query_scalar("SELECT metadata_json FROM layers WHERE id = $1 FOR UPDATE")
             .bind(id)
             .fetch_optional(&mut *tx)
             .await
         {
-            Ok(row) => row,
+            Ok(metadata) => metadata,
             Err(err) => {
                 tracing::error!("Could not read layer {id}: {err}");
+                let _ = tx.rollback().await;
                 return error::internal_error(DELETE_HIDDEN);
             }
         };
-    let Some((page_id, metadata)) = row else {
+    // Deleted while this request waited for the lock.
+    let Some(metadata) = metadata else {
+        let _ = tx.rollback().await;
         return StatusCode::NOT_FOUND.into_response();
     };
     let recorded: Vec<Uuid> = metadata
@@ -517,6 +562,15 @@ pub async fn delete_hidden_texts(
             return error::internal_error(DELETE_HIDDEN);
         }
     };
+    let label = format!("delete {deleted} hidden texts");
+    if let Err(err) = recorder
+        .finish(&mut tx, "delete-hidden-texts", &label, &user.email, None)
+        .await
+    {
+        tracing::error!("Could not record deleting hidden texts on {page_id}: {err}");
+        let _ = tx.rollback().await;
+        return error::internal_error(DELETE_HIDDEN);
+    }
     if let Err(err) = advance_page_revision_by_hand(&mut tx, page_id).await {
         tracing::error!("Could not advance page revision for layer {id}: {err}");
         let _ = tx.rollback().await;
