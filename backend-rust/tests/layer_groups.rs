@@ -973,7 +973,7 @@ async fn layers_hidden_only_by_their_group_may_not_skip_a_shown_like_layer() {
 
 #[tokio::test]
 async fn text_the_canvas_hides_covers_nothing_in_a_merge() {
-    let Some((app, pool, _state)) = app().await else {
+    let Some((app, pool, state)) = app().await else {
         eprintln!(
             "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
         );
@@ -1026,6 +1026,9 @@ async fn text_the_canvas_hides_covers_nothing_in_a_merge() {
     let merged: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(merged["hiddenTexts"], 0);
     assert_eq!(visible(&pool, lower).await, Some(true));
+    // The export draws what the canvas does: the merge wrote the null down as hidden, so the scene
+    // builder (which still reads a null as shown) leaves it out of the merged layer too.
+    assert_eq!(texts(&scene(&state, page_id).await), ["one"]);
 
     cleanup_series(&pool, series_id).await;
 }

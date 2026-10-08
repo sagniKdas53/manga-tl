@@ -163,7 +163,10 @@ async fn merge_in(
     let source_ids: Vec<Uuid> = sources.iter().map(|layer| layer.id).collect();
 
     let hidden: Vec<Uuid> = match kind {
-        MergeKind::Text => hide_covered_text(tx, &layers).await?,
+        MergeKind::Text => {
+            hide_null_text(tx, ids).await?;
+            hide_covered_text(tx, &layers).await?
+        }
         MergeKind::Patches => {
             renumber_patches(tx, &layers).await?;
             Vec::new()
@@ -273,6 +276,22 @@ fn merge_language(layers: &[Layer]) -> Result<Option<String>, &'static str> {
         }
     }
     Ok(found)
+}
+
+/// Writes the canvas's reading of a null switch (hidden, AUDIT-F25) into the merged layers' text,
+/// so the scene builder, which still reads a null as shown, draws the merged layer as the canvas
+/// does.
+async fn hide_null_text(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ids: &[Uuid],
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE layer_elements SET visible = FALSE WHERE layer_id = ANY($1) AND visible IS NULL",
+    )
+    .bind(ids)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 /// Hides the lower layers' text wherever an upper layer has visible text for the same region, and
