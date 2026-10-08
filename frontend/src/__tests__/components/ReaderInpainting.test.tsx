@@ -287,10 +287,10 @@ describe("Reader Inpainting layer (tracker R7)", () => {
     vi.restoreAllMocks();
   });
 
-  it("saves a pending text edit before a layer undo, and holds the undo if the save fails (F4)", async () => {
-    // CodeRabbit on #253: a text edit whose save failed stays pending and is retried later. A layer
-    // undo sent in between let that retry land on the rows the undo had put back, unseen by the
-    // server's "edited since" check.
+  it("waits for text saves, queued or on their way, before a layer undo, and holds it while one fails (F4)", async () => {
+    // CodeRabbit on #253/#254: a text edit whose save failed stays pending and is retried later. A
+    // layer undo sent in between (or while the save was still on its way) let that retry land on
+    // the rows the undo had put back, unseen by the server's "edited since" check.
     const base = mockSafeFetch.getMockImplementation()!;
     const entry = {
       id: "op-1",
@@ -300,6 +300,9 @@ describe("Reader Inpainting layer (tracker R7)", () => {
       blocked: null,
     };
     let saveOk = false;
+    // The first save is held open, as a slow request would be.
+    let releaseFirst: (ok: boolean) => void = () => {};
+    let puts = 0;
     mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
       if (/\/layer-history$/.test(url)) {
         return Promise.resolve({
@@ -330,16 +333,22 @@ describe("Reader Inpainting layer (tracker R7)", () => {
         });
       }
       if (/\/api\/layer-elements\/el-2$/.test(url) && init?.method === "PUT") {
-        return Promise.resolve(
-          saveOk
+        const answer = (ok: boolean) =>
+          ok
             ? { ok: true, json: () => Promise.resolve({}) }
             : {
                 ok: false,
                 status: 500,
                 json: () => Promise.resolve({}),
                 text: () => Promise.resolve("boom"),
-              },
-        );
+              };
+        puts += 1;
+        if (puts === 1) {
+          return new Promise((resolve) => {
+            releaseFirst = (ok) => resolve(answer(ok));
+          });
+        }
+        return Promise.resolve(answer(saveOk));
       }
       return base(url, init);
     });
@@ -350,7 +359,7 @@ describe("Reader Inpainting layer (tracker R7)", () => {
     fireEvent.change(await screen.findByLabelText("Text Content"), {
       target: { value: "Hey there" },
     });
-    // Deselecting saves the edit; that save fails, so the edit stays pending.
+    // Deselecting starts the edit's save, which is still on its way when Undo is pressed.
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() =>
       expect(calls("PUT", /\/api\/layer-elements\/el-2$/)).toHaveLength(1),
@@ -359,9 +368,17 @@ describe("Reader Inpainting layer (tracker R7)", () => {
       name: "Undo layer action",
     });
     await waitFor(() => expect(undo).toBeEnabled());
-
-    // The undo retries the save first; it fails again, so the undo is not sent.
     fireEvent.click(undo);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(calls("POST", /\/layer-history\/undo$/)).toHaveLength(0);
+
+    // That save fails, so the edit is pending again: the undo retries it, fails again, and is not
+    // sent, so a later retry cannot land on rows an undo put back.
+    await act(async () => {
+      releaseFirst(false);
+    });
     await waitFor(() =>
       expect(calls("PUT", /\/api\/layer-elements\/el-2$/)).toHaveLength(2),
     );
