@@ -443,6 +443,7 @@ async function ensureToken(ctx, args) {
   // The password goes to a file only its owner can read, never to the log (CodeQL on #232).
   const saved = path.join(ctx.outRoot, "throwaway-account.json");
   fs.writeFileSync(saved, `${JSON.stringify({ email, password }, null, 2)}\n`, { mode: 0o600 });
+  fs.chmodSync(saved, 0o600); // `mode` applies only when the file is created, not to one left by a resumed run
   console.log(`  kept for this run: --email ${email} (password in ${saved})`);
   return ctx.token;
 }
@@ -1455,7 +1456,10 @@ Harvest
         `not clean: ${incomplete.length} page(s) — rerun with --resume --out ${path.relative(process.cwd(), outRoot)}`,
       );
     }
-    const hard = entries.filter((e) => ["upload-failed", "timeout", "failed"].includes(e.state));
+    // A page that rendered but had a job fail is still a failure (its artifacts are kept).
+    const hard = entries.filter((e) =>
+      ["upload-failed", "timeout", "failed", "failed-with-output"].includes(e.state),
+    );
     process.exitCode = hard.length ? 1 : 0;
   } finally {
     if (pausedByUs) {
