@@ -14,7 +14,7 @@ import Slider from "@mui/material/Slider";
 import Typography from "@mui/material/Typography";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import AddIcon from "@mui/icons-material/Add";
+import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -37,6 +37,19 @@ import type { Layer, LayerElement, OcrRegion } from "../types";
 import { inReadingOrder, regionRowStatus } from "../utils/regionReview";
 import { isInpaintingLayer, isPatchElement } from "../utils/inpainting";
 import PatchInspector from "./PatchInspector";
+import {
+  AddLayerMenu,
+  GroupRowMenu,
+  LayerRowMenu,
+  MergeMenu,
+  type LayerActions,
+} from "./LayerPanelMenus";
+import {
+  isGroupLayer,
+  isLayerShown,
+  layerDisplayName,
+  panelRows,
+} from "../utils/layerTree";
 import {
   translationElementByRegion,
   type IssueAction,
@@ -72,17 +85,6 @@ const layerHeaderDividerSx = {
   height: "14px",
   backgroundColor: "var(--border-color)",
   mx: 0.5,
-} as const;
-
-const smallAddIconSx = { fontSize: 14 } as const;
-
-const addLayerButtonSx = {
-  fontSize: "10px",
-  minWidth: 0,
-  px: 1,
-  py: 0.25,
-  color: "var(--text-muted)",
-  borderColor: "var(--border-color)",
 } as const;
 
 const noLayersTextSx = {
@@ -441,7 +443,7 @@ export interface LayerData {
   elements: LayerElement[];
 }
 
-export interface ReaderRightSidebarProps {
+export interface ReaderRightSidebarProps extends Partial<LayerActions> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   selectedItem: any; // Fallback to any to avoid complex type mismatch for now
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -519,6 +521,17 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
   );
   // The tab the user picked; until then Review when the page has issues, else Layers.
   const [pickedTab, setPickedTab] = React.useState<SidebarTab | null>(null);
+  // F3: groups start folded, so a page's re-run history takes one row.
+  const [openGroups, setOpenGroups] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+  const toggleGroupOpen = React.useCallback((groupId: string) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(groupId)) next.add(groupId);
+      return next;
+    });
+  }, []);
   const toggleLayerExpanded = React.useCallback((layerId: string) => {
     setExpandedLayers((prev) => {
       const next = new Set(prev);
@@ -579,6 +592,22 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     onConfirmMerge,
     isMerging,
   } = props;
+
+  const layerActions: Partial<LayerActions> = {
+    addLayer: props.addLayer,
+    renameLayer: props.renameLayer,
+    setLayerGroup: props.setLayerGroup,
+    groupLayers: props.groupLayers,
+    mergeLayers: props.mergeLayers,
+    deleteHiddenTexts: props.deleteHiddenTexts,
+    ungroup: props.ungroup,
+  };
+  // Stack numbers count layers, bottom first; groups hold no elements and take none.
+  const stackNumbers = new Map(
+    sortedLayers
+      .filter(({ layer }) => !isGroupLayer(layer))
+      .map(({ layer }, index) => [layer.id, index + 1] as const),
+  );
 
   // The element drawing each region, for tools offered on any region (not only issues).
   const drawnElementByRegion = React.useMemo(
@@ -758,26 +787,15 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                         <KeyboardArrowDownIcon fontSize="small" />
                       </IconButton>
                       <Box sx={layerHeaderDividerSx} />
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        startIcon={<AddIcon sx={smallAddIconSx} />}
-                        onClick={handleCreateTranslationLayer}
-                        title="Add Translation Layer"
-                        sx={addLayerButtonSx}
-                      >
-                        TL
-                      </Button>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        startIcon={<AddIcon sx={smallAddIconSx} />}
-                        onClick={handleCreateSfxLayer}
-                        title="Add SFX Layer"
-                        sx={addLayerButtonSx}
-                      >
-                        SFX
-                      </Button>
+                      <AddLayerMenu
+                        onAddTranslation={handleCreateTranslationLayer}
+                        onAddSfx={handleCreateSfxLayer}
+                        actions={layerActions}
+                      />
+                      <MergeMenu
+                        layers={sortedLayers}
+                        actions={layerActions}
+                      />
                     </Box>
                   }
                 >
@@ -790,10 +808,108 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                         No active layers.
                       </Typography>
                     ) : (
-                      [...sortedLayers].reverse().map((lData, idx) => {
+                      panelRows(sortedLayers).map((row) => {
+                        const lData = row.data;
+                        if (row.kind === "group") {
+                          const open = openGroups.has(lData.layer.id);
+                          const groupVisible = lData.layer.visible === true;
+                          return (
+                            <Box
+                              key={lData.layer.id}
+                              data-layer-group={lData.layer.id}
+                              sx={[
+                                layerRowBaseSx,
+                                {
+                                  border: "1px dashed var(--border-color)",
+                                  opacity: groupVisible ? 1 : 0.5,
+                                },
+                              ]}
+                            >
+                              <IconButton
+                                size="small"
+                                aria-label={
+                                  open ? "Fold group" : "Unfold group"
+                                }
+                                aria-expanded={open}
+                                onClick={() => toggleGroupOpen(lData.layer.id)}
+                              >
+                                {open ? (
+                                  <KeyboardArrowDownIcon fontSize="small" />
+                                ) : (
+                                  <KeyboardArrowRightIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                              <Box sx={layerNameColumnSx}>
+                                <Typography
+                                  component="span"
+                                  sx={[layerNameBaseSx, { fontWeight: 600 }]}
+                                >
+                                  {layerDisplayName(lData.layer)}
+                                </Typography>
+                                <Typography
+                                  component="span"
+                                  sx={layerElementCountSx}
+                                >
+                                  {row.members.length}{" "}
+                                  {row.members.length === 1
+                                    ? "layer"
+                                    : "layers"}
+                                  {!groupVisible ? " · group hidden" : ""}
+                                </Typography>
+                              </Box>
+                              <Box sx={layerActionsRowSx}>
+                                <Tooltip
+                                  title={
+                                    groupVisible ? "Hide group" : "Show group"
+                                  }
+                                >
+                                  <IconButton
+                                    size="small"
+                                    onClick={() =>
+                                      handleToggleLayerVisibility(
+                                        lData.layer.id,
+                                      )
+                                    }
+                                    sx={{
+                                      color: groupVisible
+                                        ? "var(--primary)"
+                                        : "var(--text-dim, var(--text-muted))",
+                                    }}
+                                  >
+                                    {groupVisible ? (
+                                      <VisibilityIcon fontSize="small" />
+                                    ) : (
+                                      <VisibilityOffIcon fontSize="small" />
+                                    )}
+                                  </IconButton>
+                                </Tooltip>
+                                <GroupRowMenu
+                                  group={lData}
+                                  layers={sortedLayers}
+                                  actions={layerActions}
+                                />
+                              </Box>
+                            </Box>
+                          );
+                        }
+                        if (
+                          row.depth === 1 &&
+                          lData.layer.parentId &&
+                          !openGroups.has(lData.layer.parentId)
+                        ) {
+                          return null;
+                        }
                         const isActive = lData.layer.id === activeLayerId;
                         const isVisible = lData.layer.visible;
-                        const stackNumber = sortedLayers.length - idx;
+                        // In a hidden group the layer's own switch is on but nothing shows.
+                        const isShown = isLayerShown(lData.layer, sortedLayers);
+                        const stackNumber = stackNumbers.get(lData.layer.id);
+                        const mergeHidden = Array.isArray(
+                          lData.layer.metadataJson?.merge_hidden,
+                        )
+                          ? (lData.layer.metadataJson.merge_hidden as unknown[])
+                              .length
+                          : 0;
                         const isExpanded = expandedLayers.has(lData.layer.id);
                         const hiddenCount = lData.elements.filter(
                           (el) => !el.visible,
@@ -819,7 +935,8 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                                   boxShadow: isActive
                                     ? "0 0 8px var(--primary-glow)"
                                     : "none",
-                                  opacity: isVisible ? 1 : 0.5,
+                                  opacity: isShown ? 1 : 0.5,
+                                  ml: row.depth === 1 ? 2 : 0,
                                   "&:hover": {
                                     borderColor: isActive
                                       ? "var(--primary)"
@@ -856,18 +973,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                                     },
                                   ]}
                                 >
-                                  {typeof lData.layer.metadataJson
-                                    ?.layer_name === "string"
-                                    ? lData.layer.metadataJson.layer_name
-                                    : lData.layer.type === "translation"
-                                      ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || "EN"})`
-                                      : lData.layer.type === "sfx"
-                                        ? "SFX Layer"
-                                        : lData.layer.type === "ocr"
-                                          ? "OCR Layer"
-                                          : isInpaintingLayer(lData.layer)
-                                            ? "Inpainting"
-                                            : `Layer (${lData.layer.type})`}
+                                  {layerDisplayName(lData.layer)}
                                 </Typography>
                                 <Typography
                                   component="span"
@@ -900,7 +1006,45 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                                     ? ` · ${hiddenCount} hidden`
                                     : ""}
                                   {!isVisible ? " · layer hidden" : ""}
+                                  {isVisible && !isShown
+                                    ? " · group hidden"
+                                    : ""}
                                 </Typography>
+                                {mergeHidden > 0 &&
+                                  layerActions.deleteHiddenTexts && (
+                                    <Box
+                                      component="span"
+                                      data-merge-hidden={mergeHidden}
+                                      sx={{
+                                        fontSize: "11px",
+                                        color: "var(--text-muted)",
+                                      }}
+                                    >
+                                      {mergeHidden} lower{" "}
+                                      {mergeHidden === 1 ? "text" : "texts"}{" "}
+                                      hidden by a merge ·{" "}
+                                      <Box
+                                        component="button"
+                                        type="button"
+                                        onClick={(e: React.MouseEvent) => {
+                                          e.stopPropagation();
+                                          layerActions.deleteHiddenTexts?.(
+                                            lData.layer.id,
+                                          );
+                                        }}
+                                        sx={{
+                                          border: 0,
+                                          p: 0,
+                                          background: "none",
+                                          color: "var(--primary)",
+                                          cursor: "pointer",
+                                          font: "inherit",
+                                        }}
+                                      >
+                                        Delete them
+                                      </Box>
+                                    </Box>
+                                  )}
                               </Box>
                               <Box
                                 sx={layerActionsRowSx}
@@ -943,6 +1087,12 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                                     <ContentCopyIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
+
+                                <LayerRowMenu
+                                  data={lData}
+                                  layers={sortedLayers}
+                                  actions={layerActions}
+                                />
 
                                 <Tooltip title="Delete layer">
                                   <IconButton

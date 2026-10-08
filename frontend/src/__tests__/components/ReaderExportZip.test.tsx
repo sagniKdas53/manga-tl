@@ -434,7 +434,7 @@ describe("Reader project ZIP export", () => {
 
     const project = JSON.parse(await zip.file("project.json")!.async("string"));
     // Tracker R7-D3: version 2 carries the Inpainting layer; version 1 is refused on import.
-    expect(project.schemaVersion).toBe(2);
+    expect(project.schemaVersion).toBe(3);
     expect(project.pageNumber).toBe(22);
     expect(project.imageId).toBe("img1");
     expect(project.dimensions).toEqual({ width: 1200, height: 1600 });

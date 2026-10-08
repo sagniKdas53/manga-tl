@@ -424,7 +424,8 @@ async fn image_archive_upload_and_project_restore() {
     assert_eq!(page_count, 2);
 
     // --- Case A: page-level project restore onto the next slot ---
-    let project = r#"{"schemaVersion":2,"layers":[{"type":"translation","targetLanguage":"en","visible":true,"zOrder":3,"elements":[{"text":"Restored text","font":"Comic Neue","size":18,"x":10,"y":12,"maxWidth":120,"maxHeight":40,"visible":true}]}]}"#;
+    // F3: version 3 carries groups; the translation layer sits in one by the archive's own ids.
+    let project = r#"{"schemaVersion":3,"layers":[{"id":"g-1","type":"group","visible":true,"zOrder":4,"metadataJson":{"layer_name":"Re-runs"},"elements":[]},{"id":"t-1","parentId":"g-1","type":"translation","targetLanguage":"en","visible":true,"zOrder":3,"elements":[{"text":"Restored text","font":"Comic Neue","size":18,"x":10,"y":12,"maxWidth":120,"maxHeight":40,"visible":true}]}]}"#;
     let project_zip = {
         let cursor = std::io::Cursor::new(Vec::new());
         let mut writer = zip::ZipWriter::new(cursor);
@@ -467,6 +468,15 @@ async fn image_archive_upload_and_project_restore() {
     .await
     .unwrap();
     assert_eq!(element_text.0.as_deref(), Some("Restored text"));
+    let grouped: (Option<String>,) = sqlx::query_as(
+        "SELECT g.metadata_json->>'layer_name' FROM layers l JOIN layers g ON g.id = l.parent_id \
+         WHERE l.page_id = $1 AND l.type = 'translation'",
+    )
+    .bind(uuid::Uuid::parse_str(restored_page_id).unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(grouped.0.as_deref(), Some("Re-runs"));
 
     // Restore a different original into the occupied slot through the upload route. The image
     // swap, layer replacement and revision increment must commit as one page replacement.
@@ -524,8 +534,13 @@ async fn image_archive_upload_and_project_restore() {
     .unwrap();
     assert_eq!(replacement_element_count, 1);
 
-    // Tracker R7-D3: version 1 has no cleanup patches and is refused, not converted.
-    for (version, fragment) in [(1, "no longer supported"), (3, "unsupported")] {
+    // Tracker R7-D3: version 1 has no cleanup patches and is refused, not converted. F3: so is
+    // version 2, with the converter named.
+    for (version, fragment) in [
+        (1, "no longer supported"),
+        (2, "convert_project_v2_to_v3.py"),
+        (4, "unsupported"),
+    ] {
         let unsupported = zip_of(
             vec![("original.png".into(), png_bytes([40, 40, 240]))],
             Some(&format!(r#"{{"schemaVersion":{version},"layers":[]}}"#)),
@@ -558,7 +573,7 @@ async fn image_archive_upload_and_project_restore() {
     let (patch_sha, mask_sha) = (digest(&patch), digest(&mask));
     let foreign_region = uuid::Uuid::new_v4();
     let inpainting_project = format!(
-        r##"{{"schemaVersion":2,"layers":[{{"type":"inpainting","visible":true,"zOrder":-1,"elements":[
+        r##"{{"schemaVersion":3,"layers":[{{"type":"inpainting","visible":true,"zOrder":-1,"elements":[
             {{"x":14.5,"y":20,"maxWidth":90,"maxHeight":30,"visible":true,"opacity":0.4,"regionId":"{foreign_region}",
               "cleanupRef":{{"patchSha256":"{patch_sha}","patchByteLength":{},"maskSha256":"{mask_sha}","maskByteLength":{},
                              "generatorSha256":"{}","bounds":{{"x":10,"y":20,"width":60,"height":30}},"order":0}}}},

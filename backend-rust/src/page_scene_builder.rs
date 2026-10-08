@@ -424,10 +424,12 @@ pub async fn build_pipeline_scene(
 
     // Same selection rule as the Pillow path it replaces: visible elements on visible
     // translation/sfx layers, painted in layer z-order.
-    let layers: Vec<Layer> = sqlx::query_as(
-        "SELECT * FROM layers WHERE page_id = $1 AND visible = TRUE \
-         AND LOWER(type) IN ('translation', 'sfx') ORDER BY z_order ASC, created_at ASC",
-    )
+    // F3: "visible" is the layer's switch and its group's (`crate::layer_tree`).
+    let layers: Vec<Layer> = sqlx::query_as(concat!(
+        "SELECT l.* FROM layers l WHERE l.page_id = $1 AND ",
+        crate::layer_shown!("l"),
+        " AND LOWER(l.type) IN ('translation', 'sfx') ORDER BY l.z_order ASC, l.created_at ASC",
+    ))
     .bind(page_id)
     .fetch_all(&mut **tx)
     .await
@@ -491,10 +493,11 @@ pub async fn build_pipeline_scene(
 
     // Tracker R7: the patches are the visible elements of the visible Inpainting layers, painted
     // layer by layer (z_order, then age) and, within a layer, in each patch's stored order.
-    let inpainting_layers: Vec<Layer> = sqlx::query_as(
-        "SELECT * FROM layers WHERE page_id = $1 AND visible = TRUE AND LOWER(type) = 'inpainting' \
-         ORDER BY z_order ASC, created_at ASC, id ASC",
-    )
+    let inpainting_layers: Vec<Layer> = sqlx::query_as(concat!(
+        "SELECT l.* FROM layers l WHERE l.page_id = $1 AND ",
+        crate::layer_shown!("l"),
+        " AND LOWER(l.type) = 'inpainting' ORDER BY l.z_order ASC, l.created_at ASC, l.id ASC",
+    ))
     .bind(page_id)
     .fetch_all(&mut **tx)
     .await

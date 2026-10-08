@@ -685,6 +685,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/layers/{id}/delete-hidden-texts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description F3 (#178): deletes the texts a merge hid on this layer (`metadataJson.merge_hidden`), keeping any shown again since. Answers `{deleted}`. */
+        post: operations["deleteHiddenTexts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/layers/{layerId}/elements": {
         parameters: {
             query?: never;
@@ -838,6 +855,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["createPageLayer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pages/{pageId}/layers/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description F3 (#178): merges two or more like layers (text with text, patches with patches) into the lowest one. Body `{layerIds}`. Where two layers have text for one region the upper text stays shown and the lower is hidden; answers `{layer, mergedLayerIds, hiddenTexts, hiddenRegions}`. Layers that are not all shown, or all hidden, are refused. */
+        post: operations["mergeLayers"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1208,6 +1242,11 @@ export interface components {
             /** Format: uuid */
             id?: string;
             metadataJson?: components["schemas"]["JsonNode"];
+            /**
+             * Format: uuid
+             * @description F3 (#178): the group (a layer of type `group`) this layer sits in; null at the top level. A layer is shown only while it and its group are visible.
+             */
+            parentId?: string;
             targetLanguage?: string;
             type?: string;
             visible?: boolean;
@@ -2973,6 +3012,30 @@ export interface operations {
             };
         };
     };
+    deleteHiddenTexts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: Record<string, never>;
+                    };
+                };
+            };
+        };
+    };
     createLayerElement: {
         parameters: {
             query?: never;
@@ -3316,6 +3379,43 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["Layer"];
                 };
+            };
+        };
+    };
+    mergeLayers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: Record<string, never>;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: Record<string, never>;
+                    };
+                };
+            };
+            /** @description Not two or more like layers on this page, or a mix of shown and hidden layers */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -1901,11 +1901,12 @@ pub async fn review_ocr_region(
                 .map_err(|e| e.to_string())?;
                 // `word_wrap` is the Reader's per-element "draw my plate" switch. Shown layers only:
                 // hidden ones are history and keep what they had.
-                sqlx::query(
+                sqlx::query(concat!(
                     "UPDATE layer_elements e SET mask_polygon = $2, background_color = $3, word_wrap = TRUE \
-                     FROM layers l WHERE e.layer_id = l.id AND l.type NOT ILIKE 'ocr' AND l.visible \
-                       AND LOWER(l.type) <> 'inpainting' AND e.region_id = $1",
-                )
+                     FROM layers l WHERE e.layer_id = l.id AND l.type NOT ILIKE 'ocr' AND ",
+                    crate::layer_shown!("l"),
+                    " AND LOWER(l.type) <> 'inpainting' AND e.region_id = $1",
+                ))
                 .bind(id)
                 .bind(polygon)
                 .bind(colour)
@@ -2268,11 +2269,12 @@ async fn show_translations(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     region_id: Uuid,
 ) -> Result<(), String> {
-    sqlx::query(
+    sqlx::query(concat!(
         "UPDATE layer_elements e SET visible = TRUE FROM layers l \
-         WHERE e.layer_id = l.id AND l.type ILIKE 'translation' AND l.visible AND e.region_id = $1 \
-           AND COALESCE(TRIM(e.text), '') <> ''",
-    )
+         WHERE e.layer_id = l.id AND l.type ILIKE 'translation' AND e.region_id = $1 AND ",
+        crate::layer_shown!("l"),
+        " AND COALESCE(TRIM(e.text), '') <> ''",
+    ))
     .bind(region_id)
     .execute(&mut **tx)
     .await
@@ -2811,7 +2813,10 @@ pub async fn insert_image_public(
 /// Tracker R7 (user decision R7-D3): version 2 adds the Inpainting layer -- `cleanup/<sha256>.png`
 /// files beside `project.json`, and `cleanupRef`/`opacity` on its elements. Version 1 is refused,
 /// not converted (standing no-compatibility rule): it cannot say where its cleanup went.
-const PROJECT_SCHEMA_VERSION: u64 = 2;
+/// F3 (#178): version 3 adds layer groups (`type: "group"` layers and each layer's `parentId`).
+/// Version 2 is refused too (owner, 2026-10-07); `scripts/convert_project_v2_to_v3.py` converts
+/// one, since a version 2 file simply has no groups.
+const PROJECT_SCHEMA_VERSION: u64 = 3;
 
 fn validate_project_schema(project_json: &[u8]) -> Result<(), &'static str> {
     let root: serde_json::Value =
@@ -2823,6 +2828,9 @@ fn validate_project_schema(project_json: &[u8]) -> Result<(), &'static str> {
         Some(PROJECT_SCHEMA_VERSION) => Ok(()),
         Some(1) => Err(
             "project.json schemaVersion 1 is no longer supported: it has no cleanup patches. Export the page again.",
+        ),
+        Some(2) => Err(
+            "project.json schemaVersion 2 is no longer supported: convert the archive with scripts/convert_project_v2_to_v3.py, or export the page again.",
         ),
         Some(_) => Err("project.json schemaVersion is unsupported"),
         None => Err("project.json schemaVersion is required"),
@@ -2873,6 +2881,10 @@ async fn restore_project_layers(
     let mut imported_layers = 0usize;
     let mut imported_elements = 0usize;
     let mut has_manual_edits = false;
+    // F3: archive ids -> new ids, so groups and a merge's hidden texts survive the import.
+    let mut layer_ids: std::collections::HashMap<String, Uuid> = std::collections::HashMap::new();
+    let mut element_ids: std::collections::HashMap<String, Uuid> = std::collections::HashMap::new();
+    let mut parents: Vec<(Uuid, String)> = Vec::new();
 
     for layer_node in &layers_node {
         let ltype = layer_node
@@ -2914,6 +2926,12 @@ async fn restore_project_layers(
         .await
         .map_err(|_| ())?;
         imported_layers += 1;
+        if let Some(old) = layer_node.get("id").and_then(|v| v.as_str()) {
+            layer_ids.insert(old.to_string(), layer_id);
+        }
+        if let Some(parent) = layer_node.get("parentId").and_then(|v| v.as_str()) {
+            parents.push((layer_id, parent.to_string()));
+        }
 
         let elements = layer_node
             .get("elements")
@@ -3080,7 +3098,54 @@ async fn restore_project_layers(
             .await
             .map_err(|_| ())?;
             imported_elements += 1;
+            if let Some(old) = el.get("id").and_then(|v| v.as_str()) {
+                element_ids.insert(old.to_string(), element_id);
+            }
         }
+    }
+
+    // F3: groups, by the archive's own ids. A parent that is not one of its groups is dropped.
+    for (layer_id, old_parent) in parents {
+        if let Some(parent_id) = layer_ids.get(&old_parent) {
+            sqlx::query(
+                "UPDATE layers SET parent_id = $2 WHERE id = $1 \
+                 AND EXISTS (SELECT 1 FROM layers g WHERE g.id = $2 AND LOWER(g.type) = 'group') \
+                 AND LOWER(type) <> 'group'",
+            )
+            .bind(layer_id)
+            .bind(parent_id)
+            .execute(&mut **tx)
+            .await
+            .map_err(|_| ())?;
+        }
+    }
+    // A merge's hidden texts, renamed to the new element ids.
+    for (layer_node, new_id) in layers_node.iter().filter_map(|node| {
+        let old = node.get("id")?.as_str()?;
+        Some((node, *layer_ids.get(old)?))
+    }) {
+        let Some(hidden) = layer_node
+            .get("metadataJson")
+            .and_then(|meta| meta.get("merge_hidden"))
+            .and_then(|v| v.as_array())
+        else {
+            continue;
+        };
+        let renamed: Vec<String> = hidden
+            .iter()
+            .filter_map(|v| v.as_str())
+            .filter_map(|old| element_ids.get(old))
+            .map(Uuid::to_string)
+            .collect();
+        sqlx::query(
+            "UPDATE layers SET metadata_json = jsonb_set(metadata_json, '{merge_hidden}', $2) \
+             WHERE id = $1 AND jsonb_typeof(metadata_json) = 'object'",
+        )
+        .bind(new_id)
+        .bind(serde_json::json!(renamed))
+        .execute(&mut **tx)
+        .await
+        .map_err(|_| ())?;
     }
 
     if has_manual_edits && track_manual_edits {

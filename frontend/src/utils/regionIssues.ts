@@ -1,3 +1,4 @@
+import { isLayerShown } from "./layerTree";
 import type { Layer, LayerElement, OcrRegion } from "../types";
 
 /** A quick resolution the issues view offers. */
@@ -175,7 +176,9 @@ export function translationElementByRegion(
 ): Map<string, LayerElement> {
   const byRegion = new Map<string, LayerElement>();
   const translationLayers = layers
-    .filter((l) => l.layer.type === "translation" && l.layer.visible === true)
+    .filter(
+      (l) => l.layer.type === "translation" && isLayerShown(l.layer, layers),
+    )
     .sort((a, b) => b.layer.zOrder - a.layer.zOrder);
   for (const { elements } of translationLayers) {
     for (const element of elements) {

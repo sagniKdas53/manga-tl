@@ -15,6 +15,7 @@ pub mod auth;
 pub mod health;
 pub mod internal;
 pub mod jobs;
+pub mod layer_merge;
 pub mod layers;
 pub mod layers_ops;
 pub mod manual_cleanup;
@@ -187,6 +188,15 @@ fn layer_routes() -> Router<AppState> {
         .route(
             "/images/{imageId}/layers",
             axum::routing::post(layers::create_image_layer),
+        )
+        // F3 (#178).
+        .route(
+            "/pages/{pageId}/layers/merge",
+            axum::routing::post(layer_merge::merge_layers),
+        )
+        .route(
+            "/layers/{id}/delete-hidden-texts",
+            axum::routing::post(layer_merge::delete_hidden_texts),
         )
 }
 

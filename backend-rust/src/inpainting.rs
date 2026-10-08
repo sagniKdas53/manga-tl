@@ -181,10 +181,11 @@ async fn newest_visible_layer(
     page_id: Uuid,
     source: &str,
 ) -> Result<Uuid, sqlx::Error> {
-    let newest: Option<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM layers WHERE page_id = $1 AND LOWER(type) = 'inpainting' AND visible \
-         ORDER BY z_order DESC, created_at DESC LIMIT 1",
-    )
+    let newest: Option<Uuid> = sqlx::query_scalar(concat!(
+        "SELECT l.id FROM layers l WHERE l.page_id = $1 AND LOWER(l.type) = 'inpainting' AND ",
+        crate::layer_shown!("l"),
+        " ORDER BY l.z_order DESC, l.created_at DESC LIMIT 1",
+    ))
     .bind(page_id)
     .fetch_optional(&mut **tx)
     .await?;

@@ -27,6 +27,8 @@ import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
 import { paintLayerMask } from "../utils/maskPaint";
 import { elementFit } from "../utils/elementFit";
 import { ocrFragmentLabel, ocrFragmentsOf } from "../utils/ocrFragments";
+import { isGroupLayer, isLayerShown } from "../utils/layerTree";
+import type { LayerActions } from "./LayerPanelMenus";
 import { useFontsVersion } from "../hooks/useFontsVersion";
 import { STROKE_WIDTH_RATIO } from "@manga-library/page-scene";
 import {
@@ -614,7 +616,7 @@ export const Reader: React.FC<ReaderProps> = ({
   const hasMoved = useRef(false);
 
   const { subscribe } = useNotifications();
-  const { showToast, showError } = useToast();
+  const { showToast, showError, showInfo: showActionInfo } = useToast();
 
   const [dirtyElements, setDirtyElements] = useState<Set<string>>(new Set());
   // Element edits wait here, newest copy per element, until the page has been left alone for
@@ -1093,7 +1095,8 @@ export const Reader: React.FC<ReaderProps> = ({
   const overflowingElementIds = React.useMemo(() => {
     const ids = new Set<string>();
     for (const { layer, elements } of layers) {
-      if (layer.type !== "translation" || layer.visible !== true) continue;
+      if (layer.type !== "translation" || !isLayerShown(layer, layers))
+        continue;
       for (const element of elements) {
         if (
           element.visible === true &&
@@ -1111,7 +1114,7 @@ export const Reader: React.FC<ReaderProps> = ({
   // Issues are judged against what is drawn: with every translation layer hidden there is
   // nothing to judge, and the review tally freezes instead of reading that as all settled.
   const reviewable = layers.some(
-    (l) => l.layer.type === "translation" && l.layer.visible === true,
+    (l) => l.layer.type === "translation" && isLayerShown(l.layer, layers),
   );
   const issues = React.useMemo(
     () =>
@@ -2798,6 +2801,170 @@ export const Reader: React.FC<ReaderProps> = ({
     });
   }, [selectedPage]);
 
+  /**
+   * F3 (#178): add, rename, group and merge layers. Each is one server request that changes the
+   * page in one transaction; the editor then reloads the page's layers, since a merge moves
+   * elements and a group can bring back text a redo overlay hid.
+   */
+  const layerRequest = useCallback(
+    async (url: string, method: string, body?: unknown) => {
+      const res = await safeFetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      if (!res.ok) {
+        let detail = "";
+        try {
+          detail = ((await res.json()) as { detail?: string }).detail ?? "";
+        } catch {
+          // a body that is not JSON says nothing more
+        }
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+      const text = await res.text();
+      return text ? (JSON.parse(text) as Record<string, unknown>) : {};
+    },
+    [user.token],
+  );
+
+  const afterLayerChange = useCallback(() => {
+    refreshAfterOverlayChange();
+    renderCurrentPage();
+  }, [refreshAfterOverlayChange, renderCurrentPage]);
+
+  const topZOrder = () =>
+    layers.reduce((top, l) => Math.max(top, l.layer.zOrder), 0) + 1;
+
+  const handleDeleteHiddenTexts = useCallback(
+    async (layerId: string) => {
+      try {
+        const result = await layerRequest(
+          `/api/layers/${layerId}/delete-hidden-texts`,
+          "POST",
+        );
+        showToast(`Deleted ${result.deleted ?? 0} hidden texts.`, "success");
+        afterLayerChange();
+      } catch (err) {
+        showError(
+          `Could not delete the hidden texts: ${(err as Error).message}`,
+        );
+      }
+    },
+    [layerRequest, showToast, showError, afterLayerChange],
+  );
+
+  const layerActions: LayerActions = {
+    addLayer: async (type) => {
+      if (type === "translation" || type === "sfx") {
+        await handleCreateLayer(type);
+        return;
+      }
+      if (!selectedPage) return;
+      try {
+        await layerRequest(`/api/pages/${selectedPage.id}/layers`, "POST", {
+          type,
+          visible: true,
+          zOrder: topZOrder(),
+          name: type === "group" ? "Group" : "Patches",
+        });
+        afterLayerChange();
+      } catch (err) {
+        showError(`Could not add the layer: ${(err as Error).message}`);
+      }
+    },
+    renameLayer: async (layerId, name) => {
+      try {
+        await layerRequest(`/api/layers/${layerId}`, "PUT", { name });
+        setLayers((prev) =>
+          prev.map((l) =>
+            l.layer.id === layerId
+              ? {
+                  ...l,
+                  layer: {
+                    ...l.layer,
+                    metadataJson: {
+                      ...(l.layer.metadataJson ?? {}),
+                      layer_name: name,
+                    },
+                  },
+                }
+              : l,
+          ),
+        );
+      } catch (err) {
+        showError(`Could not rename the layer: ${(err as Error).message}`);
+      }
+    },
+    setLayerGroup: async (layerId, groupId) => {
+      try {
+        await layerRequest(`/api/layers/${layerId}`, "PUT", {
+          parentId: groupId,
+        });
+        afterLayerChange();
+      } catch (err) {
+        showError(`Could not move the layer: ${(err as Error).message}`);
+      }
+    },
+    groupLayers: async (layerIds, name) => {
+      if (!selectedPage || !layerIds.length) return;
+      try {
+        await layerRequest(`/api/pages/${selectedPage.id}/layers`, "POST", {
+          type: "group",
+          visible: true,
+          zOrder: topZOrder(),
+          name,
+          childIds: layerIds,
+        });
+        afterLayerChange();
+      } catch (err) {
+        showError(`Could not group the layers: ${(err as Error).message}`);
+      }
+    },
+    mergeLayers: async (layerIds) => {
+      if (!selectedPage || layerIds.length < 2) return;
+      try {
+        const result = await layerRequest(
+          `/api/pages/${selectedPage.id}/layers/merge`,
+          "POST",
+          { layerIds },
+        );
+        afterLayerChange();
+        const hidden = Number(result.hiddenTexts ?? 0);
+        const regions = Number(result.hiddenRegions ?? 0);
+        const target = (result.layer as { id?: string } | undefined)?.id;
+        if (hidden > 0 && target) {
+          // D2 (owner, 2026-10-07): say that the lower text is now hidden, and offer to delete it.
+          showActionInfo(
+            `Merged ${layerIds.length} layers. ${regions} ${regions === 1 ? "region" : "regions"} had text on more than one; the lower text is hidden in the merged layer.`,
+            {
+              action: {
+                label: "Delete hidden texts",
+                onClick: () => void handleDeleteHiddenTexts(target),
+              },
+            },
+          );
+        } else {
+          showToast(`Merged ${layerIds.length} layers.`, "success");
+        }
+      } catch (err) {
+        showError(`Could not merge: ${(err as Error).message}`);
+      }
+    },
+    deleteHiddenTexts: handleDeleteHiddenTexts,
+    ungroup: async (groupId) => {
+      try {
+        await layerRequest(`/api/layers/${groupId}`, "DELETE");
+        afterLayerChange();
+      } catch (err) {
+        showError(`Could not ungroup: ${(err as Error).message}`);
+      }
+    },
+  };
+
   const handleToggleLayerVisibility = async (layerId: string) => {
     const layerData = layers.find((l) => l.layer.id === layerId);
     if (!layerData) return;
@@ -2830,7 +2997,9 @@ export const Reader: React.FC<ReaderProps> = ({
         },
         body: JSON.stringify({ visible: nextVisible }),
       });
-      if (isRedoOverlay(layerData.layer)) {
+      // A group's switch re-applies the overlays of every layer in it on the server, which
+      // can show or hide text on other layers, so reload them too.
+      if (isRedoOverlay(layerData.layer) || isGroupLayer(layerData.layer)) {
         refreshAfterOverlayChange();
       }
       if (res.ok) renderCurrentPage();
@@ -3304,7 +3473,8 @@ export const Reader: React.FC<ReaderProps> = ({
 
       const paintedIds = new Set(patches.map((patch) => patch.element.id));
       const projectData = {
-        schemaVersion: 2,
+        // F3 (#178): version 3 carries layer groups (`type: "group"` layers, `parentId`).
+        schemaVersion: 3,
         pageNumber: selectedPage.pageNumber,
         imageId: selectedPage.imageId,
         dimensions: { width: W, height: H },
@@ -3324,6 +3494,7 @@ export const Reader: React.FC<ReaderProps> = ({
             targetLanguage: lData.layer.targetLanguage,
             visible: lData.layer.visible,
             zOrder: lData.layer.zOrder,
+            parentId: lData.layer.parentId ?? null,
             metadataJson: lData.layer.metadataJson,
             elements: lData.elements.map((el) => ({
               id: el.id,
@@ -3340,7 +3511,7 @@ export const Reader: React.FC<ReaderProps> = ({
               // are baked in here. A patch on a shown layer is visible only if it is painted
               // now (R7-D4); hidden layers are history and keep what they had.
               visible:
-                el.cleanupRef && lData.layer.visible === true
+                el.cleanupRef && isLayerShown(lData.layer, layers)
                   ? paintedIds.has(el.id)
                   : el.visible,
               wordWrap: el.wordWrap,
@@ -4071,6 +4242,7 @@ export const Reader: React.FC<ReaderProps> = ({
     handleMoveLayer,
     handleCreateTranslationLayer,
     handleCreateSfxLayer,
+    ...layerActions,
     handleToggleLayerVisibility,
     handleCloneLayer,
     handleDeleteLayer,
@@ -4624,7 +4796,7 @@ export const Reader: React.FC<ReaderProps> = ({
                   // Inpainting layers are painted above, under every text layer.
                   if (
                     inpaintingView ||
-                    !lData.layer.visible ||
+                    !isLayerShown(lData.layer, layers) ||
                     isOcrHidden ||
                     isInpaintingLayer(lData.layer)
                   )

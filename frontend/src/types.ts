@@ -165,7 +165,7 @@ export interface Conversation {
 
 export interface Layer {
   id: string;
-  type: string; // translation | ocr | notes | mask | sfx | inpainting
+  type: string; // translation | ocr | notes | mask | sfx | inpainting | group
   targetLanguage?: string | null;
   // AUDIT-F25. Nullable in the database and `Option<bool>` in the model, so the API really can
   // send `null` and this used to lie about it. A null is *hidden*: that is what the canvas does,
@@ -177,6 +177,8 @@ export interface Layer {
   zOrder: number;
   metadataJson?: Record<string, unknown> | null;
   createdAt: string;
+  /** F3 (#178): the group this layer sits in; see `utils/layerTree.ts`. */
+  parentId?: string | null;
 }
 
 export interface LayerElement {

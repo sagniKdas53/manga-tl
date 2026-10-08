@@ -3916,15 +3916,15 @@ pub async fn create_region_redo_overlay(
     .execute(&mut **tx)
     .await?;
 
-    let hidden: Vec<Uuid> = sqlx::query_scalar(
+    let hidden: Vec<Uuid> = sqlx::query_scalar(concat!(
         "UPDATE layer_elements SET visible = FALSE \
          WHERE region_id = $1 AND visible = TRUE AND layer_id <> $2 \
            AND layer_id IN ( \
-             SELECT id FROM layers WHERE type ILIKE $3 AND visible = TRUE \
-               AND ($4::text IS NULL OR LOWER(target_language) = LOWER($4)) \
-           ) \
-         RETURNING id",
-    )
+             SELECT l.id FROM layers l WHERE l.type ILIKE $3 AND \
+               ($4::text IS NULL OR LOWER(l.target_language) = LOWER($4)) AND ",
+        crate::layer_shown!("l"),
+        ") RETURNING id",
+    ))
     .bind(region_id)
     .bind(layer_id)
     .bind(layer_type)

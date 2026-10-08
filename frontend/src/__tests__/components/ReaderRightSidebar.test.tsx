@@ -765,6 +765,82 @@ describe("ReaderRightSidebar", () => {
       return props;
     };
 
+    it("folds a group's layers under one row, and its menus send F3's actions", () => {
+      const L = (id: string, zOrder: number, over: object = {}) => ({
+        layer: {
+          id,
+          type: "translation",
+          visible: true,
+          zOrder,
+          createdAt: "2026-10-07T00:00:00Z",
+          ...over,
+        } as unknown as import("../../types").Layer,
+        elements: [],
+      });
+      const actions = {
+        addLayer: vi.fn(),
+        renameLayer: vi.fn(),
+        setLayerGroup: vi.fn(),
+        groupLayers: vi.fn(),
+        mergeLayers: vi.fn(),
+        deleteHiddenTexts: vi.fn(),
+        ungroup: vi.fn(),
+      };
+      renderSidebar({
+        ...actions,
+        activeLayerId: null,
+        sortedLayers: [
+          L("base", 1, { metadataJson: { merge_hidden: ["x", "y"] } }),
+          L("old", 2, { parentId: "g", visible: false }),
+          L("retry", 3, { parentId: "g" }),
+          L("g", 4, { type: "group", metadataJson: { layer_name: "Re-runs" } }),
+          L("top", 5, { metadataJson: { layer_name: "Top TL" } }),
+        ],
+      });
+
+      // Folded: the group row says what it holds; its layers are out of the way.
+      expect(screen.getByText("Re-runs")).toBeInTheDocument();
+      expect(screen.getByText(/2 layers/)).toBeInTheDocument();
+      expect(
+        screen.queryAllByRole("button", { name: "Layer actions" }),
+      ).toHaveLength(2);
+      fireEvent.click(screen.getByRole("button", { name: "Unfold group" }));
+      expect(
+        screen.getAllByRole("button", { name: "Layer actions" }),
+      ).toHaveLength(4);
+      expect(screen.getByText(/layer hidden/)).toBeInTheDocument();
+
+      // Merge visible text layers: base, retry and top (old is hidden).
+      fireEvent.click(screen.getByRole("button", { name: "Merge" }));
+      fireEvent.click(screen.getByText(/Merge visible text layers \(3\)/));
+      expect(actions.mergeLayers).toHaveBeenCalledWith([
+        "base",
+        "retry",
+        "top",
+      ]);
+
+      // Merge down from the top layer is refused: retry, shown, sits between it and base, and
+      // the merge would move top's text under it.
+      const rowMenus = screen.getAllByRole("button", { name: "Layer actions" });
+      fireEvent.click(rowMenus[0]);
+      expect(
+        screen.getByText("Merge down").closest('[role="menuitem"]'),
+      ).toHaveAttribute("aria-disabled", "true");
+      fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+
+      // The merge's hidden lower texts can be deleted from the merged layer's row.
+      expect(
+        screen.getByText(/2 lower texts hidden by a merge/),
+      ).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Delete them" }));
+      expect(actions.deleteHiddenTexts).toHaveBeenCalledWith("base");
+
+      // Ungroup keeps the layers.
+      fireEvent.click(screen.getByRole("button", { name: "Group actions" }));
+      fireEvent.click(screen.getByText(/Ungroup/));
+      expect(actions.ungroup).toHaveBeenCalledWith("g");
+    });
+
     it("says how many of a layer's elements are hidden", () => {
       renderSidebar();
       expect(screen.getByText(/1 hidden/)).toBeInTheDocument();

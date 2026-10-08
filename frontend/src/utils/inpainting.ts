@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { cleanupOpacity } from "@manga-library/page-scene";
 import type { Layer, LayerElement, OcrRegion } from "../types";
 import { safeFetch } from "../utils";
+import { isLayerShown } from "./layerTree";
 
 export const INPAINTING_LAYER_TYPE = "inpainting";
 
@@ -47,7 +48,7 @@ export function regionAllowsPatch(
 ): boolean {
   const hasVisibleText = layers.some(
     ({ layer, elements }) =>
-      layer.visible === true &&
+      isLayerShown(layer, layers) &&
       ["translation", "sfx"].includes(layer.type.toLowerCase()) &&
       elements.some(
         (element) =>
@@ -91,7 +92,7 @@ export function patchesFollowingText(
   if (!visible) {
     const otherVisibleText = layers.some(
       ({ layer, elements }) =>
-        layer.visible === true &&
+        isLayerShown(layer, layers) &&
         TEXT_LAYER_TYPES.includes(layer.type.toLowerCase()) &&
         elements.some(
           (other) =>
@@ -152,7 +153,9 @@ export function paintedPatches(
 ): PaintedPatch[] {
   const regionById = new Map(regions.map((region) => [region.id, region]));
   return layers
-    .filter(({ layer }) => layer.visible === true && isInpaintingLayer(layer))
+    .filter(
+      ({ layer }) => isLayerShown(layer, layers) && isInpaintingLayer(layer),
+    )
     .sort(
       (a, b) =>
         a.layer.zOrder - b.layer.zOrder ||

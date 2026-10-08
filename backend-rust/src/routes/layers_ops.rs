@@ -51,6 +51,12 @@ pub async fn delete_layer(
         let _ = tx.rollback().await;
         return error::internal_error("/api/layers/{id}");
     }
+    // F3: deleting a group keeps its layers; the foreign key takes them out of it.
+    let members: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM layers WHERE parent_id = $1")
+        .bind(id)
+        .fetch_all(&mut *tx)
+        .await
+        .unwrap_or_default();
     let result = sqlx::query("DELETE FROM layers WHERE id = $1")
         .bind(id)
         .execute(&mut *tx)
@@ -58,6 +64,13 @@ pub async fn delete_layer(
     match result {
         Ok(res) if res.rows_affected() > 0 => {
             let page_id = page_id.expect("deleted layer must have an owning page");
+            for member in members {
+                if let Err(err) = crate::layer_tree::sync_overlays(&mut tx, member).await {
+                    tracing::error!("Could not sync overlay {member} out of group {id}: {err}");
+                    let _ = tx.rollback().await;
+                    return error::internal_error("/api/layers/{id}");
+                }
+            }
             if let Err(err) = advance_page_revision_by_hand(&mut tx, page_id).await {
                 tracing::error!("Could not advance page revision for deleted layer {id}: {err}");
                 let _ = tx.rollback().await;
@@ -76,7 +89,11 @@ pub async fn delete_layer(
     }
 }
 
-/// PUT /api/layers/{id} — partial {zOrder?, visible?}.
+/// PUT /api/layers/{id} — partial {zOrder?, visible?, name?, parentId?}.
+///
+/// F3 (#178): `name` sets `metadata_json.layer_name`, which the panel shows and the project ZIP
+/// carries. `parentId` puts the layer in a group (a layer of type `group` on the same page), or
+/// takes it out with `null`. Groups do not nest, so a group never gets a parent.
 pub async fn update_layer(
     State(state): State<AppState>,
     user: AuthUser,
@@ -93,6 +110,29 @@ pub async fn update_layer(
     let z_order = crate::routes::layers::z_order_of(payload.get("zOrder"));
     // Java: Boolean.TRUE.equals(value) — non-true values become false.
     let visible = payload.get("visible").map(|v| v.as_bool().unwrap_or(false));
+    let name = match payload.get("name") {
+        None => None,
+        Some(serde_json::Value::String(name)) if !name.trim().is_empty() => {
+            Some(name.trim().chars().take(120).collect::<String>())
+        }
+        Some(_) => {
+            return error::bad_request("name must be a non-empty string", "/api/layers/{id}");
+        }
+    };
+    // Some(None) takes the layer out of its group.
+    let parent = match payload.get("parentId") {
+        None => None,
+        Some(serde_json::Value::Null) => Some(None),
+        Some(serde_json::Value::String(raw)) => match Uuid::parse_str(raw) {
+            Ok(parent) => Some(Some(parent)),
+            Err(_) => {
+                return error::bad_request("parentId must be a uuid or null", "/api/layers/{id}");
+            }
+        },
+        Some(_) => {
+            return error::bad_request("parentId must be a uuid or null", "/api/layers/{id}");
+        }
+    };
 
     let mut tx = match state.pool.begin().await {
         Ok(tx) => tx,
@@ -102,14 +142,36 @@ pub async fn update_layer(
         }
     };
 
+    if let Some(Some(parent_id)) = parent {
+        match check_parent(&mut tx, id, parent_id).await {
+            Ok(None) => {}
+            Ok(Some(problem)) => {
+                let _ = tx.rollback().await;
+                return error::bad_request(problem, "/api/layers/{id}");
+            }
+            Err(err) => {
+                tracing::error!("Could not check group {parent_id} for layer {id}: {err}");
+                let _ = tx.rollback().await;
+                return error::internal_error("/api/layers/{id}");
+            }
+        }
+    }
+
     let page_id = sqlx::query_scalar(
         "UPDATE layers SET \
-           z_order = COALESCE($2, z_order), visible = COALESCE($3, visible) \
+           z_order = COALESCE($2, z_order), visible = COALESCE($3, visible), \
+           metadata_json = CASE WHEN $4::text IS NULL THEN metadata_json \
+             ELSE jsonb_set(CASE WHEN jsonb_typeof(metadata_json) = 'object' THEN metadata_json \
+               ELSE '{}'::jsonb END, '{layer_name}', to_jsonb($4::text)) END, \
+           parent_id = CASE WHEN $5 THEN $6 ELSE parent_id END \
          WHERE id = $1 RETURNING page_id",
     )
     .bind(id)
     .bind(z_order)
     .bind(visible)
+    .bind(name)
+    .bind(parent.is_some())
+    .bind(parent.flatten())
     .fetch_optional(&mut *tx)
     .await;
 
@@ -129,10 +191,10 @@ pub async fn update_layer(
     // that reading again — so the layer switch actually compares the two, which is what it looks
     // like it should do. The flag and the restore share the transaction: flipping `visible` while
     // the restore failed would leave the bubble blank with the overlay already switched off, and
-    // nothing left to toggle to bring it back.
-    if let Some(visible) = visible
-        && let Err(err) =
-            crate::jobs::coordinator::sync_superseded_elements(&mut tx, id, visible).await
+    // nothing left to toggle to bring it back. F3: a group's switch, and moving a layer in or out
+    // of a hidden group, change what is shown the same way.
+    if (visible.is_some() || parent.is_some())
+        && let Err(err) = crate::layer_tree::sync_overlays(&mut tx, id).await
     {
         tracing::error!("Could not sync what overlay {id} superseded: {err}");
         let _ = tx.rollback().await;
@@ -149,6 +211,36 @@ pub async fn update_layer(
         return error::internal_error("/api/layers/{id}");
     }
     StatusCode::OK.into_response()
+}
+
+/// Why `layer_id` may not go into `parent_id`, or None when it may.
+async fn check_parent(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    layer_id: Uuid,
+    parent_id: Uuid,
+) -> Result<Option<&'static str>, sqlx::Error> {
+    let rows: Vec<(Uuid, String, Uuid)> =
+        sqlx::query_as("SELECT id, type, page_id FROM layers WHERE id = ANY($1)")
+            .bind(vec![layer_id, parent_id])
+            .fetch_all(&mut **tx)
+            .await?;
+    let find = |id: Uuid| rows.iter().find(|row| row.0 == id);
+    let (Some(layer), Some(group)) = (find(layer_id), find(parent_id)) else {
+        return Ok(Some("the layer or the group does not exist"));
+    };
+    let is_group =
+        |layer_type: &str| layer_type.eq_ignore_ascii_case(crate::layer_tree::GROUP_TYPE);
+    Ok(if layer_id == parent_id {
+        Some("a layer cannot be its own group")
+    } else if !is_group(&group.1) {
+        Some("parentId must name a group")
+    } else if is_group(&layer.1) {
+        Some("groups do not nest")
+    } else if layer.2 != group.2 {
+        Some("the group is on another page")
+    } else {
+        None
+    })
 }
 
 /// POST /api/layers/{layerId}/elements — Java defaults applied for absent fields.

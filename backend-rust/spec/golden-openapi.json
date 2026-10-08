@@ -213,6 +213,11 @@
           "metadataJson": {
             "$ref": "#/components/schemas/JsonNode"
           },
+          "parentId": {
+            "description": "F3 (#178): the group (a layer of type `group`) this layer sits in; null at the top level. A layer is shown only while it and its group are visible.",
+            "format": "uuid",
+            "type": "string"
+          },
           "targetLanguage": {
             "type": "string"
           },
@@ -3370,6 +3375,41 @@
         ]
       }
     },
+    "/api/layers/{id}/delete-hidden-texts": {
+      "post": {
+        "description": "F3 (#178): deletes the texts a merge hid on this layer (`metadataJson.merge_hidden`), keeping any shown again since. Answers `{deleted}`.",
+        "operationId": "deleteHiddenTexts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "object"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "layer-controller"
+        ]
+      }
+    },
     "/api/layers/{layerId}/elements": {
       "post": {
         "operationId": "createLayerElement",
@@ -3828,6 +3868,57 @@
               }
             },
             "description": "OK"
+          }
+        },
+        "tags": [
+          "layer-controller"
+        ]
+      }
+    },
+    "/api/pages/{pageId}/layers/merge": {
+      "post": {
+        "description": "F3 (#178): merges two or more like layers (text with text, patches with patches) into the lowest one. Body `{layerIds}`. Where two layers have text for one region the upper text stays shown and the lower is hidden; answers `{layer, mergedLayerIds, hiddenTexts, hiddenRegions}`. Layers that are not all shown, or all hidden, are refused.",
+        "operationId": "mergeLayers",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pageId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "object"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "Not two or more like layers on this page, or a mix of shown and hidden layers"
           }
         },
         "tags": [

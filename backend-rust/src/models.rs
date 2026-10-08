@@ -261,6 +261,10 @@ pub struct Layer {
     pub visible: Option<bool>,
     pub z_order: i32,
     pub page_id: Uuid,
+    /// F3 (#178): the group this layer sits in; see `crate::layer_tree`.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub parent_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

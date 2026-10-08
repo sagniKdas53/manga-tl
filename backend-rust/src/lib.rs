@@ -14,6 +14,7 @@ pub mod export;
 pub mod inpainting;
 pub mod jobs;
 pub mod jwt;
+pub mod layer_tree;
 pub mod logging;
 pub mod minio;
 pub mod models;
