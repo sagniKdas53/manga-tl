@@ -116,6 +116,30 @@ export function translatePolygon(
   return vertices.map(([x, y]) => [x + dx, y + dy] as Point);
 }
 
+/**
+ * The level box of an element drawn at `rotationDeg` whose outline is `vertices` (page space): the
+ * box that, turned about its own centre, holds the outline. AUDIT-R14 (#179): the page-space
+ * bounding box of a rotated outline is a bigger, different rectangle, and the element turns it
+ * again. The outline is measured un-rotated, and the box's middle is put back where it sits on
+ * the page (the pivot of the un-rotation drops out). Whole pixels, as a save needs (AUDIT-F14).
+ */
+export function unrotatedBox(
+  vertices: Polygon,
+  rotationDeg: number,
+): { x: number; y: number; w: number; h: number } {
+  if (vertices.length === 0 || !rotationDeg) return polygonBBox(vertices);
+  const pivot = polygonCentroid(vertices);
+  const level = polygonBBox(rotatePolygon(vertices, pivot, -rotationDeg));
+  const [mx, my] = rotatePoint(
+    [level.x + level.w / 2, level.y + level.h / 2],
+    pivot,
+    rotationDeg,
+  );
+  const w = Math.round(level.w);
+  const h = Math.round(level.h);
+  return { x: Math.round(mx - w / 2), y: Math.round(my - h / 2), w, h };
+}
+
 // ---------------------------------------------------------------------------
 // Shape generators
 // ---------------------------------------------------------------------------
