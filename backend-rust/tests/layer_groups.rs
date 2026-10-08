@@ -1565,11 +1565,30 @@ async fn a_switch_that_lands_during_an_undo_is_never_written_over() {
         .execute(&mut *switch)
         .await
         .unwrap();
+    let switch_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *switch)
+        .await
+        .unwrap();
     let undo = {
         let (app, token) = (app.clone(), token.clone());
         tokio::spawn(async move { step(&app, &token, page_id, "undo").await })
     };
-    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    // Commit only once the undo is seen waiting on the switch's row lock.
+    let mut waited = false;
+    for _ in 0..100 {
+        waited = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid)))",
+        )
+        .bind(switch_pid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        if waited {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(waited, "the undo never waited on the switch");
     switch.commit().await.unwrap();
     let (status, body) = undo.await.unwrap();
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
