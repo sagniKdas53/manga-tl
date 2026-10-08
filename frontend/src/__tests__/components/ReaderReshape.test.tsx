@@ -96,7 +96,7 @@ const OUTLINE = rectToPolygon(BOX.x, BOX.y, BOX.w, BOX.h, ANGLE).map(
   ([x, y]) => [Math.round(x), Math.round(y)] as Point,
 );
 
-const pageDetails = () => ({
+const pageDetails = (box: Record<string, unknown> = {}) => ({
   panels: [],
   conversations: [],
   image: { width: 1200, height: 1600 },
@@ -134,6 +134,7 @@ const pageDetails = () => ({
           isManuallyEdited: false,
           boxShape: "rectangular",
           maskPolygon: JSON.stringify(OUTLINE),
+          ...box,
         },
       ],
     },
@@ -168,6 +169,8 @@ const puts = () =>
         (init as RequestInit | undefined)?.method === "PUT",
     )
     .map(([, init]) => JSON.parse((init as RequestInit).body as string));
+
+let details = pageDetails();
 
 const enterReshape = async () => {
   render(
@@ -210,6 +213,7 @@ describe("Reshape on a rotated element (#179)", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    details = pageDetails();
     // jsdom has no SVG geometry: screen space is page space here.
     svgProto.createSVGPoint = () => ({
       x: 0,
@@ -224,7 +228,7 @@ describe("Reshape on a rotated element (#179)", () => {
       if (/\/api\/pages\/[^/]+$/.test(url)) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve(pageDetails()),
+          json: () => Promise.resolve(details),
         });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
@@ -294,5 +298,37 @@ describe("Reshape on a rotated element (#179)", () => {
       BOX.h,
     ]);
     expect(JSON.parse(undone.maskPolygon)).toEqual(OUTLINE);
+  });
+
+  it("puts a null box size back as null on Undo, not the 100 px a drag works with", async () => {
+    // CodeRabbit on #253: an element with no stored size got 100 written back by Undo.
+    details = pageDetails({ maxWidth: null, maxHeight: null });
+    const handles = await enterReshape();
+    const [tx, ty] = OUTLINE[1];
+    fireEvent.pointerDown(handles[1], {
+      clientX: tx,
+      clientY: ty,
+      pointerId: 1,
+    });
+    fireEvent.pointerMove(window, {
+      clientX: tx + 10,
+      clientY: ty,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(window, {
+      clientX: tx + 10,
+      clientY: ty,
+      pointerId: 1,
+    });
+    await waitFor(() => expect(puts().length).toBeGreaterThan(0));
+    const before = puts().length;
+    await act(async () => {
+      fireEvent.click(screen.getByTitle(/^Undo last action/));
+    });
+    await waitFor(() => expect(puts().length).toBeGreaterThan(before));
+    const undone = puts().at(-1);
+    expect(undone.maxWidth ?? null).toBeNull();
+    expect(undone.maxHeight ?? null).toBeNull();
+    expect([undone.x, undone.y]).toEqual([BOX.x, BOX.y]);
   });
 });

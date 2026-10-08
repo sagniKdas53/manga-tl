@@ -599,8 +599,9 @@ export const Reader: React.FC<ReaderProps> = ({
     originalPolygon: Polygon;
     originalX: number;
     originalY: number;
-    originalW: number;
-    originalH: number;
+    /** The box as stored, null included: Undo writes these back as they were. */
+    originalW: number | null;
+    originalH: number | null;
     /** The element's angle: the outline is measured along it (#179). */
     rotation: number;
   } | null>(null);
@@ -2265,8 +2266,8 @@ export const Reader: React.FC<ReaderProps> = ({
       originalPolygon: polygon.map((p) => [...p]) as Polygon,
       originalX: element.x,
       originalY: element.y,
-      originalW: element.maxWidth || 100,
-      originalH: element.maxHeight || 100,
+      originalW: element.maxWidth ?? null,
+      originalH: element.maxHeight ?? null,
       rotation: element.rotation || 0,
     });
   };
