@@ -95,7 +95,7 @@ possible. All env values are read by the worker at start-up: change `.env`, recr
 - [ ] The untranslated aside (sample9, sample136)
 - [ ] Fixture sample99 and 4Oct p. 17 with B3/B3b running
 - [x] Merge the worker stack: #53–#61 as one merge commit (642d184, 2026-10-07); the parent pins it
-- [ ] Merge the parent stack #230–#242
+- [x] Merge the parent stack #230–#242 (2026-10-07)
 
 ## Status at a glance (2026-10-05 — B: one balloon, one text unit)
 
@@ -175,14 +175,14 @@ Checklist of the tracker's items:
 - [x] B gate: 4Oct p. 3 and p. 17 match the hand merges (live)
 - [ ] B: paragraph gaps inside one balloon (4Oct p. 15)
 - [ ] B: mixed-orientation vetoes
-- [ ] B: merge worker #53, re-pin the parent to its merge commit, merge #230 (worker merged and
-  pinned 2026-10-07; the parent stack #230–#242 is next)
+- [x] B: merge worker #53, re-pin the parent to its merge commit, merge #230 (the whole stack,
+  worker 642d184 and parent #230–#242, 2026-10-07)
 - [ ] C + G: G2 + H1, the `background_color` split, M7's single text renderer
   ([packet](output-quality-cg-packet-20261004.md))
-- [ ] F: Photoshop-style layers (#178), grouped with the OCR fragment debug toggle (#243) and
+- [ ] F: Photoshop-style layers (#178; [F and E plan](fe-plan-20261007.md)), grouped with the OCR fragment debug toggle (#243) and
   text boxes sized to the balloon instead of the OCR column (#244), and hiding a region hides its
   cleanup patch (#237) (owner, 2026-10-07)
-- [ ] E: automatic angles (`AUDIT-R23`)
+- [ ] E: automatic angles (`AUDIT-R23`, #180; reshape fix #179 first; [plan](fe-plan-20261007.md))
 - [ ] I: text the OCR detector never finds stays untranslated (#245; fixture sample99's
   ぬるぬるで sits inside a found balloon with no OCR piece over it). Before M9. Not the 2026-10-03
   "I" (`SELF_HOSTED_ADMIN`, done)
@@ -721,6 +721,7 @@ Order: R4 first (one packet, unblocks measurement — done; every later checkpoi
 ## Scope overrides from the user
 
 - Target newly processed images and a regenerated corpus. Do not implement compatibility readers, old-project converters, legacy output migrations, old renderer fallbacks or legacy rendering parity. New-format save/import/export must still round-trip correctly. Database schema migrations needed to install the new schema are normal implementation work, not legacy artifact support.
+  - One exception (owner, 2026-10-07, F3 #178): page-project ZIPs go from version 2 to 3 and the importer still refuses version 2, but `scripts/convert_project_v2_to_v3.py` converts a version 2 file offline (a version 2 file has no groups, so only the version changes). The importer gets no compatibility path; no other converter is allowed by this.
 - Preserve immutable source images, reference baselines and the historical investigation evidence. Regeneration creates a new run and then promotes its manifest; dropping compatibility is not an instruction to delete sources or old evidence now.
 - ARM64/RapidOCR is a proof of concept. Preserve its existing files unless a task specifically needs a change, but exclude native ARM deployment, ARM quality parity, QEMU benchmarks and ARM performance promises from this release. Establish the acceptance baseline on the existing Linux amd64 route; record actual CPU/GPU/runtime before comparing results.
 - Corpus outputs are historical. Use embedded OCR/translation/QA timestamps, then Git chronology; export/import time and filesystem mtime do not establish generation time. Historical screenshots are regression prompts, not proof the same issue persists today.
