@@ -72,6 +72,7 @@ import {
   rotatePolygon,
   normalizeDegrees,
   translatePolygon,
+  unrotatedBox,
   isVertexMoveValid,
   isRotationValid,
 } from "../utils/polygonUtils";
@@ -600,6 +601,8 @@ export const Reader: React.FC<ReaderProps> = ({
     originalY: number;
     originalW: number;
     originalH: number;
+    /** The element's angle: the outline is measured along it (#179). */
+    rotation: number;
   } | null>(null);
 
   /** Tracks the rotation handle being dragged in reshape mode */
@@ -2264,6 +2267,7 @@ export const Reader: React.FC<ReaderProps> = ({
       originalY: element.y,
       originalW: element.maxWidth || 100,
       originalH: element.maxHeight || 100,
+      rotation: element.rotation || 0,
     });
   };
 
@@ -2300,7 +2304,9 @@ export const Reader: React.FC<ReaderProps> = ({
       const newPoly = draggedVertex.originalPolygon.map((v, i) =>
         i === draggedVertex.vertexIndex ? newPos : ([...v] as Point),
       ) as Polygon;
-      const bbox = polygonBBox(newPoly);
+      // #179 (AUDIT-R14): the box is the outline measured along the element's own axes. Its
+      // page-space bounding box would be a bigger rectangle, which the element then turns again.
+      const bbox = unrotatedBox(newPoly, draggedVertex.rotation);
       const newMaskPolygon = JSON.stringify(newPoly);
 
       setSelectedItem((prev) =>
@@ -2349,14 +2355,14 @@ export const Reader: React.FC<ReaderProps> = ({
         }
 
         if (updatedElement) {
-          const origBbox = polygonBBox(draggedVertex.originalPolygon);
+          // Undo puts back the box the element had, not one measured from its outline.
           const originalElement: LayerElement = {
             ...(updatedElement as LayerElement),
             maskPolygon: JSON.stringify(draggedVertex.originalPolygon),
-            x: origBbox.x,
-            y: origBbox.y,
-            maxWidth: origBbox.w,
-            maxHeight: origBbox.h,
+            x: draggedVertex.originalX,
+            y: draggedVertex.originalY,
+            maxWidth: draggedVertex.originalW,
+            maxHeight: draggedVertex.originalH,
           };
           setTimeout(() => {
             pushToHistoryStack(originalElement);
@@ -5158,7 +5164,13 @@ export const Reader: React.FC<ReaderProps> = ({
                             const vertexRadius = isTouchScreen ? 10 : 7;
 
                             return (
-                              <>
+                              // #179 (AUDIT-R13): the outline and these controls are page-space points, but they sit
+                              // inside the element's rotated group. Undo that turn here, as the backdrop polygon does, or
+                              // they are drawn at twice the angle and drags start from the wrong places.
+                              <g
+                                className="reshape-controls"
+                                transform={`rotate(${-(element.rotation || 0)}, ${cx}, ${cy})`}
+                              >
                                 {/* Dashed polygon outline */}
                                 <polygon
                                   points={currentPolygon
@@ -5249,7 +5261,7 @@ export const Reader: React.FC<ReaderProps> = ({
                                   strokeLinecap="round"
                                   style={{ pointerEvents: "none" }}
                                 />
-                              </>
+                              </g>
                             );
                           })()}
 
