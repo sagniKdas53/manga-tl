@@ -80,6 +80,7 @@ async fn step(
                 Direction::Redo => "there is no layer action to redo".to_string(),
             }));
         };
+        layer_ops::lock_rows(&mut tx, &op.changes).await?;
         if let Some(reason) = layer_ops::blocked(&mut tx, &op.changes, direction).await? {
             return Ok(Err(reason));
         }

@@ -1204,6 +1204,11 @@ async fn undo_puts_a_merge_back_row_for_row_and_redo_merges_again() {
     sqlx::query("UPDATE layers SET metadata_json = jsonb_set(metadata_json, '{last_modified}', '\"later\"') WHERE id = $1")
         .bind(base).execute(&pool).await.unwrap();
 
+    let sized: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM layer_elements e JOIN layers l ON l.id = e.layer_id WHERE l.page_id = $1 AND e.size = 33")
+        .bind(page_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     let status_now = history(&app, &token, page_id).await;
     assert_eq!(status_now["undo"]["label"], "merge 2 layers");
     assert_eq!(status_now["undo"]["blocked"], serde_json::Value::Null);
@@ -1224,6 +1229,21 @@ async fn undo_puts_a_merge_back_row_for_row_and_redo_merges_again() {
         "every layer and element is back as it was"
     );
     assert_eq!(texts(&scene(&state, page_id).await), scene_start);
+    // What the pipeline wrote since is kept: undo puts back what the action changed, not the fit.
+    let still_sized: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM layer_elements e JOIN layers l ON l.id = e.layer_id WHERE l.page_id = $1 AND e.size = 33")
+            .bind(page_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(still_sized, sized, "undo kept the render callback's sizes");
+    let modified: Option<String> =
+        sqlx::query_scalar("SELECT metadata_json->>'last_modified' FROM layers WHERE id = $1")
+            .bind(base)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(modified.as_deref(), Some("later"));
     let (status, body) = step(&app, &token, page_id, "undo").await;
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
     assert!(body.contains("no layer action to undo"), "{body}");
@@ -1500,6 +1520,66 @@ async fn undoing_an_overlay_delete_hides_the_text_it_had_given_back() {
     assert_eq!(page_rows(&pool, page_id).await, start);
     assert_eq!(texts(&scene(&state, page_id).await), ["two redone"]);
     assert_eq!(visible(&pool, base_two).await, Some(false));
+
+    cleanup_series(&pool, series_id).await;
+}
+
+#[tokio::test]
+async fn a_switch_that_lands_during_an_undo_is_never_written_over() {
+    let Some((app, pool, _state)) = app().await else {
+        eprintln!(
+            "skipping: SPRING_DATASOURCE_URL / REDIS_TEST_ADDR / MINIO_TEST_ENDPOINT not set"
+        );
+        return;
+    };
+    let token = translator(&pool).await;
+    let (series_id, page_id, _image, ocr, base) = seed_page(&pool).await;
+    let one = seed_region(
+        &pool,
+        page_id,
+        (ocr, base),
+        1,
+        (10, 10, 60, 40),
+        "いち",
+        "one",
+        None,
+    )
+    .await;
+    let upper = add_text_layer(&pool, page_id, 3).await;
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES (uuid_generate_v4(),'one again',10,10,60,40,TRUE,$1,$2)")
+        .bind(upper).bind(one).execute(&pool).await.unwrap();
+    let (status, body) = send(
+        &app,
+        "POST",
+        &format!("/tlhub/api/pages/{page_id}/layers/merge"),
+        &token,
+        serde_json::json!({"layerIds": [base, upper]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // A show/hide (no history lock) is in flight when the undo starts.
+    let mut switch = pool.begin().await.unwrap();
+    sqlx::query("UPDATE layers SET visible = FALSE WHERE id = $1")
+        .bind(base)
+        .execute(&mut *switch)
+        .await
+        .unwrap();
+    let undo = {
+        let (app, token) = (app.clone(), token.clone());
+        tokio::spawn(async move { step(&app, &token, page_id, "undo").await })
+    };
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    switch.commit().await.unwrap();
+    let (status, body) = undo.await.unwrap();
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(body.contains("shown or hidden since"), "{body}");
+    let visible: Option<bool> = sqlx::query_scalar("SELECT visible FROM layers WHERE id = $1")
+        .bind(base)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(visible, Some(false), "the switch stands");
 
     cleanup_series(&pool, series_id).await;
 }

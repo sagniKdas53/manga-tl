@@ -292,6 +292,39 @@ impl Direction {
     }
 }
 
+/// Carries what the pipeline rewrote since (see the module docs) from the live row into the one
+/// being written back, so an undo or redo restores the action's change and not a stale fit or
+/// timestamp. [`blocked`] ignores these two for the same reason.
+fn keep_pipeline_fields(table: Table, row: &mut Value, now: &Value) {
+    let Some(map) = row.as_object_mut() else {
+        return;
+    };
+    match table {
+        Table::Elements => {
+            map.insert(
+                "size".into(),
+                now.get("size").cloned().unwrap_or(Value::Null),
+            );
+        }
+        Table::Layers => {
+            let live = now
+                .get("metadata_json")
+                .and_then(|meta| meta.get("last_modified"))
+                .cloned();
+            if let Some(Value::Object(meta)) = map.get_mut("metadata_json") {
+                match live {
+                    Some(value) => {
+                        meta.insert("last_modified".into(), value);
+                    }
+                    None => {
+                        meta.remove("last_modified");
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// A row without what the pipeline rewrites on its own (see the module docs).
 fn comparable(table: Table, row: &Value) -> Value {
     let mut row = row.clone();
@@ -342,6 +375,32 @@ async fn current_rows(
         }
     };
     Ok(rows.into_iter().collect())
+}
+
+/// Locks the rows an undo or redo is about to check and write. An element save or a show/hide
+/// takes no history lock: with the rows locked before [`blocked`] reads them, one that committed
+/// first is seen there, and one that comes later waits for the undo and lands on top of it instead
+/// of being written over. Elements first, in the order an element save locks them.
+pub async fn lock_rows(
+    tx: &mut Transaction<'_, Postgres>,
+    changes: &[Change],
+) -> Result<(), sqlx::Error> {
+    let ids = |table: Table| -> Vec<Uuid> {
+        changes
+            .iter()
+            .filter(|change| change.table == table)
+            .map(|change| change.id)
+            .collect()
+    };
+    sqlx::query("SELECT 1 FROM layer_elements WHERE id = ANY($1) ORDER BY id FOR UPDATE")
+        .bind(ids(Table::Elements))
+        .execute(&mut **tx)
+        .await?;
+    sqlx::query("SELECT 1 FROM layers WHERE id = ANY($1) ORDER BY id FOR UPDATE")
+        .bind(ids(Table::Layers))
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
 }
 
 /// Why the action cannot be applied in `direction` now, or None when it can.
@@ -560,7 +619,7 @@ pub async fn apply(
     direction: Direction,
 ) -> Result<(), sqlx::Error> {
     let target = |change: &Change| direction.sides(change).1.clone();
-    let existing_layers: HashSet<Uuid> = current_rows(
+    let existing_layers = current_rows(
         tx,
         Table::Layers,
         &changes
@@ -569,10 +628,8 @@ pub async fn apply(
             .map(|change| change.id)
             .collect::<Vec<_>>(),
     )
-    .await?
-    .into_keys()
-    .collect();
-    let existing_elements: HashSet<Uuid> = current_rows(
+    .await?;
+    let existing_elements = current_rows(
         tx,
         Table::Elements,
         &changes
@@ -581,15 +638,13 @@ pub async fn apply(
             .map(|change| change.id)
             .collect::<Vec<_>>(),
     )
-    .await?
-    .into_keys()
-    .collect();
+    .await?;
     let layer_columns = columns(tx, Table::Layers).await?;
     let element_columns = columns(tx, Table::Elements).await?;
 
     for change in changes.iter().filter(|c| c.table == Table::Layers) {
         if let Some(mut row) = target(change)
-            && !existing_layers.contains(&change.id)
+            && !existing_layers.contains_key(&change.id)
         {
             if let Some(map) = row.as_object_mut() {
                 map.insert("parent_id".into(), Value::Null);
@@ -598,8 +653,9 @@ pub async fn apply(
         }
     }
     for change in changes.iter().filter(|c| c.table == Table::Elements) {
-        if let Some(row) = target(change) {
-            if existing_elements.contains(&change.id) {
+        if let Some(mut row) = target(change) {
+            if let Some(now) = existing_elements.get(&change.id) {
+                keep_pipeline_fields(Table::Elements, &mut row, now);
                 update_row(tx, Table::Elements, &element_columns, change.id, &row).await?;
             } else {
                 insert_row(tx, Table::Elements, &row).await?;
@@ -607,7 +663,10 @@ pub async fn apply(
         }
     }
     for change in changes.iter().filter(|c| c.table == Table::Layers) {
-        if let Some(row) = target(change) {
+        if let Some(mut row) = target(change) {
+            if let Some(now) = existing_layers.get(&change.id) {
+                keep_pipeline_fields(Table::Layers, &mut row, now);
+            }
             update_row(tx, Table::Layers, &layer_columns, change.id, &row).await?;
         }
     }
