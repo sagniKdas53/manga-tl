@@ -287,6 +287,121 @@ describe("Reader Inpainting layer (tracker R7)", () => {
     vi.restoreAllMocks();
   });
 
+  it("waits for text saves, queued or on their way, before a layer undo, and holds it while one fails (F4)", async () => {
+    // CodeRabbit on #253/#254: a text edit whose save failed stays pending and is retried later. A
+    // layer undo sent in between (or while the save was still on its way) let that retry land on
+    // the rows the undo had put back, unseen by the server's "edited since" check.
+    const base = mockSafeFetch.getMockImplementation()!;
+    const entry = {
+      id: "op-1",
+      kind: "merge",
+      label: "merge 2 layers",
+      createdAt: "2026-10-08T00:00:00Z",
+      blocked: null,
+    };
+    let saveOk = false;
+    // The first save is held open, as a slow request would be.
+    let releaseFirst: (ok: boolean) => void = () => {};
+    let puts = 0;
+    mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (/\/layer-history$/.test(url)) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              undo: entry,
+              redo: null,
+              undoCount: 1,
+              redoCount: 0,
+              depth: 20,
+            }),
+        });
+      }
+      if (/\/layer-history\/undo$/.test(url)) {
+        const body = JSON.stringify({
+          undo: null,
+          redo: entry,
+          undoCount: 0,
+          redoCount: 1,
+          depth: 20,
+          applied: "merge 2 layers",
+        });
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(body),
+          json: () => Promise.resolve(JSON.parse(body)),
+        });
+      }
+      if (/\/api\/layer-elements\/el-2$/.test(url) && init?.method === "PUT") {
+        const answer = (ok: boolean) =>
+          ok
+            ? { ok: true, json: () => Promise.resolve({}) }
+            : {
+                ok: false,
+                status: 500,
+                json: () => Promise.resolve({}),
+                text: () => Promise.resolve("boom"),
+              };
+        puts += 1;
+        if (puts === 1) {
+          return new Promise((resolve) => {
+            releaseFirst = (ok) => resolve(answer(ok));
+          });
+        }
+        return Promise.resolve(answer(saveOk));
+      }
+      return base(url, init);
+    });
+    await renderReader();
+    fireEvent.click(
+      document.querySelector('.svg-overlay [data-element-id="el-2"]')!,
+    );
+    fireEvent.change(await screen.findByLabelText("Text Content"), {
+      target: { value: "Hey there" },
+    });
+    // Deselecting starts the edit's save, which is still on its way when Undo is pressed.
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() =>
+      expect(calls("PUT", /\/api\/layer-elements\/el-2$/)).toHaveLength(1),
+    );
+    const undo = await screen.findByRole("button", {
+      name: "Undo layer action",
+    });
+    await waitFor(() => expect(undo).toBeEnabled());
+    fireEvent.click(undo);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(calls("POST", /\/layer-history\/undo$/)).toHaveLength(0);
+
+    // That save fails, so the edit is pending again: the undo retries it, fails again, and is not
+    // sent, so a later retry cannot land on rows an undo put back.
+    await act(async () => {
+      releaseFirst(false);
+    });
+    await waitFor(() =>
+      expect(calls("PUT", /\/api\/layer-elements\/el-2$/)).toHaveLength(2),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(calls("POST", /\/layer-history\/undo$/)).toHaveLength(0);
+
+    // The save goes through: then the undo is sent, after it.
+    saveOk = true;
+    fireEvent.click(undo);
+    await waitFor(() =>
+      expect(calls("POST", /\/layer-history\/undo$/)).toHaveLength(1),
+    );
+    const order = mockSafeFetch.mock.calls.map(([url]) => String(url));
+    const lastSave = order.findLastIndex((url) =>
+      /\/api\/layer-elements\/el-2$/.test(url),
+    );
+    const undoAt = order.findIndex((url) => /\/layer-history\/undo$/.test(url));
+    expect(lastSave).toBeGreaterThanOrEqual(0);
+    expect(lastSave).toBeLessThan(undoAt);
+  });
+
   it("undoes a layer action on the server and reloads the page; a reorder is one step (F4)", async () => {
     const base = mockSafeFetch.getMockImplementation()!;
     const entry = {

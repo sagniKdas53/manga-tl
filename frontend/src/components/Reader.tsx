@@ -665,7 +665,7 @@ export const Reader: React.FC<ReaderProps> = ({
    * failed stays pending and dirty (unless a newer edit of it is already waiting), so the next
    * flush tries it again and Export still sees unsaved work.
    */
-  const flushPendingSaves = useCallback(
+  const flushQueuedSaves = useCallback(
     async (keepalive: boolean = false): Promise<void> => {
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
@@ -713,6 +713,30 @@ export const Reader: React.FC<ReaderProps> = ({
     },
     [user.token, showToast, showError, requestRenderNow],
   );
+
+  // Flushes still waiting on their saves. A flush empties the queue before its saves finish, and a
+  // failed save goes back in only when they do, so a layer undo waits for these first (#254).
+  const inFlightFlushesRef = useRef<Set<Promise<void>>>(new Set());
+
+  const flushPendingSaves = useCallback(
+    (keepalive: boolean = false): Promise<void> => {
+      const run = flushQueuedSaves(keepalive);
+      inFlightFlushesRef.current.add(run);
+      const done = () => {
+        inFlightFlushesRef.current.delete(run);
+      };
+      run.then(done, done);
+      return run;
+    },
+    [flushQueuedSaves],
+  );
+
+  /** Waits until every flush started so far has finished, failed saves back in the queue. */
+  const awaitInFlightSaves = useCallback(async () => {
+    while (inFlightFlushesRef.current.size > 0) {
+      await Promise.allSettled([...inFlightFlushesRef.current]);
+    }
+  }, []);
 
   // The page-change and tab-close handlers call the newest flush through this, so they
   // fire on those events alone, not whenever a dependency of the flush changes identity.
@@ -2897,6 +2921,17 @@ export const Reader: React.FC<ReaderProps> = ({
   const stepLayerHistory = useCallback(
     async (which: "undo" | "redo") => {
       if (!selectedPageId) return;
+      // Pending text edits go first, including saves already on their way, so the server's
+      // "edited since" check sees them. One whose save keeps failing holds the undo back: retried
+      // later, it would land on the rows the undo put back (CodeRabbit on #253 and #254).
+      await awaitInFlightSaves();
+      await flushPendingSaves();
+      if (pendingSavesRef.current.size > 0) {
+        showError(
+          `Could not ${which}: an edit is still unsaved. Save it first, then try again.`,
+        );
+        return;
+      }
       try {
         const result = (await layerRequest(
           `/api/pages/${selectedPageId}/layer-history/${which}`,
@@ -2916,6 +2951,8 @@ export const Reader: React.FC<ReaderProps> = ({
     },
     [
       selectedPageId,
+      awaitInFlightSaves,
+      flushPendingSaves,
       layerRequest,
       showToast,
       showError,
