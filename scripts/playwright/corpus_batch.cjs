@@ -1071,8 +1071,9 @@ Selection — file list first in file order, then sample roots in argument order
 
 Target
   --base <url>             instance base URL [http://localhost:8080/tlhub] [TLHUB_BASE]
-  --email / --password     account to use [TLHUB_EMAIL / TLHUB_PASSWORD]. Omit BOTH and the run
-                           registers its own throwaway TRANSLATOR and prints the credentials.
+  --email <addr>           account to use [TLHUB_EMAIL]; give its password with --password or
+                           TLHUB_PASSWORD. Omit both and the run registers its own throwaway
+                           TRANSLATOR, saving its password to throwaway-account.json (0600).
   --display-name <name>    display name for that throwaway account
   --series-id <uuid>       use this series instead of finding/creating one by title
   --series-title <title>   [Corpus Batch (<lang>)]

@@ -34,7 +34,8 @@ to `--sample-root` entries when you pass both.
 ## Accounts
 
 `--email/--password` (or `TLHUB_EMAIL`/`TLHUB_PASSWORD`) are used when given. With neither, the run
-registers its own throwaway account and prints the credentials. It asks for `translator`
+registers its own throwaway account, prints its address and saves its password to
+`throwaway-account.json` (mode 0600) in the run folder, never to the log. It asks for `translator`
 explicitly, because a registration that omits the role or asks for admin is rejected with
 "Cannot register as Admin" (`backend-rust/src/routes/auth.rs:274-289`), and uploading a page already
 requires TRANSLATOR or ADMIN (`backend-rust/src/routes/page.rs:411-413`).
