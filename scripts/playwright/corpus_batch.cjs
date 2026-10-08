@@ -172,8 +172,15 @@ function parseArgs(argv) {
   };
 
   for (let i = 2; i < argv.length; i++) {
-    const v = argv[i];
-    const next = () => argv[++i];
+    let v = argv[i];
+    // `--flag=value` and `--flag value` mean the same (the docs use --pause-queue=false).
+    let inline;
+    const eq = v.startsWith("--") ? v.indexOf("=") : -1;
+    if (eq > 0) {
+      inline = v.slice(eq + 1);
+      v = v.slice(0, eq);
+    }
+    const next = () => (inline !== undefined ? inline : argv[++i]);
     const model = MODEL_KEYS.find(([, flag]) => flag === v);
     if (model) {
       a.models[model[0]] = next();
@@ -433,7 +440,10 @@ async function ensureToken(ctx, args) {
   }
   const body = await res.json();
   ctx.adoptSession(body, `registered throwaway account ${body.email} (${body.role})`);
-  console.log(`  kept for this run: --email ${email} --password ${password}`);
+  // The password goes to a file only its owner can read, never to the log (CodeQL on #232).
+  const saved = path.join(ctx.outRoot, "throwaway-account.json");
+  fs.writeFileSync(saved, `${JSON.stringify({ email, password }, null, 2)}\n`, { mode: 0o600 });
+  console.log(`  kept for this run: --email ${email} (password in ${saved})`);
   return ctx.token;
 }
 
@@ -629,7 +639,8 @@ async function uploadPage(ctx, chapterId, entry) {
   if (!res.ok()) {
     const body = await res.text().catch(() => "");
     if (res.status() === 500) {
-      // This is the known concurrent-upload race, not a bad file. `insert_page` reads
+      // Possibly the concurrent-upload race (it is not the only cause: a failed store upload is
+      // also a 500, so the body is kept). `insert_page` reads
       // MAX(page_number)+1, clamps the requested number into that range, and only then inserts,
       // with no lock between the read and the insert (routes/page.rs:330-348). Two uploads into
       // one chapter at once can therefore pick the same slot, and the losing INSERT trips the
@@ -637,16 +648,17 @@ async function uploadPage(ctx, chapterId, entry) {
       // layer turns into this 500 with instance "/unknown". The service needs a fix; the fix on
       // this side is --submit-concurrency 1, which is the default.
       throw new Error(
-        `upload failed 500 (backend panic; no page was created)\n` +
+        `upload failed 500 ${body}\n` +
         `  requested page ${entry.pageNumber} into chapter ${chapterId}.\n` +
-        `  Concurrent uploads into one chapter race on the page-slot reservation -- re-run with\n` +
-        `  --submit-concurrency 1 (the default), or --resume to harvest what did land.`,
+        `  If uploads overlapped (--submit-concurrency > 1), this may be the page-slot race --\n` +
+        `  re-run with --submit-concurrency 1 (the default), or --resume to harvest what did land.`,
       );
     }
     throw new Error(`upload failed ${res.status()} ${body}`);
   }
   const body = await res.json().catch(() => ({}));
   if (!body.pageId) throw new Error(`upload returned no pageId (status=${body.status})`);
+  entry.sourceSha256 = crypto.createHash("sha256").update(buf).digest("hex");
   entry.pageId = body.pageId;
   entry.imageId = body.imageId;
   entry.uploadStatus = body.status;
@@ -735,10 +747,8 @@ async function poller(ctx, chapterId, entries, wake, opts) {
   const byPageNumber = new Map();
   const jobsByPage = new Map();
   const deadline = Date.now() + opts.globalTimeoutMs;
-  let passedOnce = false;
 
   for (;;) {
-    let pendingCount = 0;
     try {
       for (const [n, info] of await fetchChapterPages(ctx, chapterId)) byPageNumber.set(n, info);
       const queue = await readQueue(ctx);
@@ -758,23 +768,20 @@ async function poller(ctx, chapterId, entries, wake, opts) {
         entry.state = verdict.state;
         entry.liveJobs = verdict.live || [];
         if (verdict.error) entry.error = verdict.error;
-        if (verdict.state === "pending") {
-          pendingCount++;
-        } else {
+        if (verdict.state !== "pending") {
           entry.terminal = true;
           entry.finishedAt = new Date().toISOString();
           wake(entry);
         }
       }
-      passedOnce = true;
     } catch (e) {
-      // A failed poll must not read as "nothing left to wait for": without this the loop would
-      // return on its first tick having learned nothing, and every capture worker would sit on a
-      // promise that is never resolved.
+      // A failed poll (first tick or any later one) is retried at the next interval; only the
+      // entries themselves say when there is nothing left to wait for. Returning on a failed tick
+      // would leave every capture worker on a promise that is never resolved.
       opts.onError(e);
     }
 
-    if (passedOnce && pendingCount === 0) return;
+    if (entries.every((entry) => entry.terminal)) return;
     if (Date.now() > deadline) {
       for (const entry of entries) {
         if (entry.terminal) continue;
@@ -1130,6 +1137,7 @@ Harvest
     page: await browserContext.newPage(),
     base: args.base.replace(/\/+$/, ""),
     token: "",
+    outRoot,
     storedUser: "",
     cleanView: true,
     adoptSession(body, message) {
@@ -1186,6 +1194,9 @@ Harvest
     console.log(`reader ${ctx.base}/chapters/${chapterId}/reader/${startPage}\n`);
 
     const entries = selected.map((sample, i) => ({
+      // The source file is the entry's identity across runs; `pageNumber` is what the backend
+      // assigned (see the reconcile below), `requestedPageNumber` what was asked for.
+      sampleKey: path.resolve(sample.imagePath),
       pageNumber: startPage + i,
       sample,
       state: "pending",
@@ -1223,16 +1234,36 @@ Harvest
       counts: {},
     };
 
+    if (args.resume && !fs.existsSync(manifestPath) && existing.count > 0) {
+      throw new Error(
+        `--resume: ${manifestPath} is missing, but chapter ${chapterId} already holds ` +
+        `${existing.count} page(s). Without the manifest this run cannot tell which page is which\n` +
+        "  sample, and uploading would renumber them. Pass the earlier run's --out, or use an empty chapter.",
+      );
+    }
     if (args.resume && fs.existsSync(manifestPath)) {
       const previous = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
       if (previous.chapterId !== chapterId) {
         throw new Error(`--resume: ${manifestPath} belongs to chapter ${previous.chapterId}, not ${chapterId}`);
       }
-      const byNumber = new Map(previous.pages.map((p) => [p.pageNumber, p]));
+      // Matched by source file, not page number: the backend may have assigned a page a different
+      // number than requested, and a number-based match would hand one sample another's page.
+      const keyOf = (p) => p.sampleKey || (p.sample && path.resolve(p.sample.imagePath));
+      const byKey = new Map(previous.pages.filter(keyOf).map((p) => [keyOf(p), p]));
       let resumed = 0;
       for (const entry of entries) {
-        const before = byNumber.get(entry.pageNumber);
+        const before = byKey.get(entry.sampleKey);
         if (!before) continue;
+        if (before.sourceSha256) {
+          const now = crypto.createHash("sha256").update(fs.readFileSync(entry.sample.imagePath)).digest("hex");
+          if (now !== before.sourceSha256) {
+            throw new Error(
+              `--resume: ${entry.sample.imagePath} changed since it was uploaded as page ` +
+              `${before.pageNumber}; re-uploading would add a page and shift the later ones. ` +
+              "Start a new chapter instead.",
+            );
+          }
+        }
         const dir = path.join(outRoot, pageDirName(entry.pageNumber, entry.sample.sampleId));
         if (before.state === "done" && before.artifacts && fs.existsSync(path.join(dir, "page.json"))) {
           // `sample` is dropped on purpose: this run's selection is the authority on which page is
@@ -1240,10 +1271,17 @@ Harvest
           const { sample: _stale, ...carried } = before;
           Object.assign(entry, carried, { terminal: true });
           resumed++;
-        } else if (before.pageId) {
+        } else if (before.pageId && !before.pageDeleted) {
+          // Already on the server: harvest it, do not upload it again. A page this run deleted is
+          // uploaded again.
           entry.pageId = before.pageId;
           entry.imageId = before.imageId;
+          entry.sourceSha256 = before.sourceSha256;
           entry.submittedAt = before.submittedAt;
+          entry.pageNumber = before.pageNumber;
+          if (before.requestedPageNumber !== undefined) {
+            entry.requestedPageNumber = before.requestedPageNumber;
+          }
           entry.state = "pending";
         }
       }
@@ -1260,7 +1298,9 @@ Harvest
     }
 
     const pending = entries.filter((e) => !e.terminal);
-    if (pending.length && args.pauseQueue) {
+    // Resumed pages that are still on the server are only harvested.
+    const toUpload = pending.filter((e) => !e.pageId);
+    if (toUpload.length && args.pauseQueue) {
       const queue = await readQueue(ctx);
       if (queue.isPaused) {
         console.log(`queue was already paused (${queue.jobs.length} active job(s) listed); leaving it paused`);
@@ -1275,7 +1315,10 @@ Harvest
     }
 
     if (pending.length) {
-      console.log(`submitting ${pending.length} page(s), ${args.submitConcurrency} at a time`);
+      console.log(
+        `submitting ${toUpload.length} page(s), ${args.submitConcurrency} at a time` +
+        (pending.length > toUpload.length ? ` (${pending.length - toUpload.length} resumed page(s) already on the server)` : ""),
+      );
       if (args.submitConcurrency > 1) {
         console.warn(
           `WARNING: --submit-concurrency ${args.submitConcurrency} uploads into ONE chapter at once.\n` +
@@ -1286,12 +1329,12 @@ Harvest
         );
       }
       let submitted = 0;
-      await runQueue(pending, args.submitConcurrency, async () => async (entry) => {
+      await runQueue(toUpload, args.submitConcurrency, async () => async (entry) => {
         try {
           const body = await uploadPage(ctx, chapterId, entry);
           submitted++;
-          if (submitted % 10 === 0 || submitted === pending.length) {
-            console.log(`  submitted ${submitted}/${pending.length}`);
+          if (submitted % 10 === 0 || submitted === toUpload.length) {
+            console.log(`  submitted ${submitted}/${toUpload.length}`);
           }
           if (body.status === "already_exists") {
             console.log(`  page ${entry.pageNumber} (${entry.sample.sampleId}): image already occupied that slot`);
@@ -1330,7 +1373,7 @@ Harvest
           console.warn(
             `  ${entry.sample.sampleId}: requested page ${entry.pageNumber}, backend assigned ${actual}`,
           );
-          entry.requestedPageNumber = entry.pageNumber;
+          if (entry.requestedPageNumber === undefined) entry.requestedPageNumber = entry.pageNumber;
           entry.pageNumber = actual;
         }
       }

@@ -11,7 +11,7 @@ series + one chapter**, then harvests each finished page's artifacts back to dis
 **PR:** https://github.com/sagniKdas53/manga-tl/pull/232 — branch `feat/corpus-batch-harness`,
 commit `989a1e3` (3 files, 1575 insertions).
 
-**Uncommitted on the branch right now:** `scripts/playwright/corpus_batch.cjs` (+68/−3):
+**Committed in `e6d2e5d`** (were uncommitted when this was first written): `scripts/playwright/corpus_batch.cjs` (+68/−3):
 
 - `--submit-concurrency` default changed **4 → 1** (see Defect 1) with a loud warning when >1.
 - Post-submit **page-number reconciliation**: after uploads, look up each `pageId`'s real
@@ -86,7 +86,7 @@ inserts with no lock between read and insert; the losing INSERT trips the `(chap
 page_number)` unique constraint on a `.expect()` and the catch-panic layer answers a 500 with
 `instance: "/unknown"` (`backend-rust/src/routes/page.rs:330-348`, `routes/mod.rs:104-105`).
 Repro: `--submit-concurrency 3` into one empty chapter — here sample136 500'd, and sample263 got
-silently clamped from page 3 to page 2. Harness mitigation (committed state pending): default
+silently clamped from page 3 to page 2. Harness mitigation (committed in `e6d2e5d`): default
 concurrency 1 + reconciliation.
 
 **2. `create_chapter` 409 anomaly (UNRESOLVED).** On the rebuilt image, with chapter numbers
@@ -122,11 +122,13 @@ earlier run captured. The harness now refuses a populated chapter without `--app
 
 1. **Resolve the 409 mystery** (Defect 2, repro above) — it blocks every subsequent chapter
    creation on an already-populated series.
-2. Commit the current uncommitted harness fixes, re-run the 3 samples **serially** (new default)
+2. ~~Commit the harness fixes~~ (done, `e6d2e5d`). Still to do: re-run the 3 samples **serially** (new default)
    with QA pinned to `qwen/qwen3.8-27b:free`, and confirm 3/3 valid + `qa` jobs used qwen
    (check via the DB: `SELECT type,status FROM jobs WHERE image_id IN (…)`).
-3. Push + update PR #232 with the append/reconcile/concurrency story (or open a follow-up PR;
-   the current PR already reflects most of it, the branch just has +68 uncommitted lines).
+3. ~~Push + update PR #232~~ (done). The corrected three-sample run above still needs verifying.
+   2026-10-08: CodeRabbit's round on #232 is fixed on the branch (`--flag=value`, no password in
+   the log, 500 bodies kept, the poller survives a failed tick, resume matches pages by source
+   file and never re-uploads a page still on the server).
 4. Decide with the owner whether Defects 1 and 2 get proper service fixes (out of scope here).
 5. Delete the invalid `corpus-batch-qwen3-qa/003-sample263/` artifacts and, when the dev stack is
    done being used, the leftover test series/chapters.
