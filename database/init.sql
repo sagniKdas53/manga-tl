@@ -249,7 +249,10 @@ CREATE TABLE public.layer_elements (
     -- bounds, and `order`, its paint position within the layer); x/y/max_width/max_height are where
     -- it is drawn now. NULL on text elements. `opacity` NULL means opaque.
     cleanup_ref jsonb,
-    opacity double precision CHECK (opacity IS NULL OR (opacity >= 0 AND opacity <= 1))
+    opacity double precision CHECK (opacity IS NULL OR (opacity >= 0 AND opacity <= 1)),
+    -- #237: TRUE on a patch that was hidden by hiding its region's text, so showing the text brings
+    -- it back. A patch hidden on its own keeps FALSE/NULL and stays hidden.
+    hidden_with_text boolean
 );
 
 

@@ -91,6 +91,9 @@ pub struct LayerElementInput {
     /// Inpainting layer (undoing a delete, importing a project); an update never changes it.
     #[serde(default)]
     pub cleanupRef: Option<serde_json::Value>,
+    /// #237: set on a patch the editor hid together with its region's text.
+    #[serde(default)]
+    pub hiddenWithText: Option<bool>,
 }
 
 impl LayerElementInput {
@@ -117,6 +120,7 @@ fn capture_state(el: &LayerElement) -> serde_json::Value {
         "maskPolygon": el.mask_polygon.as_ref().map(|v| serde_json::Value::String(v.to_string())),
         "regionId": el.region_id.map(|r| r.to_string()),
         "opacity": el.opacity,
+        "hiddenWithText": el.hidden_with_text,
     })
 }
 
@@ -169,6 +173,7 @@ pub async fn update_layer_element(
            mask_polygon = COALESCE($19, mask_polygon), \
            region_id = CASE WHEN $20::uuid IS NULL THEN region_id ELSE $20 END, \
            opacity = COALESCE($21, opacity), \
+           hidden_with_text = COALESCE($22, hidden_with_text), \
            is_manually_edited = true, edited_at = now() \
          WHERE id = $1 RETURNING *",
     )
@@ -197,6 +202,7 @@ pub async fn update_layer_element(
     )
     .bind(dto.regionId)
     .bind(opacity)
+    .bind(dto.hiddenWithText)
     .fetch_one(&mut *tx)
     .await
     .expect("layer element update");

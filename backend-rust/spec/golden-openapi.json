@@ -277,6 +277,10 @@
           "fontWeight": {
             "type": "string"
           },
+          "hiddenWithText": {
+            "description": "Inpainting elements only (#237): the patch was hidden by hiding its region's text, so showing the text shows it again.",
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -387,6 +391,10 @@
           },
           "fontWeight": {
             "type": "string"
+          },
+          "hiddenWithText": {
+            "description": "Inpainting elements only (#237): the patch was hidden by hiding its region's text, so showing the text shows it again.",
+            "type": "boolean"
           },
           "maskPolygon": {
             "type": "string"

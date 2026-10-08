@@ -210,6 +210,8 @@ export interface LayerElement {
   cleanupRef?: CleanupRef | null;
   /** Inpainting elements only: drawing opacity in [0, 1]; null is opaque. */
   opacity?: number | null;
+  /** Inpainting elements only (#237): hidden by hiding its region's text, which shows it again. */
+  hiddenWithText?: boolean | null;
 }
 
 /** What an Inpainting element draws: content-addressed assets under the page's scene-assets. */

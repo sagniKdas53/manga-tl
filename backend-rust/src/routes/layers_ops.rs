@@ -226,11 +226,14 @@ pub async fn create_layer_element(
         let _ = tx.rollback().await;
         return StatusCode::NOT_FOUND.into_response();
     };
+    // #237: Undo of a deleted patch re-creates it with the mark it had. Only a patch carries one.
+    let hidden_with_text = cleanup_ref.as_ref().and(dto.hiddenWithText);
     let element: LayerElement = sqlx::query_as(
         "INSERT INTO layer_elements (id, auto_size, background_color, box_shape, font, font_style, \
            font_weight, is_manually_edited, mask_polygon, max_height, max_width, overflow, rotation, \
-           size, text, text_color, visible, word_wrap, x, y, layer_id, region_id, cleanup_ref, opacity) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, $9, $10, false, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) \
+           size, text, text_color, visible, word_wrap, x, y, layer_id, region_id, cleanup_ref, opacity, \
+           hidden_with_text) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, $9, $10, false, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23) \
          RETURNING *",
     )
     .bind(Uuid::new_v4())
@@ -255,6 +258,7 @@ pub async fn create_layer_element(
     .bind(dto.regionId)
     .bind(cleanup_ref)
     .bind(opacity)
+    .bind(hidden_with_text)
     .fetch_one(&mut *tx)
     .await
     .expect("element insert");

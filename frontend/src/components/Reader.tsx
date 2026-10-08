@@ -37,6 +37,7 @@ import {
   loadSceneAssetUrl,
   isUnpatchedSoundEffect,
   usePatchImageUrls,
+  patchesFollowingText,
 } from "../utils/inpainting";
 import type { MergePreview } from "./ReaderIssues";
 import InpaintingSession, { type PatchListItem } from "./InpaintingEditor";
@@ -146,8 +147,18 @@ const AUTOSAVE_IDLE_MS = 30_000;
 /**
  * One undo/redo step: the element's state to restore. Tracker R7: `op: "delete"` marks a deleted
  * patch — on the undo stack, undoing re-creates it; on the redo stack, redoing deletes it again.
+ * #237: `with` holds other elements the same step changed (a region's patches hidden with its
+ * text), restored together.
  */
-type UndoEntry = LayerElement & { op?: "delete" };
+type UndoEntry = LayerElement & { op?: "delete"; with?: LayerElement[] };
+
+/** A step's own element, without the step fields, and its companions. */
+function splitStep(step: UndoEntry): [LayerElement, LayerElement[]] {
+  const element: UndoEntry = { ...step };
+  delete element.op;
+  delete element.with;
+  return [element, step.with ?? []];
+}
 
 type SelectedItemType =
   | (RenderItem & Partial<Omit<LayerElement, keyof RenderItem>>)
@@ -196,7 +207,12 @@ async function saveElementChanges(
         maskPolygon: element.maskPolygon,
         // Always sent for a patch: the server keeps a value it is not given, so omitting an
         // opacity that went back to "unset" (opaque) by Undo would leave the export faded.
-        ...(element.cleanupRef ? { opacity: element.opacity ?? 1 } : {}),
+        ...(element.cleanupRef
+          ? {
+              opacity: element.opacity ?? 1,
+              hiddenWithText: element.hiddenWithText === true,
+            }
+          : {}),
       }),
     });
 
@@ -1486,17 +1502,27 @@ export const Reader: React.FC<ReaderProps> = ({
   }, [selectedItem]);
 
   // History Undo/Redo operations
-  const pushToHistoryStack = useCallback((prevState: LayerElement) => {
-    setUndoStack((prev) => [...prev.slice(-49), { ...prevState }]);
-    setRedoStack([]);
-  }, []);
+  const pushToHistoryStack = useCallback(
+    (prevState: LayerElement, companions: LayerElement[] = []) => {
+      const entry: UndoEntry = { ...prevState };
+      if (companions.length) entry.with = companions.map((el) => ({ ...el }));
+      setUndoStack((prev) => [...prev.slice(-49), entry]);
+      setRedoStack([]);
+    },
+    [],
+  );
 
   // Declared before handleUndo/handleRedo so the callbacks can reference it
   const handleSaveElementChanges = useCallback(
-    async (element: LayerElement, showAlert: boolean = true) => {
+    async (
+      element: LayerElement,
+      showAlert: boolean = true,
+      // false when the caller saves several elements and renders once after the last.
+      render: boolean = true,
+    ) => {
       const id = element.id;
       pendingSavesRef.current.delete(id);
-      await saveElementChanges(
+      const saved = await saveElementChanges(
         element,
         showAlert,
         user.token,
@@ -1509,11 +1535,12 @@ export const Reader: React.FC<ReaderProps> = ({
         next.delete(id);
         return next;
       });
-      if (selectedPage) {
+      if (render && selectedPage) {
         requestRenderNow(selectedPage.id).catch((err) =>
           console.error("Render request failed", err),
         );
       }
+      return saved;
     },
     [user.token, showToast, showError, selectedPage, requestRenderNow],
   );
@@ -1596,6 +1623,7 @@ export const Reader: React.FC<ReaderProps> = ({
           opacity: snapshot.opacity ?? undefined,
           regionId: snapshot.regionId ?? undefined,
           cleanupRef: snapshot.cleanupRef,
+          hiddenWithText: snapshot.hiddenWithText === true,
         }),
       });
       if (!res.ok) {
@@ -1603,10 +1631,15 @@ export const Reader: React.FC<ReaderProps> = ({
         return null;
       }
       const restored = (await res.json()) as LayerElement;
+      const follow = <T extends LayerElement>(element: T): T =>
+        element.id === snapshot.id ? { ...element, id: restored.id } : element;
       const remap = (entries: UndoEntry[]) =>
-        entries.map((entry) =>
-          entry.id === snapshot.id ? { ...entry, id: restored.id } : entry,
-        );
+        entries.map((entry) => {
+          const moved = follow(entry);
+          return entry.with
+            ? { ...moved, with: entry.with.map(follow) }
+            : moved;
+        });
       setUndoStack(remap);
       setRedoStack(remap);
       setLayers((prevLayers) =>
@@ -1620,6 +1653,69 @@ export const Reader: React.FC<ReaderProps> = ({
       return restored;
     },
     [user.token, showToast, renderCurrentPage],
+  );
+
+  /**
+   * Puts one undo/redo step's element states (the element and any `with` companions) into the
+   * page, and returns the step that reverses it: those elements as they are now.
+   */
+  const applyHistoryStep = useCallback(
+    (step: UndoEntry): UndoEntry | null => {
+      const [element, companions] = splitStep(step);
+      const states = [element, ...companions];
+      const byId = new Map(states.map((state) => [state.id, state]));
+      const current = new Map<string, LayerElement>();
+      for (const l of layers) {
+        for (const el of l.elements) {
+          if (byId.has(el.id)) current.set(el.id, { ...el });
+        }
+      }
+      setLayers((prevLayers) =>
+        prevLayers.map((l) =>
+          l.elements.some((el) => byId.has(el.id))
+            ? {
+                ...l,
+                elements: l.elements.map((el) => byId.get(el.id) ?? el),
+              }
+            : l,
+        ),
+      );
+      setSelectedItem((prev) => {
+        const restored = prev ? byId.get(prev.id) : undefined;
+        return restored
+          ? ({ ...restored, isLayerElement: true } as SelectedItemType)
+          : prev;
+      });
+      const inverse = current.get(element.id);
+      if (!inverse) return null;
+      const inverseCompanions = companions
+        .map((companion) => current.get(companion.id))
+        .filter((el): el is LayerElement => Boolean(el));
+      return inverseCompanions.length
+        ? { ...inverse, with: inverseCompanions }
+        : inverse;
+    },
+    [layers],
+  );
+
+  /** Saves a step's elements, then renders the page once. */
+  const saveHistoryStep = useCallback(
+    async (step: UndoEntry) => {
+      const [element, companions] = splitStep(step);
+      if (!companions.length) {
+        await handleSaveElementChanges(element, false);
+        return;
+      }
+      // Rendered only once every element saved: a failed save has its own Retry, and a render
+      // of half a step would show the text and its patch out of step.
+      const saved = await Promise.all(
+        [element, ...companions].map((el) =>
+          handleSaveElementChanges(el, false, false),
+        ),
+      );
+      if (saved.every(Boolean)) renderCurrentPage();
+    },
+    [handleSaveElementChanges, renderCurrentPage],
   );
 
   const handleUndo = useCallback(async () => {
@@ -1642,45 +1738,16 @@ export const Reader: React.FC<ReaderProps> = ({
       return;
     }
 
-    let currentElement: LayerElement | undefined;
-    setLayers((prevLayers) => {
-      let found: LayerElement | undefined;
-      for (const l of prevLayers) {
-        const el = l.elements.find((e) => e.id === previous.id);
-        if (el) {
-          found = el;
-          break;
-        }
-      }
-      if (found) {
-        currentElement = { ...found };
-      }
-
-      return prevLayers.map((l) => {
-        if (l.layer.id === previous.layerId) {
-          return {
-            ...l,
-            elements: l.elements.map((el) =>
-              el.id === previous.id ? previous : el,
-            ),
-          };
-        }
-        return l;
-      });
-    });
-
-    if (currentElement) {
-      setRedoStack((prev) => [...prev, currentElement as LayerElement]);
-    }
-
-    setSelectedItem((prev) =>
-      prev && prev.id === previous.id
-        ? ({ ...previous, isLayerElement: true } as SelectedItemType)
-        : prev,
-    );
-
-    await handleSaveElementChanges(previous, false);
-  }, [undoStack, handleSaveElementChanges, restorePatchElement, showToast]);
+    const inverse = applyHistoryStep(previous);
+    if (inverse) setRedoStack((prev) => [...prev, inverse]);
+    await saveHistoryStep(previous);
+  }, [
+    undoStack,
+    applyHistoryStep,
+    saveHistoryStep,
+    restorePatchElement,
+    showToast,
+  ]);
 
   const handleRedo = useCallback(async () => {
     if (redoStack.length === 0) return;
@@ -1694,43 +1761,10 @@ export const Reader: React.FC<ReaderProps> = ({
       return;
     }
 
-    let currentElement: LayerElement | undefined;
-    setLayers((prevLayers) => {
-      let found: LayerElement | undefined;
-      for (const l of prevLayers) {
-        const el = l.elements.find((e) => e.id === next.id);
-        if (el) {
-          found = el;
-          break;
-        }
-      }
-      if (found) {
-        currentElement = { ...found };
-      }
-
-      return prevLayers.map((l) => {
-        if (l.layer.id === next.layerId) {
-          return {
-            ...l,
-            elements: l.elements.map((el) => (el.id === next.id ? next : el)),
-          };
-        }
-        return l;
-      });
-    });
-
-    if (currentElement) {
-      setUndoStack((prev) => [...prev, currentElement as LayerElement]);
-    }
-
-    setSelectedItem((prev) =>
-      prev && prev.id === next.id
-        ? ({ ...next, isLayerElement: true } as SelectedItemType)
-        : prev,
-    );
-
-    await handleSaveElementChanges(next, false);
-  }, [redoStack, handleSaveElementChanges, deletePatchElement]);
+    const inverse = applyHistoryStep(next);
+    if (inverse) setUndoStack((prev) => [...prev, inverse]);
+    await saveHistoryStep(next);
+  }, [redoStack, applyHistoryStep, saveHistoryStep, deletePatchElement]);
 
   const handleMoveLayer = useCallback(
     async (layerId: string, direction: "up" | "down") => {
@@ -1839,24 +1873,45 @@ export const Reader: React.FC<ReaderProps> = ({
    */
   const handleSetElementVisibility = useCallback(
     (element: LayerElement, visible: boolean) => {
-      const updated = { ...element, visible } as LayerElement;
-      pushToHistoryStack(element);
+      // A patch shown or hidden by itself is no longer one its text hid (#237).
+      const updated = {
+        ...element,
+        visible,
+        ...(isPatchElement(element) ? { hiddenWithText: false } : {}),
+      } as LayerElement;
+      // #237: a region's text takes its cleanup patches with it, in the same undo step.
+      const patches = patchesFollowingText(element, visible, layers);
+      const previousPatches = patches.map(
+        (patch) =>
+          layers
+            .flatMap((l) => l.elements)
+            .find((el) => el.id === patch.id) as LayerElement,
+      );
+      pushToHistoryStack(element, previousPatches);
+      const changed = new Map([updated, ...patches].map((el) => [el.id, el]));
       setLayers((prevLayers) =>
         prevLayers.map((l) => ({
           ...l,
-          elements: l.elements.map((el) =>
-            el.id === element.id ? updated : el,
-          ),
+          elements: l.elements.map((el) => changed.get(el.id) ?? el),
         })),
       );
-      setSelectedItem((prev: SelectedItemType) =>
-        prev && prev.id === element.id
-          ? ({ ...prev, visible } as SelectedItemType)
-          : prev,
-      );
-      void handleSaveElementChanges(updated, false);
+      setSelectedItem((prev: SelectedItemType) => {
+        const next = prev ? changed.get(prev.id) : undefined;
+        return next ? ({ ...prev, ...next } as SelectedItemType) : prev;
+      });
+      if (!patches.length) {
+        void handleSaveElementChanges(updated, false);
+        return;
+      }
+      void Promise.all(
+        [updated, ...patches].map((el) =>
+          handleSaveElementChanges(el, false, false),
+        ),
+      ).then((saved) => {
+        if (saved.every(Boolean)) renderCurrentPage();
+      });
     },
-    [pushToHistoryStack, handleSaveElementChanges],
+    [layers, pushToHistoryStack, handleSaveElementChanges, renderCurrentPage],
   );
 
   const handleUpdateSelectedElement = (updates: Partial<LayerElement>) => {
@@ -2924,6 +2979,8 @@ export const Reader: React.FC<ReaderProps> = ({
               // Tracker R7: a patch copy draws the same patch.
               cleanupRef: el.cleanupRef ?? undefined,
               opacity: el.opacity ?? undefined,
+              // F1: a copy of a patch its text hid stays tied to that text.
+              hiddenWithText: el.hiddenWithText === true,
               // id intentionally omitted — fresh UUIDs, standalone copies
             }),
           },
@@ -3294,7 +3351,12 @@ export const Reader: React.FC<ReaderProps> = ({
               qaScore: el.region?.qaScore,
               qaFeedback: el.region?.qaFeedback,
               ...(el.cleanupRef
-                ? { cleanupRef: el.cleanupRef, opacity: el.opacity ?? null }
+                ? {
+                    cleanupRef: el.cleanupRef,
+                    opacity: el.opacity ?? null,
+                    // #237: so showing the region's text after an import still brings it back.
+                    hiddenWithText: el.hiddenWithText === true,
+                  }
                 : {}),
             })),
           };

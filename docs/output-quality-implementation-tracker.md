@@ -362,6 +362,9 @@ to Node 24.
 - R7-D2b: one Inpainting layer per pass; flatten later if needed.
 - R7-D3: project archives are `schemaVersion` 2, and v1 is refused.
 - R7-D4: a patch draws only if its region has usable English.
+  Since F1 (#237, 2026-10-07), a region's eye button in Layers hides its patch with its last
+  visible text, as one undo step (the patch is marked `hidden_with_text`), and showing the text
+  brings back only a patch it hid. Hiding a whole text layer still keeps every patch.
 
 **Gate (dev stack):**
 - Six fixtures: the editor content view vs the export (text hidden) is RGBA-identical on all six. A moved, stretched and faded patch also matches.

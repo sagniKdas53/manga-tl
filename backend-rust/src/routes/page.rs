@@ -3043,13 +3043,14 @@ async fn restore_project_layers(
                 .and_then(|v| v.as_f64())
                 .filter(|o| o.is_finite())
                 .map(|o| o.clamp(0.0, 1.0));
+            let hidden_with_text = el.get("hiddenWithText").and_then(|v| v.as_bool());
 
             let element_id = Uuid::new_v4();
             sqlx::query(
                 "INSERT INTO layer_elements (id, text, font, size, auto_size, max_width, max_height, word_wrap, rotation, \
                  x, y, visible, background_color, text_color, font_weight, font_style, box_shape, mask_polygon, \
-                 is_manually_edited, layer_id, region_id, cleanup_ref, opacity) \
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)",
+                 is_manually_edited, layer_id, region_id, cleanup_ref, opacity, hidden_with_text) \
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)",
             )
             .bind(element_id)
             .bind(text)
@@ -3074,6 +3075,7 @@ async fn restore_project_layers(
             .bind(region_id)
             .bind(cleanup_ref)
             .bind(opacity)
+            .bind(hidden_with_text)
             .execute(&mut **tx)
             .await
             .map_err(|_| ())?;

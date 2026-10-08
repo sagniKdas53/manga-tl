@@ -1235,6 +1235,8 @@ export interface components {
             font?: string;
             fontStyle?: string;
             fontWeight?: string;
+            /** @description Inpainting elements only (#237): the patch was hidden by hiding its region's text, so showing the text shows it again. */
+            hiddenWithText?: boolean;
             /** Format: uuid */
             id?: string;
             isManuallyEdited?: boolean;
@@ -1284,6 +1286,8 @@ export interface components {
             font?: string;
             fontStyle?: string;
             fontWeight?: string;
+            /** @description Inpainting elements only (#237): the patch was hidden by hiding its region's text, so showing the text shows it again. */
+            hiddenWithText?: boolean;
             maskPolygon?: string;
             /** Format: int32 */
             maxHeight?: number;
