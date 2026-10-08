@@ -442,8 +442,15 @@ async function ensureToken(ctx, args) {
   ctx.adoptSession(body, `registered throwaway account ${body.email} (${body.role})`);
   // The password goes to a file only its owner can read, never to the log (CodeQL on #232).
   const saved = path.join(ctx.outRoot, "throwaway-account.json");
-  fs.writeFileSync(saved, `${JSON.stringify({ email, password }, null, 2)}\n`, { mode: 0o600 });
-  fs.chmodSync(saved, 0o600); // `mode` applies only when the file is created, not to one left by a resumed run
+  // Tightened before the password is written: `mode` applies only to a new file, and one left by an
+  // earlier run may be readable by others.
+  const fd = fs.openSync(saved, "w", 0o600);
+  try {
+    fs.fchmodSync(fd, 0o600);
+    fs.writeSync(fd, `${JSON.stringify({ email, password }, null, 2)}\n`);
+  } finally {
+    fs.closeSync(fd);
+  }
   console.log(`  kept for this run: --email ${email} (password in ${saved})`);
   return ctx.token;
 }
