@@ -394,9 +394,9 @@ describe("Reader Inpainting layer (tracker R7)", () => {
       expect(calls("POST", /\/layer-history\/undo$/)).toHaveLength(1),
     );
     const order = mockSafeFetch.mock.calls.map(([url]) => String(url));
-    const lastSave = order.findLastIndex((url) =>
-      /\/api\/layer-elements\/el-2$/.test(url),
-    );
+    const lastSave = order
+      .map((url) => /\/api\/layer-elements\/el-2$/.test(url))
+      .lastIndexOf(true);
     const undoAt = order.findIndex((url) => /\/layer-history\/undo$/.test(url));
     expect(lastSave).toBeGreaterThanOrEqual(0);
     expect(lastSave).toBeLessThan(undoAt);
