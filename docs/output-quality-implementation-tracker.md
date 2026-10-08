@@ -185,6 +185,8 @@ Checklist of the tracker's items:
   F3 #250, F4 (layer Undo/Redo kept on the server, `layer_ops`, last 20 per page). The stack merges
   after F4 lands (owner, 2026-10-08); F5 (#244) moves under E, after E2.
 - [ ] E: automatic angles (`AUDIT-R23`, #180; reshape fix #179 first; [plan](fe-plan-20261007.md))
+- [ ] `visible = NULL` text: the canvas and worker hide it, the scene builder and two coordinator
+  queries show it (#252; F3 writes it down as hidden on merge; measure prod first)
 - [ ] I: text the OCR detector never finds stays untranslated (#245; fixture sample99's
   ぬるぬるで sits inside a found balloon with no OCR piece over it). Before M9. Not the 2026-10-03
   "I" (`SELF_HOSTED_ADMIN`, done)

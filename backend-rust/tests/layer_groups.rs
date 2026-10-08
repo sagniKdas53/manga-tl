@@ -1132,6 +1132,9 @@ async fn undo_puts_a_merge_back_row_for_row_and_redo_merges_again() {
     let upper = add_text_layer(&pool, page_id, 3).await;
     sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES (uuid_generate_v4(),'one again',10,10,60,40,TRUE,$1,$2)")
         .bind(upper).bind(one).execute(&pool).await.unwrap();
+    // A null switch, which the merge writes down as hidden: undo must put the null back.
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id) VALUES (uuid_generate_v4(),'never shown',200,10,60,40,NULL,$1)")
+        .bind(upper).execute(&pool).await.unwrap();
     // A redo overlay over region two, superseding base's text.
     let base_two = element_of(&pool, base, two).await;
     let overlay = Uuid::new_v4();
@@ -1180,6 +1183,14 @@ async fn undo_puts_a_merge_back_row_for_row_and_redo_merges_again() {
     let (status, body) = merge(vec![base, upper, overlay]).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let text_merged = page_rows(&pool, page_id).await;
+    let never_shown: Option<bool> = sqlx::query_scalar(
+        "SELECT visible FROM layer_elements WHERE layer_id = $1 AND text = 'never shown'",
+    )
+    .bind(base)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(never_shown, Some(false), "the merge wrote the null down");
     let (status, body) = merge(vec![lower_patches, upper_patches]).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let both_merged = page_rows(&pool, page_id).await;
