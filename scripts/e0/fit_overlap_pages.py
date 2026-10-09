@@ -28,49 +28,18 @@ for r in regions:
         by_hash[r["hash"]].append(r)
 
 
-def fold90(a):
-    return ((a + 90) % 180) - 90
+# python3 -I leaves this directory off the path; the rule lives beside this script.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from angle_rule import fold90, lines, rule as settled_rule  # noqa: E402
 
 
-def axis_dev(a):
-    """Deviation of a line direction from the nearest axis (0 or 90), in (-45, 45]."""
-    return ((a + 45) % 90) - 45
-
-
-def pieces(prov):
-    if not prov:
-        return []
-    if "fragments" in prov:
-        return [f.get("provenance", f) for f in prov["fragments"]]
-    return [prov]
+def rule(prov, dead=5.0, min_chars=1.5, agree=6.0, sign=1):
+    a, why = settled_rule(prov, dead, min_chars, agree)
+    return sign * a, why.replace(" ", "-")
 
 
 def piece_lines(prov):
-    out = []
-    for f in pieces(prov):
-        q = f.get("sourceQuad")
-        if not q or len(q) != 4:
-            continue
-        e0 = (q[1][0] - q[0][0], q[1][1] - q[0][1])
-        e1 = (q[2][0] - q[1][0], q[2][1] - q[1][1])
-        l0, l1 = math.hypot(*e0), math.hypot(*e1)
-        long_e, long_l, short_l = (e0, l0, l1) if l0 >= l1 else (e1, l1, l0)
-        ang = math.degrees(math.atan2(long_e[1], long_e[0]))
-        out.append({"dev": axis_dev(ang), "len": long_l, "thick": max(short_l, 1e-6)})
-    return out
-
-
-def rule(prov, dead=4.0, min_chars=2.0, agree=6.0, sign=1):
-    lines = [p for p in piece_lines(prov) if p["len"] >= min_chars * p["thick"]]
-    if not lines:
-        return 0.0, "no-voting-piece"
-    devs = [p["dev"] for p in lines]
-    if max(devs) - min(devs) > agree:
-        return 0.0, "pieces-disagree"
-    a = sum(p["dev"] * p["len"] for p in lines) / sum(p["len"] for p in lines)
-    if abs(a) < dead:
-        return 0.0, "dead-band"
-    return sign * a, "turned"
+    return lines(prov)
 
 
 def torii_boxes(sample_dir):
@@ -179,8 +148,8 @@ print("\nGrid (dead band, min line length in line-thicknesses, max piece disagre
       "MAE, p90 error, Torii-tilted we turn (tp), we keep level (fn), Torii-level we turn (fp)")
 for (dead, mc, ag), e in sorted(grid, key=lambda g: (g[1]["fp"] + g[1]["fn"], g[1]["mae"]))[:12]:
     print(f"  dead {dead:>2}  min {mc:>3}  agree {ag:>3}:  MAE {e['mae']:.2f}  p90 {e['p90']:.2f}  tp {e['tp']:>3}  fn {e['fn']:>3}  fp {e['fp']:>3}")
-plan = evaluate(4, 2.0, 6)
-print("\nPlan's starting rule (dead 4, min 2 chars, agree 6):",
+plan = evaluate(5, 1.5, 6)
+print("\nThe settled rule (dead 5, min 1.5 thicknesses, agree 6):",
       {k: (round(v, 2) if isinstance(v, float) else v) for k, v in plan.items() if k not in ("big", "conf", "reasons")})
 print("  why level/turned:", dict(plan["reasons"]))
 print("  confusion:", dict(plan["conf"]))
