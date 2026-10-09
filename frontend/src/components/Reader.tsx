@@ -175,8 +175,21 @@ type SelectedItemType =
   | (LayerElement & Partial<Omit<RenderItem, keyof LayerElement>>)
   | null;
 
+/**
+ * "gone": the server has no such element any more (404) -- its layer or the element itself was
+ * deleted -- so saving it again can never work.
+ */
+type SaveOutcome = "saved" | "failed" | "gone";
+
 /** Saves one element; resolves to whether the server took it (a failure is reported here). */
 async function saveElementChanges(
+  ...args: Parameters<typeof saveElement>
+): Promise<boolean> {
+  return (await saveElement(...args)) === "saved";
+}
+
+/** Saves one element and says how it went; a failure or a gone element is reported here. */
+async function saveElement(
   element: LayerElement,
   showAlert: boolean = true,
   token: string,
@@ -187,7 +200,7 @@ async function saveElementChanges(
   ) => void,
   // For saves started as the tab closes, which the browser would otherwise cancel.
   keepalive: boolean = false,
-): Promise<boolean> {
+): Promise<SaveOutcome> {
   try {
     const res = await safeFetch(`/api/layer-elements/${element.id}`, {
       method: "PUT",
@@ -226,6 +239,12 @@ async function saveElementChanges(
       }),
     });
 
+    // No Retry here: every retry would 404 again. A queued edit that met this was retried on
+    // each flush, one error toast at a time, and held a layer undo back for good (#264).
+    if (res.status === 404) {
+      showError("An edit was not saved: its text was deleted first.");
+      return "gone";
+    }
     if (!res.ok) {
       throw new Error("Failed to update element on server");
     }
@@ -233,7 +252,7 @@ async function saveElementChanges(
     if (showAlert) {
       showToast("Element updated successfully!", "success");
     }
-    return true;
+    return "saved";
   } catch (err) {
     console.error(err);
     showError("Error updating element on server.", {
@@ -243,7 +262,7 @@ async function saveElementChanges(
           saveElementChanges(element, showAlert, token, showToast, showError),
       },
     });
-    return false;
+    return "failed";
   }
 }
 
@@ -663,7 +682,8 @@ export const Reader: React.FC<ReaderProps> = ({
   /**
    * Saves every pending element edit, then renders the pages they belong to. An edit whose save
    * failed stays pending and dirty (unless a newer edit of it is already waiting), so the next
-   * flush tries it again and Export still sees unsaved work.
+   * flush tries it again and Export still sees unsaved work. An edit of an element the server no
+   * longer has is dropped (#264).
    */
   const flushQueuedSaves = useCallback(
     async (keepalive: boolean = false): Promise<void> => {
@@ -676,7 +696,7 @@ export const Reader: React.FC<ReaderProps> = ({
       if (batch.length === 0) return;
       const results = await Promise.all(
         batch.map(({ element }) =>
-          saveElementChanges(
+          saveElement(
             element,
             false,
             user.token,
@@ -687,15 +707,19 @@ export const Reader: React.FC<ReaderProps> = ({
         ),
       );
       const saved = new Set<string>();
+      const settled = new Set<string>();
       batch.forEach((entry, index) => {
-        if (results[index]) {
+        if (results[index] === "saved") {
           saved.add(entry.element.id);
+          settled.add(entry.element.id);
+        } else if (results[index] === "gone") {
+          settled.add(entry.element.id);
         } else if (!pendingSavesRef.current.has(entry.element.id)) {
           pendingSavesRef.current.set(entry.element.id, entry);
         }
       });
       setDirtyElements((prev) => {
-        const next = new Set([...prev].filter((id) => !saved.has(id)));
+        const next = new Set([...prev].filter((id) => !settled.has(id)));
         return next.size === prev.size ? prev : next;
       });
       const savedPages = new Set(
@@ -736,6 +760,36 @@ export const Reader: React.FC<ReaderProps> = ({
     while (inFlightFlushesRef.current.size > 0) {
       await Promise.allSettled([...inFlightFlushesRef.current]);
     }
+  }, []);
+
+  /**
+   * Saves every pending text edit, waiting on saves already on their way, before a layer action
+   * the server replays as a whole: a layer undo or redo, a layer delete, a merge. Resolves false,
+   * and says so, while an edit still will not save -- retried after the action, it would land on
+   * rows the action had replaced, or 404 for good once its layer was gone (#254, #264).
+   */
+  const savePendingEditsFirst = useCallback(
+    async (action: string): Promise<boolean> => {
+      await awaitInFlightSaves();
+      await flushPendingSaves();
+      if (pendingSavesRef.current.size === 0) return true;
+      showError(
+        `Could not ${action}: an edit is still unsaved. Save it first, then try again.`,
+      );
+      return false;
+    },
+    [awaitInFlightSaves, flushPendingSaves, showError],
+  );
+
+  /** Forgets the pending edit of an element that was just deleted: there is nothing to save it to. */
+  const dropPendingEdit = useCallback((elementId: string) => {
+    pendingSavesRef.current.delete(elementId);
+    setDirtyElements((prev) => {
+      if (!prev.has(elementId)) return prev;
+      const next = new Set(prev);
+      next.delete(elementId);
+      return next;
+    });
   }, []);
 
   // The page-change and tab-close handlers call the newest flush through this, so they
@@ -1643,6 +1697,8 @@ export const Reader: React.FC<ReaderProps> = ({
         showToast("Could not delete the patch.", "error");
         return false;
       }
+      // Its snapshot on the undo stack keeps the edit; restoring it makes a new element.
+      dropPendingEdit(element.id);
       setLayers((prevLayers) =>
         prevLayers.map((l) => ({
           ...l,
@@ -1653,7 +1709,7 @@ export const Reader: React.FC<ReaderProps> = ({
       renderCurrentPage();
       return true;
     },
-    [user.token, showToast, renderCurrentPage],
+    [user.token, showToast, renderCurrentPage, dropPendingEdit],
   );
 
   /** Re-creates a deleted patch from its snapshot; every stacked step for it follows the new id. */
@@ -2776,6 +2832,7 @@ export const Reader: React.FC<ReaderProps> = ({
           });
 
           if (res.ok) {
+            dropPendingEdit(elementId);
             setLayers((prevLayers) =>
               prevLayers.map((l) => ({
                 ...l,
@@ -2921,17 +2978,9 @@ export const Reader: React.FC<ReaderProps> = ({
   const stepLayerHistory = useCallback(
     async (which: "undo" | "redo") => {
       if (!selectedPageId) return;
-      // Pending text edits go first, including saves already on their way, so the server's
-      // "edited since" check sees them. One whose save keeps failing holds the undo back: retried
-      // later, it would land on the rows the undo put back (CodeRabbit on #253 and #254).
-      await awaitInFlightSaves();
-      await flushPendingSaves();
-      if (pendingSavesRef.current.size > 0) {
-        showError(
-          `Could not ${which}: an edit is still unsaved. Save it first, then try again.`,
-        );
-        return;
-      }
+      // Pending text edits go first, so the server's "edited since" check sees them (CodeRabbit
+      // on #253 and #254).
+      if (!(await savePendingEditsFirst(which))) return;
       try {
         const result = (await layerRequest(
           `/api/pages/${selectedPageId}/layer-history/${which}`,
@@ -2951,8 +3000,7 @@ export const Reader: React.FC<ReaderProps> = ({
     },
     [
       selectedPageId,
-      awaitInFlightSaves,
-      flushPendingSaves,
+      savePendingEditsFirst,
       layerRequest,
       showToast,
       showError,
@@ -3068,6 +3116,7 @@ export const Reader: React.FC<ReaderProps> = ({
     },
     mergeLayers: async (layerIds) => {
       if (!selectedPage || layerIds.length < 2) return;
+      if (!(await savePendingEditsFirst("merge"))) return;
       try {
         const result = await layerRequest(
           `/api/pages/${selectedPage.id}/layers/merge`,
@@ -3163,6 +3212,9 @@ export const Reader: React.FC<ReaderProps> = ({
       isDangerous: true,
       onConfirm: async () => {
         closeConfirm();
+        // The layer's pending text edits are saved first, so its undo brings them back with it;
+        // left queued, each retry met a 404 and a fresh error toast (#264).
+        if (!(await savePendingEditsFirst("delete the layer"))) return;
         try {
           const res = await safeFetch(`/api/layers/${layerId}`, {
             method: "DELETE",
