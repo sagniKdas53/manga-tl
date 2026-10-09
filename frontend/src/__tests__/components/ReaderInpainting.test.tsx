@@ -34,11 +34,12 @@ vi.mock("../../components/useNotifications", () => ({
 }));
 
 const mockShowToast = vi.fn();
+const mockShowError = vi.fn();
 vi.mock("../../components/ToastContext", () => ({
   useToast: () => ({
     showToast: mockShowToast,
     showSuccess: vi.fn(),
-    showError: vi.fn(),
+    showError: mockShowError,
   }),
 }));
 
@@ -400,6 +401,130 @@ describe("Reader Inpainting layer (tracker R7)", () => {
     const undoAt = order.findIndex((url) => /\/layer-history\/undo$/.test(url));
     expect(lastSave).toBeGreaterThanOrEqual(0);
     expect(lastSave).toBeLessThan(undoAt);
+  });
+
+  it("finishes a text edit's save before its layer is deleted, so the layer's undo brings the edit back (#264)", async () => {
+    // Owner's F test, 2026-10-09: a text save still on its way when the layer was deleted met a
+    // 404, then an error toast on every flush, and held the layer undo back.
+    const base = mockSafeFetch.getMockImplementation()!;
+    let releaseSave: () => void = () => {};
+    mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (/\/api\/layer-elements\/el-2$/.test(url) && init?.method === "PUT") {
+        return new Promise((resolve) => {
+          releaseSave = () =>
+            resolve({ ok: true, json: () => Promise.resolve({}) });
+        });
+      }
+      return base(url, init);
+    });
+    await renderReader();
+    fireEvent.click(
+      document.querySelector('.svg-overlay [data-element-id="el-2"]')!,
+    );
+    fireEvent.change(await screen.findByLabelText("Text Content"), {
+      target: { value: "Hey there" },
+    });
+    // Deselecting starts the save; the layer is deleted while it is still on its way.
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() =>
+      expect(calls("PUT", /\/api\/layer-elements\/el-2$/)).toHaveLength(1),
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete layer" })[0]);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Delete Layer" }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(calls("DELETE", /\/api\/layers\/[^/]+$/)).toHaveLength(0);
+
+    await act(async () => {
+      releaseSave();
+    });
+    await waitFor(() =>
+      expect(calls("DELETE", /\/api\/layers\/[^/]+$/)).toHaveLength(1),
+    );
+    expect(calls("PUT", /\/api\/layer-elements\/el-2$/)).toHaveLength(1);
+  });
+
+  it("drops a queued edit whose element is gone, with one message, and lets the layer undo through (#264)", async () => {
+    const base = mockSafeFetch.getMockImplementation()!;
+    const entry = {
+      id: "op-1",
+      kind: "delete",
+      label: "delete layer",
+      createdAt: "2026-10-09T00:00:00Z",
+      blocked: null,
+    };
+    mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (/\/layer-history$/.test(url)) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              undo: entry,
+              redo: null,
+              undoCount: 1,
+              redoCount: 0,
+              depth: 20,
+            }),
+        });
+      }
+      if (/\/layer-history\/undo$/.test(url)) {
+        const body = JSON.stringify({
+          undo: null,
+          redo: entry,
+          undoCount: 0,
+          redoCount: 1,
+          depth: 20,
+          applied: "delete layer",
+        });
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(body),
+          json: () => Promise.resolve(JSON.parse(body)),
+        });
+      }
+      if (/\/api\/layer-elements\/el-2$/.test(url) && init?.method === "PUT") {
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: () => Promise.resolve({}),
+          text: () => Promise.resolve("not found"),
+        });
+      }
+      return base(url, init);
+    });
+    await renderReader();
+    fireEvent.click(
+      document.querySelector('.svg-overlay [data-element-id="el-2"]')!,
+    );
+    fireEvent.change(await screen.findByLabelText("Text Content"), {
+      target: { value: "Hey there" },
+    });
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    await waitFor(() =>
+      expect(calls("PUT", /\/api\/layer-elements\/el-2$/)).toHaveLength(1),
+    );
+    await waitFor(() =>
+      expect(mockShowError).toHaveBeenCalledWith(
+        "An edit was not saved: its text was deleted first.",
+      ),
+    );
+
+    // Not retried: the next save has nothing to send, and the undo goes through.
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "Escape" });
+    const undo = await screen.findByRole("button", {
+      name: "Undo layer action",
+    });
+    await waitFor(() => expect(undo).toBeEnabled());
+    fireEvent.click(undo);
+    await waitFor(() =>
+      expect(calls("POST", /\/layer-history\/undo$/)).toHaveLength(1),
+    );
+    expect(calls("PUT", /\/api\/layer-elements\/el-2$/)).toHaveLength(1);
+    expect(mockShowError).toHaveBeenCalledTimes(1);
   });
 
   it("undoes a layer action on the server and reloads the page; a reorder is one step (F4)", async () => {
