@@ -14,6 +14,7 @@ import {
   isVertexMoveValid,
   isRotationValid,
   normalizeDegrees,
+  unrotatedBox,
 } from "../../utils/polygonUtils";
 import type { Polygon } from "../../utils/polygonUtils";
 
@@ -82,6 +83,60 @@ describe("polygonUtils", () => {
       const rotated = rotatePolygon(square, [1, 1], 90);
       // Square should remain a square but vertices shifted
       expect(polygonArea(rotated)).toBeCloseTo(4);
+    });
+  });
+
+  describe("unrotatedBox (#179, AUDIT-R14)", () => {
+    it("gives back the box a rotated outline was made from", () => {
+      const outline = rectToPolygon(100, 50, 80, 30, 30);
+      expect(unrotatedBox(outline, 30)).toEqual({
+        x: 100,
+        y: 50,
+        w: 80,
+        h: 30,
+      });
+      // The page-space bounding box is the inflated one the element used to get.
+      expect(polygonBBox(outline).w).toBeGreaterThan(80);
+    });
+
+    it("is the plain bounding box when the element is level", () => {
+      const outline: Polygon = [
+        [10, 20],
+        [70, 20],
+        [60, 50],
+        [10, 45],
+      ];
+      expect(unrotatedBox(outline, 0)).toEqual(polygonBBox(outline));
+    });
+
+    it("measures a dragged vertex along the element's own axes", () => {
+      // Pull the top-right corner 20 px further along the element's x axis.
+      const level: Polygon = [
+        [100, 50],
+        [200, 50],
+        [180, 80],
+        [100, 80],
+      ];
+      const outline = rotatePolygon(level, [140, 65], 30);
+      const box = unrotatedBox(outline, 30);
+      expect(box.w).toBe(100);
+      expect(box.h).toBe(30);
+      // Turned about its own centre, the box's corners hold the outline's extreme corners.
+      const corners = rectToPolygon(box.x, box.y, box.w, box.h, 30);
+      const turnedLevel = rotatePolygon(
+        [
+          [100, 50],
+          [200, 50],
+          [200, 80],
+          [100, 80],
+        ],
+        [140, 65],
+        30,
+      );
+      corners.forEach(([x, y], i) => {
+        expect(Math.abs(x - turnedLevel[i][0])).toBeLessThanOrEqual(1);
+        expect(Math.abs(y - turnedLevel[i][1])).toBeLessThanOrEqual(1);
+      });
     });
   });
 
