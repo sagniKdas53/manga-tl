@@ -606,6 +606,28 @@ fn error(message: &str) -> PageSceneError {
 
 #[cfg(test)]
 mod tests {
+    /// E2 (#180): a turned quad's corners have 17 significant digits. The recovery path reads a
+    /// snapshot back out of jsonb, and the digest it was filed under must still match, or the
+    /// worker refuses the render ("queued logical scene digest mismatch", 2026-10-10). serde_json's
+    /// default float parser can land one ULP off on such values; `float_roundtrip` makes it exact.
+    #[test]
+    fn a_scene_digest_survives_a_text_round_trip_of_long_floats() {
+        let values = [
+            1611.2375205589237_f64,
+            991.0999187417717,
+            1371.2587046408419,
+            952.5412953591583,
+            1918.5746199497535,
+            3867.7253800502467,
+            1062.3052337227377,
+        ];
+        for value in values {
+            let text = serde_json::to_string(&serde_json::json!({ "x": value })).unwrap();
+            let back: Value = serde_json::from_str(&text).unwrap();
+            assert_eq!(back["x"].as_f64(), Some(value), "{text} did not parse back exactly");
+        }
+    }
+
     use super::*;
     use serde_json::json;
 
