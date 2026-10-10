@@ -37,8 +37,11 @@ def multipart(fields, name, data, ftype):
 
 def main():
     root, base, password = sys.argv[1], sys.argv[2].rstrip("/"), sys.argv[3]
-    host = urllib.parse.urlparse(base).hostname or ""
-    if base.startswith("http://") and host not in ("localhost", "127.0.0.1", "::1"):
+    parsed = urllib.parse.urlparse(base)
+    scheme, host = parsed.scheme.lower(), parsed.hostname or ""
+    if scheme not in ("http", "https"):
+        sys.exit(f"base URL must be http or https, not {scheme or 'none'}")
+    if scheme == "http" and host not in ("localhost", "127.0.0.1", "::1"):
         sys.exit(f"refusing to send the password over plain HTTP to {host}; use https or run this on the host")
     if os.path.exists(DONE):
         sys.exit(f"already uploaded ({DONE}); re-test with Redo OCR, never a second upload")
@@ -48,7 +51,7 @@ def main():
     # manifest by hand.
     state_path = os.path.join(root, "manifest.json")
     state = json.load(open(state_path)) if os.path.exists(state_path) else {"chapters": {}, "pages": {}}
-    unconfirmed = [name for name, page in state["pages"].items() if page.get("state") == "sent"]
+    unconfirmed = [name for name, page in state["pages"].items() if page.get("state") in ("sent", "check")]
     if unconfirmed:
         sys.exit(f"uploads sent but not confirmed: {unconfirmed}; check the stack and edit {state_path}")
 
@@ -77,8 +80,14 @@ def main():
                 body, ctype = multipart({"chapterId": chapter_id, "pageNumber": str(page)}, name, fh.read(), ftype)
             state["pages"][key] = {"series": fields["title"], "chapterId": chapter_id, "page": page, "state": "sent"}
             save()
-            res = request("POST", f"{base}/api/images", token, body, ctype)
-            state["pages"][key].update(state="uploaded", pageId=(res or {}).get("pageId"), status=(res or {}).get("status"))
+            res = request("POST", f"{base}/api/images", token, body, ctype) or {}
+            # Only "processing" starts a fresh OCR run. "duplicate" copies an earlier page's regions
+            # and "already_exists" means the slot is taken: neither is a test page, so stop.
+            if res.get("status") != "processing" or not res.get("pageId"):
+                state["pages"][key].update(state="check", status=res.get("status"), pageId=res.get("pageId"))
+                save()
+                sys.exit(f"{key}: upload answered {res.get('status')!r}, not a fresh OCR run; check the stack and edit {state_path}")
+            state["pages"][key].update(state="uploaded", pageId=res["pageId"], status=res["status"])
             save()
             print(lang, page, name, state["pages"][key])
     open(DONE, "w").close()
