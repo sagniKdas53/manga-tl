@@ -624,7 +624,11 @@ mod tests {
         for value in values {
             let text = serde_json::to_string(&serde_json::json!({ "x": value })).unwrap();
             let back: Value = serde_json::from_str(&text).unwrap();
-            assert_eq!(back["x"].as_f64(), Some(value), "{text} did not parse back exactly");
+            assert_eq!(
+                back["x"].as_f64(),
+                Some(value),
+                "{text} did not parse back exactly"
+            );
         }
     }
 
