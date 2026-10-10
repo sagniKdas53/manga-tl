@@ -62,7 +62,12 @@ def rule(prov, dead=SETTLED[0], min_chars=SETTLED[1], agree=SETTLED[2]):
     vs = votes(prov, min_chars)
     if not vs:
         return 0.0, "no long piece"
-    spread = lambda v: max(d for d, _ in v) - min(d for d, _ in v)
+    # Line directions wrap at ±90 (−89° and +89° are 2° apart): unwrap them around the voter
+    # closest, by length, to all the others before comparing or averaging (CodeRabbit on #255).
+    gap = lambda a, b: abs(((a - b + 90) % 180) - 90)
+    centre = min(vs, key=lambda c: sum(l * gap(c[0], d) for d, l in vs))[0]
+    vs = [(centre + ((d - centre + 90) % 180) - 90, l) for d, l in vs]
+    spread =lambda v: max(d for d, _ in v) - min(d for d, _ in v)
     if spread(vs) > agree and len(vs) >= 3:
         # One stray piece (a short column, a misread) kept a whole tilted bubble level (#266):
         # drop the piece farthest from the length-weighted median, once, and check again.
@@ -76,5 +81,5 @@ def rule(prov, dead=SETTLED[0], min_chars=SETTLED[1], agree=SETTLED[2]):
         vs = [v for v in vs if v is not far]
     if spread(vs) > agree:
         return 0.0, "pieces disagree"
-    a = sum(d * l for d, l in vs) / sum(l for _, l in vs)
+    a = fold90(sum(d * l for d, l in vs) / sum(l for _, l in vs))
     return (0.0, "dead band") if abs(a) < dead else (a, "turned")
