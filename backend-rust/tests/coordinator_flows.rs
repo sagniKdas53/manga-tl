@@ -1530,3 +1530,99 @@ async fn a_turned_region_sets_its_text_at_its_angle() {
 
     cleanup_series(&pool, series_id).await;
 }
+
+/// A balloon box the detector glued over two balloons (Free ch 2 p27, owner 2026-10-11): the
+/// region's translation is laid out in a box around its own text, not across both balloons into
+/// the other region's text. The other balloon keeps its own box.
+#[tokio::test]
+async fn a_glued_balloon_box_gives_way_to_the_regions_own_text_box() {
+    let Some((pool, _redis, state)) = app().await else {
+        return;
+    };
+    let (series_id, _, page_id, image_id) = seed_pipeline(&pool, Some("ja"), Some("en")).await;
+    let (job, identity) = seed_stage_job(&pool, "ocr", image_id, Some(page_id)).await;
+    let in_balloon = |order: i32, text: &str, bubble: [i32; 4], bbox: [i32; 4]| {
+        serde_json::json!({"text": text, "detectedLanguage": "ja", "confidence": 0.9,
+            "bubbleReadingOrder": order,
+            "x": bbox[0], "y": bbox[1], "width": bbox[2], "height": bbox[3],
+            "bubbleX": bubble[0], "bubbleY": bubble[1], "bubbleWidth": bubble[2], "bubbleHeight": bubble[3]})
+    };
+    let dto = serde_json::json!({
+        "jobId": job, "imageId": image_id.to_string(), "pageId": page_id.to_string(),
+        "regions": [
+            in_balloon(1, "上", [944, 104, 307, 491], [1015, 154, 148, 395]),
+            in_balloon(2, "下", [944, 91, 334, 1086], [1025, 686, 186, 358]),
+        ],
+    });
+    manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            identity,
+            manga_backend::jobs::coordinator::handle_ocr_callback(&state, &dto),
+        )
+        .await
+        .expect("ocr callback");
+    let regions: Vec<(Uuid,)> = sqlx::query_as(
+        "SELECT id FROM ocr_regions WHERE page_id = $1 ORDER BY bubble_reading_order",
+    )
+    .bind(page_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(regions.len(), 2);
+
+    let translations = vec![
+        serde_json::json!({"regionId": regions[0].0, "pageId": page_id, "translatedText": "Upper"}),
+        serde_json::json!({"regionId": regions[1].0, "pageId": page_id, "translatedText": "Lower"}),
+    ];
+    let (job, identity) = seed_stage_job(&pool, "translation", image_id, Some(page_id)).await;
+    manga_backend::jobs::coordinator::CALLBACK_IDENTITY
+        .scope(
+            identity,
+            manga_backend::jobs::coordinator::handle_translation_callback(
+                &state,
+                Some(&job),
+                image_id,
+                &translations,
+                None,
+            ),
+        )
+        .await
+        .expect("translation callback");
+    let element = |region: Uuid| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query_as::<_, (f64, f64, Option<i32>, Option<i32>, Option<String>)>(
+                "SELECT e.x, e.y, e.max_width, e.max_height, e.box_shape FROM layer_elements e \
+                 JOIN layers l ON l.id = e.layer_id WHERE e.region_id = $1 AND l.type = 'translation'",
+            )
+            .bind(region)
+            .fetch_one(&pool)
+            .await
+            .expect("element")
+        }
+    };
+    assert_eq!(
+        element(regions[0].0).await,
+        (
+            954.0,
+            114.0,
+            Some(287),
+            Some(471),
+            Some("elliptical".into())
+        ),
+        "the upper balloon keeps its own box"
+    );
+    assert_eq!(
+        element(regions[1].0).await,
+        (
+            1015.0,
+            676.0,
+            Some(206),
+            Some(378),
+            Some("rectangular".into())
+        ),
+        "the lower region is laid out around its own text, clear of the upper balloon"
+    );
+
+    cleanup_series(&pool, series_id).await;
+}
