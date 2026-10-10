@@ -61,6 +61,7 @@ CREATE TABLE public.chapters (
     routing_strategy character varying(255),
     cleanup_mode character varying(255),
     ocr_merge_threshold double precision,
+    ocr_text_angle boolean,
     series_id uuid NOT NULL
 );
 
@@ -355,7 +356,11 @@ CREATE TABLE public.ocr_regions (
     cleanup_patch_byte_length bigint,
     cleanup_bounds jsonb,
     cleanup_generator_sha256 character(64),
-    cleanup_diagnostics jsonb
+    cleanup_diagnostics jsonb,
+    text_area_x double precision,
+    text_area_y double precision,
+    text_area_w double precision,
+    text_area_h double precision
 );
 
 
@@ -532,6 +537,7 @@ CREATE TABLE public.series (
     routing_strategy character varying(255),
     cleanup_mode character varying(255),
     ocr_merge_threshold double precision,
+    ocr_text_angle boolean,
     use_fallback_models boolean,
     created_by uuid
 );

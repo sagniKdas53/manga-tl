@@ -957,6 +957,18 @@ pub async fn enqueue_job_with_ledger(
                             .unwrap_or(settings.ocr_merge_threshold),
                     )),
                 );
+
+                // E2 (#180): chapter, then series, then System Settings; the OCR handler sets each
+                // region's angle when this is true.
+                job.insert(
+                    "ocrTextAngle".into(),
+                    json!(
+                        chapter
+                            .ocr_text_angle
+                            .or(series.ocr_text_angle)
+                            .unwrap_or(settings.ocr_text_angle)
+                    ),
+                );
             }
         }
     }
@@ -1678,9 +1690,10 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
              safe_text_x, safe_text_y, safe_text_w, safe_text_h, page_id, panel_id, \
              cleanup_mask_asset_id, cleanup_mask_sha256, cleanup_mask_byte_length, \
              cleanup_patch_asset_id, cleanup_patch_sha256, cleanup_patch_byte_length, \
-             cleanup_bounds, cleanup_generator_sha256, cleanup_diagnostics) \
+             cleanup_bounds, cleanup_generator_sha256, cleanup_diagnostics, \
+             text_area_x, text_area_y, text_area_w, text_area_h) \
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,\
-             $28,$29,$30,$31,$32,$33,$34,$35,$36)",
+             $28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40)",
         )
         .bind(region_id)
         .bind(r.get("text").and_then(|v| v.as_str()))
@@ -1718,6 +1731,11 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
         .bind(r.get("cleanupBounds").cloned())
         .bind(r.get("cleanupGeneratorSha256").and_then(|v| v.as_str()))
         .bind(r.get("cleanupDiagnostics").cloned())
+        // E2: the box along a turned region's text (absent for a level region).
+        .bind(r.get("textAreaX").and_then(|v| v.as_f64()))
+        .bind(r.get("textAreaY").and_then(|v| v.as_f64()))
+        .bind(r.get("textAreaW").and_then(|v| v.as_f64()))
+        .bind(r.get("textAreaH").and_then(|v| v.as_f64()))
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -1803,16 +1821,18 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
             .await
             .map_err(|e| e.to_string())?;
         let Some(region) = region else { continue };
+        let (x, y, w, h, rotation) = source_text_box(&region);
         sqlx::query(
-            "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, word_wrap, layer_id, region_id) \
-             VALUES ($1,$2,$3,$4,$5,$6,TRUE,TRUE,$7,$8)",
+            "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, rotation, visible, word_wrap, layer_id, region_id) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,TRUE,$8,$9)",
         )
         .bind(Uuid::new_v4())
         .bind(&region.text)
-        .bind(region.bbox_x as f64)
-        .bind(region.bbox_y as f64)
-        .bind(region.bbox_w)
-        .bind(region.bbox_h)
+        .bind(x)
+        .bind(y)
+        .bind(w)
+        .bind(h)
+        .bind(rotation)
         .bind(layer_id)
         .bind(region.id)
         .execute(&mut *tx)
@@ -2416,9 +2436,59 @@ fn geometry_source(region: &OcrRegion) -> (f64, f64, i32, i32) {
     }
 }
 
+/// Where a region's source text is, as an element box `(x, y, w, h, degrees)`: its bbox, or for a
+/// region the worker turned (E2), the box along its text at its angle.
+pub fn source_text_box(region: &OcrRegion) -> (f64, f64, i32, i32, f64) {
+    match turned_text_area(region) {
+        Some((x, y, w, h, degrees)) => (x, y, w.round() as i32, h.round() as i32, degrees),
+        None => (
+            f64::from(region.bbox_x),
+            f64::from(region.bbox_y),
+            region.bbox_w,
+            region.bbox_h,
+            0.0,
+        ),
+    }
+}
+
+/// E2 (#180): the angle a region's text elements start at: the region's own, once the worker
+/// turned it and gave it a box along its text; level otherwise.
+pub fn element_rotation(region: &OcrRegion) -> f64 {
+    turned_text_area(region).map_or(0.0, |(.., degrees)| degrees)
+}
+
+/// E2 (#180): `(x, y, w, h, degrees)` of the box along a turned region's text, or `None` for a
+/// level region (or one whose text area is missing or degenerate). The box is level; it is drawn
+/// turned by `degrees` about its centre, as elements are.
+pub fn turned_text_area(region: &OcrRegion) -> Option<(f64, f64, f64, f64, f64)> {
+    let degrees = region.rotation.filter(|r| r.is_finite() && *r != 0.0)?;
+    let (x, y, w, h) = (
+        region.text_area_x?,
+        region.text_area_y?,
+        region.text_area_w?,
+        region.text_area_h?,
+    );
+    (x.is_finite() && y.is_finite() && w.is_finite() && h.is_finite() && w > 0.0 && h > 0.0)
+        .then_some((x, y, w, h, degrees))
+}
+
 /// Pure text-box geometry: everything textBoxFor decides given the page bounds.
 /// Split from [`text_box_for`] so TextBoxForTest ports as database-free unit tests.
 pub fn text_box_geometry(region: &OcrRegion, page: Option<(f64, f64)>) -> TextBox {
+    // E2 (#180): a turned region's box runs along its text. Its bubble, safe-text and bbox boxes
+    // are level page-space boxes, too big once turned, so they are not used. It gets the free-text
+    // padding and widening, in a balloon too, until E3 fits it to the balloon's outline (owner,
+    // 2026-10-10, option a).
+    if let Some((x, y, w, h, _)) = turned_text_area(region) {
+        let half_pad = (FREE_TEXT_PADDING / 2) as f64;
+        return free_text_box(
+            x - half_pad,
+            y - half_pad,
+            w.round() as i32 + FREE_TEXT_PADDING,
+            h.round() as i32 + FREE_TEXT_PADDING,
+            page,
+        );
+    }
     if !has_detected_bubble(region) {
         let (x, y, w, h) = geometry_source(region);
         let half_pad = (FREE_TEXT_PADDING / 2) as f64;
@@ -2448,8 +2518,8 @@ pub fn text_box_geometry(region: &OcrRegion, page: Option<(f64, f64)>) -> TextBo
 /// Text box for a region: inset into a detected bubble, grown outward + squared up
 /// for free-floating columns (Japanese vertical text).
 pub async fn text_box_for(pool: &PgPool, region: &OcrRegion) -> TextBox {
-    // Java consults page bounds only on the free-text path.
-    if has_detected_bubble(region) {
+    // Java consults page bounds only on the free-text path (a turned region takes it too).
+    if has_detected_bubble(region) && turned_text_area(region).is_none() {
         return text_box_geometry(region, None);
     }
     let page = page_bounds(pool, region)
@@ -2562,16 +2632,18 @@ async fn add_untranslated_region_rows(
     .await
     .map_err(|e| e.to_string())?;
     for region in &missing {
+        let (x, y, w, h, rotation) = source_text_box(region);
         sqlx::query(
             "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, auto_size, font, \
-             font_weight, word_wrap, layer_id, region_id) \
-             VALUES ($1,NULL,$2,$3,$4,$5,FALSE,TRUE,'Comic Neue','bold',TRUE,$6,$7)",
+             font_weight, word_wrap, rotation, layer_id, region_id) \
+             VALUES ($1,NULL,$2,$3,$4,$5,FALSE,TRUE,'Comic Neue','bold',TRUE,$6,$7,$8)",
         )
         .bind(Uuid::new_v4())
-        .bind(f64::from(region.bbox_x))
-        .bind(f64::from(region.bbox_y))
-        .bind(region.bbox_w)
-        .bind(region.bbox_h)
+        .bind(x)
+        .bind(y)
+        .bind(w)
+        .bind(h)
+        .bind(rotation)
         .bind(layer_id)
         .bind(region.id)
         .execute(&mut **tx)
@@ -2911,7 +2983,8 @@ pub async fn handle_translation_callback(
                     let box_geom = text_box_for(&state.pool, region).await;
                     let uncertain = awaits_uncertain_check(region);
                     sqlx::query(
-                        "UPDATE layer_elements SET text=$2, x=$3, y=$4, max_width=$5, max_height=$6, mask_polygon=$7, visible=$8 WHERE id=$1",
+                        "UPDATE layer_elements SET text=$2, x=$3, y=$4, max_width=$5, max_height=$6, mask_polygon=$7, visible=$8, \
+                         rotation=$9 WHERE id=$1",
                     )
                     .bind(element.id)
                     .bind(&translated_text)
@@ -2921,6 +2994,7 @@ pub async fn handle_translation_callback(
                     .bind(box_geom.h)
                     .bind(if uncertain { None } else { region.mask_polygon.clone() })
                     .bind(!failed && !uncertain)
+                    .bind(element_rotation(region))
                     .execute(&mut *tx)
                     .await
                     .map_err(|e| e.to_string())?;
@@ -2937,8 +3011,8 @@ pub async fn handle_translation_callback(
                 // ocr_regions but never consulted here.
                 sqlx::query(
                     "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, auto_size, font, font_weight, \
-                     background_color, text_color, box_shape, mask_polygon, word_wrap, layer_id, region_id) \
-                     VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,'Comic Neue','bold',$8,$9,$10,$11,TRUE,$12,$13)",
+                     background_color, text_color, box_shape, mask_polygon, word_wrap, rotation, layer_id, region_id) \
+                     VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,'Comic Neue','bold',$8,$9,$10,$11,TRUE,$12,$13,$14)",
                 )
                 .bind(Uuid::new_v4())
                 .bind(&translated_text)
@@ -2952,13 +3026,15 @@ pub async fn handle_translation_callback(
                 // AUDIT-R19 (tracker R2): the shape says what was *found*, not what the layout
                 // classifier guessed. A detected container -- YOLO balloon or a contour the
                 // fallback found -- is elliptical/contour-based; free-standing text, whose only
-                // geometry is its bbox, is a rectangle, whatever `region_type` says.
-                .bind(if has_detected_bubble(region) {
+                // geometry is its bbox, is a rectangle, whatever `region_type` says. A turned region's
+                // box is the tight box along its text, so it is a rectangle too (E2).
+                .bind(if has_detected_bubble(region) && turned_text_area(region).is_none() {
                     "elliptical"
                 } else {
                     "rectangular"
                 })
                 .bind(if uncertain { None } else { region.mask_polygon.clone() })
+                .bind(element_rotation(region))
                 .bind(layer_id)
                 .bind(region_id)
                 .execute(&mut *tx)
@@ -5051,6 +5127,52 @@ mod textbox_tests {
             "bboxX": x, "bboxY": y, "bboxW": w, "bboxH": h,
             "safeTextX": x, "safeTextY": y, "safeTextW": w, "safeTextH": h,
         })
+    }
+
+    /// E2: a region the worker turned 12°, with the box along its text.
+    fn turned(mut value: serde_json::Value) -> serde_json::Value {
+        value["rotation"] = serde_json::json!(12.0);
+        value["textAreaX"] = serde_json::json!(100.0);
+        value["textAreaY"] = serde_json::json!(200.0);
+        value["textAreaW"] = serde_json::json!(300.0);
+        value["textAreaH"] = serde_json::json!(40.0);
+        value
+    }
+
+    #[test]
+    fn a_turned_free_region_takes_the_box_along_its_text_not_its_level_bbox() {
+        // The level box around 300x40 text at 12° is about 302x101; the free-text path would pad
+        // that. The text area is the box along the text, padded the same way.
+        let r = region(turned(direct_text_region(95, 175, 302, 101)));
+        let box_geom = text_box_geometry(&r, Some((2000.0, 3000.0)));
+        assert_eq!((box_geom.x, box_geom.y), (90.0, 190.0));
+        assert_eq!((box_geom.w, box_geom.h), (320, 60));
+        assert_eq!(element_rotation(&r), 12.0);
+        assert_eq!(source_text_box(&r), (100.0, 200.0, 300, 40, 12.0));
+    }
+
+    #[test]
+    fn a_turned_region_in_a_balloon_also_runs_along_its_text_until_e3() {
+        let r = region(turned(bubble_region(0, 100, 600, 300)));
+        let box_geom = text_box_geometry(&r, None);
+        assert_eq!((box_geom.w, box_geom.h), (320, 60));
+    }
+
+    #[test]
+    fn a_level_region_ignores_any_text_area_and_keeps_todays_box() {
+        let mut value = turned(bubble_region(100, 200, 300, 400));
+        value["rotation"] = serde_json::json!(0.0);
+        let r = region(value);
+        let box_geom = text_box_geometry(&r, None);
+        assert_eq!(
+            (box_geom.x, box_geom.y, box_geom.w, box_geom.h),
+            (110.0, 210.0, 280, 380)
+        );
+        assert_eq!(element_rotation(&r), 0.0);
+        // A rotation with no text area (a region from before E2, or a hand edit) stays level too.
+        let mut value = bubble_region(100, 200, 300, 400);
+        value["rotation"] = serde_json::json!(15.0);
+        assert_eq!(element_rotation(&region(value)), 0.0);
     }
 
     #[test]

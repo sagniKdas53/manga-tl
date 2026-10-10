@@ -26,6 +26,8 @@ export interface Series {
   cleanupMode?: string;
   /** OCR grouping threshold override, in characters; null inherits. */
   ocrMergeThreshold?: number | null;
+  /** E2: set tilted text at its angle on OCR; null inherits. */
+  ocrTextAngle?: boolean | null;
   useFallbackModels?: boolean | null;
   resolvedUseFallbackModels?: boolean;
   createdAt?: string;
@@ -64,6 +66,8 @@ export interface Chapter {
   cleanupMode?: string;
   /** OCR grouping threshold override, in characters; null inherits. */
   ocrMergeThreshold?: number | null;
+  /** E2: set tilted text at its angle on OCR; null inherits. */
+  ocrTextAngle?: boolean | null;
   useFallbackModels?: boolean | null;
   resolvedUseFallbackModels?: boolean;
   useContextMemory?: boolean;
@@ -124,6 +128,14 @@ export interface OcrRegion {
   bubbleY?: number | null;
   bubbleW?: number | null;
   bubbleH?: number | null;
+  /**
+   * E2 (#180): set only on a region the worker turned (`rotation` != 0): the level box that,
+   * turned by `rotation` about its centre, runs along the text. Its text elements start there.
+   */
+  textAreaX?: number | null;
+  textAreaY?: number | null;
+  textAreaW?: number | null;
+  textAreaH?: number | null;
   backgroundColor?: string | null;
   qaStatus?:
     | "passed"
@@ -302,6 +314,8 @@ export interface SystemSettingsDto {
   cleanupMode?: string;
   /** Global OCR grouping threshold, in characters of white space. */
   ocrMergeThreshold?: number;
+  /** E2: set tilted text at its angle on OCR (default on); redo OCR to apply to a page. */
+  ocrTextAngle?: boolean;
   /** Model IDs typed in rather than picked; replaced via PUT /api/settings/custom-models. */
   customModels?: CustomModel[];
 }

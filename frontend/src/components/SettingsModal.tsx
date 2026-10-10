@@ -509,6 +509,29 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               />
             </Grid>
 
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <FormControl
+                fullWidth
+                size="small"
+              >
+                <InputLabel>Angle Tilted Text</InputLabel>
+                <Select
+                  value={settings.ocrTextAngle !== false ? "true" : "false"}
+                  label="Angle Tilted Text"
+                  onChange={(e) =>
+                    handleChange("ocrTextAngle", e.target.value === "true")
+                  }
+                >
+                  <MenuItem value="true">Enabled</MenuItem>
+                  <MenuItem value="false">Disabled</MenuItem>
+                </Select>
+                <FormHelperText>
+                  Turns text to match tilted lines in the source. Disabled sets
+                  every text level, as before. Redo OCR to apply to a page
+                </FormHelperText>
+              </FormControl>
+            </Grid>
+
             <Grid size={12}>
               <Typography
                 variant="overline"

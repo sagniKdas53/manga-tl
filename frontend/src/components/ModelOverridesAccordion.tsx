@@ -45,6 +45,8 @@ export interface ModelOverridesValue {
   cleanupMode: string;
   /** OCR grouping threshold, in characters of white space; null inherits. */
   ocrMergeThreshold: number | null;
+  /** E2: set tilted text at its angle on OCR; null inherits. */
+  ocrTextAngle: boolean | null;
 }
 
 /**
@@ -64,6 +66,8 @@ export interface InheritedModelSettings {
   routingStrategy?: string;
   cleanupMode?: string;
   ocrMergeThreshold?: number | null;
+  /** Resolved inherited text-angle switch (series override ?? global setting). */
+  ocrTextAngle?: boolean;
   /** Resolved inherited fallback toggle (series override ?? global setting). */
   useFallbackModels?: boolean;
 }
@@ -236,6 +240,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
     useFallbackModels,
     cleanupMode,
     ocrMergeThreshold,
+    ocrTextAngle,
   } = value;
 
   const providers = settings?.activeProviders || [];
@@ -258,8 +263,9 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
   const overriddenCount =
     overrideFields.filter((v) => v !== "").length +
     (useFallbackModels !== null ? 1 : 0) +
-    (ocrMergeThreshold !== null ? 1 : 0);
-  const inheritedCount = overrideFields.length + 2 - overriddenCount;
+    (ocrMergeThreshold !== null ? 1 : 0) +
+    (ocrTextAngle !== null ? 1 : 0);
+  const inheritedCount = overrideFields.length + 3 - overriddenCount;
   const effectiveMergeThreshold =
     ocrMergeThreshold ??
     inherited.ocrMergeThreshold ??
@@ -320,6 +326,8 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
   // Picking an option sets an explicit override; the X button reverts to inherit.
   const effectiveUseFallback =
     useFallbackModels ?? inherited.useFallbackModels !== false;
+  const effectiveTextAngle =
+    ocrTextAngle ?? inherited.ocrTextAngle ?? settings?.ocrTextAngle ?? true;
 
   return (
     <Accordion
@@ -452,6 +460,36 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
               size="small"
               sx={{ mt: 0.5 }}
               onClick={() => onChange("ocrMergeThreshold", null)}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          )}
+        </Box>
+        {/* Also an OCR-time choice: whether tilted text comes out tilted (E2). */}
+        <Box sx={fieldBoxSx}>
+          <FormControl
+            fullWidth
+            size="small"
+          >
+            <InputLabel>Angle Tilted Text</InputLabel>
+            <Select
+              size="small"
+              value={effectiveTextAngle ? "true" : "false"}
+              label="Angle Tilted Text"
+              onChange={(e) =>
+                onChange("ocrTextAngle", e.target.value === "true")
+              }
+            >
+              <MenuItem value="true">Enabled</MenuItem>
+              <MenuItem value="false">Disabled</MenuItem>
+            </Select>
+          </FormControl>
+          {ocrTextAngle !== null && (
+            <IconButton
+              aria-label="Clear Angle Tilted Text override"
+              size="small"
+              sx={{ mt: 0.5 }}
+              onClick={() => onChange("ocrTextAngle", null)}
             >
               <CloseIcon fontSize="small" />
             </IconButton>

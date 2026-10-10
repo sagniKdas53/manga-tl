@@ -70,6 +70,9 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   const [ocrMergeThreshold, setOcrMergeThreshold] = useState<number | null>(
     editingSeries?.ocrMergeThreshold ?? null,
   );
+  const [ocrTextAngle, setOcrTextAngle] = useState<boolean | null>(
+    editingSeries?.ocrTextAngle ?? null,
+  );
   const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
     editingSeries?.useFallbackModels ?? null,
   );
@@ -102,6 +105,7 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
       setRoutingStrategy(editingSeries.routingStrategy || "");
       setCleanupMode(editingSeries.cleanupMode || "");
       setOcrMergeThreshold(editingSeries.ocrMergeThreshold ?? null);
+      setOcrTextAngle(editingSeries.ocrTextAngle ?? null);
       setUseFallbackModels(editingSeries.useFallbackModels ?? null);
     } else {
       setTitle("");
@@ -119,6 +123,7 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
       setRoutingStrategy("");
       setCleanupMode("");
       setOcrMergeThreshold(null);
+      setOcrTextAngle(null);
       setUseFallbackModels(null);
     }
   } else if (!open && prevOpen) {
@@ -150,6 +155,7 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
     routingStrategy,
     cleanupMode,
     ocrMergeThreshold,
+    ocrTextAngle,
     useFallbackModels,
   };
 
@@ -167,6 +173,7 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
     routingStrategy: setRoutingStrategy,
     cleanupMode: setCleanupMode,
     ocrMergeThreshold: setOcrMergeThreshold,
+    ocrTextAngle: setOcrTextAngle,
     useFallbackModels: setUseFallbackModels,
   };
 
@@ -206,6 +213,7 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
           routingStrategy: routingStrategy || null,
           cleanupMode: cleanupMode || null,
           ocrMergeThreshold,
+          ocrTextAngle,
           useFallbackModels: useFallbackModels,
         }),
       });
@@ -319,6 +327,7 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
             routingStrategy: settings?.routingStrategy,
             cleanupMode: settings?.cleanupMode,
             ocrMergeThreshold: settings?.ocrMergeThreshold,
+            ocrTextAngle: settings?.ocrTextAngle,
             useFallbackModels: settings?.useFallbackModels,
           }}
         />

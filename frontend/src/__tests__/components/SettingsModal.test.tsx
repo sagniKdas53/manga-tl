@@ -158,8 +158,8 @@ describe("SettingsModal", () => {
     });
 
     expect(screen.getByText("System Settings")).toBeInTheDocument();
-    // 11 comboboxes: Global OCR Provider, Global OCR Model, Global TL Provider, Global TL Model, Global QA Provider, QA Mode, Global QA LLM Model, Global QA VLM Model, Cleanup Mode, OpenRouter Routing Strategy, Use Fallback Models
-    expect(screen.getAllByRole("combobox")).toHaveLength(11);
+    // 12 comboboxes: Global OCR Provider, Global OCR Model, Angle Tilted Text, Global TL Provider, Global TL Model, Global QA Provider, QA Mode, Global QA LLM Model, Global QA VLM Model, Cleanup Mode, OpenRouter Routing Strategy, Use Fallback Models
+    expect(screen.getAllByRole("combobox")).toHaveLength(12);
   });
 
   it("handles saving the updated settings", { timeout: 30000 }, async () => {
@@ -195,8 +195,8 @@ describe("SettingsModal", () => {
     });
 
     const selects = screen.getAllByRole("combobox");
-    // 0=OCR Provider, 1=OCR Model, 2=TL Provider, 3=TL Model,
-    // 4=QA Provider, 5=QA Mode, 6=QA LLM Model, 7=QA VLM Model, 8=Routing Strategy, 9=Use Fallback Models
+    // 0=OCR Provider, 1=OCR Model, 2=Angle Tilted Text, 3=TL Provider, 4=TL Model,
+    // 5=QA Provider, 6=QA Mode, 7=QA LLM Model, 8=QA VLM Model, 9=Routing Strategy, 10=Use Fallback Models
     const change = (idx: number, option: string) => {
       fireEvent.mouseDown(selects[idx]);
       fireEvent.click(
@@ -210,11 +210,11 @@ describe("SettingsModal", () => {
 
     change(0, "local");
     // OCR Model is disabled when provider is local — skip and change TL/QA instead
-    change(2, "openai");
-    change(3, "meta-llama/llama-3-8b-instruct:free");
-    change(4, "gemini");
-    change(6, "deepseek/deepseek-v4-flash");
-    change(7, "qwen/qwen3-vl-8b-instruct");
+    change(3, "openai");
+    change(4, "meta-llama/llama-3-8b-instruct:free");
+    change(5, "gemini");
+    change(7, "deepseek/deepseek-v4-flash");
+    change(8, "qwen/qwen3-vl-8b-instruct");
 
     const saveButton = screen.getByRole("button", { name: /save settings/i });
     fireEvent.click(saveButton);

@@ -59,6 +59,7 @@ pub struct SeriesDto {
     pub routingStrategy: Option<String>,
     pub cleanupMode: Option<String>,
     pub ocrMergeThreshold: Option<f64>,
+    pub ocrTextAngle: Option<bool>,
     pub useFallbackModels: Option<bool>,
     pub resolvedUseFallbackModels: bool,
     pub createdAt: chrono::DateTime<chrono::Utc>,
@@ -102,6 +103,7 @@ pub struct ChapterDto {
     pub routingStrategy: Option<String>,
     pub cleanupMode: Option<String>,
     pub ocrMergeThreshold: Option<f64>,
+    pub ocrTextAngle: Option<bool>,
     pub useContextMemory: Option<bool>,
     pub useFallbackModels: Option<bool>,
     pub resolvedUseFallbackModels: bool,
@@ -171,6 +173,7 @@ fn to_series_dto(state: &AppState, s: &Series, resolved_use_fallback: bool) -> S
         routingStrategy: s.routing_strategy.clone(),
         cleanupMode: s.cleanup_mode.clone(),
         ocrMergeThreshold: s.ocr_merge_threshold,
+        ocrTextAngle: s.ocr_text_angle,
         useFallbackModels: s.use_fallback_models,
         resolvedUseFallbackModels: resolved_use_fallback,
         createdAt: s.created_at,
@@ -312,6 +315,7 @@ async fn to_chapter_dto(
         routingStrategy: chapter.routing_strategy.clone(),
         cleanupMode: chapter.cleanup_mode.clone(),
         ocrMergeThreshold: chapter.ocr_merge_threshold,
+        ocrTextAngle: chapter.ocr_text_angle,
         useContextMemory: chapter.use_context_memory.into(),
         useFallbackModels: chapter.use_fallback_models,
         resolvedUseFallbackModels: resolved_use_fallback,
@@ -377,6 +381,9 @@ pub struct SeriesInput {
     pub cleanupMode: Option<String>,
     #[serde(default)]
     pub ocrMergeThreshold: Option<f64>,
+    /// E2 (#180): NULL (absent) = inherit.
+    #[serde(default)]
+    pub ocrTextAngle: Option<bool>,
     #[serde(default)]
     pub useFallbackModels: Option<bool>,
 }
@@ -410,6 +417,9 @@ pub struct ChapterInput {
     pub cleanupMode: Option<String>,
     #[serde(default)]
     pub ocrMergeThreshold: Option<f64>,
+    /// E2 (#180): NULL (absent) = inherit.
+    #[serde(default)]
+    pub ocrTextAngle: Option<bool>,
     #[serde(default)]
     pub useContextMemory: Option<bool>,
     #[serde(default)]
@@ -500,9 +510,10 @@ pub async fn create_series(
         "INSERT INTO series (id, created_at, updated_at, title, original_language, \
          source_language, target_language, reading_direction, ocr_provider, ocr_model, \
          tl_provider, tl_model, qa_provider, qa_llm_model, qa_vlm_model, qa_mode, \
-         routing_strategy, use_fallback_models, created_by, cleanup_mode, ocr_merge_threshold) \
+         routing_strategy, use_fallback_models, created_by, cleanup_mode, ocr_merge_threshold, \
+         ocr_text_angle) \
          VALUES ($1, now(), now(), $2, $3, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, \
-                 $14, $15, $16, $17, $18) RETURNING *",
+                 $14, $15, $16, $17, $18, $19) RETURNING *",
     )
     .bind(Uuid::new_v4())
     .bind(dto.title.clone())
@@ -522,6 +533,7 @@ pub async fn create_series(
     .bind(user.id)
     .bind(cleanup_mode_setting(&dto.cleanupMode))
     .bind(merge_threshold_setting(dto.ocrMergeThreshold))
+    .bind(dto.ocrTextAngle)
     .fetch_one(&state.pool)
     .await
     .expect("series insert");
@@ -627,7 +639,7 @@ pub async fn update_series(
          tl_provider = $8, tl_model = $9, qa_provider = $10, qa_llm_model = $11, \
          qa_vlm_model = $12, qa_mode = $13, routing_strategy = $14, \
          use_fallback_models = $15, cleanup_mode = $16, ocr_merge_threshold = $17, \
-         updated_at = now() WHERE id = $1 RETURNING *",
+         ocr_text_angle = $18, updated_at = now() WHERE id = $1 RETURNING *",
     )
     .bind(id)
     .bind(dto.title.clone())
@@ -646,6 +658,7 @@ pub async fn update_series(
     .bind(dto.useFallbackModels)
     .bind(cleanup_mode_setting(&dto.cleanupMode))
     .bind(merge_threshold_setting(dto.ocrMergeThreshold))
+    .bind(dto.ocrTextAngle)
     .fetch_optional(&state.pool)
     .await
     .unwrap_or(None);
@@ -770,8 +783,8 @@ pub async fn create_chapter(
         "INSERT INTO chapters (id, created_at, updated_at, series_id, chapter_number, title, \
          ocr_provider, ocr_model, tl_provider, tl_model, qa_provider, qa_llm_model, \
          qa_vlm_model, qa_mode, routing_strategy, use_context_memory, use_fallback_models, cleanup_mode, \
-         ocr_merge_threshold) \
-         VALUES ($1, now(), now(), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) \
+         ocr_merge_threshold, ocr_text_angle) \
+         VALUES ($1, now(), now(), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) \
          RETURNING *",
     )
     .bind(Uuid::new_v4())
@@ -792,6 +805,7 @@ pub async fn create_chapter(
     .bind(dto.useFallbackModels)
     .bind(cleanup_mode_setting(&dto.cleanupMode))
     .bind(merge_threshold_setting(dto.ocrMergeThreshold))
+    .bind(dto.ocrTextAngle)
     .fetch_one(&state.pool)
     .await
     .expect("chapter insert");
@@ -893,7 +907,8 @@ pub async fn update_chapter(
          ocr_model = $5, tl_provider = $6, tl_model = $7, qa_provider = $8, \
          qa_llm_model = $9, qa_vlm_model = $10, qa_mode = $11, routing_strategy = $12, \
          use_fallback_models = $13, use_context_memory = COALESCE($14, use_context_memory), \
-         cleanup_mode = $15, ocr_merge_threshold = $16, updated_at = now() WHERE id = $1 RETURNING *",
+         cleanup_mode = $15, ocr_merge_threshold = $16, ocr_text_angle = $17, updated_at = now() \
+         WHERE id = $1 RETURNING *",
     )
     .bind(id)
     .bind(dto.title.clone())
@@ -911,6 +926,7 @@ pub async fn update_chapter(
     .bind(dto.useContextMemory)
     .bind(cleanup_mode_setting(&dto.cleanupMode))
     .bind(merge_threshold_setting(dto.ocrMergeThreshold))
+    .bind(dto.ocrTextAngle)
     .fetch_one(&state.pool)
     .await
     .expect("chapter update");
@@ -1013,6 +1029,7 @@ struct ImportFields {
     routing_strategy: Option<String>,
     cleanup_mode: Option<String>,
     ocr_merge_threshold: Option<f64>,
+    ocr_text_angle: Option<bool>,
     use_fallback_models: Option<bool>,
     file: Option<(String, Vec<u8>)>,
 }
@@ -1039,6 +1056,7 @@ pub async fn import_chapter(
         routing_strategy: None,
         cleanup_mode: None,
         ocr_merge_threshold: None,
+        ocr_text_angle: None,
         use_fallback_models: None,
         file: None,
     };
@@ -1097,6 +1115,10 @@ pub async fn import_chapter(
             "ocrMergeThreshold" => {
                 fields.ocr_merge_threshold =
                     read_text(field).await.and_then(|v| v.trim().parse().ok());
+            }
+            // "true"/"false"; anything else ("inherit", empty) leaves the chapter inheriting.
+            "ocrTextAngle" => {
+                fields.ocr_text_angle = read_text(field).await.and_then(|v| v.trim().parse().ok());
             }
             _ => {}
         }
@@ -1174,8 +1196,8 @@ pub async fn import_chapter(
         "INSERT INTO chapters (id, chapter_number, title, created_at, updated_at, \
          ocr_provider, ocr_model, tl_provider, tl_model, qa_provider, qa_llm_model, qa_vlm_model, qa_mode, \
          routing_strategy, use_fallback_models, use_context_memory, series_id, cleanup_mode, \
-         ocr_merge_threshold) \
-         VALUES ($1,$2,$3,now(),now(),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,TRUE,$14,$15,$16)",
+         ocr_merge_threshold, ocr_text_angle) \
+         VALUES ($1,$2,$3,now(),now(),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,TRUE,$14,$15,$16,$17)",
     )
     .bind(chapter_id)
     .bind(chapter_number)
@@ -1193,6 +1215,7 @@ pub async fn import_chapter(
     .bind(series_id)
     .bind(cleanup_mode_setting(&fields.cleanup_mode))
     .bind(merge_threshold_setting(fields.ocr_merge_threshold))
+    .bind(fields.ocr_text_angle)
     .execute(&state.pool)
     .await;
 

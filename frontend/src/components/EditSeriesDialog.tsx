@@ -64,6 +64,9 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
   const [ocrMergeThreshold, setOcrMergeThreshold] = useState<number | null>(
     series.ocrMergeThreshold ?? null,
   );
+  const [ocrTextAngle, setOcrTextAngle] = useState<boolean | null>(
+    series.ocrTextAngle ?? null,
+  );
   const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
     series.useFallbackModels ?? null,
   );
@@ -81,6 +84,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
     routingStrategy,
     cleanupMode,
     ocrMergeThreshold,
+    ocrTextAngle,
     useFallbackModels,
   };
 
@@ -98,6 +102,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
     routingStrategy: setRoutingStrategy,
     cleanupMode: setCleanupMode,
     ocrMergeThreshold: setOcrMergeThreshold,
+    ocrTextAngle: setOcrTextAngle,
     useFallbackModels: setUseFallbackModels,
   };
 
@@ -146,6 +151,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
           routingStrategy: routingStrategy || null,
           cleanupMode: cleanupMode || null,
           ocrMergeThreshold,
+          ocrTextAngle,
           useFallbackModels: useFallbackModels,
         }),
       });
@@ -262,6 +268,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
               routingStrategy: settings?.routingStrategy,
               cleanupMode: settings?.cleanupMode,
               ocrMergeThreshold: settings?.ocrMergeThreshold,
+              ocrTextAngle: settings?.ocrTextAngle,
               useFallbackModels: settings?.useFallbackModels,
             }}
             ocrModelLabel="OCR Model"

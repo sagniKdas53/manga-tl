@@ -2082,6 +2082,23 @@ pub async fn merge_ocr_regions(
             r.safe_text_h?,
         ))
     }));
+    // E2 (#180): the block keeps the survivor's angle when every merged region is set at it; its
+    // box then runs along the text. Otherwise (a level region among them, or two angles) it is
+    // level, as merges always were. The full angle rule is the worker's; it is not re-run here.
+    let source_boxes: Vec<(f64, f64, f64, f64, f64)> = regions
+        .iter()
+        .map(|r| {
+            let (x, y, w, h, degrees) = crate::jobs::coordinator::source_text_box(r);
+            (x, y, f64::from(w), f64::from(h), degrees)
+        })
+        .collect();
+    let survivor_angle = crate::jobs::coordinator::element_rotation(survivor);
+    let text_area = crate::region_merge::merged_text_area(&source_boxes, survivor_angle);
+    let rotation = if text_area.is_some() {
+        survivor_angle
+    } else {
+        0.0
+    };
     // A block merged again keeps every fragment it was ever made from.
     let mut merged_from: Vec<String> = regions
         .iter()
@@ -2158,7 +2175,8 @@ pub async fn merge_ocr_regions(
                cleanup_patch_asset_id = NULL, cleanup_patch_sha256 = NULL, cleanup_patch_byte_length = NULL, \
                cleanup_bounds = NULL, cleanup_generator_sha256 = NULL, \
                cleanup_diagnostics = '[\"merged in review; cleanup pending\"]'::jsonb, \
-               ownership_provenance = COALESCE(ownership_provenance, '{}'::jsonb) || jsonb_build_object('mergedFrom', $16::jsonb, 'mergedTexts', $17::jsonb) \
+               ownership_provenance = COALESCE(ownership_provenance, '{}'::jsonb) || jsonb_build_object('mergedFrom', $16::jsonb, 'mergedTexts', $17::jsonb), \
+               rotation = $18, text_area_x = $19, text_area_y = $20, text_area_w = $21, text_area_h = $22 \
              WHERE id = $1 RETURNING *",
         )
         .bind(survivor.id)
@@ -2178,13 +2196,21 @@ pub async fn merge_ocr_regions(
         .bind(safe.map(|b| b.3))
         .bind(serde_json::json!(merged_from))
         .bind(serde_json::json!(merged_texts))
+        .bind(rotation)
+        .bind(text_area.map(|a| a.0))
+        .bind(text_area.map(|a| a.1))
+        .bind(text_area.map(|a| a.2))
+        .bind(text_area.map(|a| a.3))
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
-        // Every current element that draws the survivor takes the block's box; the OCR ones show
-        // the joined text, the translations wait (hidden, empty) for the block's own translation.
+        // Every current element that draws the survivor takes the block's box (along its text and
+        // at its angle, when it has one); the OCR ones show the joined text, the translations wait
+        // (hidden, empty) for the block's own translation.
+        let (ex, ey, ew, eh, _) = crate::jobs::coordinator::source_text_box(&merged);
         sqlx::query(
             "UPDATE layer_elements e SET x = $2, y = $3, max_width = $4, max_height = $5, mask_polygon = $6, \
+               rotation = $8, \
                text = CASE WHEN l.type ILIKE 'ocr' THEN $7 ELSE NULL END, \
                visible = CASE WHEN l.type ILIKE 'ocr' THEN e.visible ELSE FALSE END \
              FROM layers l WHERE e.layer_id = l.id AND e.region_id = $1 \
@@ -2192,12 +2218,13 @@ pub async fn merge_ocr_regions(
                AND (l.type ILIKE 'ocr' OR l.visible IS TRUE)",
         )
         .bind(survivor.id)
-        .bind(f64::from(x))
-        .bind(f64::from(y))
-        .bind(w)
-        .bind(h)
+        .bind(ex)
+        .bind(ey)
+        .bind(ew)
+        .bind(eh)
         .bind(&polygon)
         .bind(&text)
+        .bind(rotation)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;

@@ -243,6 +243,7 @@ describe("Dashboard Component", () => {
             routingStrategy: null,
             cleanupMode: null,
             ocrMergeThreshold: null,
+            ocrTextAngle: null,
             useFallbackModels: null,
           }),
         });
@@ -313,6 +314,7 @@ describe("Dashboard Component", () => {
           routingStrategy: null,
           cleanupMode: null,
           ocrMergeThreshold: null,
+          ocrTextAngle: null,
           useFallbackModels: null,
         }),
       });
@@ -739,6 +741,7 @@ describe("Dashboard Component", () => {
             routingStrategy: null,
             cleanupMode: null,
             ocrMergeThreshold: null,
+            ocrTextAngle: null,
             useFallbackModels: null,
           }),
         });

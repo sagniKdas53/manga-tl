@@ -238,6 +238,7 @@ describe("ChapterGallery Component", () => {
           routingStrategy: null,
           cleanupMode: null,
           ocrMergeThreshold: null,
+          ocrTextAngle: null,
           useFallbackModels: null,
         }),
       });

@@ -71,6 +71,7 @@ const EMPTY_OVERRIDES: ModelOverridesValue = {
   routingStrategy: "",
   cleanupMode: "",
   ocrMergeThreshold: null,
+  ocrTextAngle: null,
   useFallbackModels: null,
 };
 
@@ -420,6 +421,8 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
       if (o.cleanupMode) formData.append("cleanupMode", o.cleanupMode);
       if (o.ocrMergeThreshold !== null)
         formData.append("ocrMergeThreshold", String(o.ocrMergeThreshold));
+      if (o.ocrTextAngle !== null)
+        formData.append("ocrTextAngle", String(o.ocrTextAngle));
       // Only a value set on this chapter is sent. The backend reads any value other than "true"
       // as false, so sending "null" (or the series' value) would pin the chapter instead of
       // letting it inherit.
@@ -479,6 +482,7 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
     cleanupMode: targetSeries?.cleanupMode || settings?.cleanupMode,
     ocrMergeThreshold:
       targetSeries?.ocrMergeThreshold ?? settings?.ocrMergeThreshold,
+    ocrTextAngle: targetSeries?.ocrTextAngle ?? settings?.ocrTextAngle,
     useFallbackModels:
       targetSeries?.useFallbackModels ?? settings?.useFallbackModels,
   };

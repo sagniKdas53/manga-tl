@@ -326,13 +326,25 @@ pub async fn plain_plate_cleanup(
     })
 }
 
+/// The region's text as a page-space quad. A region the worker turned (E2) is its text area,
+/// turned by `rotation` about its centre; any other region is its level bbox. The bbox is the level
+/// box around the text, so turning it as well would draw a bigger box at the text's angle.
 fn quad_for(region: &OcrRegion) -> Vec<Value> {
-    let cx = region.bbox_x as f64 + region.bbox_w as f64 / 2.0;
-    let cy = region.bbox_y as f64 + region.bbox_h as f64 / 2.0;
-    let radians = region.rotation.unwrap_or(0.0).to_radians();
-    let (sin, cos) = radians.sin_cos();
-    let hw = region.bbox_w as f64 / 2.0;
-    let hh = region.bbox_h as f64 / 2.0;
+    let (x, y, w, h, degrees) = match crate::jobs::coordinator::turned_text_area(region) {
+        Some((x, y, w, h, degrees)) => (x, y, w, h, degrees),
+        None => (
+            region.bbox_x as f64,
+            region.bbox_y as f64,
+            region.bbox_w as f64,
+            region.bbox_h as f64,
+            0.0,
+        ),
+    };
+    let cx = x + w / 2.0;
+    let cy = y + h / 2.0;
+    let (sin, cos) = degrees.to_radians().sin_cos();
+    let hw = w / 2.0;
+    let hh = h / 2.0;
     [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]
         .iter()
         .map(|(dx, dy)| json!({ "x": cx + dx * cos - dy * sin, "y": cy + dx * sin + dy * cos }))
@@ -1176,6 +1188,10 @@ mod tests {
             cleanup_bounds,
             cleanup_generator_sha256,
             cleanup_diagnostics,
+            text_area_x: None,
+            text_area_y: None,
+            text_area_w: None,
+            text_area_h: None,
         }
     }
 

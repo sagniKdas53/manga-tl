@@ -1255,6 +1255,8 @@ export interface components {
              * @description OCR grouping threshold: join fragments closer than this many characters, 0.05-3 (null inherits).
              */
             ocrMergeThreshold?: number;
+            /** @description Set tilted text at its angle on OCR (E2); null inherits. */
+            ocrTextAngle?: boolean;
         };
         CleanupCallbackDto: {
             /** @description Echo of the digest of the dispatched region list. */
@@ -1480,6 +1482,26 @@ export interface components {
             /** Format: int32 */
             safeTextY?: number;
             text?: string;
+            /**
+             * Format: double
+             * @description E2: box along a turned region's text (level box turned by rotation about its centre); absent when level.
+             */
+            textAreaH?: number;
+            /**
+             * Format: double
+             * @description E2: box along a turned region's text (level box turned by rotation about its centre); absent when level.
+             */
+            textAreaW?: number;
+            /**
+             * Format: double
+             * @description E2: box along a turned region's text (level box turned by rotation about its centre); absent when level.
+             */
+            textAreaX?: number;
+            /**
+             * Format: double
+             * @description E2: box along a turned region's text (level box turned by rotation about its centre); absent when level.
+             */
+            textAreaY?: number;
             /** Format: int32 */
             width?: number;
             /** Format: int32 */
@@ -1661,6 +1683,8 @@ export interface components {
              * @description OCR grouping threshold: join fragments closer than this many characters, 0.05-3 (null inherits).
              */
             ocrMergeThreshold?: number;
+            /** @description Set tilted text at its angle on OCR (E2); null inherits. */
+            ocrTextAngle?: boolean;
         };
         SseEmitter: {
             /** Format: int64 */
@@ -1711,6 +1735,8 @@ export interface components {
              * @description Global OCR grouping threshold, in characters of white space (0.05-3; default 0.35).
              */
             ocrMergeThreshold?: number;
+            /** @description Set tilted text at its angle on OCR (E2); default true. Redo OCR to apply to a page. */
+            ocrTextAngle?: boolean;
             /**
              * Format: int32
              * @description Padding is never less than this many px (0 = no floor; at most a quarter of the box).
@@ -4097,6 +4123,7 @@ export interface operations {
                 cleanupMode?: string;
                 useFallbackModels?: boolean;
                 ocrMergeThreshold?: number;
+                ocrTextAngle?: boolean;
             };
             header?: never;
             path: {

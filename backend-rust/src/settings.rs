@@ -92,6 +92,8 @@ pub struct GlobalSettings {
     pub cleanup_mode: String,
     /// OCR grouping threshold in characters; see [`ocr_merge_threshold`].
     pub ocr_merge_threshold: f64,
+    /// E2 (#180): set tilted text at its angle (`ocrTextAngle`, default on, owner D4 2026-10-10).
+    pub ocr_text_angle: bool,
     /// ProviderConfigCache.getDefaultModel("local","ocr") once Phase 3 lands; until then
     /// only the PADDLEOCR_REC_MODEL fallback path exists (documented deviation).
     pub local_ocr_model: String,
@@ -278,6 +280,7 @@ pub async fn load_global_settings(pool: &PgPool, defaults: &PipelineDefaults) ->
                 .parse::<f64>()
                 .unwrap_or(OCR_MERGE_THRESHOLD_DEFAULT),
         ),
+        ocr_text_angle: setting_value(pool, "ocrTextAngle", "true").await.trim() != "false",
         local_ocr_model: defaults.paddle_rec_model.clone(),
     }
 }

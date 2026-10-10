@@ -103,6 +103,10 @@
             "description": "OCR grouping threshold: join fragments closer than this many characters, 0.05-3 (null inherits).",
             "format": "double",
             "type": "number"
+          },
+          "ocrTextAngle": {
+            "description": "Set tilted text at its angle on OCR (E2); null inherits.",
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -640,6 +644,26 @@
           "text": {
             "type": "string"
           },
+          "textAreaH": {
+            "description": "E2: box along a turned region's text (level box turned by rotation about its centre); absent when level.",
+            "format": "double",
+            "type": "number"
+          },
+          "textAreaW": {
+            "description": "E2: box along a turned region's text (level box turned by rotation about its centre); absent when level.",
+            "format": "double",
+            "type": "number"
+          },
+          "textAreaX": {
+            "description": "E2: box along a turned region's text (level box turned by rotation about its centre); absent when level.",
+            "format": "double",
+            "type": "number"
+          },
+          "textAreaY": {
+            "description": "E2: box along a turned region's text (level box turned by rotation about its centre); absent when level.",
+            "format": "double",
+            "type": "number"
+          },
           "width": {
             "format": "int32",
             "type": "integer"
@@ -1104,6 +1128,10 @@
             "description": "OCR grouping threshold: join fragments closer than this many characters, 0.05-3 (null inherits).",
             "format": "double",
             "type": "number"
+          },
+          "ocrTextAngle": {
+            "description": "Set tilted text at its angle on OCR (E2); null inherits.",
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -1231,6 +1259,10 @@
             "description": "Global OCR grouping threshold, in characters of white space (0.05-3; default 0.35).",
             "format": "double",
             "type": "number"
+          },
+          "ocrTextAngle": {
+            "description": "Set tilted text at its angle on OCR (E2); default true. Redo OCR to apply to a page.",
+            "type": "boolean"
           },
           "textBoxPaddingMinPx": {
             "description": "Padding is never less than this many px (0 = no floor; at most a quarter of the box).",
@@ -5058,6 +5090,14 @@
             "schema": {
               "type": "number",
               "format": "double"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ocrTextAngle",
+            "required": false,
+            "schema": {
+              "type": "boolean"
             }
           }
         ],

@@ -36,6 +36,12 @@ import type { SystemStyleObject, Theme } from "@mui/system";
 import type { Layer, LayerElement, OcrRegion } from "../types";
 import { inReadingOrder, regionRowStatus } from "../utils/regionReview";
 import { isInpaintingLayer, isPatchElement } from "../utils/inpainting";
+import {
+  formatDegrees,
+  isOcrAngle,
+  ocrAngle,
+  signedDegrees,
+} from "../utils/textAngle";
 import PatchInspector from "./PatchInspector";
 import {
   AddLayerMenu,
@@ -437,6 +443,71 @@ const RejectedRegionNote: React.FC<{
     </Box>
   </Box>
 );
+
+/**
+ * E2 (#180): says when an element's angle came from OCR, so a tilted text is not a mystery with
+ * the slider at 0. At OCR's angle: an "Auto (OCR)" tag and a Level button. Turned away from it
+ * (by hand, or levelled): a button that puts OCR's angle back. Nothing for a region OCR left level.
+ */
+export const OcrAngleNote = ({
+  rotation,
+  region,
+  onRotate,
+}: {
+  rotation: number | null | undefined;
+  region: OcrRegion | undefined;
+  onRotate: (rotation: number) => void;
+}) => {
+  const angle = ocrAngle(region);
+  if (angle === null) return null;
+  const auto = isOcrAngle(rotation, region);
+  return (
+    <Box
+      sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}
+    >
+      {auto ? (
+        <>
+          <Tooltip
+            title={`OCR read the source text at ${formatDegrees(angle)} and turned this text to match.`}
+          >
+            <Typography
+              component="span"
+              data-testid="ocr-angle-tag"
+              sx={{
+                fontSize: "11px",
+                fontWeight: 700,
+                px: 0.75,
+                py: 0.25,
+                borderRadius: "4px",
+                color: "var(--primary)",
+                border: "1px solid var(--primary)",
+              }}
+            >
+              Auto (OCR)
+            </Typography>
+          </Tooltip>
+          <Button
+            size="small"
+            variant="text"
+            onClick={() => onRotate(0)}
+            sx={{ textTransform: "none", minWidth: 0, px: 0.5 }}
+          >
+            Level
+          </Button>
+        </>
+      ) : (
+        <Button
+          size="small"
+          variant="text"
+          onClick={() => onRotate(angle)}
+          sx={{ textTransform: "none", minWidth: 0, px: 0.5 }}
+        >
+          Use OCR angle ({formatDegrees(angle)})
+        </Button>
+      )}
+    </Box>
+  );
+};
 
 // Assuming types are defined here or imported
 // You may need to adjust types based on actual project structure
@@ -1914,14 +1985,27 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 }}
               >
                 <FieldLabel id="element-rotation-label">
-                  Rotation ({selectedItem.rotation || 0}°)
+                  Rotation ({formatDegrees(selectedItem.rotation)})
                 </FieldLabel>
+                <OcrAngleNote
+                  rotation={selectedItem.rotation}
+                  region={
+                    selectedItem.regionId
+                      ? regionById.get(selectedItem.regionId)
+                      : undefined
+                  }
+                  onRotate={(rotation) =>
+                    handleUpdateSelectedElement({ rotation })
+                  }
+                />
+                {/* Signed, so an OCR angle of -15° (or a hand turn stored as 345°) sits left of
+                    level instead of pinned at 0 (E2). */}
                 <Slider
                   aria-labelledby="element-rotation-label"
                   size="small"
-                  min={0}
-                  max={360}
-                  value={selectedItem.rotation || 0}
+                  min={-180}
+                  max={180}
+                  value={signedDegrees(selectedItem.rotation)}
                   onChange={(_, val) =>
                     handleUpdateSelectedElement({
                       rotation: val as number,
