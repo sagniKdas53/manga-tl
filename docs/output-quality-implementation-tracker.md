@@ -1,8 +1,53 @@
 # Output quality implementation tracker
 
-Start with the [2026-10-04 handoff](output-quality-next-session-20261004.md) and the plan below. The [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md) is background. The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
+Start with the [2026-10-10 status](#status-at-a-glance-2026-10-10--b-and-f-merged-e-next) below, the [F and E plan](fe-plan-20261007.md) and the [E handoff](e-handoff-20261008.md). The [2026-10-04 handoff](output-quality-next-session-20261004.md) still has the order after E. The [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md) is background. The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
 
 Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section, and the [plan for 2026-10-03](#plan-for-2026-10-03-user-2026-10-02-late) is done; A's halo grow and B landed 2026-10-05 ([status and checklist](#status-at-a-glance-2026-10-05--b-one-balloon-one-text-unit)); the [2026-10-04 handoff](output-quality-next-session-20261004.md) has the rest of the order. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25-ocr-threshold-added-2026-09-26). The [2026-09-29 handoff](output-quality-next-session-20260929.md) is history now. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+
+## Status at a glance (2026-10-10 — B and F merged, E next)
+
+**Done since 2026-10-06**
+
+| Part | What it changed | State |
+|---|---|---|
+| B1–B5 (#175) | one balloon, one text unit; spreads, two-paragraph balloons, no-balloon text | merged 2026-10-07 (worker #53–#61 as 642d184, parent #230–#242); #175 closed |
+| F1 (#237) | hiding a region's text hides its cleanup patch | merged 2026-10-08 (#247) |
+| F2 (#243) | *Show debug → OCR fragments* draws each region's OCR pieces | merged 2026-10-08 (#248) |
+| F3 (#178) | Add layer, merge, groups, layer names; project ZIPs go to version 3 | merged 2026-10-08 (#250) |
+| F4 (#178) | layer Undo/Redo kept on the server, so they survive a save and a reload | merged 2026-10-08 (#251); #178 closed |
+| E0 (#180) | the angle rule, measured against Torii and the owner's Rotate set | settled 2026-10-09: dead band 5°, a piece votes from 1.5 line-thicknesses, pieces agree within 6°; text near 45° is read along each piece (#265); one stray piece is dropped (#266). In PR #255 (`scripts/e0/angle_rule.py`) |
+
+**Open PRs: tested, waiting for the owner to merge**
+
+| PR | What it does | Closes | State |
+|---|---|---|---|
+| #253 | E1: reshape handles sit on a rotated element's outline; a corner drag keeps the box's size | #179 | owner's test passed 2026-10-09; CodeRabbit clean |
+| #254 | layer Undo, delete and merge save waiting text edits first; a save whose text was deleted is dropped with one message | #264 | owner's test passed 2026-10-09 and, with the #264 fix, 2026-10-10; CodeRabbit clean |
+| #255 | E handoff, the E0 scripts and the settled rule; this status | #265, #266 | docs only |
+| #232 | corpus batch harness | — | GitGuardian false positive to dismiss (see the E handoff) |
+
+All three of #253–#255 are deployed on the chrome-box F test stack (`deploy/e-test-20261008`,
+7fbae21; rollback image tag `:pre-264`).
+
+**Next, in order**
+1. **E2 (#180):** the worker writes each region's angle (E0's rule) and a box measured along the
+   text; the backend copies it to the translated text. Behind `OCR_TEXT_ANGLE` (on, with a series
+   override, D4). Stacked on #253. About 2 days. Changes output: tilted signs and captions come out
+   tilted in the editor and the export.
+2. **F5 (#244):** text box sized to the balloon, not the OCR column. Reuses E2's box code.
+3. **C + G (#176, #177):** the balloon shape goes into the page scene, so the export fits text like
+   the editor.
+4. **E3 (#180):** rotated text fits its balloon's outline (after G2, decision D1).
+
+**Known, not blocking E2**
+- Korean OCR gives one piece per paragraph, so Korean text has no line angle and stays level.
+- Rotate p8: one diagonal sign is two overlapping regions, one per line (grouping, #231). E2
+  turns both. They still overlap.
+- Junk regions get an angle too (#267, parked): their translations are usually empty, so nothing is
+  drawn.
+- #268: a duplicate upload copies regions without their OCR pieces (*Redo OCR* is the workaround).
+- #252: the backend treats `visible = NULL` as shown, while the editor treats it as hidden.
+- #238: a custom model list longer than about three entries crashes the settings save.
 
 ## Status at a glance (2026-10-06 — B stack: B1–B5)
 
