@@ -2457,18 +2457,20 @@ fn glued_to<'a>(
     })
 }
 
-/// The part of a glued balloon box that is the region's own balloon: the box is cut halfway
-/// across the gap to each other balloon's text, then trimmed to the largest box centred on the
-/// region's own text, as text sits centred in its balloon. The far side of the box is the
-/// detector's, so on p27 the lower balloon gets 320x495 back (a 300x475 text box inside it, as
-/// wide as the page's other balloons), where a box around its own text alone gave 206x378.
-///
-/// `None` when that leaves no room around the text.
-fn own_balloon(region: &OcrRegion, page_regions: &[OcrRegion]) -> Option<Rect> {
+/// The region's balloon box cut halfway across the gap to the text of each region it is glued to,
+/// either way round: a glued box is cut away from the balloon inside it, and that balloon's own
+/// box, which can also reach past the gap (Free ch 5 p62's runs 260 px into the lower balloon),
+/// is cut away from the glued region's text. `None` for a region glued to nothing.
+fn cut_at_gaps(region: &OcrRegion, page_regions: &[OcrRegion]) -> Option<Rect> {
     let (x, y, w, h) = bubble_rect(region)?;
     let (mut left, mut top, mut right, mut bottom) = (x, y, x + w, y + h);
     let (tx, ty, tw, th) = text_rect(region);
-    for other in glued_to(region, page_regions) {
+    let glued_over_this = page_regions
+        .iter()
+        .filter(|other| glued_to(other, page_regions).any(|inner| inner.id == region.id));
+    let mut cut = false;
+    for other in glued_to(region, page_regions).chain(glued_over_this) {
+        cut = true;
         let (ox, oy, ow, oh) = text_rect(other);
         // The texts don't overlap, so they sit apart along at least one axis: cut along the wider gap.
         let x_gap = (ox - (tx + tw)).max(tx - (ox + ow));
@@ -2485,6 +2487,20 @@ fn own_balloon(region: &OcrRegion, page_regions: &[OcrRegion]) -> Option<Rect> {
             right = right.min((tx + tw + ox) / 2.0);
         }
     }
+    cut.then_some((left, top, right - left, bottom - top))
+}
+
+/// The part of a glued balloon box that is the region's own balloon: the box is cut at the gaps
+/// ([`cut_at_gaps`]), then trimmed to the largest box centred on the region's own text, as text
+/// sits centred in its balloon. The far side of the box is the detector's, so on p27 the lower
+/// balloon gets 320x495 back (a 300x475 text box inside it, as wide as the page's other
+/// balloons), where a box around its own text alone gave 206x378.
+///
+/// `None` when that leaves no room around the text.
+fn own_balloon(region: &OcrRegion, page_regions: &[OcrRegion]) -> Option<Rect> {
+    let (left, top, w, h) = cut_at_gaps(region, page_regions)?;
+    let (right, bottom) = (left + w, top + h);
+    let (tx, ty, tw, th) = text_rect(region);
     let (cx, cy) = (tx + tw / 2.0, ty + th / 2.0);
     let half_w = (cx - left).min(right - cx);
     let half_h = (cy - top).min(bottom - cy);
@@ -2497,21 +2513,29 @@ fn own_balloon(region: &OcrRegion, page_regions: &[OcrRegion]) -> Option<Rect> {
 /// The region as its text is laid out. A glued balloon box is cut down to the region's own
 /// balloon ([`own_balloon`]); if that leaves no room, the region is laid out as free-standing
 /// text in a box around its own text (the bubble box echoes the bbox, which is how the worker
-/// marks a region no balloon matched). Either way its text stays in its own balloon. Every other
-/// region as it is.
+/// marks a region no balloon matched). A balloon a glued box was glued over keeps its own box,
+/// cut where it reaches past the gap to the glued region's text. Either way each text stays in
+/// its own balloon. Every other region as it is.
 pub fn region_for_layout(region: &OcrRegion, page_regions: &[OcrRegion]) -> OcrRegion {
     let mut region = region.clone();
-    if !glued_balloon(&region, page_regions) {
-        return region;
-    }
-    let (x, y, w, h) = match own_balloon(&region, page_regions) {
-        Some((x, y, w, h)) => (
+    let rounded = |(x, y, w, h): Rect| {
+        (
             x.round() as i32,
             y.round() as i32,
             w.round() as i32,
             h.round() as i32,
-        ),
-        None => (region.bbox_x, region.bbox_y, region.bbox_w, region.bbox_h),
+        )
+    };
+    let (x, y, w, h) = if glued_balloon(&region, page_regions) {
+        match own_balloon(&region, page_regions) {
+            Some(rect) => rounded(rect),
+            None => (region.bbox_x, region.bbox_y, region.bbox_w, region.bbox_h),
+        }
+    } else {
+        match cut_at_gaps(&region, page_regions) {
+            Some(rect) => rounded(rect),
+            None => return region,
+        }
     };
     region.bubble_x = Some(x);
     region.bubble_y = Some(y);
@@ -5416,7 +5440,8 @@ mod textbox_tests {
         // the upper balloon sticks out. Centred on its own text (x 1002) it keeps 842-1162.
         let lower = on_page((842, 210, 420, 1093), (916, 695, 172, 508));
         let upper = on_page((961, 164, 291, 718), (1046, 204, 115, 414));
-        let laid_out = region_for_layout(&lower, &[lower.clone(), upper]);
+        let page = [lower.clone(), upper.clone()];
+        let laid_out = region_for_layout(&lower, &page);
         assert_eq!(
             (
                 laid_out.bubble_x,
@@ -5425,6 +5450,18 @@ mod textbox_tests {
                 laid_out.bubble_h
             ),
             (Some(842), Some(657), Some(320), Some(585))
+        );
+        // The upper balloon's own box ran down to 882, deep into the lower balloon, so its text
+        // ran into the lower one's. It stops at the same line, halfway between the texts.
+        let upper_laid_out = region_for_layout(&upper, &page);
+        assert_eq!(
+            (
+                upper_laid_out.bubble_x,
+                upper_laid_out.bubble_y,
+                upper_laid_out.bubble_w,
+                upper_laid_out.bubble_h
+            ),
+            (Some(961), Some(164), Some(291), Some(493))
         );
     }
 
