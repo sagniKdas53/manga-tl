@@ -1532,10 +1532,10 @@ async fn a_turned_region_sets_its_text_at_its_angle() {
 }
 
 /// A balloon box the detector glued over two balloons (Free ch 2 p27, owner 2026-10-11): the
-/// region's translation is laid out in a box around its own text, not across both balloons into
-/// the other region's text. The other balloon keeps its own box.
+/// region's translation is laid out in its own balloon, cut from the glued box, not across both
+/// balloons into the other region's text. The other balloon keeps its own box.
 #[tokio::test]
-async fn a_glued_balloon_box_gives_way_to_the_regions_own_text_box() {
+async fn a_glued_balloon_box_is_cut_down_to_the_regions_own_balloon() {
     let Some((pool, _redis, state)) = app().await else {
         return;
     };
@@ -1615,13 +1615,13 @@ async fn a_glued_balloon_box_gives_way_to_the_regions_own_text_box() {
     assert_eq!(
         element(regions[1].0).await,
         (
-            1015.0,
-            676.0,
-            Some(206),
-            Some(378),
-            Some("rectangular".into())
+            968.0,
+            628.0,
+            Some(300),
+            Some(475),
+            Some("elliptical".into())
         ),
-        "the lower region is laid out around its own text, clear of the upper balloon"
+        "the lower region is laid out in its own balloon, clear of the upper balloon"
     );
 
     cleanup_series(&pool, series_id).await;
