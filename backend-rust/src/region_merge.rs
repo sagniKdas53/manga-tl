@@ -124,8 +124,82 @@ pub fn union_box(
     acc.map(|(x0, y0, x1, y1)| (x0, y0, x1 - x0, y1 - y0))
 }
 
+/// Pieces of text agree on an angle when they are this close (E0's agreement, degrees).
+pub const AGREE_DEGREES: f64 = 6.0;
+
+/// E2 (#180): the box along the text of a merged block, when every merged region is set at the
+/// same angle as `angle` (within [`AGREE_DEGREES`], directions wrapping at ±90°). Each input is a
+/// region's text box `(x, y, w, h, degrees)`: level, drawn turned by `degrees` about its centre.
+/// The result is the level box that, turned by `angle` about its own centre, covers all of them.
+/// `None` when `angle` is level or the regions disagree: the merge then stays level.
+pub fn merged_text_area(
+    boxes: &[(f64, f64, f64, f64, f64)],
+    angle: f64,
+) -> Option<(f64, f64, f64, f64)> {
+    let gap = |a: f64, b: f64| ((a - b + 90.0).rem_euclid(180.0) - 90.0).abs();
+    if angle == 0.0 || !angle.is_finite() || boxes.is_empty() {
+        return None;
+    }
+    if boxes.iter().any(|b| gap(b.4, angle) > AGREE_DEGREES) {
+        return None;
+    }
+    let (sin, cos) = angle.to_radians().sin_cos();
+    let (mut u0, mut u1, mut v0, mut v1) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
+    for &(x, y, w, h, degrees) in boxes {
+        let (cx, cy) = (x + w / 2.0, y + h / 2.0);
+        let (bs, bc) = degrees.to_radians().sin_cos();
+        for (dx, dy) in [(-w, -h), (w, -h), (w, h), (-w, h)] {
+            let (dx, dy) = (dx / 2.0, dy / 2.0);
+            let (px, py) = (cx + dx * bc - dy * bs, cy + dx * bs + dy * bc);
+            // Into the block's frame: turn by -angle.
+            let (u, v) = (px * cos + py * sin, -px * sin + py * cos);
+            u0 = u0.min(u);
+            u1 = u1.max(u);
+            v0 = v0.min(v);
+            v1 = v1.max(v);
+        }
+    }
+    let (w, h) = (u1 - u0, v1 - v0);
+    let (cu, cv) = ((u0 + u1) / 2.0, (v0 + v1) / 2.0);
+    let (cx, cy) = (cu * cos - cv * sin, cu * sin + cv * cos);
+    Some((cx - w / 2.0, cy - h / 2.0, w, h))
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_merge_of_regions_at_one_angle_keeps_a_box_along_the_text() {
+        // Two 100x20 lines at 30°, 30 px apart across the text, centred on (200, 200).
+        let a = 30f64.to_radians();
+        let (ox, oy) = (-a.sin() * 15.0, a.cos() * 15.0);
+        let line = |cx: f64, cy: f64, deg: f64| (cx - 50.0, cy - 10.0, 100.0, 20.0, deg);
+        let boxes = [
+            line(200.0 - ox, 200.0 - oy, 30.0),
+            line(200.0 + ox, 200.0 + oy, 30.0),
+        ];
+        // A region 2° off still agrees.
+        assert!(super::merged_text_area(&[line(0.0, 0.0, 32.0)], 30.0).is_some());
+        let (x, y, w, h) = super::merged_text_area(&boxes, 30.0).expect("agree");
+        assert!((x + w / 2.0 - 200.0).abs() < 0.5 && (y + h / 2.0 - 200.0).abs() < 0.5);
+        assert!(
+            (w - 100.0).abs() < 4.0 && (h - 50.0).abs() < 4.0,
+            "{w} x {h}"
+        );
+    }
+
+    #[test]
+    fn a_merge_whose_regions_disagree_or_are_level_stays_level() {
+        let boxes = [(0.0, 0.0, 100.0, 20.0, 30.0), (0.0, 40.0, 100.0, 20.0, 0.0)];
+        assert_eq!(super::merged_text_area(&boxes, 30.0), None);
+        assert_eq!(super::merged_text_area(&boxes[1..], 0.0), None);
+        // Directions wrap at ±90°: -89° and +89° agree.
+        let wrap = [
+            (0.0, 0.0, 20.0, 100.0, -89.0),
+            (40.0, 0.0, 20.0, 100.0, 89.0),
+        ];
+        assert!(super::merged_text_area(&wrap, 89.0).is_some());
+    }
+
     use super::*;
 
     fn frag(x: i32, y: i32, w: i32, h: i32, text: &str) -> Fragment {
