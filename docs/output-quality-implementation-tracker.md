@@ -1,8 +1,62 @@
 # Output quality implementation tracker
 
-Start with the [2026-10-10 status](#status-at-a-glance-2026-10-10--b-and-f-merged-e-next) below, the [F and E plan](fe-plan-20261007.md) and the [E handoff](e-handoff-20261008.md). The [2026-10-04 handoff](output-quality-next-session-20261004.md) still has the order after E. The [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md) is background. The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
+Start with the [2026-10-17 status](#status-at-a-glance-2026-10-17--e2-korean-and-reshape-merged) below, the [F and E plan](fe-plan-20261007.md) and the [E handoff](e-handoff-20261008.md). The [2026-10-04 handoff](output-quality-next-session-20261004.md) still has the order after E. The [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md) is background. The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
 
 Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section, and the [plan for 2026-10-03](#plan-for-2026-10-03-user-2026-10-02-late) is done; A's halo grow and B landed 2026-10-05 ([status and checklist](#status-at-a-glance-2026-10-05--b-one-balloon-one-text-unit)); the [2026-10-04 handoff](output-quality-next-session-20261004.md) has the rest of the order. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25-ocr-threshold-added-2026-09-26). The [2026-09-29 handoff](output-quality-next-session-20260929.md) is history now. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+
+## Status at a glance (2026-10-17 — E2, Korean and Reshape merged)
+
+**Owner's tests on the F test stack (2026-10-17), all passed:** E2 on the Rotate set and the E
+rotation test series; the glued-balloon fix (Free ch 2 p27, ch 5 p62); Rotate p5 after the
+page-edge trim; Reshape on a rotated box; Korean on the placard page and a fresh Korean chapter.
+The stack runs `deploy/f-test-20261017` in both repos (rollback images `:pre-20261017`).
+
+**Merged 2026-10-17**
+
+| PR | What it does |
+|---|---|
+| worker #72, #282 | E2 (#180): tilted text at its angle, the box along the text; a turned box whose corner runs off the page is trimmed back onto it (Rotate p5: 512x358 with a corner 77 px off the page, now 403x358) |
+| #283 | a balloon box glued over two balloons is cut back to the region's own balloon |
+| worker #73, #284 | Korean always reads with PP-OCRv6's detector and `korean_PP-OCRv5_mobile_rec`, whatever OCR model the series names |
+| #285 | Reshape: a box's corners resize it along its angle; *Free shape* or Alt-drag still bend it; *Reset outline to box* |
+| worker #75 | the ARM64 smoke test runs by hand only (turning it back on: worker #74, milestone "ARM64 support (later)") |
+| 14 Dependabot PRs | parent #272–#280 (react and react-dom 19.3, prettier, typescript-eslint, @vitest/ui, sha2, uuid, serde_json, rust-embed); worker #67–#71 (ruff 0.17, fastapi 0.143, shapely 2.2, pydantic 2.14.1, rapidocr 3.10) |
+
+The parent's `worker` pointer is worker `main` (aa83212): E2, the Korean fix and the worker
+dependency updates. Reviews: CodeRabbit approved worker #72, #73, #282 and #283; #284 and #285 were
+reviewed with the CodeRabbit CLI (the app's free limit is about one review an hour on these repos),
+and #285's one finding (an elliptical box's Reshape hint) was fixed before merging.
+
+**Korean is fixed, not level.** The 2026-10-10 note below ("Korean stays level") was wrong twice
+over: PP-OCRv5's mobile detector was finding almost nothing on large tilted Korean (ko/sample188's
+six-line placard came back as five scraps), so there was nothing to measure. PP-OCRv6's detector
+finds every line. On the 29 Korean corpus pages, against Torii's text: Hangul recall 0.961 to
+0.978, precision unchanged, no page worse by more than one character; detection takes ~2.5x as long
+(~9 s a page on the dev box). E2 then turns the placard +14.8° (Torii +10° to +14°); over 186 Torii
+boxes, 4 false turns, all one-character scraps the translation filter drops. Left on that page:
+the five numbered points run as one paragraph, and the "!" tails past the page edge are not
+cleaned.
+
+**Filed:** #281. A stack restart can leave the dev backend down (it fails fast on an unreachable
+Postgres and `docker-compose.dev.yml` has no restart policy), and startup recovery re-arms jobs a
+live worker is still running, so a finished cleanup is refused and redone and the restart costs an
+attempt. Reproduced both on 2026-10-17.
+
+**Corpus:** the corpus images live in LFS on pi5 (`.lfsconfig`), not GitHub's LFS. A checkout
+without them has pointer files; `git -c lfs.url=https://pi5.tail9ece4.ts.net/git/sagnik/manga-tl-corpus.git/info/lfs lfs pull`
+fetches them (7,358 files, 5.7 GB).
+
+**Setup note:** the worker's OCR redo model is `google/gemini-3.5-flash`; `qwen3-vl-32b` has no
+OpenRouter providers any more. Check it if prod comes back up.
+
+**Next, in order**
+1. **F5 (#244):** text box sized to the balloon, not the OCR column. Reuses E2's box code.
+2. **C + G (#176, #177):** the balloon shape goes into the page scene.
+3. **E3 (#180):** rotated text fits its balloon's outline (after G2, decision D1).
+
+**Known, not blocking**
+- Rotate p8: one diagonal sign is two overlapping regions (#231). Junk regions get an angle (#267).
+- #268, #252, #238 as below.
 
 ## Status at a glance (2026-10-10 — B and F merged, E next)
 
@@ -40,7 +94,8 @@ All three of #253–#255 are deployed on the chrome-box F test stack (`deploy/e-
 4. **E3 (#180):** rotated text fits its balloon's outline (after G2, decision D1).
 
 **Known, not blocking E2**
-- Korean OCR gives one piece per paragraph, so Korean text has no line angle and stays level.
+- ~~Korean OCR gives one piece per paragraph, so Korean text has no line angle and stays level.~~
+  Wrong: the detector was missing the lines. Fixed 2026-10-17 (see above).
 - Rotate p8: one diagonal sign is two overlapping regions, one per line (grouping, #231). E2
   turns both. They still overlap.
 - Junk regions get an angle too (#267, parked): their translations are usually empty, so nothing is
