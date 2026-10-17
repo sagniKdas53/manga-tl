@@ -44,6 +44,7 @@ const emptyValue: ModelOverridesValue = {
   routingStrategy: "",
   cleanupMode: "",
   ocrMergeThreshold: null,
+  ocrTextAngle: null,
   useFallbackModels: null,
 };
 
@@ -86,7 +87,7 @@ describe("ModelOverridesAccordion", () => {
   it("renders the summary with overridden/inherited counts", () => {
     render(<Harness inherited={{}} />);
     expect(screen.getByText("Model Overrides (Optional)")).toBeInTheDocument();
-    expect(screen.getByText("0 overridden, 12 inherited")).toBeInTheDocument();
+    expect(screen.getByText("0 overridden, 13 inherited")).toBeInTheDocument();
   });
 
   it("shows the inherited value for non-overridden selects", () => {
@@ -140,14 +141,14 @@ describe("ModelOverridesAccordion", () => {
 
     // Override applied: shows the overridden value, chip counts it, X appears
     expect(getFallbackSelect().textContent).toBe("Disabled");
-    expect(screen.getByText("1 overridden, 11 inherited")).toBeInTheDocument();
+    expect(screen.getByText("1 overridden, 12 inherited")).toBeInTheDocument();
     const clearBtns = document.querySelectorAll('[data-testid="CloseIcon"]');
     expect(clearBtns.length).toBe(1);
 
     // Clearing reverts to displaying the inherited value
     fireEvent.click(clearBtns[0]);
     expect(getFallbackSelect().textContent).toBe("Enabled");
-    expect(screen.getByText("0 overridden, 12 inherited")).toBeInTheDocument();
+    expect(screen.getByText("0 overridden, 13 inherited")).toBeInTheDocument();
     expect(document.querySelectorAll('[data-testid="CloseIcon"]').length).toBe(
       0,
     );
@@ -162,7 +163,7 @@ describe("ModelOverridesAccordion", () => {
     );
     expect(getFallbackSelect().textContent).toBe("Enabled");
     // Still counts as overridden because the value is explicitly set
-    expect(screen.getByText("1 overridden, 11 inherited")).toBeInTheDocument();
+    expect(screen.getByText("1 overridden, 12 inherited")).toBeInTheDocument();
     expect(document.querySelectorAll('[data-testid="CloseIcon"]').length).toBe(
       1,
     );
@@ -269,7 +270,7 @@ describe("ModelOverridesAccordion", () => {
 
     fireEvent.change(field, { target: { value: "0.9" } });
     expect(field).toHaveValue(0.9);
-    expect(screen.getByText("1 overridden, 11 inherited")).toBeInTheDocument();
+    expect(screen.getByText("1 overridden, 12 inherited")).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", {
         name: "Clear OCR Grouping Threshold override",

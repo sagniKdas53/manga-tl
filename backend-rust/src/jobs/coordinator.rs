@@ -957,6 +957,18 @@ pub async fn enqueue_job_with_ledger(
                             .unwrap_or(settings.ocr_merge_threshold),
                     )),
                 );
+
+                // E2 (#180): chapter, then series, then System Settings; the OCR handler sets each
+                // region's angle when this is true.
+                job.insert(
+                    "ocrTextAngle".into(),
+                    json!(
+                        chapter
+                            .ocr_text_angle
+                            .or(series.ocr_text_angle)
+                            .unwrap_or(settings.ocr_text_angle)
+                    ),
+                );
             }
         }
     }
@@ -1678,9 +1690,10 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
              safe_text_x, safe_text_y, safe_text_w, safe_text_h, page_id, panel_id, \
              cleanup_mask_asset_id, cleanup_mask_sha256, cleanup_mask_byte_length, \
              cleanup_patch_asset_id, cleanup_patch_sha256, cleanup_patch_byte_length, \
-             cleanup_bounds, cleanup_generator_sha256, cleanup_diagnostics) \
+             cleanup_bounds, cleanup_generator_sha256, cleanup_diagnostics, \
+             text_area_x, text_area_y, text_area_w, text_area_h) \
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,\
-             $28,$29,$30,$31,$32,$33,$34,$35,$36)",
+             $28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40)",
         )
         .bind(region_id)
         .bind(r.get("text").and_then(|v| v.as_str()))
@@ -1718,6 +1731,11 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
         .bind(r.get("cleanupBounds").cloned())
         .bind(r.get("cleanupGeneratorSha256").and_then(|v| v.as_str()))
         .bind(r.get("cleanupDiagnostics").cloned())
+        // E2: the box along a turned region's text (absent for a level region).
+        .bind(r.get("textAreaX").and_then(|v| v.as_f64()))
+        .bind(r.get("textAreaY").and_then(|v| v.as_f64()))
+        .bind(r.get("textAreaW").and_then(|v| v.as_f64()))
+        .bind(r.get("textAreaH").and_then(|v| v.as_f64()))
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -1803,16 +1821,18 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
             .await
             .map_err(|e| e.to_string())?;
         let Some(region) = region else { continue };
+        let (x, y, w, h, rotation) = source_text_box(&region);
         sqlx::query(
-            "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, word_wrap, layer_id, region_id) \
-             VALUES ($1,$2,$3,$4,$5,$6,TRUE,TRUE,$7,$8)",
+            "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, rotation, visible, word_wrap, layer_id, region_id) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,TRUE,$8,$9)",
         )
         .bind(Uuid::new_v4())
         .bind(&region.text)
-        .bind(region.bbox_x as f64)
-        .bind(region.bbox_y as f64)
-        .bind(region.bbox_w)
-        .bind(region.bbox_h)
+        .bind(x)
+        .bind(y)
+        .bind(w)
+        .bind(h)
+        .bind(rotation)
         .bind(layer_id)
         .bind(region.id)
         .execute(&mut *tx)
@@ -2369,6 +2389,161 @@ pub fn has_detected_bubble(region: &OcrRegion) -> bool {
     }
 }
 
+/// How much of another region's balloon a glued balloon covers.
+const GLUED_BALLOON_COVER: f64 = 0.8;
+/// How close in size two regions' texts are when each fills a balloon of its own (smaller / larger).
+const GLUED_BALLOON_TEXT_RATIO: f64 = 0.25;
+
+type Rect = (f64, f64, f64, f64);
+
+fn bubble_rect(region: &OcrRegion) -> Option<Rect> {
+    Some((
+        region.bubble_x? as f64,
+        region.bubble_y? as f64,
+        region.bubble_w? as f64,
+        region.bubble_h? as f64,
+    ))
+}
+
+fn text_rect(region: &OcrRegion) -> Rect {
+    (
+        region.bbox_x as f64,
+        region.bbox_y as f64,
+        region.bbox_w as f64,
+        region.bbox_h as f64,
+    )
+}
+
+fn overlap_area(a: Rect, b: Rect) -> f64 {
+    let w = (a.0 + a.2).min(b.0 + b.2) - a.0.max(b.0);
+    let h = (a.1 + a.3).min(b.1 + b.3) - a.1.max(b.1);
+    w.max(0.0) * h.max(0.0)
+}
+
+/// True when the balloon detector gave `region` one box over two balloons: its box holds another
+/// region's own, smaller balloon, and the two texts sit apart and are of a size, each filling a
+/// balloon of its own. Laid out in that box, the text spreads across both balloons and runs into
+/// the other region's (Free ch 2 p27, owner 2026-10-11).
+///
+/// A small piece of text inside a real balloon -- an SFX, a stray "1", a split-off "Huh...?" --
+/// is not enough: about 79 balloon boxes on the F stack hold another region's text, nearly all of
+/// them that kind, and only 2 are glued balloons.
+pub fn glued_balloon(region: &OcrRegion, page_regions: &[OcrRegion]) -> bool {
+    glued_to(region, page_regions).next().is_some()
+}
+
+/// The regions whose balloons `region`'s balloon box was glued over (see [`glued_balloon`]).
+fn glued_to<'a>(
+    region: &'a OcrRegion,
+    page_regions: &'a [OcrRegion],
+) -> impl Iterator<Item = &'a OcrRegion> + 'a {
+    let own = bubble_rect(region).filter(|_| has_detected_bubble(region));
+    let text = text_rect(region);
+    page_regions.iter().filter(move |other| {
+        let (Some(own), Some(inner)) = (
+            own,
+            bubble_rect(other).filter(|_| other.id != region.id && has_detected_bubble(other)),
+        ) else {
+            return false;
+        };
+        let other_text = text_rect(other);
+        let (inner_area, own_area) = (inner.2 * inner.3, own.2 * own.3);
+        let (a, b) = (text.2 * text.3, other_text.2 * other_text.3);
+        inner_area > 0.0
+            && own_area > inner_area
+            && overlap_area(own, inner) >= GLUED_BALLOON_COVER * inner_area
+            && overlap_area(text, other_text) == 0.0
+            && a.min(b) >= GLUED_BALLOON_TEXT_RATIO * a.max(b)
+    })
+}
+
+/// The region's balloon box cut halfway across the gap to the text of each region it is glued to,
+/// either way round: a glued box is cut away from the balloon inside it, and that balloon's own
+/// box, which can also reach past the gap (Free ch 5 p62's runs 260 px into the lower balloon),
+/// is cut away from the glued region's text. `None` for a region glued to nothing.
+fn cut_at_gaps(region: &OcrRegion, page_regions: &[OcrRegion]) -> Option<Rect> {
+    let (x, y, w, h) = bubble_rect(region)?;
+    let (mut left, mut top, mut right, mut bottom) = (x, y, x + w, y + h);
+    let (tx, ty, tw, th) = text_rect(region);
+    let glued_over_this = page_regions
+        .iter()
+        .filter(|other| glued_to(other, page_regions).any(|inner| inner.id == region.id));
+    let mut cut = false;
+    for other in glued_to(region, page_regions).chain(glued_over_this) {
+        cut = true;
+        let (ox, oy, ow, oh) = text_rect(other);
+        // The texts don't overlap, so they sit apart along at least one axis: cut along the wider gap.
+        let x_gap = (ox - (tx + tw)).max(tx - (ox + ow));
+        let y_gap = (oy - (ty + th)).max(ty - (oy + oh));
+        if y_gap >= x_gap {
+            if oy + oh <= ty {
+                top = top.max((oy + oh + ty) / 2.0);
+            } else {
+                bottom = bottom.min((ty + th + oy) / 2.0);
+            }
+        } else if ox + ow <= tx {
+            left = left.max((ox + ow + tx) / 2.0);
+        } else {
+            right = right.min((tx + tw + ox) / 2.0);
+        }
+    }
+    cut.then_some((left, top, right - left, bottom - top))
+}
+
+/// The part of a glued balloon box that is the region's own balloon: the box is cut at the gaps
+/// ([`cut_at_gaps`]), then trimmed to the largest box centred on the region's own text, as text
+/// sits centred in its balloon. The far side of the box is the detector's, so on p27 the lower
+/// balloon gets 320x495 back (a 300x475 text box inside it, as wide as the page's other
+/// balloons), where a box around its own text alone gave 206x378.
+///
+/// `None` when that leaves no room around the text.
+fn own_balloon(region: &OcrRegion, page_regions: &[OcrRegion]) -> Option<Rect> {
+    let (left, top, w, h) = cut_at_gaps(region, page_regions)?;
+    let (right, bottom) = (left + w, top + h);
+    let (tx, ty, tw, th) = text_rect(region);
+    let (cx, cy) = (tx + tw / 2.0, ty + th / 2.0);
+    let half_w = (cx - left).min(right - cx);
+    let half_h = (cy - top).min(bottom - cy);
+    if half_w < tw / 2.0 || half_h < th / 2.0 {
+        return None;
+    }
+    Some((cx - half_w, cy - half_h, 2.0 * half_w, 2.0 * half_h))
+}
+
+/// The region as its text is laid out. A glued balloon box is cut down to the region's own
+/// balloon ([`own_balloon`]); if that leaves no room, the region is laid out as free-standing
+/// text in a box around its own text (the bubble box echoes the bbox, which is how the worker
+/// marks a region no balloon matched). A balloon a glued box was glued over keeps its own box,
+/// cut where it reaches past the gap to the glued region's text. Either way each text stays in
+/// its own balloon. Every other region as it is.
+pub fn region_for_layout(region: &OcrRegion, page_regions: &[OcrRegion]) -> OcrRegion {
+    let mut region = region.clone();
+    let rounded = |(x, y, w, h): Rect| {
+        (
+            x.round() as i32,
+            y.round() as i32,
+            w.round() as i32,
+            h.round() as i32,
+        )
+    };
+    let (x, y, w, h) = if glued_balloon(&region, page_regions) {
+        match own_balloon(&region, page_regions) {
+            Some(rect) => rounded(rect),
+            None => (region.bbox_x, region.bbox_y, region.bbox_w, region.bbox_h),
+        }
+    } else {
+        match cut_at_gaps(&region, page_regions) {
+            Some(rect) => rounded(rect),
+            None => return region,
+        }
+    };
+    region.bubble_x = Some(x);
+    region.bubble_y = Some(y);
+    region.bubble_w = Some(w);
+    region.bubble_h = Some(h);
+    region
+}
+
 trait IntoOptionI32 {
     fn into_option(self) -> Option<i32>;
 }
@@ -2416,9 +2591,60 @@ fn geometry_source(region: &OcrRegion) -> (f64, f64, i32, i32) {
     }
 }
 
+/// Where a region's source text is, as an element box `(x, y, w, h, degrees)`: its bbox, or for a
+/// region the worker turned (E2), the box along its text at its angle.
+pub fn source_text_box(region: &OcrRegion) -> (f64, f64, i32, i32, f64) {
+    match turned_text_area(region) {
+        Some((x, y, w, h, degrees)) => (x, y, w.round() as i32, h.round() as i32, degrees),
+        None => (
+            f64::from(region.bbox_x),
+            f64::from(region.bbox_y),
+            region.bbox_w,
+            region.bbox_h,
+            0.0,
+        ),
+    }
+}
+
+/// E2 (#180): the angle a region's text elements start at: the region's own, once the worker
+/// turned it and gave it a box along its text; level otherwise.
+pub fn element_rotation(region: &OcrRegion) -> f64 {
+    turned_text_area(region).map_or(0.0, |(.., degrees)| degrees)
+}
+
+/// E2 (#180): `(x, y, w, h, degrees)` of the box along a turned region's text, or `None` for a
+/// level region (or one whose text area is missing or degenerate). The box is level; it is drawn
+/// turned by `degrees` about its centre, as elements are.
+pub fn turned_text_area(region: &OcrRegion) -> Option<(f64, f64, f64, f64, f64)> {
+    let degrees = region.rotation.filter(|r| r.is_finite() && *r != 0.0)?;
+    let (x, y, w, h) = (
+        region.text_area_x?,
+        region.text_area_y?,
+        region.text_area_w?,
+        region.text_area_h?,
+    );
+    (x.is_finite() && y.is_finite() && w.is_finite() && h.is_finite() && w > 0.0 && h > 0.0)
+        .then_some((x, y, w, h, degrees))
+}
+
 /// Pure text-box geometry: everything textBoxFor decides given the page bounds.
 /// Split from [`text_box_for`] so TextBoxForTest ports as database-free unit tests.
 pub fn text_box_geometry(region: &OcrRegion, page: Option<(f64, f64)>) -> TextBox {
+    // E2 (#180): a turned region's box runs along its text. Its bubble, safe-text and bbox boxes
+    // are level page-space boxes, too big once turned, so they are not used. It gets the free-text
+    // padding and widening, in a balloon too, until E3 fits it to the balloon's outline (owner,
+    // 2026-10-10, option a).
+    if let Some((x, y, w, h, degrees)) = turned_text_area(region) {
+        let half_pad = (FREE_TEXT_PADDING / 2) as f64;
+        let padded = free_text_box(
+            x - half_pad,
+            y - half_pad,
+            w.round() as i32 + FREE_TEXT_PADDING,
+            h.round() as i32 + FREE_TEXT_PADDING,
+            page,
+        );
+        return keep_turned_box_on_page(padded, degrees, page);
+    }
     if !has_detected_bubble(region) {
         let (x, y, w, h) = geometry_source(region);
         let half_pad = (FREE_TEXT_PADDING / 2) as f64;
@@ -2448,8 +2674,8 @@ pub fn text_box_geometry(region: &OcrRegion, page: Option<(f64, f64)>) -> TextBo
 /// Text box for a region: inset into a detected bubble, grown outward + squared up
 /// for free-floating columns (Japanese vertical text).
 pub async fn text_box_for(pool: &PgPool, region: &OcrRegion) -> TextBox {
-    // Java consults page bounds only on the free-text path.
-    if has_detected_bubble(region) {
+    // Java consults page bounds only on the free-text path (a turned region takes it too).
+    if has_detected_bubble(region) && turned_text_area(region).is_none() {
         return text_box_geometry(region, None);
     }
     let page = page_bounds(pool, region)
@@ -2508,6 +2734,89 @@ fn free_text_box(x: f64, y: f64, w: i32, h: i32, page: Option<(f64, f64)>) -> Te
     }
 }
 
+/// E2 (#180): trims a turned text box until all four of its corners are on the page.
+///
+/// Turned, a box sticks out past its level outline at the corners. Where the source text runs to
+/// the page edge (Rotate p5: a sign at 45°, its lines ending 8 px from the right edge), the box
+/// along it then has a corner off the page, and the English set along its first line runs off
+/// with it. Each corner off the page is pulled back by trimming the box's end on that side,
+/// along the text or across it, whichever costs less of the box; the opposite ends stay put, so
+/// the text keeps its start. A box that would lose more than half its width or height keeps the
+/// rest of its overhang: text squeezed that small is worse than text cut at the edge.
+fn keep_turned_box_on_page(text_box: TextBox, degrees: f64, page: Option<(f64, f64)>) -> TextBox {
+    let Some((page_w, page_h)) = page else {
+        return text_box;
+    };
+    let (sin, cos) = degrees.to_radians().sin_cos();
+    let (along, across) = ((cos, sin), (-sin, cos));
+    let (mut cx, mut cy) = (
+        text_box.x + text_box.w as f64 / 2.0,
+        text_box.y + text_box.h as f64 / 2.0,
+    );
+    let (mut half_w, mut half_h) = (text_box.w as f64 / 2.0, text_box.h as f64 / 2.0);
+    let (min_half_w, min_half_h) = (half_w / 2.0, half_h / 2.0);
+    let mut trimmed = false;
+    // Each pass pulls in the corner farthest off the page; four corners, two edges each.
+    for _ in 0..8 {
+        let mut worst: Option<(f64, f64, f64, (f64, f64))> = None;
+        for (s_along, s_across) in [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)] {
+            let px = cx + s_along * half_w * along.0 + s_across * half_h * across.0;
+            let py = cy + s_along * half_w * along.1 + s_across * half_h * across.1;
+            for (overhang, outward) in [
+                (px - page_w, (1.0, 0.0)),
+                (-px, (-1.0, 0.0)),
+                (py - page_h, (0.0, 1.0)),
+                (-py, (0.0, -1.0)),
+            ] {
+                if overhang > 0.5 && worst.is_none_or(|w| overhang > w.0) {
+                    worst = Some((overhang, s_along, s_across, outward));
+                }
+            }
+        }
+        let Some((overhang, s_along, s_across, outward)) = worst else {
+            break;
+        };
+        // Trimming an end by `d` moves its corners inward by `d` along that axis; `rate` is how
+        // much of that is toward the page.
+        let rate_along = s_along * (along.0 * outward.0 + along.1 * outward.1);
+        let rate_across = s_across * (across.0 * outward.0 + across.1 * outward.1);
+        let trim_along = (rate_along > 1e-6)
+            .then(|| overhang / rate_along)
+            .filter(|d| half_w - d / 2.0 >= min_half_w);
+        let trim_across = (rate_across > 1e-6)
+            .then(|| overhang / rate_across)
+            .filter(|d| half_h - d / 2.0 >= min_half_h);
+        let use_along = match (trim_along, trim_across) {
+            (Some(a), Some(b)) => a * half_h <= b * half_w,
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (None, None) => break,
+        };
+        if use_along {
+            let d = trim_along.unwrap_or_default();
+            half_w -= d / 2.0;
+            cx -= s_along * d / 2.0 * along.0;
+            cy -= s_along * d / 2.0 * along.1;
+        } else {
+            let d = trim_across.unwrap_or_default();
+            half_h -= d / 2.0;
+            cx -= s_across * d / 2.0 * across.0;
+            cy -= s_across * d / 2.0 * across.1;
+        }
+        trimmed = true;
+    }
+    if !trimmed {
+        return text_box;
+    }
+    let (w, h) = ((2.0 * half_w).floor(), (2.0 * half_h).floor());
+    TextBox {
+        x: cx - w / 2.0,
+        y: cy - h / 2.0,
+        w: w as i32,
+        h: h as i32,
+    }
+}
+
 fn contrasting_text_color(hex_color: Option<&str>) -> String {
     let Some(hex) = hex_color else {
         return "#000000".into();
@@ -2562,16 +2871,18 @@ async fn add_untranslated_region_rows(
     .await
     .map_err(|e| e.to_string())?;
     for region in &missing {
+        let (x, y, w, h, rotation) = source_text_box(region);
         sqlx::query(
             "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, auto_size, font, \
-             font_weight, word_wrap, layer_id, region_id) \
-             VALUES ($1,NULL,$2,$3,$4,$5,FALSE,TRUE,'Comic Neue','bold',TRUE,$6,$7)",
+             font_weight, word_wrap, rotation, layer_id, region_id) \
+             VALUES ($1,NULL,$2,$3,$4,$5,FALSE,TRUE,'Comic Neue','bold',TRUE,$6,$7,$8)",
         )
         .bind(Uuid::new_v4())
-        .bind(f64::from(region.bbox_x))
-        .bind(f64::from(region.bbox_y))
-        .bind(region.bbox_w)
-        .bind(region.bbox_h)
+        .bind(x)
+        .bind(y)
+        .bind(w)
+        .bind(h)
+        .bind(rotation)
         .bind(layer_id)
         .bind(region.id)
         .execute(&mut **tx)
@@ -2853,6 +3164,16 @@ pub async fn handle_translation_callback(
     .await
     .map_err(|e| e.to_string())?;
 
+    // Every region on the page, to tell a glued balloon (`region_for_layout`).
+    let page_regions: Vec<OcrRegion> = match page.as_ref() {
+        Some(page) => sqlx::query_as("SELECT * FROM ocr_regions WHERE page_id = $1")
+            .bind(page.id)
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?,
+        None => Vec::new(),
+    };
+
     for t in translations {
         let Some(region_id) = t
             .get("regionId")
@@ -2895,6 +3216,7 @@ pub async fn handle_translation_callback(
             .fetch_optional(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
+        let region = region.map(|region| region_for_layout(&region, &page_regions));
 
         match (existing, &region) {
             (Some(element), Some(region)) => {
@@ -2911,7 +3233,8 @@ pub async fn handle_translation_callback(
                     let box_geom = text_box_for(&state.pool, region).await;
                     let uncertain = awaits_uncertain_check(region);
                     sqlx::query(
-                        "UPDATE layer_elements SET text=$2, x=$3, y=$4, max_width=$5, max_height=$6, mask_polygon=$7, visible=$8 WHERE id=$1",
+                        "UPDATE layer_elements SET text=$2, x=$3, y=$4, max_width=$5, max_height=$6, mask_polygon=$7, visible=$8, \
+                         rotation=$9 WHERE id=$1",
                     )
                     .bind(element.id)
                     .bind(&translated_text)
@@ -2921,6 +3244,7 @@ pub async fn handle_translation_callback(
                     .bind(box_geom.h)
                     .bind(if uncertain { None } else { region.mask_polygon.clone() })
                     .bind(!failed && !uncertain)
+                    .bind(element_rotation(region))
                     .execute(&mut *tx)
                     .await
                     .map_err(|e| e.to_string())?;
@@ -2937,8 +3261,8 @@ pub async fn handle_translation_callback(
                 // ocr_regions but never consulted here.
                 sqlx::query(
                     "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, auto_size, font, font_weight, \
-                     background_color, text_color, box_shape, mask_polygon, word_wrap, layer_id, region_id) \
-                     VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,'Comic Neue','bold',$8,$9,$10,$11,TRUE,$12,$13)",
+                     background_color, text_color, box_shape, mask_polygon, word_wrap, rotation, layer_id, region_id) \
+                     VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,'Comic Neue','bold',$8,$9,$10,$11,TRUE,$12,$13,$14)",
                 )
                 .bind(Uuid::new_v4())
                 .bind(&translated_text)
@@ -2952,13 +3276,15 @@ pub async fn handle_translation_callback(
                 // AUDIT-R19 (tracker R2): the shape says what was *found*, not what the layout
                 // classifier guessed. A detected container -- YOLO balloon or a contour the
                 // fallback found -- is elliptical/contour-based; free-standing text, whose only
-                // geometry is its bbox, is a rectangle, whatever `region_type` says.
-                .bind(if has_detected_bubble(region) {
+                // geometry is its bbox, is a rectangle, whatever `region_type` says. A turned region's
+                // box is the tight box along its text, so it is a rectangle too (E2).
+                .bind(if has_detected_bubble(region) && turned_text_area(region).is_none() {
                     "elliptical"
                 } else {
                     "rectangular"
                 })
                 .bind(if uncertain { None } else { region.mask_polygon.clone() })
+                .bind(element_rotation(region))
                 .bind(layer_id)
                 .bind(region_id)
                 .execute(&mut *tx)
@@ -5051,6 +5377,213 @@ mod textbox_tests {
             "bboxX": x, "bboxY": y, "bboxW": w, "bboxH": h,
             "safeTextX": x, "safeTextY": y, "safeTextW": w, "safeTextH": h,
         })
+    }
+
+    /// E2: a region the worker turned 12°, with the box along its text.
+    fn turned(mut value: serde_json::Value) -> serde_json::Value {
+        value["rotation"] = serde_json::json!(12.0);
+        value["textAreaX"] = serde_json::json!(100.0);
+        value["textAreaY"] = serde_json::json!(200.0);
+        value["textAreaW"] = serde_json::json!(300.0);
+        value["textAreaH"] = serde_json::json!(40.0);
+        value
+    }
+
+    /// A region from a real page: its balloon box, then its text box.
+    fn on_page(bubble: (i32, i32, i32, i32), bbox: (i32, i32, i32, i32)) -> OcrRegion {
+        region(serde_json::json!({
+            "id": Uuid::new_v4(), "pageId": Uuid::nil(),
+            "detectedLanguage": "ja",
+            "bubbleX": bubble.0, "bubbleY": bubble.1, "bubbleW": bubble.2, "bubbleH": bubble.3,
+            "bboxX": bbox.0, "bboxY": bbox.1, "bboxW": bbox.2, "bboxH": bbox.3,
+        }))
+    }
+
+    #[test]
+    fn a_balloon_box_glued_over_two_balloons_is_cut_down_to_the_regions_own_balloon() {
+        // Free ch 2 p27: the detector's box for the lower-right balloon also covers the upper one,
+        // which has its own box and its own text.
+        let lower = on_page((944, 91, 334, 1086), (1025, 686, 186, 358));
+        let upper = on_page((944, 104, 307, 491), (1015, 154, 148, 395));
+        let page = [lower.clone(), upper.clone()];
+        assert!(glued_balloon(&lower, &page));
+        assert!(!glued_balloon(&upper, &page));
+
+        // Cut halfway between the texts (549 and 686), then centred on its own text (1118, 865).
+        let laid_out = region_for_layout(&lower, &page);
+        assert_eq!(
+            (
+                laid_out.bubble_x,
+                laid_out.bubble_y,
+                laid_out.bubble_w,
+                laid_out.bubble_h
+            ),
+            (Some(958), Some(618), Some(320), Some(495))
+        );
+        // Still a balloon: inset as one, about as wide as the page's other balloons (287-321).
+        let box_geom = text_box_geometry(&laid_out, None);
+        assert_eq!(
+            (box_geom.x, box_geom.y, box_geom.w, box_geom.h),
+            (968.0, 628.0, 300, 475)
+        );
+        assert!(box_geom.y > 549.0, "clear of the upper balloon's text");
+        assert_eq!(
+            region_for_layout(&upper, &page).bubble_h,
+            upper.bubble_h,
+            "the upper balloon keeps its box"
+        );
+    }
+
+    #[test]
+    fn a_glued_box_wider_than_the_balloon_is_trimmed_around_the_text() {
+        // Free ch 5 p62: the glued box reaches 100 px past the lower balloon's right edge, where
+        // the upper balloon sticks out. Centred on its own text (x 1002) it keeps 842-1162.
+        let lower = on_page((842, 210, 420, 1093), (916, 695, 172, 508));
+        let upper = on_page((961, 164, 291, 718), (1046, 204, 115, 414));
+        let page = [lower.clone(), upper.clone()];
+        let laid_out = region_for_layout(&lower, &page);
+        assert_eq!(
+            (
+                laid_out.bubble_x,
+                laid_out.bubble_y,
+                laid_out.bubble_w,
+                laid_out.bubble_h
+            ),
+            (Some(842), Some(657), Some(320), Some(585))
+        );
+        // The upper balloon's own box ran down to 882, deep into the lower balloon, so its text
+        // ran into the lower one's. It stops at the same line, halfway between the texts.
+        let upper_laid_out = region_for_layout(&upper, &page);
+        assert_eq!(
+            (
+                upper_laid_out.bubble_x,
+                upper_laid_out.bubble_y,
+                upper_laid_out.bubble_w,
+                upper_laid_out.bubble_h
+            ),
+            (Some(961), Some(164), Some(291), Some(493))
+        );
+    }
+
+    #[test]
+    fn a_glued_box_with_no_room_around_the_text_falls_back_to_the_text_box() {
+        // The text runs past the glued box's right edge, so no box centred on it fits inside.
+        let lower = on_page((0, 0, 100, 400), (60, 250, 80, 100));
+        let upper = on_page((0, 0, 100, 150), (10, 20, 60, 100));
+        let laid_out = region_for_layout(&lower, &[lower.clone(), upper]);
+        assert!(!has_detected_bubble(&laid_out));
+        assert_eq!((laid_out.bubble_x, laid_out.bubble_w), (Some(60), Some(80)));
+    }
+
+    #[test]
+    fn a_small_piece_of_text_in_a_balloon_leaves_the_balloon_box_alone() {
+        // B #230 p4: "は！" sits inside the box of the "ここでサインですよね" balloon, as free text.
+        let balloon = on_page((576, 191, 288, 442), (682, 232, 135, 358));
+        let sfx = on_page((599, 202, 57, 99), (599, 202, 57, 99));
+        assert!(!glued_balloon(&balloon, &[balloon.clone(), sfx]));
+
+        // Test ch 1 p27: "む～" has a small balloon box of its own inside the column's box, apart
+        // from the column's text, but it is a fifth of the column's size.
+        let column = on_page((0, 353, 104, 365), (8, 359, 34, 351));
+        let aside = on_page((59, 369, 47, 82), (62, 377, 39, 66));
+        assert!(!glued_balloon(&column, &[column.clone(), aside]));
+    }
+
+    #[test]
+    fn regions_splitting_one_balloon_keep_its_box() {
+        // E rotation ja p1: three columns of one balloon, each detected with nearly the same box.
+        // Their texts overlap, so the box is one balloon, not two glued together.
+        let a = on_page((48, 542, 134, 354), (68, 562, 94, 328));
+        let b = on_page((38, 552, 121, 344), (36, 572, 103, 333));
+        let page = [a.clone(), b.clone()];
+        assert!(!glued_balloon(&a, &page));
+        assert!(!glued_balloon(&b, &page));
+    }
+
+    #[test]
+    fn a_turned_free_region_takes_the_box_along_its_text_not_its_level_bbox() {
+        // The level box around 300x40 text at 12° is about 302x101; the free-text path would pad
+        // that. The text area is the box along the text, padded the same way.
+        let r = region(turned(direct_text_region(95, 175, 302, 101)));
+        let box_geom = text_box_geometry(&r, Some((2000.0, 3000.0)));
+        assert_eq!((box_geom.x, box_geom.y), (90.0, 190.0));
+        assert_eq!((box_geom.w, box_geom.h), (320, 60));
+        assert_eq!(element_rotation(&r), 12.0);
+        assert_eq!(source_text_box(&r), (100.0, 200.0, 300, 40, 12.0));
+    }
+
+    /// The four corners of a box drawn turned by `degrees` about its centre.
+    fn turned_corners(b: &TextBox, degrees: f64) -> Vec<(f64, f64)> {
+        let (sin, cos) = degrees.to_radians().sin_cos();
+        let (cx, cy) = (b.x + b.w as f64 / 2.0, b.y + b.h as f64 / 2.0);
+        let (hw, hh) = (b.w as f64 / 2.0, b.h as f64 / 2.0);
+        [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)]
+            .iter()
+            .map(|(a, c)| {
+                (
+                    cx + a * hw * cos - c * hh * sin,
+                    cy + a * hw * sin + c * hh * cos,
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_turned_box_whose_corner_runs_off_the_page_is_trimmed_back_onto_it() {
+        // Rotate p5: a sign at 45°, its Japanese ending at x 1342 on a 1350 px page. Padded, the
+        // box along it had its right-hand corner at x 1427, and the first English line ran off.
+        let mut value = direct_text_region(936, 210, 406, 548);
+        value["rotation"] = serde_json::json!(45.0);
+        value["textAreaX"] = serde_json::json!(873.4);
+        value["textAreaY"] = serde_json::json!(333.5);
+        value["textAreaW"] = serde_json::json!(492.1);
+        value["textAreaH"] = serde_json::json!(338.0);
+        let r = region(value);
+        let box_geom = text_box_geometry(&r, Some((1350.0, 2048.0)));
+        for (x, y) in turned_corners(&box_geom, 45.0) {
+            assert!(
+                (-0.5..=1350.5).contains(&x) && (-0.5..=2048.5).contains(&y),
+                "({x}, {y})"
+            );
+        }
+        // The cheaper trim is along the text: the lines get shorter, the box keeps its height.
+        assert_eq!(box_geom.h, 358);
+        assert!((400..=406).contains(&box_geom.w), "w = {}", box_geom.w);
+        assert_eq!(element_rotation(&r), 45.0);
+    }
+
+    #[test]
+    fn a_turned_box_mostly_off_the_page_keeps_its_size_rather_than_shrink_past_half() {
+        // 300x40 text at 12° starting 150 px from the right edge: pulling its far corner in would
+        // take 166 px of a 320 px box.
+        let mut value = turned(direct_text_region(1850, 175, 302, 101));
+        value["textAreaX"] = serde_json::json!(1850.0);
+        let box_geom = text_box_geometry(&region(value), Some((2000.0, 3000.0)));
+        assert_eq!((box_geom.x, box_geom.w, box_geom.h), (1840.0, 320, 60));
+    }
+
+    #[test]
+    fn a_turned_region_in_a_balloon_also_runs_along_its_text_until_e3() {
+        let r = region(turned(bubble_region(0, 100, 600, 300)));
+        let box_geom = text_box_geometry(&r, None);
+        assert_eq!((box_geom.w, box_geom.h), (320, 60));
+    }
+
+    #[test]
+    fn a_level_region_ignores_any_text_area_and_keeps_todays_box() {
+        let mut value = turned(bubble_region(100, 200, 300, 400));
+        value["rotation"] = serde_json::json!(0.0);
+        let r = region(value);
+        let box_geom = text_box_geometry(&r, None);
+        assert_eq!(
+            (box_geom.x, box_geom.y, box_geom.w, box_geom.h),
+            (110.0, 210.0, 280, 380)
+        );
+        assert_eq!(element_rotation(&r), 0.0);
+        // A rotation with no text area (a region from before E2, or a hand edit) stays level too.
+        let mut value = bubble_region(100, 200, 300, 400);
+        value["rotation"] = serde_json::json!(15.0);
+        assert_eq!(element_rotation(&region(value)), 0.0);
     }
 
     #[test]

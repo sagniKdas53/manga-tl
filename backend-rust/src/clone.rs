@@ -448,9 +448,10 @@ pub async fn clone_ocr_data(
              bubble_x, bubble_y, bubble_w, bubble_h, bubble_id, bubble_reading_order, confidence, detected_language, \
              detection_confidence, mask_polygon, ocr_score, panel_reading_order, qa_feedback, qa_score, qa_status, \
              region_type, rotation, safe_text_x, safe_text_y, safe_text_w, safe_text_h, text, \
-             translated_text, translation_failed, translation_score, page_id, panel_id) \
+             translated_text, translation_failed, translation_score, page_id, panel_id, \
+             text_area_x, text_area_y, text_area_w, text_area_h) \
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29, \
-             NULL,FALSE,NULL,$30,$31)",
+             NULL,FALSE,NULL,$30,$31,$32,$33,$34,$35)",
         )
         .bind(cloned_id)
         .bind(false)
@@ -483,6 +484,10 @@ pub async fn clone_ocr_data(
         .bind(&region.text)
         .bind(target_page_id)
         .bind(region.panel_id)
+        .bind(region.text_area_x)
+        .bind(region.text_area_y)
+        .bind(region.text_area_w)
+        .bind(region.text_area_h)
         .execute(pool)
         .await;
         if inserted.is_ok() {
