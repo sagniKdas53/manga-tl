@@ -28,7 +28,8 @@
               "zh": "PP-OCRv6_medium_rec",
               "zh-cn": "PP-OCRv6_medium_rec",
               "zh-tw": "PP-OCRv6_medium_rec",
-              "en": "PP-OCRv6_medium_rec"
+              "en": "PP-OCRv6_medium_rec",
+              "ko": "korean_PP-OCRv5_mobile_rec"
             }
           },
           {
@@ -41,7 +42,6 @@
               "zh": "PP-OCRv5_server_rec",
               "zh-cn": "PP-OCRv5_server_rec",
               "zh-tw": "PP-OCRv5_server_rec",
-              "ko": "korean_PP-OCRv5_mobile_rec",
               "en": "en_PP-OCRv5_mobile_rec"
             }
           }
