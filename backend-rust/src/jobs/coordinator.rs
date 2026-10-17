@@ -2479,15 +2479,16 @@ pub fn text_box_geometry(region: &OcrRegion, page: Option<(f64, f64)>) -> TextBo
     // are level page-space boxes, too big once turned, so they are not used. It gets the free-text
     // padding and widening, in a balloon too, until E3 fits it to the balloon's outline (owner,
     // 2026-10-10, option a).
-    if let Some((x, y, w, h, _)) = turned_text_area(region) {
+    if let Some((x, y, w, h, degrees)) = turned_text_area(region) {
         let half_pad = (FREE_TEXT_PADDING / 2) as f64;
-        return free_text_box(
+        let padded = free_text_box(
             x - half_pad,
             y - half_pad,
             w.round() as i32 + FREE_TEXT_PADDING,
             h.round() as i32 + FREE_TEXT_PADDING,
             page,
         );
+        return keep_turned_box_on_page(padded, degrees, page);
     }
     if !has_detected_bubble(region) {
         let (x, y, w, h) = geometry_source(region);
@@ -2575,6 +2576,89 @@ fn free_text_box(x: f64, y: f64, w: i32, h: i32, page: Option<(f64, f64)>) -> Te
         y: y.max(0.0),
         w: new_w,
         h,
+    }
+}
+
+/// E2 (#180): trims a turned text box until all four of its corners are on the page.
+///
+/// Turned, a box sticks out past its level outline at the corners. Where the source text runs to
+/// the page edge (Rotate p5: a sign at 45°, its lines ending 8 px from the right edge), the box
+/// along it then has a corner off the page, and the English set along its first line runs off
+/// with it. Each corner off the page is pulled back by trimming the box's end on that side,
+/// along the text or across it, whichever costs less of the box; the opposite ends stay put, so
+/// the text keeps its start. A box that would lose more than half its width or height keeps the
+/// rest of its overhang: text squeezed that small is worse than text cut at the edge.
+fn keep_turned_box_on_page(text_box: TextBox, degrees: f64, page: Option<(f64, f64)>) -> TextBox {
+    let Some((page_w, page_h)) = page else {
+        return text_box;
+    };
+    let (sin, cos) = degrees.to_radians().sin_cos();
+    let (along, across) = ((cos, sin), (-sin, cos));
+    let (mut cx, mut cy) = (
+        text_box.x + text_box.w as f64 / 2.0,
+        text_box.y + text_box.h as f64 / 2.0,
+    );
+    let (mut half_w, mut half_h) = (text_box.w as f64 / 2.0, text_box.h as f64 / 2.0);
+    let (min_half_w, min_half_h) = (half_w / 2.0, half_h / 2.0);
+    let mut trimmed = false;
+    // Each pass pulls in the corner farthest off the page; four corners, two edges each.
+    for _ in 0..8 {
+        let mut worst: Option<(f64, f64, f64, (f64, f64))> = None;
+        for (s_along, s_across) in [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)] {
+            let px = cx + s_along * half_w * along.0 + s_across * half_h * across.0;
+            let py = cy + s_along * half_w * along.1 + s_across * half_h * across.1;
+            for (overhang, outward) in [
+                (px - page_w, (1.0, 0.0)),
+                (-px, (-1.0, 0.0)),
+                (py - page_h, (0.0, 1.0)),
+                (-py, (0.0, -1.0)),
+            ] {
+                if overhang > 0.5 && worst.is_none_or(|w| overhang > w.0) {
+                    worst = Some((overhang, s_along, s_across, outward));
+                }
+            }
+        }
+        let Some((overhang, s_along, s_across, outward)) = worst else {
+            break;
+        };
+        // Trimming an end by `d` moves its corners inward by `d` along that axis; `rate` is how
+        // much of that is toward the page.
+        let rate_along = s_along * (along.0 * outward.0 + along.1 * outward.1);
+        let rate_across = s_across * (across.0 * outward.0 + across.1 * outward.1);
+        let trim_along = (rate_along > 1e-6)
+            .then(|| overhang / rate_along)
+            .filter(|d| half_w - d / 2.0 >= min_half_w);
+        let trim_across = (rate_across > 1e-6)
+            .then(|| overhang / rate_across)
+            .filter(|d| half_h - d / 2.0 >= min_half_h);
+        let use_along = match (trim_along, trim_across) {
+            (Some(a), Some(b)) => a * half_h <= b * half_w,
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (None, None) => break,
+        };
+        if use_along {
+            let d = trim_along.unwrap_or_default();
+            half_w -= d / 2.0;
+            cx -= s_along * d / 2.0 * along.0;
+            cy -= s_along * d / 2.0 * along.1;
+        } else {
+            let d = trim_across.unwrap_or_default();
+            half_h -= d / 2.0;
+            cx -= s_across * d / 2.0 * across.0;
+            cy -= s_across * d / 2.0 * across.1;
+        }
+        trimmed = true;
+    }
+    if !trimmed {
+        return text_box;
+    }
+    let (w, h) = ((2.0 * half_w).floor(), (2.0 * half_h).floor());
+    TextBox {
+        x: cx - w / 2.0,
+        y: cy - h / 2.0,
+        w: w as i32,
+        h: h as i32,
     }
 }
 
@@ -5149,6 +5233,56 @@ mod textbox_tests {
         assert_eq!((box_geom.w, box_geom.h), (320, 60));
         assert_eq!(element_rotation(&r), 12.0);
         assert_eq!(source_text_box(&r), (100.0, 200.0, 300, 40, 12.0));
+    }
+
+    /// The four corners of a box drawn turned by `degrees` about its centre.
+    fn turned_corners(b: &TextBox, degrees: f64) -> Vec<(f64, f64)> {
+        let (sin, cos) = degrees.to_radians().sin_cos();
+        let (cx, cy) = (b.x + b.w as f64 / 2.0, b.y + b.h as f64 / 2.0);
+        let (hw, hh) = (b.w as f64 / 2.0, b.h as f64 / 2.0);
+        [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)]
+            .iter()
+            .map(|(a, c)| {
+                (
+                    cx + a * hw * cos - c * hh * sin,
+                    cy + a * hw * sin + c * hh * cos,
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_turned_box_whose_corner_runs_off_the_page_is_trimmed_back_onto_it() {
+        // Rotate p5: a sign at 45°, its Japanese ending at x 1342 on a 1350 px page. Padded, the
+        // box along it had its right-hand corner at x 1427, and the first English line ran off.
+        let mut value = direct_text_region(936, 210, 406, 548);
+        value["rotation"] = serde_json::json!(45.0);
+        value["textAreaX"] = serde_json::json!(873.4);
+        value["textAreaY"] = serde_json::json!(333.5);
+        value["textAreaW"] = serde_json::json!(492.1);
+        value["textAreaH"] = serde_json::json!(338.0);
+        let r = region(value);
+        let box_geom = text_box_geometry(&r, Some((1350.0, 2048.0)));
+        for (x, y) in turned_corners(&box_geom, 45.0) {
+            assert!(
+                (-0.5..=1350.5).contains(&x) && (-0.5..=2048.5).contains(&y),
+                "({x}, {y})"
+            );
+        }
+        // The cheaper trim is along the text: the lines get shorter, the box keeps its height.
+        assert_eq!(box_geom.h, 358);
+        assert!((400..=406).contains(&box_geom.w), "w = {}", box_geom.w);
+        assert_eq!(element_rotation(&r), 45.0);
+    }
+
+    #[test]
+    fn a_turned_box_mostly_off_the_page_keeps_its_size_rather_than_shrink_past_half() {
+        // 300x40 text at 12° starting 150 px from the right edge: pulling its far corner in would
+        // take 166 px of a 320 px box.
+        let mut value = turned(direct_text_region(1850, 175, 302, 101));
+        value["textAreaX"] = serde_json::json!(1850.0);
+        let box_geom = text_box_geometry(&region(value), Some((2000.0, 3000.0)));
+        assert_eq!((box_geom.x, box_geom.w, box_geom.h), (1840.0, 320, 60));
     }
 
     #[test]
