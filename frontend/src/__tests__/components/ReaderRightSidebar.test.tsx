@@ -259,6 +259,101 @@ describe("ReaderRightSidebar", () => {
     );
   });
 
+  it("tells an elliptical box's reshape that every drag bends the outline", () => {
+    const setFreeShapeCorners = vi.fn();
+    const handleResetOutlineToBox = vi.fn();
+    render(
+      <ReaderRightSidebar
+        selectedItem={{
+          id: "e1",
+          isLayerElement: true,
+          text: "Hello World",
+          x: 100,
+          y: 100,
+          maxWidth: 200,
+          maxHeight: 100,
+          rotation: 0,
+          boxShape: "elliptical",
+          // One corner pulled 40 px out: the outline is bent off the box.
+          maskPolygon: JSON.stringify([
+            [100, 100],
+            [340, 100],
+            [300, 200],
+            [100, 200],
+          ]),
+          regionId: "r1",
+          layerType: "translation",
+        }}
+        setSelectedItem={vi.fn()}
+        activeLayerId="l1"
+        setActiveLayerId={vi.fn()}
+        sortedLayers={[]}
+        layers={[]}
+        manuallyShownOcrLayers={new Set()}
+        cleanScanlationView={false}
+        handleMoveLayer={vi.fn()}
+        handleCreateTranslationLayer={vi.fn()}
+        handleCreateSfxLayer={vi.fn()}
+        handleToggleLayerVisibility={vi.fn()}
+        handleCloneLayer={vi.fn()}
+        handleDeleteLayer={vi.fn()}
+        handleAddNewElement={vi.fn()}
+        handleLaunchEyeDropper={vi.fn()}
+        handleRedoPageOcr={vi.fn()}
+        isRedoingPageOcr={false}
+        handleRedoPageTranslation={vi.fn()}
+        isRedoingPageTranslation={false}
+        handleExportPng={vi.fn()}
+        handleExportZip={vi.fn()}
+        interactionMode="reshape"
+        setInteractionMode={vi.fn()}
+        undoStack={[]}
+        handleUndo={vi.fn()}
+        handleEnterReshapeMode={vi.fn()}
+        freeShapeCorners={false}
+        setFreeShapeCorners={setFreeShapeCorners}
+        handleResetOutlineToBox={handleResetOutlineToBox}
+        handleUpdateSelectedElement={vi.fn()}
+        dirtyElements={new Set(["e1"])}
+        handleSaveElementChanges={vi.fn()}
+        handleDeleteElement={vi.fn()}
+        ocrRegions={[
+          {
+            id: "r1",
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 10,
+          } as unknown as import("../../types").OcrRegion,
+        ]}
+        isRedoingRegionOcr={false}
+        handleRedoRegion={vi.fn()}
+        isRedoingRegionTl={false}
+        issues={[]}
+        onSelectIssue={vi.fn()}
+        onStepIssue={vi.fn()}
+        handleRegionAction={vi.fn()}
+        handleSaveIssueTranslation={vi.fn()}
+        handleSaveSourceText={vi.fn()}
+        mergeMode={false}
+        mergeSelection={[]}
+        mergePreview={null}
+        onToggleMergeMode={vi.fn()}
+        onToggleMergeRegion={vi.fn()}
+        onConfirmMerge={vi.fn()}
+        isMerging={false}
+        isReviewingRegion={false}
+        handleSetElementVisibility={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "Drag a vertex to bend the outline, or the top handle to rotate.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Free shape")).not.toBeInTheDocument();
+  });
+
   it("renders selected element inspector and handles interactions", () => {
     const handleUpdateSelectedElement = vi.fn();
     const handleRedoRegion = vi.fn();

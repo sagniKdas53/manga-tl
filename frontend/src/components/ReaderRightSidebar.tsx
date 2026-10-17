@@ -1730,7 +1730,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   >
                     {interactionMode === "drag"
                       ? "Touch or drag the bubble on the page to move it."
-                      : freeShapeCorners || outlineIsBent
+                      : freeShapeCorners ||
+                          outlineIsBent ||
+                          selectedItem.boxShape === "elliptical"
                         ? "Drag a vertex to bend the outline, or the top handle to rotate."
                         : "Drag a corner to resize the box (Alt-drag bends it), or the top handle to rotate."}
                   </Typography>
