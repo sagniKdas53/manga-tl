@@ -66,6 +66,9 @@ pub struct Series {
     pub routing_strategy: Option<String>,
     pub cleanup_mode: Option<String>,
     pub ocr_merge_threshold: Option<f64>,
+    /// E2 (#180): set tilted text at its angle; NULL = use System Settings (`ocrTextAngle`).
+    #[sqlx(default)]
+    pub ocr_text_angle: Option<bool>,
     pub use_fallback_models: Option<bool>,
     pub created_by: Option<Uuid>,
 }
@@ -96,6 +99,9 @@ pub struct Chapter {
     pub routing_strategy: Option<String>,
     pub cleanup_mode: Option<String>,
     pub ocr_merge_threshold: Option<f64>,
+    /// E2 (#180): NULL = the series' value, then System Settings.
+    #[sqlx(default)]
+    pub ocr_text_angle: Option<bool>,
     pub series_id: Uuid,
 }
 
@@ -243,6 +249,17 @@ pub struct OcrRegion {
     pub cleanup_bounds: Option<serde_json::Value>,
     pub cleanup_generator_sha256: Option<String>,
     pub cleanup_diagnostics: Option<serde_json::Value>,
+    // E2 (#180): for a region the worker turned (`rotation` != 0), the box along its text: the
+    // level box that, turned by `rotation` about its own centre, covers the text. NULL for a level
+    // region, which keeps the bubble/safe-text/bbox chain in `text_box_geometry`.
+    #[sqlx(default)]
+    pub text_area_x: Option<f64>,
+    #[sqlx(default)]
+    pub text_area_y: Option<f64>,
+    #[sqlx(default)]
+    pub text_area_w: Option<f64>,
+    #[sqlx(default)]
+    pub text_area_h: Option<f64>,
 }
 
 // ---------------------------------------------------------------- layers

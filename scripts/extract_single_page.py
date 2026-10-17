@@ -52,7 +52,7 @@ def process_page(sample_id, page_dir, lang, ocr_lang, out_base="scripts/corpus")
     # Run OCR on source image with language-appropriate reader
     if lang == "ko" or ocr_lang == "korean":
         reader = PaddleOCR(
-            text_detection_model_name="PP-OCRv5_mobile_det",
+            text_detection_model_name="PP-OCRv6_medium_det",
             text_recognition_model_name="korean_PP-OCRv5_mobile_rec",
             use_textline_orientation=False,
             use_doc_unwarping=False,

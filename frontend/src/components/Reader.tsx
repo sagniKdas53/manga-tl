@@ -75,6 +75,8 @@ import {
   unrotatedBox,
   isVertexMoveValid,
   isRotationValid,
+  isRectOutline,
+  resizeRectFromCorner,
 } from "../utils/polygonUtils";
 import JSZip from "jszip";
 import { useNotifications } from "./useNotifications";
@@ -595,6 +597,8 @@ export const Reader: React.FC<ReaderProps> = ({
   const [interactionMode, setInteractionMode] = useState<
     "none" | "drag" | "reshape"
   >("none");
+  /** Reshape: corners move freely (bending the outline) instead of resizing the box. */
+  const [freeShapeCorners, setFreeShapeCorners] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const [draggedElement, setDraggedElement] = useState<{
     id: string;
@@ -623,6 +627,8 @@ export const Reader: React.FC<ReaderProps> = ({
     originalH: number | null;
     /** The element's angle: the outline is measured along it (#179). */
     rotation: number;
+    /** A rectangular box's four corners: the drag resizes the rectangle, opposite corner held. */
+    rectMode: boolean;
   } | null>(null);
 
   /** Tracks the rotation handle being dragged in reshape mode */
@@ -640,6 +646,8 @@ export const Reader: React.FC<ReaderProps> = ({
 
   /** Minimum polygon area in square SVG-coord pixels (~36px font, 2 chars) */
   const MIN_POLYGON_AREA = 1296;
+  /** Shortest side a rectangular box can be resized to from a corner (√ of the area above). */
+  const MIN_RECT_SIDE = 36;
 
   // Touch & Zoom enhancements
   // Detected once at component initialization — never changes after mount
@@ -2318,6 +2326,38 @@ export const Reader: React.FC<ReaderProps> = ({
     [pushToHistoryStack, handleSaveElementChanges],
   );
 
+  /** Puts a bent outline back on the element's box, so its corners resize the box again. */
+  const handleResetOutlineToBox = useCallback(
+    (element: LayerElement) => {
+      const polygon = rectToPolygon(
+        element.x,
+        element.y,
+        element.maxWidth || 100,
+        element.maxHeight || 100,
+        element.rotation || 0,
+      );
+      const updates: Partial<LayerElement> = {
+        maskPolygon: JSON.stringify(
+          polygon.map(([px, py]) => [Math.round(px), Math.round(py)]),
+        ),
+      };
+      pushToHistoryStack(element);
+      setSelectedItem((prev) =>
+        prev && prev.id === element.id ? { ...prev, ...updates } : prev,
+      );
+      setLayers((prev) =>
+        prev.map((l) => ({
+          ...l,
+          elements: l.elements.map((el) =>
+            el.id === element.id ? { ...el, ...updates } : el,
+          ),
+        })),
+      );
+      handleSaveElementChanges({ ...element, ...updates }, false);
+    },
+    [pushToHistoryStack, handleSaveElementChanges],
+  );
+
   // ---------------------------------------------------------------------------
   // RESHAPE MODE: Vertex drag
   // ---------------------------------------------------------------------------
@@ -2349,6 +2389,17 @@ export const Reader: React.FC<ReaderProps> = ({
       originalW: element.maxWidth ?? null,
       originalH: element.maxHeight ?? null,
       rotation: element.rotation || 0,
+      // Alt-drag is a one-off free move; a bent outline is the user's and always moves freely.
+      rectMode:
+        !freeShapeCorners &&
+        !e.altKey &&
+        isRectOutline(element.boxShape, polygon, {
+          x: element.x,
+          y: element.y,
+          w: element.maxWidth || 100,
+          h: element.maxHeight || 100,
+          rotation: element.rotation || 0,
+        }),
     });
   };
 
@@ -2371,23 +2422,39 @@ export const Reader: React.FC<ReaderProps> = ({
         Math.round(Math.max(0, Math.min(imageDims.h, svgPt.y))),
       ];
 
-      if (
-        !isVertexMoveValid(
+      let newPoly: Polygon;
+      let bbox: { x: number; y: number; w: number; h: number };
+      if (draggedVertex.rectMode) {
+        // A rectangular box stays a rectangle: the corner resizes it along its own angle, the
+        // opposite corner held. The other corners may sit off the page, as a turned box's do.
+        const resized = resizeRectFromCorner(
           draggedVertex.originalPolygon,
           draggedVertex.vertexIndex,
           newPos,
-          imageDims,
-          MIN_POLYGON_AREA,
+          draggedVertex.rotation,
+          MIN_RECT_SIDE,
+        );
+        newPoly = resized.polygon;
+        bbox = resized;
+      } else {
+        if (
+          !isVertexMoveValid(
+            draggedVertex.originalPolygon,
+            draggedVertex.vertexIndex,
+            newPos,
+            imageDims,
+            MIN_POLYGON_AREA,
+          )
         )
-      )
-        return; // Reject invalid moves silently
+          return; // Reject invalid moves silently
 
-      const newPoly = draggedVertex.originalPolygon.map((v, i) =>
-        i === draggedVertex.vertexIndex ? newPos : ([...v] as Point),
-      ) as Polygon;
-      // #179 (AUDIT-R14): the box is the outline measured along the element's own axes. Its
-      // page-space bounding box would be a bigger rectangle, which the element then turns again.
-      const bbox = unrotatedBox(newPoly, draggedVertex.rotation);
+        newPoly = draggedVertex.originalPolygon.map((v, i) =>
+          i === draggedVertex.vertexIndex ? newPos : ([...v] as Point),
+        ) as Polygon;
+        // #179 (AUDIT-R14): the box is the outline measured along the element's own axes. Its
+        // page-space bounding box would be a bigger rectangle, which the element then turns again.
+        bbox = unrotatedBox(newPoly, draggedVertex.rotation);
+      }
       const newMaskPolygon = JSON.stringify(newPoly);
 
       setSelectedItem((prev) =>
@@ -2465,6 +2532,7 @@ export const Reader: React.FC<ReaderProps> = ({
     draggedVertex,
     imageDims,
     MIN_POLYGON_AREA,
+    MIN_RECT_SIDE,
     pushToHistoryStack,
     handleSaveElementChanges,
   ]);
@@ -4455,6 +4523,7 @@ export const Reader: React.FC<ReaderProps> = ({
     handleExportZip,
     handleUndo,
     handleEnterReshapeMode,
+    handleResetOutlineToBox,
     handleUpdateSelectedElement,
     handleSaveElementChanges,
     handleSetElementVisibility,
@@ -5747,6 +5816,8 @@ export const Reader: React.FC<ReaderProps> = ({
             isRedoingPageOcr={isRedoingPageOcr}
             isRedoingPageTranslation={isRedoingPageTranslation}
             interactionMode={interactionMode}
+            freeShapeCorners={freeShapeCorners}
+            setFreeShapeCorners={setFreeShapeCorners}
             setInteractionMode={setInteractionMode}
             undoStack={undoStack}
             dirtyElements={dirtyElements}

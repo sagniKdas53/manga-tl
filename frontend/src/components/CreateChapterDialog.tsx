@@ -74,6 +74,9 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
   const [ocrMergeThreshold, setOcrMergeThreshold] = useState<number | null>(
     editingChapter?.ocrMergeThreshold ?? null,
   );
+  const [ocrTextAngle, setOcrTextAngle] = useState<boolean | null>(
+    editingChapter?.ocrTextAngle ?? null,
+  );
   const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
     editingChapter?.useFallbackModels ?? null,
   );
@@ -109,6 +112,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
       setRoutingStrategy(editingChapter.routingStrategy || "");
       setCleanupMode(editingChapter.cleanupMode || "");
       setOcrMergeThreshold(editingChapter.ocrMergeThreshold ?? null);
+      setOcrTextAngle(editingChapter.ocrTextAngle ?? null);
       setUseFallbackModels(editingChapter.useFallbackModels ?? null);
     } else {
       setNumber(defaultNum);
@@ -125,6 +129,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
       setRoutingStrategy("");
       setCleanupMode("");
       setOcrMergeThreshold(null);
+      setOcrTextAngle(null);
       setUseFallbackModels(null);
     }
   } else if (!open && prevOpen) {
@@ -194,6 +199,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
     routingStrategy,
     cleanupMode,
     ocrMergeThreshold,
+    ocrTextAngle,
     useFallbackModels,
   };
 
@@ -211,6 +217,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
     routingStrategy: setRoutingStrategy,
     cleanupMode: setCleanupMode,
     ocrMergeThreshold: setOcrMergeThreshold,
+    ocrTextAngle: setOcrTextAngle,
     useFallbackModels: setUseFallbackModels,
   };
 
@@ -249,6 +256,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
           routingStrategy: routingStrategy || null,
           cleanupMode: cleanupMode || null,
           ocrMergeThreshold,
+          ocrTextAngle,
           useFallbackModels: useFallbackModels,
         }),
       });
@@ -335,6 +343,8 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
             cleanupMode: selectedSeries?.cleanupMode || settings?.cleanupMode,
             ocrMergeThreshold:
               selectedSeries?.ocrMergeThreshold ?? settings?.ocrMergeThreshold,
+            ocrTextAngle:
+              selectedSeries?.ocrTextAngle ?? settings?.ocrTextAngle,
             useFallbackModels:
               selectedSeries?.useFallbackModels ?? settings?.useFallbackModels,
           }}

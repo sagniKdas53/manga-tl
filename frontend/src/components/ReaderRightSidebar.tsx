@@ -10,6 +10,7 @@ import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
+import Switch from "@mui/material/Switch";
 import Slider from "@mui/material/Slider";
 import Typography from "@mui/material/Typography";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
@@ -26,6 +27,7 @@ import OpenWithIcon from "@mui/icons-material/OpenWith";
 import CropIcon from "@mui/icons-material/Crop";
 import TextFieldsIcon from "@mui/icons-material/TextFields";
 import type { ReviewRow } from "../hooks/useReviewTally";
+import { isRectOutline, type Polygon } from "../utils/polygonUtils";
 import CropSquareIcon from "@mui/icons-material/CropSquare";
 import CallMergeIcon from "@mui/icons-material/CallMerge";
 import Tabs from "@mui/material/Tabs";
@@ -36,6 +38,12 @@ import type { SystemStyleObject, Theme } from "@mui/system";
 import type { Layer, LayerElement, OcrRegion } from "../types";
 import { inReadingOrder, regionRowStatus } from "../utils/regionReview";
 import { isInpaintingLayer, isPatchElement } from "../utils/inpainting";
+import {
+  formatDegrees,
+  isOcrAngle,
+  ocrAngle,
+  signedDegrees,
+} from "../utils/textAngle";
 import PatchInspector from "./PatchInspector";
 import {
   AddLayerMenu,
@@ -438,6 +446,71 @@ const RejectedRegionNote: React.FC<{
   </Box>
 );
 
+/**
+ * E2 (#180): says when an element's angle came from OCR, so a tilted text is not a mystery with
+ * the slider at 0. At OCR's angle: an "Auto (OCR)" tag and a Level button. Turned away from it
+ * (by hand, or levelled): a button that puts OCR's angle back. Nothing for a region OCR left level.
+ */
+export const OcrAngleNote = ({
+  rotation,
+  region,
+  onRotate,
+}: {
+  rotation: number | null | undefined;
+  region: OcrRegion | undefined;
+  onRotate: (rotation: number) => void;
+}) => {
+  const angle = ocrAngle(region);
+  if (angle === null) return null;
+  const auto = isOcrAngle(rotation, region);
+  return (
+    <Box
+      sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}
+    >
+      {auto ? (
+        <>
+          <Tooltip
+            title={`OCR read the source text at ${formatDegrees(angle)} and turned this text to match.`}
+          >
+            <Typography
+              component="span"
+              data-testid="ocr-angle-tag"
+              sx={{
+                fontSize: "11px",
+                fontWeight: 700,
+                px: 0.75,
+                py: 0.25,
+                borderRadius: "4px",
+                color: "var(--primary)",
+                border: "1px solid var(--primary)",
+              }}
+            >
+              Auto (OCR)
+            </Typography>
+          </Tooltip>
+          <Button
+            size="small"
+            variant="text"
+            onClick={() => onRotate(0)}
+            sx={{ textTransform: "none", minWidth: 0, px: 0.5 }}
+          >
+            Level
+          </Button>
+        </>
+      ) : (
+        <Button
+          size="small"
+          variant="text"
+          onClick={() => onRotate(angle)}
+          sx={{ textTransform: "none", minWidth: 0, px: 0.5 }}
+        >
+          Use OCR angle ({formatDegrees(angle)})
+        </Button>
+      )}
+    </Box>
+  );
+};
+
 // Assuming types are defined here or imported
 // You may need to adjust types based on actual project structure
 export interface LayerData {
@@ -481,6 +554,10 @@ export interface ReaderRightSidebarProps extends Partial<LayerActions> {
   undoStack: LayerElement[];
   handleUndo: () => void;
   handleEnterReshapeMode: (element: LayerElement) => void;
+  /** Reshape: corners bend the outline freely instead of resizing the box. */
+  freeShapeCorners: boolean;
+  setFreeShapeCorners: (free: boolean) => void;
+  handleResetOutlineToBox: (element: LayerElement) => void;
   handleUpdateSelectedElement: (updates: Partial<LayerElement>) => void;
   dirtyElements: Set<string>;
   handleSaveElementChanges: (element: LayerElement) => void;
@@ -571,6 +648,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     undoStack,
     handleUndo,
     handleEnterReshapeMode,
+    freeShapeCorners,
+    setFreeShapeCorners,
+    handleResetOutlineToBox,
     handleUpdateSelectedElement,
     dirtyElements,
     handleSaveElementChanges,
@@ -596,6 +676,25 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     onConfirmMerge,
     isMerging,
   } = props;
+
+  // Reshape: an outline no longer on the element's box is the user's bent shape. Its corners move
+  // freely, and the sidebar offers to put it back on the box.
+  const outlineIsBent = (() => {
+    const el = selectedItem as LayerElement | null;
+    if (!el?.maskPolygon || el.boxShape === "elliptical") return false;
+    try {
+      const polygon = JSON.parse(el.maskPolygon) as Polygon;
+      return !isRectOutline(el.boxShape, polygon, {
+        x: el.x,
+        y: el.y,
+        w: el.maxWidth || 100,
+        h: el.maxHeight || 100,
+        rotation: el.rotation || 0,
+      });
+    } catch {
+      return false;
+    }
+  })();
 
   const layerActions: Partial<LayerActions> = {
     addLayer: props.addLayer,
@@ -1702,9 +1801,46 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   >
                     {interactionMode === "drag"
                       ? "Touch or drag the bubble on the page to move it."
-                      : "Drag a vertex to reshape, or the top handle to rotate."}
+                      : freeShapeCorners ||
+                          outlineIsBent ||
+                          selectedItem.boxShape === "elliptical"
+                        ? "Drag a vertex to bend the outline, or the top handle to rotate."
+                        : "Drag a corner to resize the box (Alt-drag bends it), or the top handle to rotate."}
                   </Typography>
                 )}
+                {interactionMode === "reshape" &&
+                  selectedItem.boxShape !== "elliptical" && (
+                    <Grid size={12}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            size="small"
+                            checked={freeShapeCorners}
+                            onChange={(e) =>
+                              setFreeShapeCorners(e.target.checked)
+                            }
+                          />
+                        }
+                        label={
+                          <Typography variant="caption">Free shape</Typography>
+                        }
+                      />
+                      {outlineIsBent && (
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() =>
+                            handleResetOutlineToBox(
+                              selectedItem as LayerElement,
+                            )
+                          }
+                          title="Put the outline back on the text box, so its corners resize the box again."
+                        >
+                          Reset outline to box
+                        </Button>
+                      )}
+                    </Grid>
+                  )}
               </Grid>
             </SidebarSection>
 
@@ -1914,14 +2050,27 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 }}
               >
                 <FieldLabel id="element-rotation-label">
-                  Rotation ({selectedItem.rotation || 0}°)
+                  Rotation ({formatDegrees(selectedItem.rotation)})
                 </FieldLabel>
+                <OcrAngleNote
+                  rotation={selectedItem.rotation}
+                  region={
+                    selectedItem.regionId
+                      ? regionById.get(selectedItem.regionId)
+                      : undefined
+                  }
+                  onRotate={(rotation) =>
+                    handleUpdateSelectedElement({ rotation })
+                  }
+                />
+                {/* Signed, so an OCR angle of -15° (or a hand turn stored as 345°) sits left of
+                    level instead of pinned at 0 (E2). */}
                 <Slider
                   aria-labelledby="element-rotation-label"
                   size="small"
-                  min={0}
-                  max={360}
-                  value={selectedItem.rotation || 0}
+                  min={-180}
+                  max={180}
+                  value={signedDegrees(selectedItem.rotation)}
                   onChange={(_, val) =>
                     handleUpdateSelectedElement({
                       rotation: val as number,

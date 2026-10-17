@@ -73,6 +73,10 @@ pub struct SystemSettingsDto {
     /// override it. `None` on a PUT leaves it as it is.
     #[serde(default)]
     pub ocrMergeThreshold: Option<f64>,
+    /// E2 (#180): set tilted text at its angle; chapters and series may override it. `None` on a
+    /// PUT leaves it as it is.
+    #[serde(default)]
+    pub ocrTextAngle: Option<bool>,
     /// Model IDs typed in rather than picked from the catalog. Read-only here: a PUT of the whole
     /// settings object ignores it, and `PUT /api/settings/custom-models` replaces the list.
     #[serde(default)]
@@ -139,6 +143,7 @@ async fn build_dto(state: &AppState) -> SystemSettingsDto {
         textBoxSafetyPercent: Some(geometry.safety_percent),
         cleanupMode: Some(global.cleanup_mode.clone()),
         ocrMergeThreshold: Some(global.ocr_merge_threshold),
+        ocrTextAngle: Some(global.ocr_text_angle),
         customModels: Some(state.providers.custom_models()),
     }
 }
@@ -240,6 +245,15 @@ pub async fn update_settings(
             &state.pool,
             "ocrMergeThreshold",
             &crate::settings::ocr_merge_threshold(threshold).to_string(),
+        )
+        .await;
+    }
+    // So does the text angle: it applies to OCR run from now on (redo OCR to turn a page's text).
+    if let Some(enabled) = dto.ocrTextAngle {
+        save_setting(
+            &state.pool,
+            "ocrTextAngle",
+            if enabled { "true" } else { "false" },
         )
         .await;
     }
