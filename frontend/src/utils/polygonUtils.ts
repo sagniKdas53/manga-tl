@@ -140,6 +140,71 @@ export function unrotatedBox(
   return { x: Math.round(mx - w / 2), y: Math.round(my - h / 2), w, h };
 }
 
+/**
+ * A rectangular box resized from one corner, along its own angle, with the opposite corner held
+ * where it is. `corners` is the box's outline as `rectToPolygon` draws it (TL → TR → BR → BL at
+ * `rotationDeg`); `pointer` is where the dragged corner should go (page space).
+ *
+ * Moving one vertex of a rectangle freely makes it a loose quad, and the text box is then the
+ * rectangle around that quad: a corner pulled out grew both sides, and a corner pulled in shrank
+ * nothing (owner, 2026-10-17, Rotate p5). Kept a rectangle, the box follows the corner. The
+ * corner cannot cross the held one: each side stays at least `minSize` long.
+ */
+export function resizeRectFromCorner(
+  corners: Polygon,
+  vertexIndex: number,
+  pointer: Point,
+  rotationDeg: number,
+  minSize: number,
+): { x: number; y: number; w: number; h: number; polygon: Polygon } {
+  const held = corners[(vertexIndex + 2) % 4];
+  // Into the box's own frame, about the held corner.
+  const toLocal = (p: Point): Point => {
+    const [lx, ly] = rotatePoint(p, held, -rotationDeg);
+    return [lx - held[0], ly - held[1]];
+  };
+  const [startX, startY] = toLocal(corners[vertexIndex]);
+  const [px, py] = toLocal(pointer);
+  const signX = startX < 0 ? -1 : 1;
+  const signY = startY < 0 ? -1 : 1;
+  const localX = signX * Math.max(minSize, signX * px);
+  const localY = signY * Math.max(minSize, signY * py);
+  const [cx, cy] = rotatePoint(
+    [held[0] + localX / 2, held[1] + localY / 2],
+    held,
+    rotationDeg,
+  );
+  const w = Math.round(Math.abs(localX));
+  const h = Math.round(Math.abs(localY));
+  const x = Math.round(cx - w / 2);
+  const y = Math.round(cy - h / 2);
+  const polygon = rectToPolygon(x, y, w, h, rotationDeg).map(
+    ([vx, vy]) => [Math.round(vx), Math.round(vy)] as Point,
+  ) as Polygon;
+  return { x, y, w, h, polygon };
+}
+
+/**
+ * Whether an element's reshape outline is still its rectangular box: four corners on the box it
+ * draws (within `tolerance` px), and the box is not elliptical. Those corners resize the rectangle
+ * (`resizeRectFromCorner`). An outline bent into another shape is the user's own and keeps free
+ * vertex editing, as does any outline while *Free shape* is chosen.
+ */
+export function isRectOutline(
+  boxShape: string | null | undefined,
+  polygon: Polygon,
+  box: { x: number; y: number; w: number; h: number; rotation: number },
+  tolerance = 1.5,
+): boolean {
+  if (boxShape === "elliptical" || polygon.length !== 4) return false;
+  const corners = rectToPolygon(box.x, box.y, box.w, box.h, box.rotation);
+  return polygon.every(
+    ([px, py], i) =>
+      Math.abs(px - corners[i][0]) <= tolerance &&
+      Math.abs(py - corners[i][1]) <= tolerance,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Shape generators
 // ---------------------------------------------------------------------------

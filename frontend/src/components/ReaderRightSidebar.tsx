@@ -10,6 +10,7 @@ import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
+import Switch from "@mui/material/Switch";
 import Slider from "@mui/material/Slider";
 import Typography from "@mui/material/Typography";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
@@ -26,6 +27,7 @@ import OpenWithIcon from "@mui/icons-material/OpenWith";
 import CropIcon from "@mui/icons-material/Crop";
 import TextFieldsIcon from "@mui/icons-material/TextFields";
 import type { ReviewRow } from "../hooks/useReviewTally";
+import { isRectOutline, type Polygon } from "../utils/polygonUtils";
 import CropSquareIcon from "@mui/icons-material/CropSquare";
 import CallMergeIcon from "@mui/icons-material/CallMerge";
 import Tabs from "@mui/material/Tabs";
@@ -481,6 +483,10 @@ export interface ReaderRightSidebarProps extends Partial<LayerActions> {
   undoStack: LayerElement[];
   handleUndo: () => void;
   handleEnterReshapeMode: (element: LayerElement) => void;
+  /** Reshape: corners bend the outline freely instead of resizing the box. */
+  freeShapeCorners: boolean;
+  setFreeShapeCorners: (free: boolean) => void;
+  handleResetOutlineToBox: (element: LayerElement) => void;
   handleUpdateSelectedElement: (updates: Partial<LayerElement>) => void;
   dirtyElements: Set<string>;
   handleSaveElementChanges: (element: LayerElement) => void;
@@ -571,6 +577,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     undoStack,
     handleUndo,
     handleEnterReshapeMode,
+    freeShapeCorners,
+    setFreeShapeCorners,
+    handleResetOutlineToBox,
     handleUpdateSelectedElement,
     dirtyElements,
     handleSaveElementChanges,
@@ -596,6 +605,25 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     onConfirmMerge,
     isMerging,
   } = props;
+
+  // Reshape: an outline no longer on the element's box is the user's bent shape. Its corners move
+  // freely, and the sidebar offers to put it back on the box.
+  const outlineIsBent = (() => {
+    const el = selectedItem as LayerElement | null;
+    if (!el?.maskPolygon || el.boxShape === "elliptical") return false;
+    try {
+      const polygon = JSON.parse(el.maskPolygon) as Polygon;
+      return !isRectOutline(el.boxShape, polygon, {
+        x: el.x,
+        y: el.y,
+        w: el.maxWidth || 100,
+        h: el.maxHeight || 100,
+        rotation: el.rotation || 0,
+      });
+    } catch {
+      return false;
+    }
+  })();
 
   const layerActions: Partial<LayerActions> = {
     addLayer: props.addLayer,
@@ -1702,9 +1730,44 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   >
                     {interactionMode === "drag"
                       ? "Touch or drag the bubble on the page to move it."
-                      : "Drag a vertex to reshape, or the top handle to rotate."}
+                      : freeShapeCorners || outlineIsBent
+                        ? "Drag a vertex to bend the outline, or the top handle to rotate."
+                        : "Drag a corner to resize the box (Alt-drag bends it), or the top handle to rotate."}
                   </Typography>
                 )}
+                {interactionMode === "reshape" &&
+                  selectedItem.boxShape !== "elliptical" && (
+                    <Grid size={12}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            size="small"
+                            checked={freeShapeCorners}
+                            onChange={(e) =>
+                              setFreeShapeCorners(e.target.checked)
+                            }
+                          />
+                        }
+                        label={
+                          <Typography variant="caption">Free shape</Typography>
+                        }
+                      />
+                      {outlineIsBent && (
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() =>
+                            handleResetOutlineToBox(
+                              selectedItem as LayerElement,
+                            )
+                          }
+                          title="Put the outline back on the text box, so its corners resize the box again."
+                        >
+                          Reset outline to box
+                        </Button>
+                      )}
+                    </Grid>
+                  )}
               </Grid>
             </SidebarSection>
 
