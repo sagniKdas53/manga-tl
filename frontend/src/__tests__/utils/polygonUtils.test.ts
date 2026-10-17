@@ -15,6 +15,8 @@ import {
   isRotationValid,
   normalizeDegrees,
   unrotatedBox,
+  resizeRectFromCorner,
+  isRectOutline,
 } from "../../utils/polygonUtils";
 import type { Polygon } from "../../utils/polygonUtils";
 
@@ -255,5 +257,81 @@ describe("normalizeDegrees (AUDIT-R5)", () => {
   it("treats a non-finite angle as unrotated rather than propagating NaN", () => {
     expect(normalizeDegrees(NaN)).toBe(0);
     expect(normalizeDegrees(Infinity)).toBe(0);
+  });
+});
+
+describe("resizeRectFromCorner (owner, 2026-10-17)", () => {
+  // Rotate p5's text box: 512x358 at 45°.
+  const box = { x: 863, y: 324, w: 512, h: 358 };
+  const corners = rectToPolygon(box.x, box.y, box.w, box.h, 45);
+
+  it("keeps the opposite corner where it was and the box a rectangle at its angle", () => {
+    const moved = rotatePoint(corners[1], corners[3], 0); // TR, held corner BL
+    const pulledIn: [number, number] = [moved[0] - 40, moved[1] - 10];
+    const r = resizeRectFromCorner(corners, 1, pulledIn, 45, 36);
+    expect(r.polygon[3][0]).toBeCloseTo(corners[3][0], -0.5);
+    expect(r.polygon[3][1]).toBeCloseTo(corners[3][1], -0.5);
+    expect(r.polygon).toEqual(
+      rectToPolygon(r.x, r.y, r.w, r.h, 45).map(([x, y]) => [
+        Math.round(x),
+        Math.round(y),
+      ]),
+    );
+  });
+
+  it("shrinks the box when a corner is pulled in, which a free vertex never could", () => {
+    // Pull the bottom-right corner 50 px straight back along the box's own width.
+    const [ux, uy] = [Math.cos(Math.PI / 4), Math.sin(Math.PI / 4)];
+    const target: [number, number] = [
+      corners[2][0] - 50 * ux,
+      corners[2][1] - 50 * uy,
+    ];
+    const r = resizeRectFromCorner(corners, 2, target, 45, 36);
+    expect(r.w).toBe(462);
+    expect(r.h).toBe(358);
+  });
+
+  it("grows only the side the corner moved along", () => {
+    const [vx, vy] = [-Math.sin(Math.PI / 4), Math.cos(Math.PI / 4)];
+    const target: [number, number] = [
+      corners[2][0] + 30 * vx,
+      corners[2][1] + 30 * vy,
+    ];
+    const r = resizeRectFromCorner(corners, 2, target, 45, 36);
+    expect(r.w).toBe(512);
+    expect(r.h).toBe(388);
+  });
+
+  it("does not let the corner cross the held one", () => {
+    const r = resizeRectFromCorner(corners, 2, corners[0], 45, 36);
+    expect(r.w).toBe(36);
+    expect(r.h).toBe(36);
+  });
+
+  it("matches a level box's plain resize at 0°", () => {
+    const level = rectToPolygon(100, 100, 200, 100, 0);
+    const r = resizeRectFromCorner(level, 2, [250, 180], 0, 36);
+    expect([r.x, r.y, r.w, r.h]).toEqual([100, 100, 150, 80]);
+  });
+
+  it("applies to a rectangular box's own four corners only", () => {
+    const at = { ...box, rotation: 45 };
+    const rounded = corners.map(([x, y]) => [Math.round(x), Math.round(y)]);
+    expect(isRectOutline("rectangular", rounded as Polygon, at)).toBe(true);
+    expect(isRectOutline(null, corners, at)).toBe(true);
+    expect(isRectOutline("elliptical", corners, at)).toBe(false);
+    expect(
+      isRectOutline("rectangular", ellipseToPolygon(0, 0, 10, 5, 0, 12), at),
+    ).toBe(false);
+  });
+
+  it("leaves an outline bent off the box to free editing", () => {
+    // One corner pulled 40 px out: the user's own shape, not the box any more.
+    const bent = corners.map((p, i) =>
+      i === 1 ? ([p[0] + 40, p[1]] as [number, number]) : p,
+    ) as Polygon;
+    expect(isRectOutline("rectangular", bent, { ...box, rotation: 45 })).toBe(
+      false,
+    );
   });
 });
