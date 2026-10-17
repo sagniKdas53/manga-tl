@@ -13,7 +13,7 @@ SERIES = {
            "ocrModel": "PP-OCRv6", "tlProvider": "openrouter", "tlModel": "z-ai/glm-5.3-flash", "qaMode": "auto"},
     "ko": {"title": "E rotation test (ko) 2026-10-08", "originalLanguage": "ko", "sourceLanguage": "ko",
            "targetLanguage": "en", "readingDirection": "leftToRight", "ocrProvider": "local",
-           "ocrModel": "PP-OCRv5", "tlProvider": "openrouter", "tlModel": "z-ai/glm-5.3-flash", "qaMode": "auto"},
+           "ocrModel": "PP-OCRv6", "tlProvider": "openrouter", "tlModel": "z-ai/glm-5.3-flash", "qaMode": "auto"},
 }
 
 def request(method, url, token=None, body=None, ctype="application/json"):
