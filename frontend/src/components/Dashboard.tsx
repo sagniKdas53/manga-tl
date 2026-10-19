@@ -142,6 +142,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
         "success",
       );
     } else {
+      // "New series…" in the dialog made this series just now; an existing one is listed already.
+      setSeriesList((prev) =>
+        prev.some((s) => s.id === series.id) ? prev : [series, ...prev],
+      );
       showToast(
         `Imported ${pageCount} ${pageCount === 1 ? "page" : "pages"} into ${series.title}`,
         "success",
@@ -177,6 +181,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // A one-shot goes with its chapter (any role may delete a chapter; deleting a series is
   // admin-only), and the server removes the emptied one-shot.
   const handleDeleteOneshot = (s: Series, e: React.MouseEvent) => {
+    // A one-shot without its chapter has nothing to delete through; delete the series instead.
+    if (!s.oneshotChapterId) {
+      handleDeleteSeries(s.id, e);
+      return;
+    }
     e.stopPropagation();
     setConfirmModal({
       isOpen: true,

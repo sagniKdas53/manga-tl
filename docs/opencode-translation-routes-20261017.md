@@ -4,8 +4,9 @@ Why we looked: buying OpenRouter credits by card from India adds about 5.5% fee 
 and 18% GST, plus the card's own forex fee. Of the routes checked, only OpenCode was worth keeping.
 This page records the two ways to use it: **with an API key** and **without one**.
 
-The GST is a lawful tax. Any foreign seller of digital services to an Indian buyer is generally
-meant to charge it, so switching providers probably does not remove it. What a switch can save is
+The GST is a lawful tax. A foreign seller of online services (OIDAR) to an unregistered Indian
+buyer, which is us, is generally meant to charge it; a GST-registered buyer pays it under reverse
+charge instead. So switching providers probably does not remove it. What a switch can save is
 OpenRouter's fee, and the free models.
 
 ## What was measured
@@ -133,7 +134,8 @@ So nobody re-investigates these:
   explicit pages.
 - **NVIDIA API catalog.** Free for research and testing; production needs a paid licence.
 - **Cerebras / Groq free tiers.** Unverified limits, a small free context, likely no images.
-- **Paying OpenRouter by crypto** because it shows no tax line. That is avoiding a lawful tax. No.
+- **Paying OpenRouter by crypto** because it shows no tax line. A missing tax line does not mean no
+  tax is owed; paying that way to dodge it would be avoiding a lawful tax. No.
 
 Small savings that do not need any of this: a zero-forex card (removes the 1–3.5% card fee), and
 fewer, bigger OpenRouter top-ups (the $0.80 minimum is about 16% of a $5 top-up).

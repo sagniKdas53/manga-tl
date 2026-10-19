@@ -67,6 +67,23 @@ vi.mock("../../components/ZipImportDialog", () => ({
         <button
           onClick={() =>
             onImported(
+              { id: "c1" },
+              {
+                id: "s9",
+                title: "Fresh Series",
+                kind: "series",
+                readingDirection: "rtl",
+                originalLanguage: "ja",
+              },
+              2,
+            )
+          }
+        >
+          finish import into new series
+        </button>
+        <button
+          onClick={() =>
+            onImported(
               { id: "c9" },
               {
                 id: "os1",
@@ -181,6 +198,26 @@ describe("Dashboard Component", () => {
       "Imported Romance Dawn as a one-shot (3 pages)",
       "success",
     );
+  });
+
+  it("lists a series made by the import dialog, once", () => {
+    renderDashboard();
+    fireEvent.click(screen.getByRole("button", { name: /Import chapter/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "finish import into new series" }),
+    );
+    const update = mockSetSeriesList.mock.calls.at(-1)![0];
+    expect(update(initialSeries)[0]).toMatchObject({ id: "s9" });
+    const listed = [{ ...initialSeries[0], id: "s9" }];
+    expect(update(listed)).toBe(listed);
+  });
+
+  it("deletes a one-shot that lost its chapter as a series", () => {
+    renderDashboard([{ ...oneshot, oneshotChapterId: null }]);
+    fireEvent.click(screen.getByTitle("Delete One-shot"));
+    expect(
+      screen.getByRole("heading", { name: "Delete Series" }),
+    ).toBeInTheDocument();
   });
 
   it("takes a ZIP dropped on the library into the import dialog", async () => {
