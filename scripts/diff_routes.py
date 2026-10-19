@@ -48,6 +48,9 @@ PORTED = {
     "GET /api/series/chapters/{chapterId}",
     "PUT /api/series/chapters/{chapterId}",
     "DELETE /api/series/chapters/{chapterId}",
+    # one-shots (#226)
+    "POST /api/series/oneshots",
+    "POST /api/series/oneshots/import",
     # pages/images (Phase 2; zip branches + redo + import-project defer to Phase 3)
     "POST /api/images",
     "GET /api/chapters/{chapterId}/pages",

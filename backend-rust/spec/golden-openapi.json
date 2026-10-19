@@ -1132,6 +1132,19 @@
           "ocrTextAngle": {
             "description": "Set tilted text at its angle on OCR (E2); null inherits.",
             "type": "boolean"
+          },
+          "kind": {
+            "description": "series or oneshot (a series holding exactly one chapter, #226).",
+            "enum": [
+              "series",
+              "oneshot"
+            ],
+            "type": "string"
+          },
+          "oneshotChapterId": {
+            "description": "A one-shot's only chapter, so the library card opens it directly; null for a regular series.",
+            "format": "uuid",
+            "type": "string"
           }
         },
         "type": "object"
@@ -1388,6 +1401,81 @@
           "redoCount",
           "depth"
         ]
+      },
+      "OneshotRequest": {
+        "description": "A new one-shot (#226). The model overrides go on its chapter; languages and reading direction on the one-shot series.",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "sourceLanguage": {
+            "type": "string"
+          },
+          "targetLanguage": {
+            "type": "string"
+          },
+          "readingDirection": {
+            "type": "string"
+          },
+          "ocrProvider": {
+            "type": "string"
+          },
+          "ocrModel": {
+            "type": "string"
+          },
+          "tlProvider": {
+            "type": "string"
+          },
+          "tlModel": {
+            "type": "string"
+          },
+          "qaProvider": {
+            "type": "string"
+          },
+          "qaLlmModel": {
+            "type": "string"
+          },
+          "qaVlmModel": {
+            "type": "string"
+          },
+          "qaMode": {
+            "type": "string"
+          },
+          "routingStrategy": {
+            "type": "string"
+          },
+          "cleanupMode": {
+            "type": "string"
+          },
+          "ocrMergeThreshold": {
+            "format": "double",
+            "type": "number"
+          },
+          "ocrTextAngle": {
+            "type": "boolean"
+          },
+          "useFallbackModels": {
+            "type": "boolean"
+          },
+          "useContextMemory": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "type": "object"
+      },
+      "OneshotDto": {
+        "properties": {
+          "chapter": {
+            "$ref": "#/components/schemas/ChapterDto"
+          },
+          "series": {
+            "$ref": "#/components/schemas/SeriesDto"
+          }
+        },
+        "type": "object"
       }
     }
   },
@@ -4537,6 +4625,19 @@
               "default": "desc",
               "type": "string"
             }
+          },
+          {
+            "description": "series or oneshot; absent lists both.",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "enum": [
+                "series",
+                "oneshot"
+              ],
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -4775,6 +4876,128 @@
               "*/*": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "series-controller"
+        ]
+      }
+    },
+    "/api/series/oneshots": {
+      "post": {
+        "operationId": "createOneshot",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OneshotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OneshotDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "series-controller"
+        ]
+      }
+    },
+    "/api/series/oneshots/import": {
+      "post": {
+        "operationId": "importOneshot",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "title": {
+                    "description": "Defaults to the file name.",
+                    "type": "string"
+                  },
+                  "sourceLanguage": {
+                    "type": "string"
+                  },
+                  "targetLanguage": {
+                    "type": "string"
+                  },
+                  "readingDirection": {
+                    "type": "string"
+                  },
+                  "ocrProvider": {
+                    "type": "string"
+                  },
+                  "ocrModel": {
+                    "type": "string"
+                  },
+                  "tlProvider": {
+                    "type": "string"
+                  },
+                  "tlModel": {
+                    "type": "string"
+                  },
+                  "qaProvider": {
+                    "type": "string"
+                  },
+                  "qaLlmModel": {
+                    "type": "string"
+                  },
+                  "qaVlmModel": {
+                    "type": "string"
+                  },
+                  "qaMode": {
+                    "type": "string"
+                  },
+                  "routingStrategy": {
+                    "type": "string"
+                  },
+                  "cleanupMode": {
+                    "type": "string"
+                  },
+                  "ocrMergeThreshold": {
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "ocrTextAngle": {
+                    "type": "boolean"
+                  },
+                  "useFallbackModels": {
+                    "type": "boolean"
+                  },
+                  "file": {
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OneshotDto"
                 }
               }
             },

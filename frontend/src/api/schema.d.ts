@@ -1062,6 +1062,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/series/oneshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createOneshot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/series/oneshots/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["importOneshot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/series/{seriesId}": {
         parameters: {
             query?: never;
@@ -1685,6 +1717,16 @@ export interface components {
             ocrMergeThreshold?: number;
             /** @description Set tilted text at its angle on OCR (E2); null inherits. */
             ocrTextAngle?: boolean;
+            /**
+             * @description series or oneshot (a series holding exactly one chapter, #226).
+             * @enum {string}
+             */
+            kind?: "series" | "oneshot";
+            /**
+             * Format: uuid
+             * @description A one-shot's only chapter, so the library card opens it directly; null for a regular series.
+             */
+            oneshotChapterId?: string;
         };
         SseEmitter: {
             /** Format: int64 */
@@ -1778,6 +1820,32 @@ export interface components {
             depth: number;
             /** @description After Undo or Redo: the label of the action applied */
             applied?: string;
+        };
+        /** @description A new one-shot (#226). The model overrides go on its chapter; languages and reading direction on the one-shot series. */
+        OneshotRequest: {
+            title: string;
+            sourceLanguage?: string;
+            targetLanguage?: string;
+            readingDirection?: string;
+            ocrProvider?: string;
+            ocrModel?: string;
+            tlProvider?: string;
+            tlModel?: string;
+            qaProvider?: string;
+            qaLlmModel?: string;
+            qaVlmModel?: string;
+            qaMode?: string;
+            routingStrategy?: string;
+            cleanupMode?: string;
+            /** Format: double */
+            ocrMergeThreshold?: number;
+            ocrTextAngle?: boolean;
+            useFallbackModels?: boolean;
+            useContextMemory?: boolean;
+        };
+        OneshotDto: {
+            chapter?: components["schemas"]["ChapterDto"];
+            series?: components["schemas"]["SeriesDto"];
         };
     };
     responses: never;
@@ -3808,6 +3876,8 @@ export interface operations {
                 unsortedPageable: components["schemas"]["Pageable"];
                 sortBy?: string;
                 sortDir?: string;
+                /** @description series or oneshot; absent lists both. */
+                kind?: "series" | "oneshot";
             };
             header?: never;
             path?: never;
@@ -3983,6 +4053,76 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    createOneshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OneshotRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OneshotDto"];
+                };
+            };
+        };
+    };
+    importOneshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** @description Defaults to the file name. */
+                    title?: string;
+                    sourceLanguage?: string;
+                    targetLanguage?: string;
+                    readingDirection?: string;
+                    ocrProvider?: string;
+                    ocrModel?: string;
+                    tlProvider?: string;
+                    tlModel?: string;
+                    qaProvider?: string;
+                    qaLlmModel?: string;
+                    qaVlmModel?: string;
+                    qaMode?: string;
+                    routingStrategy?: string;
+                    cleanupMode?: string;
+                    /** Format: double */
+                    ocrMergeThreshold?: number;
+                    ocrTextAngle?: boolean;
+                    useFallbackModels?: boolean;
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OneshotDto"];
                 };
             };
         };

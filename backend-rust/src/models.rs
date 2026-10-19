@@ -71,6 +71,10 @@ pub struct Series {
     pub ocr_text_angle: Option<bool>,
     pub use_fallback_models: Option<bool>,
     pub created_by: Option<Uuid>,
+    /// #226: `series` or `oneshot` (a series holding exactly one chapter; the API keeps it at
+    /// one). Defaulted so a read before the upgrade script still loads.
+    #[sqlx(default)]
+    pub kind: String,
 }
 
 // ---------------------------------------------------------------- chapters
