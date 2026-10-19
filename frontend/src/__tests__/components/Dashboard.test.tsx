@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import Dashboard from "../../components/Dashboard";
+import type { Series } from "../../types";
 
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", () => ({
@@ -43,6 +44,63 @@ vi.mock("../../utils", () => ({
     return mockSafeFetch(url, ...args);
   },
   toSlug: (s: string) => s.toLowerCase().replace(/\s+/g, "-"),
+}));
+
+// The import dialog has its own tests; here it only has to open with the right file and report
+// back what it imported.
+vi.mock("../../components/ZipImportDialog", () => ({
+  default: ({
+    open,
+    initialFile,
+    onImported,
+  }: {
+    open: boolean;
+    initialFile?: File | null;
+    onImported: (chapter: unknown, series: unknown, pages: number) => void;
+  }) =>
+    open ? (
+      <div
+        role="dialog"
+        aria-label="Import chapter"
+      >
+        {initialFile?.name ?? "no file yet"}
+        <button
+          onClick={() =>
+            onImported(
+              { id: "c1" },
+              {
+                id: "s9",
+                title: "Fresh Series",
+                kind: "series",
+                readingDirection: "rtl",
+                originalLanguage: "ja",
+              },
+              2,
+            )
+          }
+        >
+          finish import into new series
+        </button>
+        <button
+          onClick={() =>
+            onImported(
+              { id: "c9" },
+              {
+                id: "os1",
+                title: "Romance Dawn",
+                kind: "oneshot",
+                oneshotChapterId: "c9",
+                readingDirection: "rtl",
+                originalLanguage: "ja",
+              },
+              3,
+            )
+          }
+        >
+          finish import
+        </button>
+      </div>
+    ) : null,
 }));
 
 describe("Dashboard Component", () => {
@@ -88,12 +146,12 @@ describe("Dashboard Component", () => {
     localStorage.clear();
   });
 
-  it("keeps New chapter, Import chapter and ZIP drops in place but leading nowhere yet", () => {
+  const renderDashboard = (seriesList: Series[] = initialSeries) =>
     render(
       <Dashboard
         mode="dark"
         user={mockUser}
-        seriesList={initialSeries}
+        seriesList={seriesList}
         setSeriesList={mockSetSeriesList}
         sortBy="updatedAt"
         setSortBy={mockSetSortBy}
@@ -105,21 +163,106 @@ describe("Dashboard Component", () => {
         onSelectSeries={mockOnSelectSeries}
       />,
     );
-    const notYet =
-      "Chapters without a series are coming later. For now, open a series and import there.";
 
+  const oneshot = {
+    id: "os1",
+    title: "Romance Dawn",
+    coverImageUrl: "",
+    readingDirection: "rtl",
+    originalLanguage: "ja",
+    kind: "oneshot" as const,
+    oneshotChapterId: "c9",
+  };
+
+  it("New chapter opens the one-shot dialog (#216)", () => {
+    renderDashboard();
     fireEvent.click(screen.getByRole("button", { name: /New chapter/ }));
+    expect(
+      screen.getByRole("heading", { name: "Create One-shot" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/One-shot Title/)).toBeInTheDocument();
+  });
+
+  it("Import chapter and a dropped ZIP open the import dialog (#216)", () => {
+    renderDashboard();
     fireEvent.click(screen.getByRole("button", { name: /Import chapter/ }));
+    expect(
+      screen.getByRole("dialog", { name: "Import chapter" }),
+    ).toHaveTextContent("no file yet");
+    // An imported one-shot joins the library.
+    fireEvent.click(screen.getByRole("button", { name: "finish import" }));
+    expect(mockSetSeriesList).toHaveBeenCalled();
+    const update = mockSetSeriesList.mock.calls.at(-1)![0];
+    expect(update(initialSeries)[0]).toMatchObject({ id: "os1" });
+    expect(mockShowToast).toHaveBeenCalledWith(
+      "Imported Romance Dawn as a one-shot (3 pages)",
+      "success",
+    );
+  });
+
+  it("lists a series made by the import dialog, once", () => {
+    renderDashboard();
+    fireEvent.click(screen.getByRole("button", { name: /Import chapter/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "finish import into new series" }),
+    );
+    const update = mockSetSeriesList.mock.calls.at(-1)![0];
+    expect(update(initialSeries)[0]).toMatchObject({ id: "s9" });
+    const listed = [{ ...initialSeries[0], id: "s9" }];
+    expect(update(listed)).toBe(listed);
+  });
+
+  it("deletes a one-shot that lost its chapter as a series", () => {
+    renderDashboard([{ ...oneshot, oneshotChapterId: null }]);
+    fireEvent.click(screen.getByTitle("Delete One-shot"));
+    expect(
+      screen.getByRole("heading", { name: "Delete Series" }),
+    ).toBeInTheDocument();
+  });
+
+  it("takes a ZIP dropped on the library into the import dialog", async () => {
+    renderDashboard();
     const drop = new Event("drop", { bubbles: true, cancelable: true });
     Object.defineProperty(drop, "dataTransfer", {
       value: { types: ["Files"], files: [new File(["z"], "chapter.zip")] },
     });
     window.dispatchEvent(drop);
 
-    expect(mockShowToast).toHaveBeenCalledTimes(3);
-    expect(mockShowToast).toHaveBeenLastCalledWith(notYet, "info");
     expect(drop.defaultPrevented).toBe(true); // the browser must not open the file
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(
+      await screen.findByRole("dialog", { name: "Import chapter" }),
+    ).toHaveTextContent("chapter.zip");
+  });
+
+  it("opens a one-shot's chapter straight from its card", () => {
+    renderDashboard([oneshot, ...initialSeries]);
+    expect(screen.getByText("One-shot")).toBeInTheDocument();
+    const card = screen.getByText("Romance Dawn").closest(".MuiCard-root");
+    fireEvent.click(card!);
+    expect(mockOnSelectSeries).toHaveBeenCalledWith(oneshot);
+    expect(mockNavigate).toHaveBeenCalledWith("/chapters/c9/romance-dawn");
+  });
+
+  it("deletes a one-shot through its chapter", async () => {
+    mockSafeFetch.mockResolvedValueOnce({ ok: true });
+    renderDashboard([oneshot, ...initialSeries]);
+
+    fireEvent.click(screen.getByTitle("Delete One-shot"));
+    const confirmBtns = screen.getAllByRole("button", {
+      name: "Delete One-shot",
+    });
+    fireEvent.click(confirmBtns[confirmBtns.length - 1]);
+
+    await waitFor(() =>
+      expect(mockSafeFetch).toHaveBeenCalledWith("/api/series/chapters/c9", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer token123` },
+      }),
+    );
+    expect(mockSafeFetch).not.toHaveBeenCalledWith(
+      "/api/series/os1",
+      expect.anything(),
+    );
   });
 
   it("renders the dashboard with list of series", () => {

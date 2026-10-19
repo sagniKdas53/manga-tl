@@ -89,4 +89,62 @@ describe("CreateSeriesDialog", () => {
       expect(defaultProps.onClose).toHaveBeenCalled();
     });
   });
+
+  it("creates a one-shot through the one-shot route and hands back its series (#216)", async () => {
+    mockSafeFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          series: { id: "os1", title: "Short", kind: "oneshot" },
+          chapter: { id: "c9", chapterNumber: 1 },
+        }),
+    });
+    render(
+      <CreateSeriesDialog
+        {...defaultProps}
+        oneshot
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { name: "Create One-shot" }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/One-shot Title/), {
+      target: { value: "Short" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create One-shot" }));
+
+    await waitFor(() =>
+      expect(defaultProps.onSuccess).toHaveBeenCalledWith({
+        id: "os1",
+        title: "Short",
+        kind: "oneshot",
+      }),
+    );
+    expect(mockSafeFetch).toHaveBeenCalledWith(
+      "/api/series/oneshots",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("edits a one-shot without its model overrides, which live on the chapter", () => {
+    render(
+      <CreateSeriesDialog
+        {...defaultProps}
+        editingSeries={{
+          id: "os1",
+          title: "Short",
+          originalLanguage: "ja",
+          readingDirection: "rtl",
+          kind: "oneshot",
+        }}
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { name: "Edit One-shot" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Model Overrides/)).toBeNull();
+    expect(
+      screen.getByText(/models are set on its chapter/),
+    ).toBeInTheDocument();
+  });
 });

@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import ChapterGallery from "../../components/ChapterGallery";
+import type { Series } from "../../types";
 
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", () => ({
@@ -110,6 +111,56 @@ describe("ChapterGallery Component", () => {
     vi.clearAllMocks();
     mockSafeFetch.mockReset();
     mockShowToast.mockReset();
+  });
+
+  const renderGallery = (series: Series = mockSeries) =>
+    render(
+      <ChapterGallery
+        mode="dark"
+        user={mockUser}
+        selectedSeries={series}
+        selectedChapter={mockChapter}
+        setSelectedChapter={mockSetSelectedChapter}
+        pages={mockPages}
+        setPages={mockSetPages}
+        pagesTotalCount={mockPages.length}
+        hasMorePages={false}
+        isLoadingMorePages={false}
+        onLoadMorePages={mockOnLoadMorePages}
+        refreshPages={mockRefreshPages}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
+        onSelectPage={mockOnSelectPage}
+        isLoadingDetails={false}
+      />,
+    );
+
+  const deleteChapter = () => {
+    fireEvent.click(screen.getByRole("button", { name: "Delete chapter" }));
+    const confirm = screen.getAllByRole("button", { name: "Delete Chapter" });
+    fireEvent.click(confirm[confirm.length - 1]);
+  };
+
+  it("deletes a chapter through the series chapter route", async () => {
+    mockSafeFetch.mockResolvedValue({ ok: true });
+    renderGallery();
+    deleteChapter();
+    await waitFor(() =>
+      expect(mockSafeFetch).toHaveBeenCalledWith("/api/series/chapters/c1", {
+        method: "DELETE",
+        headers: { Authorization: "Bearer token123" },
+      }),
+    );
+    expect(mockNavigate).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/series\/s1\//),
+    );
+  });
+
+  it("goes back to the library after deleting a one-shot's chapter (#216)", async () => {
+    mockSafeFetch.mockResolvedValue({ ok: true });
+    renderGallery({ ...mockSeries, kind: "oneshot" });
+    deleteChapter();
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/"));
   });
 
   it("renders chapter details and pages", () => {

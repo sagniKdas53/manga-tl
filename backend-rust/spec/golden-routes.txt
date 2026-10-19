@@ -70,6 +70,8 @@ POST    /api/pages/{pageId}/regions/merge  [pageId] body
 GET     /api/series  [] 
 POST    /api/series  [] body
 GET     /api/series/chapters/exports/{exportId}/download  [exportId] 
+POST    /api/series/oneshots  [] body
+POST    /api/series/oneshots/import  [] body
 DELETE  /api/series/chapters/{chapterId}  [chapterId] 
 GET     /api/series/chapters/{chapterId}  [chapterId] 
 PUT     /api/series/chapters/{chapterId}  [chapterId] body
