@@ -776,3 +776,218 @@ async fn oneshot_upgrade_script_reruns() {
     .unwrap();
     assert_eq!(checks, 1);
 }
+
+/// A probe user of its own prefix, for tests that run beside the CRUD test (see `cleanup()`).
+async fn move_probe(pool: &sqlx::PgPool, jwt: &JwtUtils) -> String {
+    let email = format!("__move-e2e-{}@example.invalid", Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO users (id, created_at, display_name, email, password_hash, role) \
+         VALUES (uuid_generate_v4(), now(), 'Probe', $1, 'x', 'translator')",
+    )
+    .bind(&email)
+    .execute(pool)
+    .await
+    .expect("probe user insert");
+    jwt.generate_token(&email).expect("token")
+}
+
+async fn move_cleanup(pool: &sqlx::PgPool) {
+    sqlx::query(
+        "DELETE FROM series WHERE created_by IN (SELECT id FROM users WHERE email LIKE '__move-e2e-%')",
+    )
+    .execute(pool)
+    .await
+    .expect("cleanup move series");
+    sqlx::query("DELETE FROM images WHERE filename = '__move-e2e-cover.png'")
+        .execute(pool)
+        .await
+        .expect("cleanup move images");
+    sqlx::query("DELETE FROM users WHERE email LIKE '__move-e2e-%'")
+        .execute(pool)
+        .await
+        .expect("cleanup move users");
+}
+
+async fn json_of(response: axum::http::Response<Body>) -> (StatusCode, serde_json::Value) {
+    let (status, _, body) = body_string(response).await;
+    (
+        status,
+        serde_json::from_str(&body).unwrap_or(serde_json::Value::Null),
+    )
+}
+
+/// #226 / #218: moving chapters series -> series, series -> one-shot and one-shot -> series, with
+/// covers and counts right on both sides, the emptied one-shot gone, clashes answered with the next
+/// free number, and `keepSettings` pinning what the move would change.
+#[tokio::test]
+async fn chapter_moves_between_series_and_oneshots() {
+    let Some((app, pool, jwt)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL not set");
+        return;
+    };
+    move_cleanup(&pool).await;
+    let token = move_probe(&pool, &jwt).await;
+    let post = |uri: String, body: String| {
+        let app = app.clone();
+        let token = token.clone();
+        async move { json_of(send(app, "POST", &uri, Some(&token), Some(body)).await).await }
+    };
+    let get = |uri: String| {
+        let app = app.clone();
+        let token = token.clone();
+        async move { json_of(send(app, "GET", &uri, Some(&token), None).await).await }
+    };
+
+    // Series A (tlModel old/tl, ko, ltr) with chapters 1 and 2; series B (tlModel new/tl) with 1.
+    let (_, a) = post(
+        "/tlhub/api/series".into(),
+        r#"{"title":"Move A","sourceLanguage":"ko","readingDirection":"ltr","tlModel":"old/tl"}"#
+            .into(),
+    )
+    .await;
+    let (_, b) = post(
+        "/tlhub/api/series".into(),
+        r#"{"title":"Move B","readingDirection":"rtl","tlModel":"new/tl"}"#.into(),
+    )
+    .await;
+    let a_id = a["id"].as_str().unwrap().to_string();
+    let b_id = b["id"].as_str().unwrap().to_string();
+    let mut a_chapters = Vec::new();
+    for (number, title) in [(1, "First"), (2, "Second")] {
+        let (status, c) = post(
+            format!("/tlhub/api/series/{a_id}/chapters"),
+            format!(r#"{{"chapterNumber":{number},"title":"{title}"}}"#),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        a_chapters.push(c["id"].as_str().unwrap().to_string());
+    }
+    let (_, b1) = post(
+        format!("/tlhub/api/series/{b_id}/chapters"),
+        r#"{"chapterNumber":1}"#.into(),
+    )
+    .await;
+
+    // Chapter 2 of A carries a cover, so A's cover is its; after the move it must be B's.
+    let cover = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO images (id, created_at, filename, storage_path, hash) \
+         VALUES ($1, now(), '__move-e2e-cover.png', 'originals/x.png', $2)",
+    )
+    .bind(cover)
+    .bind(format!("{:064x}", cover.as_u128()))
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE chapters SET cover_image_id = $1 WHERE id = $2::uuid")
+        .bind(cover)
+        .bind(&a_chapters[1])
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE series SET cover_image_id = $1 WHERE id = $2::uuid")
+        .bind(cover)
+        .bind(&a_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let move_uri = |chapter: &str| format!("/tlhub/api/series/chapters/{chapter}/move");
+
+    // Bad bodies.
+    for body in [
+        r#"{}"#.to_string(),
+        format!(r#"{{"seriesId":"{b_id}","oneshot":true}}"#),
+    ] {
+        let (status, _) = post(move_uri(&a_chapters[1]), body).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+    let (status, _) = post(
+        move_uri(&a_chapters[1]),
+        format!(r#"{{"seriesId":"{a_id}"}}"#),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "already in that series");
+
+    // A clash on chapter number answers 409 with the next free number in B.
+    let (status, clash) = post(
+        move_uri(&a_chapters[0]),
+        format!(r#"{{"seriesId":"{b_id}"}}"#),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(clash["nextFreeNumber"], 2.0);
+
+    // Series -> series, without keepSettings: the chapter inherits B's model.
+    let (status, moved) = post(
+        move_uri(&a_chapters[1]),
+        format!(r#"{{"seriesId":"{b_id}","chapterNumber":5}}"#),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    assert_eq!(moved["chapter"]["seriesId"], b_id.as_str());
+    assert_eq!(moved["chapter"]["chapterNumber"], 5.0);
+    assert!(moved["chapter"]["tlModel"].is_null());
+    assert_eq!(moved["chapter"]["resolvedTranslation"]["model"], "new/tl");
+    assert!(moved["removedSeriesId"].is_null());
+    assert!(
+        moved["series"]["coverImageUrl"]
+            .as_str()
+            .unwrap()
+            .contains(&cover.to_string()),
+        "B takes the moved chapter's cover"
+    );
+    let (_, a_now) = get(format!("/tlhub/api/series/{a_id}")).await;
+    assert!(a_now["coverImageUrl"].is_null(), "A's cover left with it");
+    let (_, a_list) = get(format!("/tlhub/api/series/{a_id}/chapters")).await;
+    assert_eq!(a_list["totalElements"], 1);
+    let (_, b_list) = get(format!("/tlhub/api/series/{b_id}/chapters")).await;
+    assert_eq!(b_list["totalElements"], 2);
+
+    // Series -> one-shot, with keepSettings: A's model is pinned (the one-shot sets none); the
+    // one-shot takes A's languages and direction and the chapter's title.
+    let (status, out) = post(
+        move_uri(&a_chapters[0]),
+        r#"{"oneshot":true,"keepSettings":true}"#.into(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{out}");
+    let oneshot = &out["series"];
+    assert_eq!(oneshot["kind"], "oneshot");
+    assert_eq!(oneshot["title"], "First");
+    assert_eq!(oneshot["originalLanguage"], "ko");
+    assert_eq!(oneshot["readingDirection"], "ltr");
+    assert_eq!(oneshot["oneshotChapterId"], a_chapters[0].as_str());
+    assert_eq!(out["chapter"]["chapterNumber"], 1.0);
+    assert_eq!(out["chapter"]["tlModel"], "old/tl", "keepSettings pins it");
+    let oneshot_id = oneshot["id"].as_str().unwrap().to_string();
+    let (_, a_list) = get(format!("/tlhub/api/series/{a_id}/chapters")).await;
+    assert_eq!(a_list["totalElements"], 0);
+    let (status, _) = get(format!("/tlhub/api/series/{a_id}")).await;
+    assert_eq!(status, StatusCode::OK, "an emptied regular series stays");
+
+    // A one-shot that has its chapter can't take another.
+    let (status, _) = post(
+        move_uri(b1["id"].as_str().unwrap()),
+        format!(r#"{{"seriesId":"{oneshot_id}"}}"#),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    // One-shot -> series: the emptied one-shot is deleted.
+    let (status, back) = post(
+        move_uri(&a_chapters[0]),
+        format!(r#"{{"seriesId":"{a_id}","chapterNumber":1}}"#),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{back}");
+    assert_eq!(back["removedSeriesId"], oneshot_id.as_str());
+    let (status, _) = get(format!("/tlhub/api/series/{oneshot_id}")).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(
+        back["chapter"]["tlModel"], "old/tl",
+        "a pinned value stays pinned"
+    );
+
+    move_cleanup(&pool).await;
+}

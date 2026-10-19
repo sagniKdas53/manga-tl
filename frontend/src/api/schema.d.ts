@@ -1062,6 +1062,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/series/chapters/{chapterId}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["moveChapter"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/series/oneshots": {
         parameters: {
             query?: never;
@@ -1845,6 +1861,28 @@ export interface components {
         };
         OneshotDto: {
             chapter?: components["schemas"]["ChapterDto"];
+            series?: components["schemas"]["SeriesDto"];
+        };
+        /** @description Move a chapter into another series (seriesId) or out to the library as a one-shot (oneshot: true); exactly one of the two (#226). */
+        MoveChapterRequest: {
+            /**
+             * Format: double
+             * @description Number in the destination; absent keeps the current one. A one-shot is always 1.
+             */
+            chapterNumber?: number;
+            /** @description Write onto the chapter the values it resolved to before the move wherever the new series would resolve it differently. */
+            keepSettings?: boolean;
+            oneshot?: boolean;
+            /** Format: uuid */
+            seriesId?: string;
+        };
+        MoveChapterDto: {
+            chapter?: components["schemas"]["ChapterDto"];
+            /**
+             * Format: uuid
+             * @description The one-shot the move emptied and deleted, if any.
+             */
+            removedSeriesId?: string;
             series?: components["schemas"]["SeriesDto"];
         };
     };
@@ -4054,6 +4092,39 @@ export interface operations {
                 content: {
                     "*/*": Record<string, never>;
                 };
+            };
+        };
+    };
+    moveChapter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chapterId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveChapterRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MoveChapterDto"];
+                };
+            };
+            /** @description Chapter number taken (body carries nextFreeNumber), or the target one-shot already has its chapter. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

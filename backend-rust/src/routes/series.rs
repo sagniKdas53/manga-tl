@@ -1132,6 +1132,471 @@ pub async fn delete_chapter(State(state): State<AppState>, Path(id): Path<Uuid>)
 }
 
 // ---------------------------------------------------------------------------
+// Moving a chapter (#226, for #218's Move dialog)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+#[allow(non_snake_case)]
+pub struct MoveChapterInput {
+    /// The series to move into. Exactly one of this and `oneshot`.
+    #[serde(default)]
+    pub seriesId: Option<Uuid>,
+    /// Move out to the library as a new one-shot.
+    #[serde(default)]
+    pub oneshot: bool,
+    /// The number in the destination; absent keeps the current one (a one-shot is always 1).
+    #[serde(default)]
+    pub chapterNumber: Option<f64>,
+    /// Write onto the chapter the values it resolved to before the move, wherever the new series
+    /// would resolve it differently, so it keeps behaving the same.
+    #[serde(default)]
+    pub keepSettings: bool,
+}
+
+#[derive(Serialize)]
+#[allow(non_snake_case)]
+pub struct MoveChapterDto {
+    pub chapter: ChapterDto,
+    /// The series the chapter is in now.
+    pub series: SeriesDto,
+    /// The one-shot the move emptied and deleted, if any.
+    pub removedSeriesId: Option<Uuid>,
+}
+
+/// The chapter's settings columns, in the order `move_chapter`'s UPDATE binds them.
+#[derive(Clone, Debug, PartialEq)]
+struct ChapterSettings {
+    ocr_provider: Option<String>,
+    ocr_model: Option<String>,
+    tl_provider: Option<String>,
+    tl_model: Option<String>,
+    qa_provider: Option<String>,
+    qa_llm_model: Option<String>,
+    qa_vlm_model: Option<String>,
+    qa_mode: Option<String>,
+    routing_strategy: Option<String>,
+    cleanup_mode: Option<String>,
+    ocr_merge_threshold: Option<f64>,
+    ocr_text_angle: Option<bool>,
+    use_fallback_models: Option<bool>,
+}
+
+impl ChapterSettings {
+    fn of_chapter(c: &Chapter) -> Self {
+        Self {
+            ocr_provider: c.ocr_provider.clone(),
+            ocr_model: c.ocr_model.clone(),
+            tl_provider: c.tl_provider.clone(),
+            tl_model: c.tl_model.clone(),
+            qa_provider: c.qa_provider.clone(),
+            qa_llm_model: c.qa_llm_model.clone(),
+            qa_vlm_model: c.qa_vlm_model.clone(),
+            qa_mode: c.qa_mode.clone(),
+            routing_strategy: c.routing_strategy.clone(),
+            cleanup_mode: c.cleanup_mode.clone(),
+            ocr_merge_threshold: c.ocr_merge_threshold,
+            ocr_text_angle: c.ocr_text_angle,
+            use_fallback_models: c.use_fallback_models,
+        }
+    }
+
+    fn of_series(s: &Series) -> Self {
+        Self {
+            ocr_provider: s.ocr_provider.clone(),
+            ocr_model: s.ocr_model.clone(),
+            tl_provider: s.tl_provider.clone(),
+            tl_model: s.tl_model.clone(),
+            qa_provider: s.qa_provider.clone(),
+            qa_llm_model: s.qa_llm_model.clone(),
+            qa_vlm_model: s.qa_vlm_model.clone(),
+            qa_mode: s.qa_mode.clone(),
+            routing_strategy: s.routing_strategy.clone(),
+            cleanup_mode: s.cleanup_mode.clone(),
+            ocr_merge_threshold: s.ocr_merge_threshold,
+            ocr_text_angle: s.ocr_text_angle,
+            use_fallback_models: s.use_fallback_models,
+        }
+    }
+
+    fn of_global(g: &GlobalSettings) -> Self {
+        let text = |v: &str| Some(v.to_string()).filter(|v| !v.trim().is_empty());
+        Self {
+            ocr_provider: text(&g.ocr_provider),
+            ocr_model: text(&g.ocr_model),
+            tl_provider: text(&g.tl_provider),
+            tl_model: text(&g.tl_model),
+            qa_provider: text(&g.qa_provider),
+            qa_llm_model: text(&g.qa_llm_model),
+            qa_vlm_model: text(&g.qa_vlm_model),
+            qa_mode: text(&g.qa_mode),
+            routing_strategy: text(&g.routing_strategy),
+            cleanup_mode: text(&g.cleanup_mode),
+            ocr_merge_threshold: Some(g.ocr_merge_threshold),
+            ocr_text_angle: Some(g.ocr_text_angle),
+            use_fallback_models: Some(g.use_fallback_models),
+        }
+    }
+}
+
+/// `keepSettings`: for each setting the chapter leaves unset, the value it resolves to through
+/// `from` (chapter -> series -> global) is written onto it when resolving through `to` would give
+/// something else. Settings the chapter sets itself, and ones both series resolve alike, stay as
+/// they are, so the chapter still follows later System Settings changes where it can.
+fn pin_settings(
+    chapter: &ChapterSettings,
+    from: &ChapterSettings,
+    to: &ChapterSettings,
+    global: &ChapterSettings,
+) -> ChapterSettings {
+    fn pin<T: Clone + PartialEq>(
+        chapter: &Option<T>,
+        from: &Option<T>,
+        to: &Option<T>,
+        global: &Option<T>,
+    ) -> Option<T> {
+        if chapter.is_some() {
+            return chapter.clone();
+        }
+        let before = from.clone().or_else(|| global.clone());
+        let after = to.clone().or_else(|| global.clone());
+        if before != after { before } else { None }
+    }
+    ChapterSettings {
+        ocr_provider: pin(
+            &chapter.ocr_provider,
+            &from.ocr_provider,
+            &to.ocr_provider,
+            &global.ocr_provider,
+        ),
+        ocr_model: pin(
+            &chapter.ocr_model,
+            &from.ocr_model,
+            &to.ocr_model,
+            &global.ocr_model,
+        ),
+        tl_provider: pin(
+            &chapter.tl_provider,
+            &from.tl_provider,
+            &to.tl_provider,
+            &global.tl_provider,
+        ),
+        tl_model: pin(
+            &chapter.tl_model,
+            &from.tl_model,
+            &to.tl_model,
+            &global.tl_model,
+        ),
+        qa_provider: pin(
+            &chapter.qa_provider,
+            &from.qa_provider,
+            &to.qa_provider,
+            &global.qa_provider,
+        ),
+        qa_llm_model: pin(
+            &chapter.qa_llm_model,
+            &from.qa_llm_model,
+            &to.qa_llm_model,
+            &global.qa_llm_model,
+        ),
+        qa_vlm_model: pin(
+            &chapter.qa_vlm_model,
+            &from.qa_vlm_model,
+            &to.qa_vlm_model,
+            &global.qa_vlm_model,
+        ),
+        qa_mode: pin(
+            &chapter.qa_mode,
+            &from.qa_mode,
+            &to.qa_mode,
+            &global.qa_mode,
+        ),
+        routing_strategy: pin(
+            &chapter.routing_strategy,
+            &from.routing_strategy,
+            &to.routing_strategy,
+            &global.routing_strategy,
+        ),
+        cleanup_mode: pin(
+            &chapter.cleanup_mode,
+            &from.cleanup_mode,
+            &to.cleanup_mode,
+            &global.cleanup_mode,
+        ),
+        ocr_merge_threshold: pin(
+            &chapter.ocr_merge_threshold,
+            &from.ocr_merge_threshold,
+            &to.ocr_merge_threshold,
+            &global.ocr_merge_threshold,
+        ),
+        ocr_text_angle: pin(
+            &chapter.ocr_text_angle,
+            &from.ocr_text_angle,
+            &to.ocr_text_angle,
+            &global.ocr_text_angle,
+        ),
+        use_fallback_models: pin(
+            &chapter.use_fallback_models,
+            &from.use_fallback_models,
+            &to.use_fallback_models,
+            &global.use_fallback_models,
+        ),
+    }
+}
+
+/// Why a move was refused.
+enum MoveRefusal {
+    Response(Response),
+    Db(sqlx::Error),
+}
+
+impl From<sqlx::Error> for MoveRefusal {
+    fn from(err: sqlx::Error) -> Self {
+        MoveRefusal::Db(err)
+    }
+}
+
+/// The lowest whole number above every chapter number in `series_id` (1 for an empty series).
+async fn next_free_chapter_number(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    series_id: Uuid,
+) -> Result<f64, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT COALESCE(FLOOR(MAX(chapter_number)), 0) + 1 FROM chapters WHERE series_id = $1",
+    )
+    .bind(series_id)
+    .fetch_one(&mut **tx)
+    .await
+}
+
+/// POST /api/series/chapters/{chapterId}/move — into another series (`seriesId`) or out to the
+/// library as a one-shot (`oneshot: true`). One transaction: the chapter row and both series rows
+/// are locked. Leaving a one-shot deletes it (never a regular series). Pages, layers, renders and
+/// jobs are not touched and nothing re-renders.
+pub async fn move_chapter(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(chapter_id): Path<Uuid>,
+    body: Result<Json<MoveChapterInput>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    const INSTANCE: &str = "/api/series/chapters/{chapterId}/move";
+    let Json(dto) = match body {
+        Ok(json) => json,
+        Err(_) => return error::unreadable_body(INSTANCE),
+    };
+    if dto.seriesId.is_some() == dto.oneshot {
+        return error::bad_request("Send either seriesId or oneshot: true.", INSTANCE);
+    }
+    if dto
+        .chapterNumber
+        .is_some_and(|n| !n.is_finite() || n <= 0.0)
+    {
+        return error::bad_request("chapterNumber must be a positive number.", INSTANCE);
+    }
+    let defaults = PipelineDefaults::from_env();
+    let global = load_global_settings(&state.pool, &defaults).await;
+
+    let moved = async {
+        let mut tx = state.pool.begin().await?;
+        let chapter: Option<Chapter> =
+            sqlx::query_as("SELECT * FROM chapters WHERE id = $1 FOR UPDATE")
+                .bind(chapter_id)
+                .fetch_optional(&mut *tx)
+                .await?;
+        let Some(chapter) = chapter else {
+            return Err(MoveRefusal::Response(error::not_found(
+                &format!("Chapter not found: {chapter_id}"),
+                INSTANCE,
+            )));
+        };
+        let source_id = chapter.series_id;
+
+        // Lock in id order, so two moves between the same pair of series can't deadlock.
+        let mut ids = vec![source_id];
+        if let Some(target_id) = dto.seriesId {
+            if target_id == source_id {
+                return Err(MoveRefusal::Response(error::bad_request(
+                    "The chapter is already in that series.",
+                    INSTANCE,
+                )));
+            }
+            ids.push(target_id);
+        }
+        let locked: Vec<Series> =
+            sqlx::query_as("SELECT * FROM series WHERE id = ANY($1) ORDER BY id FOR UPDATE")
+                .bind(&ids)
+                .fetch_all(&mut *tx)
+                .await?;
+        let Some(source) = locked.iter().find(|s| s.id == source_id).cloned() else {
+            return Err(MoveRefusal::Response(not_found_series(source_id, INSTANCE)));
+        };
+
+        let target = match dto.seriesId {
+            Some(target_id) => {
+                let Some(target) = locked.iter().find(|s| s.id == target_id).cloned() else {
+                    return Err(MoveRefusal::Response(not_found_series(target_id, INSTANCE)));
+                };
+                if target.kind == KIND_ONESHOT {
+                    let has_chapter: bool = sqlx::query_scalar(
+                        "SELECT EXISTS(SELECT 1 FROM chapters WHERE series_id = $1)",
+                    )
+                    .bind(target.id)
+                    .fetch_one(&mut *tx)
+                    .await?;
+                    if has_chapter {
+                        return Err(MoveRefusal::Response(oneshot_full()));
+                    }
+                }
+                target
+            }
+            None => {
+                if source.kind == KIND_ONESHOT {
+                    return Err(MoveRefusal::Response(error::bad_request(
+                        "The chapter is already a one-shot.",
+                        INSTANCE,
+                    )));
+                }
+                // The new one-shot takes the source series' languages and reading direction, and
+                // the chapter's title (or "<series> — Chapter <n>").
+                let title = chapter
+                    .title
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|t| !t.is_empty())
+                    .map(str::to_string)
+                    .unwrap_or_else(|| {
+                        format!("{} — Chapter {}", source.title, chapter.chapter_number)
+                    });
+                sqlx::query_as(
+                    "INSERT INTO series (id, created_at, updated_at, title, original_language, \
+                     source_language, target_language, reading_direction, created_by, kind) \
+                     VALUES ($1, now(), now(), $2, $3, $4, $5, $6, $7, 'oneshot') RETURNING *",
+                )
+                .bind(Uuid::new_v4())
+                .bind(&title)
+                .bind(&source.original_language)
+                .bind(&source.source_language)
+                .bind(&source.target_language)
+                .bind(&source.reading_direction)
+                .bind(user.id)
+                .fetch_one(&mut *tx)
+                .await?
+            }
+        };
+
+        let number = if dto.oneshot {
+            ONESHOT_CHAPTER_NUMBER
+        } else {
+            dto.chapterNumber.unwrap_or(chapter.chapter_number)
+        };
+        if chapter_number_taken(&mut tx, target.id, number).await? {
+            let next = next_free_chapter_number(&mut tx, target.id).await?;
+            return Err(MoveRefusal::Response(
+                (
+                    StatusCode::CONFLICT,
+                    Json(json!({
+                        "message": format!("Chapter {number} already exists in {}.", target.title),
+                        "nextFreeNumber": next,
+                    })),
+                )
+                    .into_response(),
+            ));
+        }
+
+        let own = ChapterSettings::of_chapter(&chapter);
+        let settings = if dto.keepSettings {
+            pin_settings(
+                &own,
+                &ChapterSettings::of_series(&source),
+                &ChapterSettings::of_series(&target),
+                &ChapterSettings::of_global(&global),
+            )
+        } else {
+            own
+        };
+        let moved: Chapter = sqlx::query_as(
+            "UPDATE chapters SET series_id = $2, chapter_number = $3, ocr_provider = $4, \
+             ocr_model = $5, tl_provider = $6, tl_model = $7, qa_provider = $8, \
+             qa_llm_model = $9, qa_vlm_model = $10, qa_mode = $11, routing_strategy = $12, \
+             cleanup_mode = $13, ocr_merge_threshold = $14, ocr_text_angle = $15, \
+             use_fallback_models = $16, updated_at = now() WHERE id = $1 RETURNING *",
+        )
+        .bind(chapter.id)
+        .bind(target.id)
+        .bind(number)
+        .bind(&settings.ocr_provider)
+        .bind(&settings.ocr_model)
+        .bind(&settings.tl_provider)
+        .bind(&settings.tl_model)
+        .bind(&settings.qa_provider)
+        .bind(&settings.qa_llm_model)
+        .bind(&settings.qa_vlm_model)
+        .bind(&settings.qa_mode)
+        .bind(&settings.routing_strategy)
+        .bind(&settings.cleanup_mode)
+        .bind(settings.ocr_merge_threshold)
+        .bind(settings.ocr_text_angle)
+        .bind(settings.use_fallback_models)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        // After the chapter has left: deleting first would take it along by cascade.
+        let removed = sqlx::query(
+            "DELETE FROM series WHERE id = $1 AND kind = 'oneshot' \
+             AND NOT EXISTS (SELECT 1 FROM chapters WHERE series_id = $1)",
+        )
+        .bind(source.id)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected()
+            > 0;
+        sqlx::query("UPDATE series SET updated_at = now() WHERE id = ANY($1)")
+            .bind(vec![source.id, target.id])
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok((
+            moved,
+            target.id,
+            (!removed).then_some(source.id),
+            removed.then_some(source.id),
+        ))
+    }
+    .await;
+
+    let (chapter, target_id, source_left, removed) = match moved {
+        Ok(moved) => moved,
+        Err(MoveRefusal::Response(response)) => return response,
+        Err(MoveRefusal::Db(err)) => {
+            tracing::error!("move chapter {chapter_id}: {err}");
+            return error::internal_error(INSTANCE);
+        }
+    };
+    // Covers use the pool, so they follow the commit.
+    crate::clone::recalculate_series_cover(&state.pool, target_id).await;
+    if let Some(source_id) = source_left {
+        crate::clone::recalculate_series_cover(&state.pool, source_id).await;
+    }
+
+    let Some(row) = find_series_row(&state.pool, target_id).await else {
+        return error::internal_error(INSTANCE);
+    };
+    let chapter = find_chapter(&state.pool, chapter.id)
+        .await
+        .unwrap_or(chapter);
+    let resolved = row
+        .series
+        .use_fallback_models
+        .unwrap_or(global.use_fallback_models);
+    let chapter_dto = to_chapter_dto(&state, &chapter, Some(&row.series), &global).await;
+    Json(MoveChapterDto {
+        chapter: chapter_dto,
+        series: to_series_dto(&state, &row.series, resolved, row.oneshot_chapter_id),
+        removedSeriesId: removed,
+    })
+    .into_response()
+}
+
+// ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
@@ -1167,6 +1632,7 @@ pub fn router() -> Router<AppState> {
             "/chapters/{chapterId}",
             get(get_chapter).put(update_chapter).delete(delete_chapter),
         )
+        .route("/chapters/{chapterId}/move", post(move_chapter))
         .route("/{seriesId}/chapters/import", post(import_chapter))
         .route("/chapters/{chapterId}/export", get(export_chapter))
         .route(
@@ -1858,5 +2324,63 @@ pub async fn download_export(
             (StatusCode::OK, headers, bytes).into_response()
         }
         None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn settings(tl_model: Option<&str>, qa_mode: Option<&str>) -> ChapterSettings {
+        ChapterSettings {
+            ocr_provider: None,
+            ocr_model: None,
+            tl_provider: None,
+            tl_model: tl_model.map(str::to_string),
+            qa_provider: None,
+            qa_llm_model: None,
+            qa_vlm_model: None,
+            qa_mode: qa_mode.map(str::to_string),
+            routing_strategy: None,
+            cleanup_mode: None,
+            ocr_merge_threshold: None,
+            ocr_text_angle: None,
+            use_fallback_models: None,
+        }
+    }
+
+    #[test]
+    fn keep_settings_pins_only_what_the_move_would_change() {
+        let global = settings(Some("global/tl"), Some("auto"));
+
+        // The old series set the model, the new one doesn't: pin the old series' value.
+        let pinned = pin_settings(
+            &settings(None, None),
+            &settings(Some("old/tl"), None),
+            &settings(None, None),
+            &global,
+        );
+        assert_eq!(pinned.tl_model.as_deref(), Some("old/tl"));
+        // Both resolve QA mode to the global value: left unset, so it still follows the global.
+        assert_eq!(pinned.qa_mode, None);
+
+        // The old series inherited the global, the new one overrides: pin the global value.
+        let pinned = pin_settings(
+            &settings(None, None),
+            &settings(None, None),
+            &settings(Some("new/tl"), Some("off")),
+            &global,
+        );
+        assert_eq!(pinned.tl_model.as_deref(), Some("global/tl"));
+        assert_eq!(pinned.qa_mode.as_deref(), Some("auto"));
+
+        // The chapter's own value always stays.
+        let pinned = pin_settings(
+            &settings(Some("mine/tl"), None),
+            &settings(Some("old/tl"), None),
+            &settings(Some("new/tl"), None),
+            &global,
+        );
+        assert_eq!(pinned.tl_model.as_deref(), Some("mine/tl"));
     }
 }

@@ -1476,6 +1476,44 @@
           }
         },
         "type": "object"
+      },
+      "MoveChapterRequest": {
+        "description": "Move a chapter into another series (seriesId) or out to the library as a one-shot (oneshot: true); exactly one of the two (#226).",
+        "properties": {
+          "chapterNumber": {
+            "description": "Number in the destination; absent keeps the current one. A one-shot is always 1.",
+            "format": "double",
+            "type": "number"
+          },
+          "keepSettings": {
+            "description": "Write onto the chapter the values it resolved to before the move wherever the new series would resolve it differently.",
+            "type": "boolean"
+          },
+          "oneshot": {
+            "type": "boolean"
+          },
+          "seriesId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MoveChapterDto": {
+        "properties": {
+          "chapter": {
+            "$ref": "#/components/schemas/ChapterDto"
+          },
+          "removedSeriesId": {
+            "description": "The one-shot the move emptied and deleted, if any.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "series": {
+            "$ref": "#/components/schemas/SeriesDto"
+          }
+        },
+        "type": "object"
       }
     }
   },
@@ -4880,6 +4918,50 @@
               }
             },
             "description": "OK"
+          }
+        },
+        "tags": [
+          "series-controller"
+        ]
+      }
+    },
+    "/api/series/chapters/{chapterId}/move": {
+      "post": {
+        "operationId": "moveChapter",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chapterId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveChapterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveChapterDto"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "description": "Chapter number taken (body carries nextFreeNumber), or the target one-shot already has its chapter."
           }
         },
         "tags": [

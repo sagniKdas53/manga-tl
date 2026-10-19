@@ -77,6 +77,7 @@ GET     /api/series/chapters/{chapterId}  [chapterId]
 PUT     /api/series/chapters/{chapterId}  [chapterId] body
 GET     /api/series/chapters/{chapterId}/export  [chapterId] 
 DELETE  /api/series/chapters/{chapterId}/exports  [chapterId] 
+POST    /api/series/chapters/{chapterId}/move  [chapterId] body
 DELETE  /api/series/{seriesId}  [seriesId] 
 GET     /api/series/{seriesId}  [seriesId] 
 PUT     /api/series/{seriesId}  [seriesId] body
