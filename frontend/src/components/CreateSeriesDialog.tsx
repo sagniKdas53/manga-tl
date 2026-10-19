@@ -10,6 +10,7 @@ import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import TextField from "@mui/material/TextField";
 import type { User, Series, SystemSettingsDto } from "../types";
+import { isOneshot } from "../types";
 import { safeFetch } from "../utils";
 import { useToast } from "./ToastContext";
 import ModelOverridesAccordion, {
@@ -22,6 +23,11 @@ interface CreateSeriesDialogProps {
   user: User;
   onClose: () => void;
   onSuccess: (series: Series) => void;
+  /**
+   * Create a one-shot (#216): a series holding one chapter, made in one call. Its model
+   * overrides go on the chapter. Editing a one-shot passes it as `editingSeries` instead.
+   */
+  oneshot?: boolean;
 }
 
 const LANG_OPTS = ["ja", "zh-TW", "zh-CN", "ko", "en"];
@@ -38,7 +44,10 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   user,
   onClose,
   onSuccess,
+  oneshot = false,
 }) => {
+  const forOneshot = editingSeries ? isOneshot(editingSeries) : oneshot;
+  const noun = forOneshot ? "One-shot" : "Series";
   const [title, setTitle] = useState(
     editingSeries ? editingSeries.title || "" : "",
   );
@@ -189,7 +198,9 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
     try {
       const url = editingSeries
         ? `/api/series/${editingSeries.id}`
-        : "/api/series";
+        : oneshot
+          ? "/api/series/oneshots"
+          : "/api/series";
       const res = await safeFetch(url, {
         method: editingSeries ? "PUT" : "POST",
         headers: {
@@ -219,10 +230,11 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
-      onSuccess(data);
+      // The one-shot route answers { series, chapter }.
+      onSuccess(!editingSeries && oneshot ? data.series : data);
       onClose();
     } catch {
-      showToast("Failed to save series", "error");
+      showToast(`Failed to save ${noun.toLowerCase()}`, "error");
       setSaving(false);
     }
   };
@@ -235,11 +247,11 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
       fullWidth
     >
       <DialogTitle>
-        {editingSeries ? "Edit Series" : "Create Series"}
+        {editingSeries ? `Edit ${noun}` : `Create ${noun}`}
       </DialogTitle>
       <DialogContent dividers>
         <TextField
-          label="Series Title"
+          label={`${noun} Title`}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required
@@ -342,8 +354,8 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
           {saving
             ? "Saving..."
             : editingSeries
-              ? "Update Series"
-              : "Create Series"}
+              ? `Update ${noun}`
+              : `Create ${noun}`}
         </Button>
       </DialogActions>
     </Dialog>

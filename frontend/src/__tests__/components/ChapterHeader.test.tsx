@@ -115,6 +115,20 @@ describe("ChapterHeader", () => {
     expect(defaultProps.onBack).toHaveBeenCalledTimes(1);
   });
 
+  it("goes back to the library from a one-shot (#216)", () => {
+    render(
+      <ChapterHeader
+        {...defaultProps}
+        selectedSeries={{ ...defaultProps.selectedSeries, kind: "oneshot" }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
+    expect(defaultProps.onBack).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("button", { name: "Back to library" }),
+    ).toHaveTextContent("Library");
+  });
+
   it("calls onEditClick when edit button clicked", () => {
     render(<ChapterHeader {...defaultProps} />);
     fireEvent.click(screen.getByTitle("Edit Chapter Name & Number"));
