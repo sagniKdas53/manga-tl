@@ -42,6 +42,9 @@ interface MoveChapterDialogProps {
   onMoved: (result: MoveChapterResult) => void;
 }
 
+/** At most this many pages of 100 series are listed. */
+const MAX_SERIES_PAGES = 10;
+
 /** The "Library (as a one-shot)" choice, listed with the series. */
 const LIBRARY = "__library__";
 
@@ -84,17 +87,26 @@ export const MoveChapterDialog: React.FC<MoveChapterDialogProps> = ({
       setKeepSettings(true);
       setError("");
     });
-    safeFetch(
-      "/api/series?page=0&size=100&sortBy=updatedAt&sortDir=desc&kind=series",
-      { headers: { Authorization: `Bearer ${user.token}` } },
-    )
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) =>
-        setOptions(
-          ((d?.content ?? []) as Series[]).filter((s) => s.id !== series.id),
-        ),
-      )
-      .catch(() => setOptions([]));
+    // Every page (the server serves at most 100 a page), so the search covers the whole
+    // library; capped so a huge library can't keep the dialog fetching.
+    let cancelled = false;
+    void (async () => {
+      const all: Series[] = [];
+      for (let page = 0; page < MAX_SERIES_PAGES; page++) {
+        const res = await safeFetch(
+          `/api/series?page=${page}&size=100&sortBy=updatedAt&sortDir=desc&kind=series`,
+          { headers: { Authorization: `Bearer ${user.token}` } },
+        ).catch(() => null);
+        const data = res?.ok ? await res.json() : null;
+        if (!data) break;
+        all.push(...((data.content ?? []) as Series[]));
+        if (page + 1 >= (data.totalPages ?? 1)) break;
+      }
+      if (!cancelled) setOptions(all.filter((s) => s.id !== series.id));
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [open, chapter.chapterNumber, series.id, user.token]);
 
   const destinations = useMemo<Destination[]>(

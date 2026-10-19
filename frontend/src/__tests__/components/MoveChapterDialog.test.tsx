@@ -214,4 +214,29 @@ describe("MoveChapterDialog", () => {
     expect(screen.getByLabelText(/Chapter number/)).toHaveValue(12);
     expect(onMoved).not.toHaveBeenCalled();
   });
+
+  it("lists series from every page, not only the first", async () => {
+    mockSafeFetch.mockImplementation((url: string) => {
+      if (url.startsWith("/api/series?page=0"))
+        return ok({ content: [naruto], totalPages: 2 });
+      if (url.startsWith("/api/series?page=1"))
+        return ok({ content: [korean], totalPages: 2 });
+      return Promise.reject(new Error(`unexpected ${url}`));
+    });
+    render(
+      <MoveChapterDialog
+        open
+        onClose={vi.fn()}
+        user={user}
+        chapter={chapter}
+        series={from}
+        onMoved={vi.fn()}
+      />,
+    );
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Move to" }));
+    expect(
+      await screen.findByRole("option", { name: "Solo Leveling" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Naruto" })).toBeInTheDocument();
+  });
 });
