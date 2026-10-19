@@ -125,4 +125,26 @@ describe("CreateSeriesDialog", () => {
       expect.objectContaining({ method: "POST" }),
     );
   });
+
+  it("edits a one-shot without its model overrides, which live on the chapter", () => {
+    render(
+      <CreateSeriesDialog
+        {...defaultProps}
+        editingSeries={{
+          id: "os1",
+          title: "Short",
+          originalLanguage: "ja",
+          readingDirection: "rtl",
+          kind: "oneshot",
+        }}
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { name: "Edit One-shot" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Model Overrides/)).toBeNull();
+    expect(
+      screen.getByText(/models are set on its chapter/),
+    ).toBeInTheDocument();
+  });
 });

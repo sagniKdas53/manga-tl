@@ -9,6 +9,7 @@ import InputLabel from "@mui/material/InputLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
 import type { User, Series, SystemSettingsDto } from "../types";
 import { isOneshot } from "../types";
 import { safeFetch } from "../utils";
@@ -320,29 +321,41 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
           </Select>
         </FormControl>
 
-        <ModelOverridesAccordion
-          token={user.token}
-          expanded={showOverrides}
-          onToggle={() => setShowOverrides(!showOverrides)}
-          value={overridesValue}
-          onChange={handleOverrideChange}
-          settings={settings}
-          inherited={{
-            ocrProvider: settings?.ocrProvider,
-            ocrModel: settings?.ocrModel,
-            tlProvider: settings?.tlProvider,
-            tlModel: settings?.tlModel,
-            qaProvider: settings?.qaProvider,
-            qaMode: settings?.qaMode,
-            qaLlmModel: settings?.qaLlmModel,
-            qaVlmModel: settings?.qaVlmModel,
-            routingStrategy: settings?.routingStrategy,
-            cleanupMode: settings?.cleanupMode,
-            ocrMergeThreshold: settings?.ocrMergeThreshold,
-            ocrTextAngle: settings?.ocrTextAngle,
-            useFallbackModels: settings?.useFallbackModels,
-          }}
-        />
+        {editingSeries && forOneshot ? (
+          // A one-shot's models live on its chapter (they move with it); editing them here
+          // would set the series' values, which the chapter's own values hide.
+          <Typography
+            variant="body2"
+            sx={{ color: "text.secondary", mt: 2 }}
+          >
+            A one-shot&apos;s models are set on its chapter: open it and use
+            Edit.
+          </Typography>
+        ) : (
+          <ModelOverridesAccordion
+            token={user.token}
+            expanded={showOverrides}
+            onToggle={() => setShowOverrides(!showOverrides)}
+            value={overridesValue}
+            onChange={handleOverrideChange}
+            settings={settings}
+            inherited={{
+              ocrProvider: settings?.ocrProvider,
+              ocrModel: settings?.ocrModel,
+              tlProvider: settings?.tlProvider,
+              tlModel: settings?.tlModel,
+              qaProvider: settings?.qaProvider,
+              qaMode: settings?.qaMode,
+              qaLlmModel: settings?.qaLlmModel,
+              qaVlmModel: settings?.qaVlmModel,
+              routingStrategy: settings?.routingStrategy,
+              cleanupMode: settings?.cleanupMode,
+              ocrMergeThreshold: settings?.ocrMergeThreshold,
+              ocrTextAngle: settings?.ocrTextAngle,
+              useFallbackModels: settings?.useFallbackModels,
+            }}
+          />
+        )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
