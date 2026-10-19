@@ -687,6 +687,7 @@ function AppContent() {
                               <ChapterGallery
                                 user={user}
                                 selectedSeries={selectedSeries}
+                                onSeriesChanged={setSelectedSeries}
                                 selectedChapter={selectedChapter}
                                 setSelectedChapter={setSelectedChapter}
                                 pages={pages}
@@ -719,6 +720,7 @@ function AppContent() {
                               <ChapterGallery
                                 user={user}
                                 selectedSeries={selectedSeries}
+                                onSeriesChanged={setSelectedSeries}
                                 selectedChapter={selectedChapter}
                                 setSelectedChapter={setSelectedChapter}
                                 pages={pages}

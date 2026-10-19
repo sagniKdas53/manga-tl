@@ -18,6 +18,7 @@ import { useArchiveDrop } from "../hooks/useArchiveDrop";
 import { isChapterArchiveFile } from "../utils/zipPages";
 import SeriesHeader from "./SeriesHeader";
 import ChapterCardGrid from "./ChapterCardGrid";
+import MoveChapterDialog, { type MoveChapterResult } from "./MoveChapterDialog";
 
 interface SeriesDetailsProps {
   user: User;
@@ -58,6 +59,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [showChapterModal, setShowChapterModal] = useState(false);
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null);
   const [chapterCreateCounter, setChapterCreateCounter] = useState(0);
+  const [movingChapter, setMovingChapter] = useState<Chapter | null>(null);
   const { showToast } = useToast();
 
   const [showImportModal, setShowImportModal] = useState(false);
@@ -186,6 +188,23 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     showToast(msg, "error");
   };
 
+  // A moved chapter leaves this list; the series is re-read for its cover, which may have been
+  // the moved chapter's.
+  const handleChapterMoved = (result: MoveChapterResult) => {
+    setChapters((prev) => prev.filter((c) => c.id !== result.chapter.id));
+    showToast(
+      `Moved to ${result.series.kind === "oneshot" ? "the library as a one-shot" : result.series.title}`,
+      "success",
+    );
+    if (!selectedSeries) return;
+    safeFetch(`/api/series/${selectedSeries.id}`, {
+      headers: { Authorization: `Bearer ${user.token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => data && setSelectedSeries(data))
+      .catch(() => {});
+  };
+
   const handleDeleteChapter = (chapterId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setConfirmModal({
@@ -264,6 +283,10 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         onSelectChapter={onSelectChapter}
         onEditChapter={handleEditChapterClick}
         onDeleteChapter={handleDeleteChapter}
+        onMoveChapter={(chapter, e) => {
+          e.stopPropagation();
+          setMovingChapter(chapter);
+        }}
         onNavigate={(path) => navigate(path)}
         hasMore={hasMoreChapters}
         isLoadingMore={isLoadingMoreChapters}
@@ -306,6 +329,16 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
           );
         }}
       />
+      {movingChapter && (
+        <MoveChapterDialog
+          open
+          onClose={() => setMovingChapter(null)}
+          user={user}
+          chapter={movingChapter}
+          series={selectedSeries}
+          onMoved={handleChapterMoved}
+        />
+      )}
       <DropOverlay
         visible={draggingArchive}
         title={`Import into ${selectedSeries?.title ?? "this series"}`}

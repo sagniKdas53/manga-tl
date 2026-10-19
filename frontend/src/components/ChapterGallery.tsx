@@ -9,6 +9,7 @@ import { safeFetch, toSlug, getContextPath } from "../utils";
 import CreateChapterDialog from "./CreateChapterDialog";
 import ConfirmModal from "./ConfirmModal";
 import ChapterHeader from "./ChapterHeader";
+import MoveChapterDialog from "./MoveChapterDialog";
 import ChapterPageGrid from "./ChapterPageGrid";
 import ChapterDragOverlay from "./ChapterDragOverlay";
 import { useToast } from "./ToastContext";
@@ -37,6 +38,8 @@ interface ChapterGalleryProps {
   /** Page-number sort direction. Server-side, so it holds for the whole chapter. */
   sortAsc: boolean;
   onToggleSort: () => void;
+  /** After a move (#218) the chapter is in another series; the header follows it. */
+  onSeriesChanged?: (series: Series) => void;
 }
 
 export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
@@ -56,7 +59,9 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   refreshPages,
   sortAsc,
   onToggleSort,
+  onSeriesChanged,
 }) => {
+  const [showMove, setShowMove] = useState(false);
   const navigate = useNavigate();
 
   // Page-wide drag state
@@ -670,6 +675,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         onClearExportsClick={handleClearExports}
         onUploadClick={() => document.getElementById("file-upload")?.click()}
         onDeleteClick={handleDeleteChapter}
+        onMoveClick={() => setShowMove(true)}
         isImporting={isImportingProject}
         mode={mode}
       />
@@ -716,6 +722,21 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
       />
 
       {/* Confirm Modal */}
+      <MoveChapterDialog
+        open={showMove}
+        onClose={() => setShowMove(false)}
+        user={user}
+        chapter={selectedChapter}
+        series={selectedSeries}
+        onMoved={(result) => {
+          setSelectedChapter(result.chapter);
+          onSeriesChanged?.(result.series);
+          showToast(
+            `Moved to ${isOneshot(result.series) ? "the library as a one-shot" : result.series.title}`,
+            "success",
+          );
+        }}
+      />
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}

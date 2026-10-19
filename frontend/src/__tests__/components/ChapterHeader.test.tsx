@@ -129,6 +129,19 @@ describe("ChapterHeader", () => {
     ).toHaveTextContent("Library");
   });
 
+  it("offers Move… in the more-actions menu (#218)", () => {
+    const onMoveClick = vi.fn();
+    render(
+      <ChapterHeader
+        {...defaultProps}
+        onMoveClick={onMoveClick}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "more actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Move…" }));
+    expect(onMoveClick).toHaveBeenCalledTimes(1);
+  });
+
   it("calls onEditClick when edit button clicked", () => {
     render(<ChapterHeader {...defaultProps} />);
     fireEvent.click(screen.getByTitle("Edit Chapter Name & Number"));
