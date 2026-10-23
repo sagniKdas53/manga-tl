@@ -19,7 +19,7 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@manga-library/page-scene": "file:../packages/page-scene",
-    "@mui/icons-material": "^9.4.0",
+    "@mui/icons-material": "^9.5.0",
     "@mui/material": "^9.3.1",
     "jszip": "^3.10.2",
     "openapi-fetch": "^0.17.0",
