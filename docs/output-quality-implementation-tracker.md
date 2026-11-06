@@ -1,15 +1,59 @@
 # Output quality implementation tracker
 
-Start with the [2026-10-17 status](#status-at-a-glance-2026-10-17--e2-korean-and-reshape-merged) below, the [F and E plan](fe-plan-20261007.md) and the [E handoff](e-handoff-20261008.md). The [2026-10-04 handoff](output-quality-next-session-20261004.md) still has the order after E. The [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md) is background. The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
+Start with the [2026-11-06 status](#status-at-a-glance-2026-11-06--one-shots-merged-test-stack-on-main) below, the [2026-10-17 status](#status-at-a-glance-2026-10-17--e2-korean-and-reshape-merged), the [F and E plan](fe-plan-20261007.md) and the [E handoff](e-handoff-20261008.md). The [2026-10-04 handoff](output-quality-next-session-20261004.md) still has the order after E. The [2026-09-23 evidence report](quality-runs/oq-20260923-synthetic/README.md) is background. The [2026-09-22 handoff](output-quality-next-session-20260922.md) retains triaged issues OQ-01–OQ-08 and acceptance checks. The [2026-09-21 owner briefing](output-quality-owner-briefing-20260921.md) is historical context; its phase-separation next steps have landed.
 
 Planning began 2026-09-09; the R-track replaced the isolated-test milestone sequence on 2026-09-17. **R3 closed 2026-09-26 on the user's acceptance of Packet 4** ([run README](quality-runs/r3p4-20260926-six/README.md)): cleanup quality accepted with four defects filed; the reliability disturbance cases and a latency ceiling carry forward as open items. R7 (the editor's layers, masks and render path) closed and merged 2026-10-02; the order after it is in the 2026-10-02 night section, and the [plan for 2026-10-03](#plan-for-2026-10-03-user-2026-10-02-late) is done; A's halo grow and B landed 2026-10-05 ([status and checklist](#status-at-a-glance-2026-10-05--b-one-balloon-one-text-unit)); the [2026-10-04 handoff](output-quality-next-session-20261004.md) has the rest of the order. [Pipeline diagram](#how-the-pipeline-works-now-2026-09-25-ocr-threshold-added-2026-09-26). The [2026-09-29 handoff](output-quality-next-session-20260929.md) is history now. The [R3 handoff](quality-checkpoints/R3-phase-separation-handoff-20260921.md), older milestone tables, resume notes, and dated addenda preserve history; their pre-implementation and no-live-run statements do not override the current handoff or establish runtime/quality acceptance. A09 remains unscored, and full corpus regeneration/release remain later work.
+
+## Status at a glance (2026-11-06 — one-shots merged, test stack on main)
+
+**Merged 2026-11-06**
+
+| PR | What it does |
+|---|---|
+| #288, #307 | One-shots and moving chapters: a chapter with no series, from the library; move between series and out to a one-shot, with `keepSettings`. Closes #216, #218, #226 |
+| #232 | Corpus batch harness (`scripts/playwright/corpus_batch.cjs`). GitGuardian incident 37888553 resolved as a false positive |
+| #306 | zip 9, for five advisories on zip 8. Reading only (no `extract()`), so exposure was low. Replaces #298 |
+| #309 | Worker pin at 3894470: worker #76–#80 (fastapi 0.155, tenacity 9.2.1, ruff 0.17.1, pytest-mock 3.17, onnxruntime 1.31 on non-x86 only) |
+| 13 parent Dependabot PRs | rustls, aws-sdk-s3, uuid, tokio, redis; zod, undici, @vitest/ui, @vitest/coverage-v8, @vitejs/plugin-react, @mui/icons-material, @types/node, vite 8.3.5. Checked together before merging |
+
+Closed as done by #222 and #224: #214, #215. Filed: #308 (`keepSettings` edge cases).
+
+**The rule for empty containers (owner, 2026-11-06):** a one-shot is just a chapter, so deleting its chapter deletes it. A regular series left with no chapters stays.
+
+**Test stack:** chrome-box `manga-tl-test` runs `main` a280e6a, worker 3894470. Rollback images `:pre-20261106`. Its library is empty (one account, no pages). The database was upgraded in place with `2026-10-19-oneshot-series-kind.sql`; a new volume gets the column from `init.sql` instead. Snapshot from before the upgrade: `~/Projects/manga-tl-data-backup/20261106-test-before-oneshots`.
+
+**Old data:** the F test stack (8,464 objects) and the old prod copy are archived and verified in `~/Projects/manga-tl-data-backup/`, from 2026-10-19. They are not restored. The original prod `data/` directory (21 GB) stays where it is for now.
+
+**Not promoted:** prod stays down. #188 waits, and its "on the test stack's data" no longer holds, since the data was archived rather than migrated.
+
+**Not tested by the owner yet:** one-shots and moves passed CI and an API check on the deployed stack (2026-11-06), but no one has driven them in a browser on this stack: New chapter and Import ZIP as a one-shot, Move from a chapter card, deleting a one-shot.
+
+**Next, in order** (owner, 2026-11-06: SeaweedFS first, as a chore; G2 before F5, for the better final result)
+1. **SeaweedFS replaces MinIO (#271).** The stack runs a frozen mirror of the last community MinIO image. A chore before the bigger work. Design first; `minio-aistor-migration.md` lists the presign and multipart paths to re-validate.
+2. **Test pages.** The owner runs some images by hand first, then the quality regression starts. The stack is empty and every gate below needs pages.
+   - `manga-b-20261006-sources` has 64 pages, including F5's two: Free ch. 1 p27 and B #230 test (ja) p10. `seed_f_stack.py` loads them, once only, because a duplicate upload loses OCR pieces (#268). Re-tests use *Redo OCR*. Clear its `~/.manga-f-seeded` marker first, and run `manga-tl-test-heat-guard.sh` alongside it.
+   - The other gate pages (sample177, 222, 61, 93, 83, 197, 641) need the corpus: its submodule isn't checked out here, and the images come from LFS on pi5. Sample7 is in `e-rotation-20261008`; sample99 is one of the B fixtures.
+   - Ch. 6 p. 1 was measured on the laptop's dev database. Find it, or pick another page with very large text.
+   - Seeding runs paid translation and QA, so the owner picks the set.
+   - Before G2's first commit, capture today's output on the seeded pages. It is the "before" of the gates below.
+3. **G2, with H1 and the weight defaults (#176), then its gate (#177).** The export carries the balloon shape, for the 49 % of text where it draws a different size or line breaks from the editor. **C is not in this:** decision D3 was to skip it. G3 is already on main and on this stack, and the empty stack removes most of the re-render cost that argued for releasing them together.
+4. **F5 (#244):** text box sized to the balloon, not the OCR column, judged on an export that now matches the editor. **Measure first:** #244's table is from 2026-10-07, and E2 and #283 have changed this code since (`geometry_source`, `source_text_box`, the glued-balloon cuts in `coordinator.rs`). Find which path p27 and p10 take today; the `safe_text` step may be smaller than #244 says. The flood fill for p10's real balloon width is the larger part. LOCK-1 holds: text with no balloon is never widened. Gate: #183's readability check on p27 and p10 beside the capture, no new overlaps (#182).
+5. **E3 (#180):** rotated text fits its balloon's outline. Needs G2.
+6. **Then M7's remaining packets** (#181, #182, #183; sample697–700 and sample76), **#245 and #231**, the R3 carry-forwards (#184, #185), and **#174 / #228** if they still matter. After the tracker: corpus-v2 (#186), M9 (#187), a fresh production stack (#188).
+
+**Before any code:** this machine has no GitNexus index, so `impact` and `detect_changes` could not run on 2026-11-06. Run `gitnexus analyze` in the root and in `worker/`.
+
+**Known, not blocking**
+- Deleting a chapter leaves the series page's paging offset one too far along, the bug #307 fixed for moves. No issue yet.
+- Left from one-shots: a one-shot's chapter page shows a "Series" row and a "Chapter 1" heading; the import dialog's series list stops at the first 100.
+- `minimatch` dev-only advisory (GHSA-g3hv-75wg-m249).
 
 ## Status at a glance (2026-10-17 — E2, Korean and Reshape merged)
 
 **Owner's tests on the F test stack (2026-10-17), all passed:** E2 on the Rotate set and the E
 rotation test series; the glued-balloon fix (Free ch 2 p27, ch 5 p62); Rotate p5 after the
 page-edge trim; Reshape on a rotated box; Korean on the placard page and a fresh Korean chapter.
-The stack runs `deploy/f-test-20261017` in both repos (rollback images `:pre-20261017`).
+At the time the stack ran `deploy/f-test-20261017` in both repos (rollback images `:pre-20261017`).
 
 **Merged 2026-10-17**
 
