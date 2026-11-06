@@ -6,6 +6,7 @@ import Grid from "@mui/material/Grid";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import DeleteIcon from "@mui/icons-material/Delete";
+import DriveFileMoveIcon from "@mui/icons-material/DriveFileMove";
 import EditIcon from "@mui/icons-material/Edit";
 import ImportExportIcon from "@mui/icons-material/ImportExport";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
@@ -43,6 +44,8 @@ interface ChapterCardGridProps {
   onSelectChapter: (chapter: Chapter) => void;
   onEditChapter: (chapter: Chapter, e: React.MouseEvent) => void;
   onDeleteChapter: (chapterId: string, e: React.MouseEvent) => void;
+  /** Move to another series or out to the library (#218). */
+  onMoveChapter?: (chapter: Chapter, e: React.MouseEvent) => void;
   onNavigate: (path: string) => void;
   settings?: SystemSettingsDto | null;
   hasMore: boolean;
@@ -58,6 +61,7 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
   onSelectChapter,
   onEditChapter,
   onDeleteChapter,
+  onMoveChapter,
   onNavigate,
   hasMore,
   isLoadingMore,
@@ -216,6 +220,15 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
                     icon: <EditIcon />,
                     onClick: (e) => onEditChapter(c, e),
                   },
+                  ...(onMoveChapter
+                    ? [
+                        {
+                          title: "Move Chapter",
+                          icon: <DriveFileMoveIcon />,
+                          onClick: (e: React.MouseEvent) => onMoveChapter(c, e),
+                        },
+                      ]
+                    : []),
                   {
                     title: "Delete Chapter",
                     icon: <DeleteIcon />,

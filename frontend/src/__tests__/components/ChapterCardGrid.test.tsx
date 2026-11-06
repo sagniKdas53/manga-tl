@@ -134,4 +134,32 @@ describe("ChapterCardGrid", () => {
     fireEvent.click(deleteBtns[0]);
     expect(mockOnDeleteChapter).toHaveBeenCalledWith("c1", expect.anything());
   });
+
+  it("offers Move only where a move handler is given (#218)", () => {
+    const onMove = vi.fn();
+    const props = {
+      chapters: mockChapters,
+      series: mockSeries,
+      sortAsc: true,
+      onToggleSort: mockOnToggleSort,
+      onSelectChapter: mockOnSelectChapter,
+      onEditChapter: mockOnEditChapter,
+      onDeleteChapter: mockOnDeleteChapter,
+      onNavigate: mockOnNavigate,
+      hasMore: false,
+      isLoadingMore: false,
+      onLoadMore: mockOnLoadMore,
+    };
+    const { rerender } = render(<ChapterCardGrid {...props} />);
+    expect(screen.queryByTitle("Move Chapter")).toBeNull();
+
+    rerender(
+      <ChapterCardGrid
+        {...props}
+        onMoveChapter={onMove}
+      />,
+    );
+    fireEvent.click(screen.getAllByTitle("Move Chapter")[1]);
+    expect(onMove).toHaveBeenCalledWith(mockChapters[1], expect.anything());
+  });
 });

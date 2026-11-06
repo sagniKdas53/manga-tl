@@ -644,6 +644,7 @@ function AppContent() {
                                 setSelectedSeries={setSelectedSeries}
                                 chapters={chapters}
                                 setChapters={setChapters}
+                                refreshChapters={refreshChapters}
                                 onSelectChapter={setSelectedChapter}
                                 isLoadingDetails={isLoadingDetails}
                                 sortAsc={chaptersSortAsc}
@@ -667,6 +668,7 @@ function AppContent() {
                                 setSelectedSeries={setSelectedSeries}
                                 chapters={chapters}
                                 setChapters={setChapters}
+                                refreshChapters={refreshChapters}
                                 onSelectChapter={setSelectedChapter}
                                 isLoadingDetails={isLoadingDetails}
                                 sortAsc={chaptersSortAsc}
@@ -687,6 +689,7 @@ function AppContent() {
                               <ChapterGallery
                                 user={user}
                                 selectedSeries={selectedSeries}
+                                onSeriesChanged={setSelectedSeries}
                                 selectedChapter={selectedChapter}
                                 setSelectedChapter={setSelectedChapter}
                                 pages={pages}
@@ -719,6 +722,7 @@ function AppContent() {
                               <ChapterGallery
                                 user={user}
                                 selectedSeries={selectedSeries}
+                                onSeriesChanged={setSelectedSeries}
                                 selectedChapter={selectedChapter}
                                 setSelectedChapter={setSelectedChapter}
                                 pages={pages}

@@ -35,6 +35,8 @@ export interface ChapterHeaderProps {
   onClearExportsClick: () => void;
   onUploadClick: () => void;
   onDeleteClick: () => void;
+  /** Move to another series or out to the library (#218). */
+  onMoveClick?: () => void;
   isImporting: boolean;
   mode: "light" | "dark";
 }
@@ -51,6 +53,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
   onClearExportsClick,
   onUploadClick,
   onDeleteClick,
+  onMoveClick,
   isImporting,
 }) => {
   const oneshot = isOneshot(selectedSeries);
@@ -296,6 +299,16 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
             open={openOverflow}
             onClose={() => setOverflowAnchorEl(null)}
           >
+            {onMoveClick && (
+              <MenuItem
+                onClick={() => {
+                  onMoveClick();
+                  setOverflowAnchorEl(null);
+                }}
+              >
+                Move…
+              </MenuItem>
+            )}
             <MenuItem
               onClick={() => {
                 onReexportClick();

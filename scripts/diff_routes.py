@@ -51,6 +51,7 @@ PORTED = {
     # one-shots (#226)
     "POST /api/series/oneshots",
     "POST /api/series/oneshots/import",
+    "POST /api/series/chapters/{chapterId}/move",
     # pages/images (Phase 2; zip branches + redo + import-project defer to Phase 3)
     "POST /api/images",
     "GET /api/chapters/{chapterId}/pages",
