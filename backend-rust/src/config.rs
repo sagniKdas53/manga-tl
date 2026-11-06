@@ -58,7 +58,7 @@ pub struct Config {
 }
 
 /// MinIO (S3-compatible) object storage. Compose passes:
-///   MINIO_ENDPOINT=http://minio:9000   (scheme REQUIRED for the Java SDK; we keep it)
+///   MINIO_ENDPOINT=http://seaweedfs:9000   (scheme REQUIRED for the Java SDK; we keep it)
 ///   MINIO_EXTERNAL_URL=                (optional public base to rewrite presigned URLs)
 ///   MINIO_ACCESS_KEY / MINIO_SECRET_KEY(_FILE)
 /// Redis/Valkey. Compose passes REDIS_HOST=redis / REDIS_PORT=6379.

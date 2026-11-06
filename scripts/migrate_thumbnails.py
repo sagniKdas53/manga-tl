@@ -35,7 +35,7 @@ if os.path.exists(db_pass_file):
 else:
     DB_PASS = os.getenv("DB_PASS", "postgres")
 
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio:9000")
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "seaweedfs:9000")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 minio_pass_file = "/run/secrets/minio_password"
 if os.path.exists(minio_pass_file):

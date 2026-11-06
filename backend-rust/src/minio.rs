@@ -1,4 +1,5 @@
-//! MinIO object storage — port of Java `MinioService`.
+//! S3 object storage — port of Java `MinioService`. The server has been SeaweedFS since 2026-11-06
+//! (#271); this module and its `MINIO_*` settings keep their old names.
 //!
 //! Rust refresher:
 //! - We use the AWS S3 SDK because MinIO speaks the S3 protocol. Two things make it

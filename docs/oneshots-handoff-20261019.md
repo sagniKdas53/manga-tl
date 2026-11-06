@@ -84,8 +84,8 @@ unpushed; remove them once this work has merged.
 docker run -d --rm --name oneshot-pg -p 127.0.0.1:5432:5432 -e POSTGRES_DB=manga_library \
   -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres postgres:15-alpine
 docker run -d --rm --name oneshot-valkey -p 127.0.0.1:6379:6379 valkey/valkey:8-alpine
-docker run -d --rm --name oneshot-minio -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=minioadmin \
-  -e MINIO_ROOT_PASSWORD=minioadmin purevert/minio:backup server /data
+docker run -d --rm --name oneshot-minio -p 127.0.0.1:9000:9000 -e AWS_ACCESS_KEY_ID=minioadmin \
+  -e AWS_SECRET_ACCESS_KEY=minioadmin chrislusf/seaweedfs:4.52 mini -dir=/data -s3.port=9000
 sed -e '/^\\restrict/d' -e '/^\\unrestrict/d' -e 's/OWNER TO [a-zA-Z_]*;/OWNER TO postgres;/' \
   database/init.sql | docker exec -i oneshot-pg psql -q -U postgres -d manga_library -v ON_ERROR_STOP=1
 cd backend-rust && APP_PROFILE=test \
