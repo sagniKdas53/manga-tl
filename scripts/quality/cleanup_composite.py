@@ -11,7 +11,7 @@ run whose stack has no host port for Postgres (e.g. chrome-box), pass a `psql` p
 execs into the container over SSH (`--psql-arg`, repeated). MinIO works the same way
 (`--minio-exec-arg`, repeated) rather than through a tunneled endpoint + explicit keys: it execs
 a tiny fetcher inside the *worker* container, which already holds a working MinIO credential
-(`minio:9000` on the compose network, secret at `/run/secrets/minio_password`) -- reusing that
+(`seaweedfs:9000` on the compose network, secret at `/run/secrets/minio_password`) -- reusing that
 proven path turned out to be far more robust than re-deriving `access_key`/`secret_key` and a
 tunneled endpoint for a from-scratch minio-py client, which hit persistent SignatureDoesNotMatch
 errors through the SSH-forwarded port for reasons never fully isolated (the same credential
@@ -75,7 +75,7 @@ import sys
 from minio import Minio
 
 client = Minio(
-    "minio:9000",
+    "seaweedfs:9000",
     access_key="minioadmin",
     secret_key=open("/run/secrets/minio_password").read().strip(),
     secure=False,

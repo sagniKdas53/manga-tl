@@ -68,7 +68,7 @@ python3 scripts/dev_setup.py up
 docker compose -f docker-compose.dev.yml ps
 ```
 
-The app is at `http://127.0.0.1:18080/tlhub/`; MinIO API/console use loopback ports 19000/19001. Use SSH forwarding from your workstation, for example `ssh -L 18080:127.0.0.1:18080 devbox`, then open the local app address. Set `DEV_HTTP_PORT`, `DEV_MINIO_PORT`, `DEV_MINIO_CONSOLE_PORT` or `DEV_PROJECT_NAME` in `.env` before startup if needed. Dev DB and storage accounts are internally consistent (`tladmin` and `minioadmin`); the dev DB role matches ownership declarations in `database/init.sql`.
+The app is at `http://127.0.0.1:18080/tlhub/`; the S3 API (SeaweedFS) uses loopback port 19000. Use SSH forwarding from your workstation, for example `ssh -L 18080:127.0.0.1:18080 devbox`, then open the local app address. Set `DEV_HTTP_PORT`, `DEV_MINIO_PORT`, `DEV_MINIO_CONSOLE_PORT` or `DEV_PROJECT_NAME` in `.env` before startup if needed. Dev DB and storage accounts are internally consistent (`tladmin` and `minioadmin`); the dev DB role matches ownership declarations in `database/init.sql`.
 
 After editing code, rerun `up` to rebuild the checked-out sources. After changing catalog/keys, rerun `init` first. To stop while retaining state: `docker compose -f docker-compose.dev.yml down`. A failure from `up --wait` is a failed startup; inspect `docker compose -f docker-compose.dev.yml logs` before processing pages.
 

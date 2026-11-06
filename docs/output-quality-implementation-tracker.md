@@ -29,7 +29,7 @@ Closed as done by #222 and #224: #214, #215. Filed: #308 (`keepSettings` edge ca
 **Not tested by the owner yet:** one-shots and moves passed CI and an API check on the deployed stack (2026-11-06), but no one has driven them in a browser on this stack: New chapter and Import ZIP as a one-shot, Move from a chapter card, deleting a one-shot.
 
 **Next, in order** (owner, 2026-11-06: SeaweedFS first, as a chore; G2 before F5, for the better final result)
-1. **SeaweedFS replaces MinIO (#271).** The stack runs a frozen mirror of the last community MinIO image. A chore before the bigger work. Design first; `minio-aistor-migration.md` lists the presign and multipart paths to re-validate.
+1. **Done: SeaweedFS replaces MinIO (#271).** See [object storage](minio-aistor-migration.md). No data migrated.
 2. **Test pages.** The owner runs some images by hand first, then the quality regression starts. The stack is empty and every gate below needs pages.
    - `manga-b-20261006-sources` has 64 pages, including F5's two: Free ch. 1 p27 and B #230 test (ja) p10. `seed_f_stack.py` loads them, once only, because a duplicate upload loses OCR pieces (#268). Re-tests use *Redo OCR*. Clear its `~/.manga-f-seeded` marker first, and run `manga-tl-test-heat-guard.sh` alongside it.
    - The other gate pages (sample177, 222, 61, 93, 83, 197, 641) need the corpus: its submodule isn't checked out here, and the images come from LFS on pi5. Sample7 is in `e-rotation-20261008`; sample99 is one of the B fixtures.

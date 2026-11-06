@@ -1,4 +1,42 @@
-# Object storage: MinIO mirror today, AIStor later
+# Object storage: SeaweedFS, and what it replaced
+
+**Status (2026-11-06): SeaweedFS (`chrislusf/seaweedfs:4.52`) runs in both compose files, CI and the test stacks (#271).** It replaced `purevert/minio:backup`, a frozen mirror of the last community MinIO image. The rest of this page is the old MinIO and AIStor plan, kept as history.
+
+## What runs now
+
+- `weed mini`: the master, volume server, filer and S3 gateway in one process, on one volume. It suits this stack, which has one storage node.
+- **Unchanged for clients:** the S3 API on port 9000, the credentials file, bucket `manga-library`. The backend's `MinioService`, the worker's `minio` Python client and the `MINIO_*` settings keep their names, because they are S3 clients. Renaming them is a separate, cosmetic change.
+- **Credentials:** `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`; the compose files read the secret from `minio_password`.
+- **Health:** `GET /healthz`.
+- **Addressing:** `-ip=seaweedfs` names the compose service, so the data stays reachable when the container gets a new IP (tested).
+- **Don't publish the filer.** Port 8888 takes unauthenticated reads and writes. Only the S3 port is ever published, and only on loopback. The admin UI listens inside the container only, so the old console port is gone.
+
+## Checked against SeaweedFS (2026-11-06)
+
+With the worker's client: multipart upload (40 MB), content types, Unicode keys, listing by prefix, presigned GET at 10 minutes and 7 days, refusal of expired and tampered links and of anonymous requests, wrong secret refused. Data survived a restart and a new container IP. The Rust suite runs against it in CI.
+
+## Old data
+
+**Nothing was migrated (owner, 2026-11-06).** SeaweedFS can't read MinIO's data directory, so old objects stay in `~/Projects/manga-tl-data-backup/` and in `data/minio` until you remove them. Objects alone don't appear in the app; they need their database too.
+
+To copy a bucket from a running MinIO into SeaweedFS, on the same Docker network (tested on the test stack: 52 objects, `rclone check` reported 0 differences):
+
+```sh
+docker run --rm --network <network> --entrypoint sh \
+  -e RCLONE_CONFIG_SRC_TYPE=s3 -e RCLONE_CONFIG_SRC_PROVIDER=Minio \
+  -e RCLONE_CONFIG_SRC_ENDPOINT=http://minio:9000 \
+  -e RCLONE_CONFIG_SRC_ACCESS_KEY_ID=minioadmin -e RCLONE_CONFIG_SRC_SECRET_ACCESS_KEY="$MINIO_PASSWORD" \
+  -e RCLONE_CONFIG_DST_TYPE=s3 -e RCLONE_CONFIG_DST_PROVIDER=SeaweedFS \
+  -e RCLONE_CONFIG_DST_ENDPOINT=http://seaweedfs:9000 \
+  -e RCLONE_CONFIG_DST_ACCESS_KEY_ID=minioadmin -e RCLONE_CONFIG_DST_SECRET_ACCESS_KEY="$MINIO_PASSWORD" \
+  rclone/rclone:1.71 -c 'rclone mkdir dst:manga-library && rclone copy src:manga-library dst:manga-library --metadata && rclone check src:manga-library dst:manga-library'
+```
+
+For an unpacked archive such as `20261019-f-test-20261017/minio/manga-library/`, mount it and use it as the source instead of `src:manga-library`. That variant has not been run.
+
+---
+
+# History: MinIO mirror, AIStor later (2026-09-19)
 
 **Status (2026-09-19): documented, not scheduled.** The stack runs on the user's own Docker Hub
 mirror of the last community MinIO image. Moving to MinIO AIStor with a free license is worked out
