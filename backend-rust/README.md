@@ -9,7 +9,7 @@ in-memory SSE broadcasting, and async pipeline coordination.
 
 - **Web Framework**: Axum 0.8 on Tokio
 - **Database**: PostgreSQL via SQLx connection pools
-- **Object Storage**: MinIO (S3-compatible API via AWS SDK)
+- **Object Storage**: SeaweedFS (S3 API via the AWS SDK; config keeps its `MINIO_*` names)
 - **Cache & Pub/Sub**: Valkey / Redis via `redis` crate
 - **Image Processing**: Native WebP decoding and encoding via `image` and `webp` crates
 - **Frontend Serving**: Embedded React SPA assets via `rust-embed` at `/tlhub/`

@@ -22,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_FILE = ROOT / "scripts/quality-test-deps.yml"
 PROJECT = "manga-quality-preflight"
-PORTS = {"db": 55590, "redis": 56490, "minio": 19190}
+PORTS = {"db": 55590, "redis": 56490, "seaweedfs": 19190}
 
 
 def run(command: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -82,18 +82,17 @@ def check_services() -> dict:
     curl = shutil.which("curl")
     storage = {"connected": False, "round_trip": False}
     if curl:
-        health = subprocess.run([curl, "-fsS", f"http://127.0.0.1:{PORTS['minio']}/minio/health/live"], text=True, capture_output=True, check=False)
-        storage["health_endpoint"] = "/minio/health/live"
+        health = subprocess.run([curl, "-fsS", f"http://127.0.0.1:{PORTS['seaweedfs']}/healthz"], text=True, capture_output=True, check=False)
+        storage["health_endpoint"] = "/healthz"
         storage["health"] = health.returncode == 0
-    token_key = f"preflight/{token}"
-    setup = compose("exec", "-T", "minio", "mc", "alias", "set", "quality", "http://localhost:9000", "quality_test", "quality_test_password", check=False)
-    create = compose("exec", "-T", "minio", "mc", "mb", "--ignore-existing", "quality/preflight", check=False)
-    put = compose("exec", "-T", "minio", "sh", "-c", f"printf %s {token!r} | mc pipe quality/preflight/{token_key}", check=False)
-    get = compose("exec", "-T", "minio", "mc", "cat", f"quality/preflight/{token_key}", check=False)
-    storage["round_trip"] = setup.returncode == create.returncode == put.returncode == get.returncode == 0 and get.stdout == token
+    # Through the filer, inside the container: the round trip proves storage, not the S3 credentials.
+    url = f"http://localhost:8888/buckets/preflight/preflight/{token}"
+    put = compose("exec", "-T", "seaweedfs", "sh", "-c", f"printf %s {token!r} | curl -fsS -o /dev/null -F file=@- {url}", check=False)
+    get = compose("exec", "-T", "seaweedfs", "curl", "-fsS", url, check=False)
+    storage["round_trip"] = put.returncode == get.returncode == 0 and get.stdout == token
     storage["connected"] = bool(storage.get("health")) and storage["round_trip"]
     if not storage["connected"]:
-        storage["note"] = "MinIO health or isolated object round trip failed"
+        storage["note"] = "SeaweedFS health or isolated object round trip failed"
     result["services"]["storage"] = storage
     return result
 

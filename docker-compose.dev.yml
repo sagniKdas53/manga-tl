@@ -29,19 +29,25 @@ services:
       timeout: 3s
       retries: 20
 
-  minio:
-    image: purevert/minio:backup
-    command: server /data --console-address :9001
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.52
+    # `weed mini` runs the master, volume server, filer and S3 gateway in one process. The credentials
+    # come from the environment, so the secret file is read into it here. -ip names the service, not an
+    # address, so the data stays reachable when the container gets a new IP.
+    entrypoint:
+      - sh
+      - -c
+      - |-
+        export AWS_SECRET_ACCESS_KEY="$$(cat /run/secrets/minio_password)"
+        exec weed -logtostderr=true mini -dir=/data -ip=seaweedfs -ip.bind=0.0.0.0 -s3.port=9000
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_password
+      AWS_ACCESS_KEY_ID: minioadmin
     secrets: [ minio_password ]
-    volumes: [ "dev-minio:/data" ]
+    volumes: [ "dev-seaweedfs:/data" ]
     ports:
       - "127.0.0.1:${DEV_MINIO_PORT:-19000}:9000"
-      - "127.0.0.1:${DEV_MINIO_CONSOLE_PORT:-19001}:9001"
     healthcheck:
-      test: [ CMD, curl, -f, http://localhost:9000/minio/health/live ]
+      test: [ CMD, curl, -f, http://localhost:9000/healthz ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -59,7 +65,7 @@ services:
       SPRING_DATASOURCE_PASSWORD_FILE: /run/secrets/db_password
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: "6379"
-      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ENDPOINT: http://seaweedfs:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY_FILE: /run/secrets/minio_password
       JWT_SECRET_FILE: /run/secrets/jwt_secret
@@ -74,12 +80,12 @@ services:
       SELF_HOSTED_ADMIN: ${SELF_HOSTED_ADMIN:-true}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     secrets: [ db_password, minio_password, jwt_secret, internal_api_token, worker_api_secret ]
-    # DEV_HTTP_BIND=0.0.0.0 in .env opens the Reader to the LAN (phones, tablets); MinIO stays local.
+    # DEV_HTTP_BIND=0.0.0.0 in .env opens the Reader to the LAN (phones, tablets); SeaweedFS stays local.
     ports: [ "${DEV_HTTP_BIND:-127.0.0.1}:${DEV_HTTP_PORT:-18080}:8080" ]
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
-      minio: { condition: service_healthy }
+      seaweedfs: { condition: service_healthy }
     healthcheck:
       test: [ CMD, /usr/local/bin/healthcheck ]
       interval: 10s
@@ -111,7 +117,7 @@ services:
     env_file: [ ./secrets/runtime/models.env ]
     environment:
       REDIS_HOST: redis
-      MINIO_ENDPOINT: minio:9000
+      MINIO_ENDPOINT: seaweedfs:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY_FILE: /run/secrets/minio_password
       BACKEND_CALLBACK_URL: http://backend:8080${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
@@ -184,7 +190,7 @@ services:
 volumes:
   dev-postgres:
   dev-redis:
-  dev-minio:
+  dev-seaweedfs:
   dev-huggingface:
   dev-paddlex:
   dev-rendered:

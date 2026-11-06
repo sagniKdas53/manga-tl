@@ -1,17 +1,16 @@
-//! MinIO integration tests against a REAL server.
+//! Object storage integration tests against a REAL server.
 //!
 //! Skipped unless MINIO_TEST_ENDPOINT is set. Locally, spin a throwaway instance:
 //!
 //! ```bash
-//! docker run --rm -d --name rust-minio-test -p 19000:9000 \
-//!   -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-//!   minio/minio server /data
+//! docker run --rm -d --name rust-s3-test -p 19000:9000 \
+//!   -e AWS_ACCESS_KEY_ID=minioadmin -e AWS_SECRET_ACCESS_KEY=minioadmin \
+//!   chrislusf/seaweedfs:4.52 mini -dir=/data -s3.port=9000
 //! MINIO_TEST_ENDPOINT=http://127.0.0.1:19000 cargo test --test minio_service
-//! docker rm -f rust-minio-test
+//! docker rm -f rust-s3-test
 //! ```
 //!
-//! CI (ci-cargo.yml) starts the same image with `docker run` (service containers cannot
-//! take the `server /data` argument minio/minio needs) and exports the same variables.
+//! CI (ci-cargo.yml) starts the same image with `docker run` and exports the same variables.
 
 use manga_backend::config::MinioConfig;
 use manga_backend::minio::MinioService;
@@ -19,13 +18,13 @@ use tokio::io::AsyncReadExt;
 
 fn test_service() -> Option<MinioService> {
     let Ok(endpoint) = std::env::var("MINIO_TEST_ENDPOINT") else {
-        // Skipping is right on a laptop with no MinIO, but in CI it would quietly turn
+        // Skipping is right on a laptop with no S3 server, but in CI it would quietly turn
         // this whole file into a no-op that still reports green -- exactly the failure
         // you would not notice. ci-cargo.yml always exports the endpoint, so its absence
         // there means the workflow broke, not that there is nothing to test.
         assert!(
             std::env::var_os("CI").is_none(),
-            "MINIO_TEST_ENDPOINT must be set under CI -- check the Start MinIO step and \
+            "MINIO_TEST_ENDPOINT must be set under CI -- check the Start SeaweedFS step and \
              the Test step env block in .github/workflows/ci-cargo.yml"
         );
         return None;

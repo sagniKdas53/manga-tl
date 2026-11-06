@@ -36,14 +36,14 @@
             "manga-backend",
             "manga-db",
             "manga-valkey",
-            "manga-minio"
+            "manga-seaweedfs"
           ],
           "value": [
             "manga-worker",
             "manga-backend",
             "manga-db",
             "manga-valkey",
-            "manga-minio"
+            "manga-seaweedfs"
           ]
         },
         "refresh": 1,

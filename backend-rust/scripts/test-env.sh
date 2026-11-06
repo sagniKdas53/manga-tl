@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Hermetic test runner for the Rust backend.
 #
-#   scripts/test-env.sh up              # start throwaway pg/valkey/minio (ports 55490/56390/19090)
+#   scripts/test-env.sh up              # start throwaway pg/valkey/seaweedfs (ports 55490/56390/19090)
 #   scripts/test-env.sh run             # full gate: fmt + clippy + cargo test, hermetic env
 #   scripts/test-env.sh run cargo test --test pages_endpoints
 #   scripts/test-env.sh down            # stop and wipe the throwaway world
 #
-# Why: the serving ruststack (db 55432 / valkey 56379 / minio 19001) must never see test
+# Why: the serving ruststack (db 55432 / valkey 56379 / s3 19000) must never see test
 # traffic — tests PUT global settings keys, delete users by prefix and can clobber the
 # Redis provider catalog blob on a crash. Everything here points at the isolated
 # manga-test-* containers instead; the live stack is unreachable from a test run by
@@ -17,7 +17,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE="docker compose -p mangatest -f ${SCRIPT_DIR}/test-deps.yml"
 
-# Ports are deliberately disjoint from the serving stack (55432/56379/19001) and from
+# Ports are deliberately disjoint from the serving stack (55432/56379/19000) and from
 # CI's service containers. Change them here AND in test-deps.yml together.
 DB_PORT=55490
 REDIS_PORT=56390
@@ -48,7 +48,7 @@ cmd_up() {
   fi
   apply_schema manga_library
   apply_schema manga_library_jobs_e2e
-  echo "mangatest ready: db :${DB_PORT} · valkey :${REDIS_PORT} · minio :${MINIO_PORT}"
+  echo "mangatest ready: db :${DB_PORT} · valkey :${REDIS_PORT} · s3 :${MINIO_PORT}"
 }
 
 cmd_down() {

@@ -42,9 +42,8 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      # NOTE: MinIO is NOT a service container on purpose — GitHub Actions cannot pass a
-      # command to services, and minio/minio exits printing usage unless run as
-      # `server /data`. The "Start MinIO" step below runs it via docker run instead.
+      # NOTE: SeaweedFS is NOT a service container on purpose: GitHub Actions cannot pass a
+      # command to services. The "Start SeaweedFS" step below runs it via docker run instead.
 
       valkey:
         image: valkey/valkey:8-alpine
@@ -71,21 +70,20 @@ jobs:
         with:
           workspaces: backend-rust
 
-      # MinIO must run with `server /data` (service containers can't take a command),
-      # so it is a plain docker run with an explicit health wait.
-      - name: Start MinIO
+      # A plain docker run with an explicit health wait: service containers can't take a command.
+      - name: Start SeaweedFS
         run: |
-          docker run -d --name ci-minio -p 9000:9000 \
-            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-            purevert/minio:backup server /data
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:9000/minio/health/live > /dev/null; then
-              echo "MinIO healthy"; exit 0
+          docker run -d --name ci-seaweedfs -p 9000:9000 \
+            -e AWS_ACCESS_KEY_ID=minioadmin -e AWS_SECRET_ACCESS_KEY=minioadmin \
+            chrislusf/seaweedfs:4.52 mini -dir=/data -s3.port=9000
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:9000/healthz > /dev/null; then
+              echo "SeaweedFS healthy"; exit 0
             fi
             sleep 1
           done
-          docker logs ci-minio
-          echo "MinIO did not become healthy in 30s" >&2
+          docker logs ci-seaweedfs
+          echo "SeaweedFS did not become healthy in 60s" >&2
           exit 1
 
       - name: Format check

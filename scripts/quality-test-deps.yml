@@ -31,18 +31,18 @@ services:
       timeout: 3s
       retries: 30
 
-  minio:
-    image: purevert/minio:backup
-    command: server /data
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.52
+    command: mini -dir=/data -s3.port=9000
     environment:
-      MINIO_ROOT_USER: quality_test
-      MINIO_ROOT_PASSWORD: quality_test_password
+      AWS_ACCESS_KEY_ID: quality_test
+      AWS_SECRET_ACCESS_KEY: quality_test_password
     ports:
       - "127.0.0.1:19190:9000"
     tmpfs:
       - /data
     healthcheck:
-      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/healthz"]
       interval: 2s
       timeout: 3s
       retries: 30
