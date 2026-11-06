@@ -26,6 +26,8 @@ interface SeriesDetailsProps {
   setSelectedSeries: React.Dispatch<React.SetStateAction<Series | null>>;
   chapters: Chapter[];
   setChapters: React.Dispatch<React.SetStateAction<Chapter[]>>;
+  /** Refetches the loaded batches, so paging stays right after a chapter leaves the list. */
+  refreshChapters?: () => Promise<void>;
   onSelectChapter: (chapter: Chapter) => void;
   isLoadingDetails: boolean;
   // AUDIT-F8: sort now drives a server-side query (App.tsx owns the fetch), for the same
@@ -44,6 +46,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   setSelectedSeries,
   chapters,
   setChapters,
+  refreshChapters,
   onSelectChapter,
   isLoadingDetails,
   sortAsc,
@@ -188,10 +191,12 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     showToast(msg, "error");
   };
 
-  // A moved chapter leaves this list; the series is re-read for its cover, which may have been
-  // the moved chapter's.
+  // A moved chapter leaves this list. Filtering alone would leave the next batch's offset one
+  // too far along, skipping a chapter, so the loaded batches are refetched too. The series is
+  // re-read for its cover, which may have been the moved chapter's.
   const handleChapterMoved = (result: MoveChapterResult) => {
     setChapters((prev) => prev.filter((c) => c.id !== result.chapter.id));
+    void refreshChapters?.();
     showToast(
       `Moved to ${result.series.kind === "oneshot" ? "the library as a one-shot" : result.series.title}`,
       "success",

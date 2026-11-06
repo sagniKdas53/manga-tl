@@ -1261,62 +1261,86 @@ fn pin_settings(
         let after = to.clone().or_else(|| global.clone());
         if before != after { before } else { None }
     }
+    // Same test as resolve_model: `inherit`, blanks and `[ORPHANED]` models count as unset, whichever
+    // level they sit at, so they mustn't stop a pin or be pinned themselves.
+    fn pin_text(
+        chapter: &Option<String>,
+        from: &Option<String>,
+        to: &Option<String>,
+        global: &Option<String>,
+    ) -> Option<String> {
+        if crate::resolve::is_override(chapter.as_deref()) {
+            return chapter.clone();
+        }
+        let set = |v: &Option<String>| {
+            v.as_deref()
+                .filter(|v| crate::resolve::is_override(Some(v)))
+                .map(|v| v.trim().to_string())
+        };
+        let before = set(from).or_else(|| global.clone());
+        let after = set(to).or_else(|| global.clone());
+        if before != after {
+            before
+        } else {
+            chapter.clone()
+        }
+    }
     ChapterSettings {
-        ocr_provider: pin(
+        ocr_provider: pin_text(
             &chapter.ocr_provider,
             &from.ocr_provider,
             &to.ocr_provider,
             &global.ocr_provider,
         ),
-        ocr_model: pin(
+        ocr_model: pin_text(
             &chapter.ocr_model,
             &from.ocr_model,
             &to.ocr_model,
             &global.ocr_model,
         ),
-        tl_provider: pin(
+        tl_provider: pin_text(
             &chapter.tl_provider,
             &from.tl_provider,
             &to.tl_provider,
             &global.tl_provider,
         ),
-        tl_model: pin(
+        tl_model: pin_text(
             &chapter.tl_model,
             &from.tl_model,
             &to.tl_model,
             &global.tl_model,
         ),
-        qa_provider: pin(
+        qa_provider: pin_text(
             &chapter.qa_provider,
             &from.qa_provider,
             &to.qa_provider,
             &global.qa_provider,
         ),
-        qa_llm_model: pin(
+        qa_llm_model: pin_text(
             &chapter.qa_llm_model,
             &from.qa_llm_model,
             &to.qa_llm_model,
             &global.qa_llm_model,
         ),
-        qa_vlm_model: pin(
+        qa_vlm_model: pin_text(
             &chapter.qa_vlm_model,
             &from.qa_vlm_model,
             &to.qa_vlm_model,
             &global.qa_vlm_model,
         ),
-        qa_mode: pin(
+        qa_mode: pin_text(
             &chapter.qa_mode,
             &from.qa_mode,
             &to.qa_mode,
             &global.qa_mode,
         ),
-        routing_strategy: pin(
+        routing_strategy: pin_text(
             &chapter.routing_strategy,
             &from.routing_strategy,
             &to.routing_strategy,
             &global.routing_strategy,
         ),
-        cleanup_mode: pin(
+        cleanup_mode: pin_text(
             &chapter.cleanup_mode,
             &from.cleanup_mode,
             &to.cleanup_mode,
@@ -2380,5 +2404,24 @@ mod tests {
             &global,
         );
         assert_eq!(pinned.tl_model.as_deref(), Some("mine/tl"));
+
+        // A chapter holding a value the resolver treats as unset still inherited the old series'
+        // model, so it is pinned like any other chapter.
+        let pinned = pin_settings(
+            &settings(Some("gone/tl [ORPHANED]"), None),
+            &settings(Some("old/tl"), None),
+            &settings(Some("new/tl"), None),
+            &global,
+        );
+        assert_eq!(pinned.tl_model.as_deref(), Some("old/tl"));
+
+        // A series holding such a value resolves to the global, so nothing would change.
+        let pinned = pin_settings(
+            &settings(None, None),
+            &settings(Some(" inherit "), None),
+            &settings(Some("[ORPHANED] x"), None),
+            &global,
+        );
+        assert_eq!(pinned.tl_model, None);
     }
 }

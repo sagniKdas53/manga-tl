@@ -27,6 +27,22 @@ vi.mock("../../utils", () => ({
   }),
 }));
 
+// The dialog has its own tests; here it only reports a finished move.
+vi.mock("../../components/MoveChapterDialog", () => ({
+  default: ({ onMoved }: { onMoved: (result: unknown) => void }) => (
+    <button
+      onClick={() =>
+        onMoved({
+          chapter: { id: "c1" },
+          series: { kind: "series", title: "Naruto" },
+        })
+      }
+    >
+      Finish move
+    </button>
+  ),
+}));
+
 describe("SeriesDetails", () => {
   const mockUser = {
     id: "1",
@@ -194,6 +210,31 @@ describe("SeriesDetails", () => {
     expect(
       screen.getByRole("heading", { name: "Edit Series" }),
     ).toBeInTheDocument();
+  });
+
+  it("refetches the loaded batches after a chapter moves out, so paging skips nothing", () => {
+    const refreshChapters = vi.fn().mockResolvedValue(undefined);
+    render(
+      <SeriesDetails
+        user={mockUser}
+        selectedSeries={mockSeries}
+        setSelectedSeries={mockSetSelectedSeries}
+        chapters={mockChapters}
+        setChapters={mockSetChapters}
+        refreshChapters={refreshChapters}
+        onSelectChapter={mockOnSelectChapter}
+        isLoadingDetails={false}
+        sortAsc={true}
+        setSortAsc={mockSetSortAsc}
+        hasMoreChapters={true}
+        isLoadingMoreChapters={false}
+        onLoadMoreChapters={mockOnLoadMoreChapters}
+      />,
+    );
+
+    fireEvent.click(screen.getByTitle("Move Chapter"));
+    fireEvent.click(screen.getByRole("button", { name: "Finish move" }));
+    expect(refreshChapters).toHaveBeenCalledTimes(1);
   });
 
   it("opens delete confirm modal on delete series click", () => {

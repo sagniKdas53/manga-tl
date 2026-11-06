@@ -644,6 +644,7 @@ function AppContent() {
                                 setSelectedSeries={setSelectedSeries}
                                 chapters={chapters}
                                 setChapters={setChapters}
+                                refreshChapters={refreshChapters}
                                 onSelectChapter={setSelectedChapter}
                                 isLoadingDetails={isLoadingDetails}
                                 sortAsc={chaptersSortAsc}
@@ -667,6 +668,7 @@ function AppContent() {
                                 setSelectedSeries={setSelectedSeries}
                                 chapters={chapters}
                                 setChapters={setChapters}
+                                refreshChapters={refreshChapters}
                                 onSelectChapter={setSelectedChapter}
                                 isLoadingDetails={isLoadingDetails}
                                 sortAsc={chaptersSortAsc}
