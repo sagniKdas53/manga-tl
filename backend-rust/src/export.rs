@@ -138,7 +138,7 @@ async fn try_build(
     let mut zip_buf = std::io::Cursor::new(Vec::new());
     {
         let mut writer = zip::ZipWriter::new(&mut zip_buf);
-        let options: zip::write::FileOptions<'_, ()> =
+        let options: zip::write::FileOptions<'_, '_, ()> =
             zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
         for page in &pages {

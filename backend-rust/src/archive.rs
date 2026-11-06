@@ -50,7 +50,11 @@ pub fn read_archive(bytes: &[u8]) -> Result<ArchiveContents, String> {
         if entry.is_dir() {
             continue;
         }
-        let name = entry.name().trim_end_matches('/').to_string();
+        let name = entry
+            .name()
+            .map_err(|e| format!("unreadable name of entry {index}: {e}"))?
+            .trim_end_matches('/')
+            .to_string();
         if !keep(&name) {
             continue;
         }
@@ -161,7 +165,7 @@ fn strip_leading_zeros(run: &[u8]) -> &[u8] {
 pub fn write_zip(entries: &[(String, Vec<u8>)]) -> Result<Vec<u8>, String> {
     let cursor = std::io::Cursor::new(Vec::new());
     let mut writer = zip::ZipWriter::new(cursor);
-    let options: zip::write::FileOptions<'_, ()> =
+    let options: zip::write::FileOptions<'_, '_, ()> =
         zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     for (name, bytes) in entries {
         writer

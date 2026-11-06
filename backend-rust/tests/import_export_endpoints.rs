@@ -123,7 +123,7 @@ fn multipart(fields: &[(&str, String)], file_field: Option<(&str, &str, &[u8])>)
 fn zip_of(entries: Vec<(String, Vec<u8>)>, project_json: Option<&str>) -> Vec<u8> {
     let cursor = std::io::Cursor::new(Vec::new());
     let mut writer = zip::ZipWriter::new(cursor);
-    let options: zip::write::FileOptions<'_, ()> =
+    let options: zip::write::FileOptions<'_, '_, ()> =
         zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     for (name, bytes) in entries {
         writer.start_file(name, options).unwrap();
@@ -434,7 +434,7 @@ async fn image_archive_upload_and_project_restore() {
     let project_zip = {
         let cursor = std::io::Cursor::new(Vec::new());
         let mut writer = zip::ZipWriter::new(cursor);
-        let options: zip::write::FileOptions<'_, ()> =
+        let options: zip::write::FileOptions<'_, '_, ()> =
             zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         writer.start_file("original.png", options).unwrap();
         std::io::Write::write_all(&mut writer, &png_bytes([40, 40, 240])).unwrap();
