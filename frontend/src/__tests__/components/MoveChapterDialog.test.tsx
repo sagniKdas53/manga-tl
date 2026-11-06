@@ -178,6 +178,31 @@ describe("MoveChapterDialog", () => {
     );
   });
 
+  it("can move a chapter numbered 0, the number a chapter gets by default", async () => {
+    const onMoved = vi.fn();
+    render(
+      <MoveChapterDialog
+        open
+        onClose={vi.fn()}
+        user={user}
+        chapter={{ ...chapter, chapterNumber: 0 }}
+        series={from}
+        onMoved={onMoved}
+      />,
+    );
+    await pick("Solo Leveling");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Move" })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Move" }));
+    await waitFor(() => expect(onMoved).toHaveBeenCalled());
+    expect(moveBody()).toEqual({
+      seriesId: "s3",
+      chapterNumber: 0,
+      keepSettings: true,
+    });
+  });
+
   it("takes the server's next free number when the number was taken meanwhile", async () => {
     mockSafeFetch.mockImplementation((url: string) => {
       if (url.startsWith("/api/series?")) return ok({ content: [korean] });

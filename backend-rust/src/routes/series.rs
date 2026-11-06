@@ -1386,11 +1386,12 @@ pub async fn move_chapter(
     if dto.seriesId.is_some() == dto.oneshot {
         return error::bad_request("Send either seriesId or oneshot: true.", INSTANCE);
     }
+    // Zero is a real chapter number: it is what create_chapter stores when none is given.
     if dto
         .chapterNumber
-        .is_some_and(|n| !n.is_finite() || n <= 0.0)
+        .is_some_and(|n| !n.is_finite() || n < 0.0)
     {
-        return error::bad_request("chapterNumber must be a positive number.", INSTANCE);
+        return error::bad_request("chapterNumber must not be negative.", INSTANCE);
     }
     let defaults = PipelineDefaults::from_env();
     let global = load_global_settings(&state.pool, &defaults).await;
@@ -1483,7 +1484,7 @@ pub async fn move_chapter(
             }
         };
 
-        let number = if dto.oneshot {
+        let number = if target.kind == KIND_ONESHOT {
             ONESHOT_CHAPTER_NUMBER
         } else {
             dto.chapterNumber.unwrap_or(chapter.chapter_number)

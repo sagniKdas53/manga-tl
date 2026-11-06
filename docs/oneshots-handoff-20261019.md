@@ -1,45 +1,29 @@
-# One-shots and moving chapters: handoff (2026-10-19)
+# One-shots and moving chapters: handoff (2026-10-19, updated 2026-11-06)
 
 Milestone "Standalone chapters (schema)": #226 (server), #216 (library UI), #218 (Move dialog).
-Everything is built and tested. Nothing is merged yet. The work is waiting on CodeRabbit.
+One-shots merged in #288 on 2026-11-06. The move route and dialog land with this document.
 
 ## Where things are
 
-| Branch | Head | PR | Contents |
-|---|---|---|---|
-| `feat/oneshot-schema` | `ddc3420` | **#288** → `main` | one-shot schema and routes, library UI, the user's OpenCode doc + `.gitignore` line (cherry-picked from 85a1bee), CLI review fixes |
-| `feat/chapter-move` | this commit | **none yet** | stacked on `feat/oneshot-schema`: move route + `keepSettings` (rest of #226), Move dialog (#218), this handoff |
+| Branch | PR | Contents |
+|---|---|---|
+| `feat/oneshot-schema` | **#288**, merged | one-shot schema and routes, library UI, the user's OpenCode doc + `.gitignore` line, CLI review fixes |
+| `feat/chapter-move` | the PR this document landed in | move route + `keepSettings` (rest of #226), Move dialog (#218), this handoff |
 
-Worktrees: `.claude/worktrees/oneshot-schema` and `.claude/worktrees/chapter-move`. Both
-branches are pushed to `github`.
+The laptop checkout (`~/Projects/docker-composes/manga-library`, remote `github`) still has the
+worktrees `.claude/worktrees/oneshot-schema` and `.claude/worktrees/chapter-move`. They hold nothing
+unpushed; remove them once this work has merged.
 
-The main checkout still has the OpenCode doc and the `.gitignore` line **staged**. They are identical
-to the commit in #288. After #288 merges, run `git restore --staged .` before you pull (or reset
-`main` to `github/main`).
+## What is left
 
-## The plan, in order
-
-1. **Wait for CodeRabbit on #288.** CodeRabbit no longer auto-reviews this repo ("fewer than 10
-   stars"). A review runs only when the **Trigger review** box in its comment is ticked. On #288
-   the box was ticked at about 10:30 on 2026-10-19 (comment 6264504047). If nothing arrives, tick it again in the
-   GitHub UI. `@coderabbitai review` alone did not start a review.
-   - Address its findings on `feat/oneshot-schema`. Then rebase `feat/chapter-move` onto it
-     (`git rebase feat/oneshot-schema`, `push --force-with-lease`). Never cherry-pick a fix up
-     the stack.
-   - "Reviews paused" or a stale CHANGES_REQUESTED: post `@coderabbitai review`, or tick the box.
-2. **When #288 is approved:** open the stacked PR from `feat/chapter-move` with base
-   `feat/oneshot-schema`. Title: "Move a chapter between series and out to a one-shot (#226, #218)".
-   Body: "Closes #226. Closes #218." Tick CodeRabbit's Trigger review box on it, and address its findings.
-3. **Merge bottom-up.** `gh pr merge` refuses PRs in a stack. Use
-   `PUT /repos/sagniKdas53/manga-tl/pulls/{n}/merge-async` (`merge_method=merge`,
-   `merge_action=direct_merge`, `sha=<head>`) and poll until `merged`. Merge #288 first. GitHub then
-   restacks the upper PR onto `main`. Reset the local worktree to the remote before working there.
-4. Close #216 (by #288), and #226 and #218 (by the stacked PR). Update the milestone and the tracker's
-   "Known, not blocking" / milestone notes if needed.
-5. **Deploy** (only on the owner's word): run
-   `database/migrations/2026-10-19-oneshot-series-kind.sql` **before** starting the new backend, on
-   each stack (dev, chrome-box test `manga-tl-test`, prod). Without the column the library lists
-   nothing (the error is swallowed) and `GET /api/series/{id}` returns 404. The script is safe to run twice.
+1. **Reviews:** CodeRabbit no longer auto-reviews this repo ("fewer than 10 stars"). A review runs
+   only when the **Trigger review** box in its comment is ticked; `@coderabbitai review` alone did
+   not start one.
+2. **Deploy** (only on the owner's word). A new stack gets `series.kind` from `database/init.sql`, as
+   long as its Postgres volume is new (`init.sql` only runs on an empty data directory). On a stack
+   that keeps its database, run `database/migrations/2026-10-19-oneshot-series-kind.sql` **before**
+   starting the new backend: without the column the library lists nothing (the error is swallowed)
+   and `GET /api/series/{id}` returns 404. The script is safe to run twice. The move adds no schema.
 
 ## What was built
 

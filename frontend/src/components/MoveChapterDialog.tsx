@@ -154,7 +154,7 @@ export const MoveChapterDialog: React.FC<MoveChapterDialogProps> = ({
     target && languagesOf(target) !== languagesOf(series),
   );
   const canMove =
-    !moving && (toLibrary || (Boolean(target) && number > 0 && !clash));
+    !moving && (toLibrary || (Boolean(target) && number >= 0 && !clash));
 
   const handleMove = async () => {
     if (!canMove) return;

@@ -989,5 +989,43 @@ async fn chapter_moves_between_series_and_oneshots() {
         "a pinned value stays pinned"
     );
 
+    // A negative number is refused; chapter 0 (what create stores by default) moves as it is.
+    let (status, _) = post(
+        move_uri(&a_chapters[0]),
+        format!(r#"{{"seriesId":"{b_id}","chapterNumber":-1}}"#),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (_, zero) = post(
+        format!("/tlhub/api/series/{a_id}/chapters"),
+        r#"{"chapterNumber":0,"title":"Prologue"}"#.into(),
+    )
+    .await;
+    let (status, moved_zero) = post(
+        move_uri(zero["id"].as_str().unwrap()),
+        format!(r#"{{"seriesId":"{b_id}","chapterNumber":0}}"#),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{moved_zero}");
+    assert_eq!(moved_zero["chapter"]["chapterNumber"], 0.0);
+
+    // Into a one-shot that has no chapter yet: it becomes chapter 1, whatever it was before.
+    let empty_oneshot: Uuid = sqlx::query_scalar(
+        "INSERT INTO series (id, created_at, updated_at, title, original_language, \
+         reading_direction, created_by, kind) \
+         SELECT uuid_generate_v4(), now(), now(), 'Empty one-shot', 'ja', 'rtl', id, 'oneshot' \
+         FROM users WHERE email LIKE '__move-e2e-%' LIMIT 1 RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("empty one-shot insert");
+    let (status, into_empty) = post(
+        move_uri(&a_chapters[1]),
+        format!(r#"{{"seriesId":"{empty_oneshot}","chapterNumber":5}}"#),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{into_empty}");
+    assert_eq!(into_empty["chapter"]["chapterNumber"], 1.0);
+
     move_cleanup(&pool).await;
 }
