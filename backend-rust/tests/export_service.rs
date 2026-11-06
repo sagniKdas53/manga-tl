@@ -334,8 +334,12 @@ async fn export_zip_metadata_cache_hit_and_notifications() {
         .expect("cached zip");
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip_bytes)).expect("zip opens");
     assert_eq!(archive.len(), 2, "one page entry + meta-data.json");
-    assert!(archive.file_names().any(|n| n == "meta-data.json"));
-    assert!(archive.file_names().any(|n| n.ends_with(".png")));
+    let names: Vec<String> = archive
+        .file_names()
+        .map(|n| n.expect("entry name").into_owned())
+        .collect();
+    assert!(names.iter().any(|n| n == "meta-data.json"));
+    assert!(names.iter().any(|n| n.ends_with(".png")));
     let meta_json = archive.by_name("meta-data.json").expect("meta entry");
     let meta: serde_json::Value =
         serde_json::from_reader(std::io::BufReader::new(meta_json)).expect("meta-data.json parses");
