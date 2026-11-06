@@ -539,7 +539,8 @@ CREATE TABLE public.series (
     ocr_merge_threshold double precision,
     ocr_text_angle boolean,
     use_fallback_models boolean,
-    created_by uuid
+    created_by uuid,
+    kind character varying(16) DEFAULT 'series'::character varying NOT NULL CONSTRAINT series_kind_check CHECK (kind IN ('series', 'oneshot'))
 );
 
 

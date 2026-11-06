@@ -92,6 +92,17 @@ describe("ZipImportDialog", () => {
         return ok({ ...series, id: "new", title: "Brand new" });
       if (url.endsWith("/chapters/import"))
         return ok({ id: "c1", chapterNumber: 8 });
+      if (url === "/api/series/oneshots/import")
+        return ok({
+          series: {
+            ...series,
+            id: "os1",
+            title: "Romance Dawn",
+            kind: "oneshot",
+            oneshotChapterId: "c9",
+          },
+          chapter: { id: "c9", chapterNumber: 1 },
+        });
       return Promise.reject(new Error(`unexpected ${url}`));
     });
   });
@@ -172,7 +183,7 @@ describe("ZipImportDialog", () => {
     );
     await waitFor(() => screen.getByText("3 of 3 pages"));
 
-    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Into" }));
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Add to" }));
     fireEvent.click(await screen.findByRole("option", { name: "New series…" }));
     // The title is proposed from the file name.
     expect(screen.getByLabelText(/Series title/)).toHaveValue("Romance Dawn");
@@ -348,7 +359,7 @@ describe("ZipImportDialog", () => {
       />,
     );
     await waitFor(() => screen.getByText("3 of 3 pages"));
-    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Into" }));
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Add to" }));
     fireEvent.click(await screen.findByRole("option", { name: "New series…" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Import 3 pages" }));
@@ -443,5 +454,60 @@ describe("ZipImportDialog", () => {
       await screen.findByText(/This is a page project archive/),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Import" })).toBeDisabled();
+  });
+
+  it("makes a one-shot from the library unless another destination is picked (#216)", async () => {
+    const onImported = vi.fn();
+    render(
+      <ZipImportDialog
+        open
+        onClose={vi.fn()}
+        user={user}
+        initialFile={await archiveFile()}
+        onImported={onImported}
+      />,
+    );
+    await waitFor(() => screen.getByText("3 of 3 pages"));
+
+    expect(screen.getByRole("combobox", { name: "Add to" })).toHaveTextContent(
+      "One-shot (no series)",
+    );
+    // A one-shot is chapter 1 of itself: no number or chapter title to ask for.
+    expect(screen.queryByLabelText(/Chapter number/)).toBeNull();
+    expect(screen.getByLabelText(/^Title/)).toHaveValue("Romance Dawn");
+    // One-shots can't take another chapter, so they are not offered as destinations.
+    expect(
+      mockSafeFetch.mock.calls.some(
+        ([url]) =>
+          String(url).startsWith("/api/series?") &&
+          String(url).includes("kind=series"),
+      ),
+    ).toBe(true);
+
+    fireEvent.mouseDown(
+      screen.getByRole("combobox", { name: "Translate from" }),
+    );
+    fireEvent.click(await screen.findByRole("option", { name: "ko" }));
+    fireEvent.click(screen.getByRole("button", { name: "Import 3 pages" }));
+
+    await waitFor(() => expect(onImported).toHaveBeenCalled());
+    const [, init] = mockSafeFetch.mock.calls.find(
+      ([url]) => url === "/api/series/oneshots/import",
+    )!;
+    const form = init.body as FormData;
+    expect(form.get("title")).toBe("Romance Dawn");
+    expect(form.get("sourceLanguage")).toBe("ko");
+    expect(form.get("targetLanguage")).toBe("en");
+    expect(form.get("readingDirection")).toBe("rtl");
+    expect(form.get("chapterNumber")).toBeNull();
+    // No series is created first: the import makes the one-shot.
+    expect(
+      mockSafeFetch.mock.calls.some(
+        ([url, i]) => url === "/api/series" && i?.method === "POST",
+      ),
+    ).toBe(false);
+    const [, importedSeries, pageCount] = onImported.mock.calls[0];
+    expect(importedSeries).toMatchObject({ id: "os1", kind: "oneshot" });
+    expect(pageCount).toBe(3);
   });
 });

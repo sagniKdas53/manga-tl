@@ -10,12 +10,14 @@ import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
+import Chip from "@mui/material/Chip";
 import FormControl from "@mui/material/FormControl";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import Typography from "@mui/material/Typography";
 import { useToast } from "./ToastContext";
 import type { User, Series } from "../types";
+import { isOneshot } from "../types";
 import { safeFetch, toSlug } from "../utils";
 import {
   readingDirectionLabel,
@@ -27,6 +29,7 @@ import CreateSeriesDialog from "./CreateSeriesDialog";
 import LazyImage from "./LazyImage";
 import LoadMoreSentinel from "./LoadMoreSentinel";
 import DropOverlay from "./DropOverlay";
+import ZipImportDialog from "./ZipImportDialog";
 import { useArchiveDrop } from "../hooks/useArchiveDrop";
 import { isChapterArchiveFile } from "../utils/zipPages";
 
@@ -77,6 +80,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [showSeriesModal, setShowSeriesModal] = useState(false);
   const [editingSeries, setEditingSeries] = useState<Series | null>(null);
   const [createCounter, setCreateCounter] = useState(0);
+  // One-shots (#216): "New chapter" makes one, "Import chapter" and a ZIP drop import one.
+  const [showOneshotModal, setShowOneshotModal] = useState(false);
+  const [oneshotCounter, setOneshotCounter] = useState(0);
+  const [zipImport, setZipImport] = useState<{
+    open: boolean;
+    file: File | null;
+  }>({ open: false, file: null });
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -96,25 +106,51 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const closeConfirmModal = () =>
     setConfirmModal((prev) => ({ ...prev, isOpen: false }));
 
-  // Standalone chapters (a chapter with no series) need a schema change and are a future
-  // milestone. Until then the library's "New chapter", "Import chapter" and ZIP drop are in
-  // place but lead nowhere: they say so and point at the series page, where import works.
-  const standaloneNotYet = () =>
-    showToast(
-      "Chapters without a series are coming later. For now, open a series and import there.",
-      "info",
-    );
-  const draggingArchive = useArchiveDrop(!showSeriesModal, (file) => {
+  const anyDialogOpen = showSeriesModal || showOneshotModal || zipImport.open;
+  const draggingArchive = useArchiveDrop(!anyDialogOpen, (file) => {
     if (!isChapterArchiveFile(file)) {
       showToast("Drop a .zip, .cbz or .epub to import a chapter.", "info");
       return;
     }
-    standaloneNotYet();
+    setZipImport({ open: true, file });
   });
 
+  // A one-shot has no series page: its card opens the chapter.
   const openSeries = (s: Series) => {
     onSelectSeries(s);
-    navigate(`/series/${s.id}/${toSlug(s.title)}`);
+    if (isOneshot(s) && s.oneshotChapterId) {
+      navigate(`/chapters/${s.oneshotChapterId}/${toSlug(s.title)}`);
+    } else {
+      navigate(`/series/${s.id}/${toSlug(s.title)}`);
+    }
+  };
+
+  const handleNewOneshotClick = () => {
+    setOneshotCounter((c) => c + 1);
+    setShowOneshotModal(true);
+  };
+
+  const handleImported = (
+    _chapter: unknown,
+    series: Series,
+    pageCount: number,
+  ) => {
+    if (isOneshot(series)) {
+      setSeriesList((prev) => [series, ...prev]);
+      showToast(
+        `Imported ${series.title} as a one-shot (${pageCount} ${pageCount === 1 ? "page" : "pages"})`,
+        "success",
+      );
+    } else {
+      // "New series…" in the dialog made this series just now; an existing one is listed already.
+      setSeriesList((prev) =>
+        prev.some((s) => s.id === series.id) ? prev : [series, ...prev],
+      );
+      showToast(
+        `Imported ${pageCount} ${pageCount === 1 ? "page" : "pages"} into ${series.title}`,
+        "success",
+      );
+    }
   };
 
   const handleEditSeriesClick = (s: Series, e: React.MouseEvent) => {
@@ -140,6 +176,45 @@ export const Dashboard: React.FC<DashboardProps> = ({
     } else {
       setSeriesList((prev) => [...prev, data]);
     }
+  };
+
+  // A one-shot goes with its chapter (any role may delete a chapter; deleting a series is
+  // admin-only), and the server removes the emptied one-shot.
+  const handleDeleteOneshot = (s: Series, e: React.MouseEvent) => {
+    // A one-shot without its chapter has nothing to delete through; delete the series instead.
+    if (!s.oneshotChapterId) {
+      handleDeleteSeries(s.id, e);
+      return;
+    }
+    e.stopPropagation();
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete One-shot",
+      message: `Delete ${s.title}? This deletes its chapter and pages.`,
+      confirmText: "Delete One-shot",
+      isDangerous: true,
+      onConfirm: async () => {
+        closeConfirmModal();
+        try {
+          const res = await safeFetch(
+            `/api/series/chapters/${s.oneshotChapterId}`,
+            {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${user.token}` },
+            },
+          );
+          if (res.ok) {
+            setSeriesList((prev) => prev.filter((x) => x.id !== s.id));
+            showToast("One-shot deleted", "success");
+          } else {
+            showToast("Failed to delete one-shot", "error");
+          }
+        } catch (err) {
+          console.error("Error deleting one-shot:", err);
+          showToast("Error deleting one-shot", "error");
+        }
+      },
+    });
   };
 
   const handleDeleteSeries = (seriesId: string, e: React.MouseEvent) => {
@@ -225,14 +300,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <Button
           variant="outlined"
           startIcon={<UploadIcon />}
-          onClick={standaloneNotYet}
+          onClick={() => setZipImport({ open: true, file: null })}
         >
           Import chapter
         </Button>
         <Button
           variant="outlined"
           startIcon={<AddIcon />}
-          onClick={standaloneNotYet}
+          onClick={handleNewOneshotClick}
         >
           New chapter
         </Button>
@@ -298,6 +373,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             }}
             sx={{
               cursor: "pointer",
+              position: "relative",
               display: "flex",
               flexDirection: "column",
               borderRadius: "8px",
@@ -307,6 +383,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
               "&:hover, &:focus-visible": { outlineColor: "primary.main" },
             }}
           >
+            {isOneshot(s) && (
+              <Chip
+                label="One-shot"
+                size="small"
+                sx={{
+                  position: "absolute",
+                  top: 6,
+                  left: 6,
+                  zIndex: 1,
+                  fontWeight: 700,
+                  bgcolor: "background.paper",
+                }}
+              />
+            )}
             {s.coverImageUrl ? (
               <LazyImage
                 src={s.coverImageUrl}
@@ -365,19 +455,35 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   label: `Reading direction: ${readingDirectionLabel(s.readingDirection).toLowerCase()}`,
                 },
               ]}
-              actions={[
-                {
-                  title: "Edit Series",
-                  icon: <EditIcon />,
-                  onClick: (e) => handleEditSeriesClick(s, e),
-                },
-                {
-                  title: "Delete Series",
-                  icon: <DeleteIcon />,
-                  onClick: (e) => handleDeleteSeries(s.id, e),
-                  danger: true,
-                },
-              ]}
+              actions={
+                isOneshot(s)
+                  ? [
+                      {
+                        title: "Edit One-shot",
+                        icon: <EditIcon />,
+                        onClick: (e) => handleEditSeriesClick(s, e),
+                      },
+                      {
+                        title: "Delete One-shot",
+                        icon: <DeleteIcon />,
+                        onClick: (e) => handleDeleteOneshot(s, e),
+                        danger: true,
+                      },
+                    ]
+                  : [
+                      {
+                        title: "Edit Series",
+                        icon: <EditIcon />,
+                        onClick: (e) => handleEditSeriesClick(s, e),
+                      },
+                      {
+                        title: "Delete Series",
+                        icon: <DeleteIcon />,
+                        onClick: (e) => handleDeleteSeries(s.id, e),
+                        danger: true,
+                      },
+                    ]
+              }
             />
           </Card>
         ))}
@@ -397,10 +503,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onClose={handleCancelSeriesModal}
         onSuccess={handleSeriesSuccess}
       />
+      <CreateSeriesDialog
+        key={`oneshot-${oneshotCounter}`}
+        open={showOneshotModal}
+        editingSeries={null}
+        oneshot
+        user={user}
+        onClose={() => setShowOneshotModal(false)}
+        onSuccess={(created) => setSeriesList((prev) => [created, ...prev])}
+      />
+      <ZipImportDialog
+        open={zipImport.open}
+        initialFile={zipImport.file}
+        user={user}
+        onClose={() => setZipImport({ open: false, file: null })}
+        onImported={handleImported}
+      />
       <DropOverlay
         visible={draggingArchive}
-        title="Chapters without a series are coming later"
-        detail="To import this ZIP now, open a series and drop it there."
+        title="Drop to import a chapter"
+        detail="It becomes a one-shot unless you pick a series."
       />
       <ConfirmModal
         isOpen={confirmModal.isOpen}

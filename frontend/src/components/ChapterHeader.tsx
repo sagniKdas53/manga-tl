@@ -13,6 +13,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import type { Series, Chapter, User, SystemSettingsDto } from "../types";
+import { isOneshot } from "../types";
 import { safeFetch } from "../utils";
 import {
   HeaderShell,
@@ -52,6 +53,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
   onDeleteClick,
   isImporting,
 }) => {
+  const oneshot = isOneshot(selectedSeries);
   const [overflowAnchorEl, setOverflowAnchorEl] = useState<null | HTMLElement>(
     null,
   );
@@ -107,10 +109,10 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
         size="small"
         startIcon={<ArrowBackIcon fontSize="small" />}
         onClick={onBack}
-        aria-label="Back to series"
+        aria-label={oneshot ? "Back to library" : "Back to series"}
         sx={{ mb: 1.5, color: "text.secondary", px: 1 }}
       >
-        {selectedSeries.title}
+        {oneshot ? "Library" : selectedSeries.title}
       </Button>
 
       <HeaderShell

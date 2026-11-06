@@ -32,7 +32,14 @@ export interface Series {
   resolvedUseFallbackModels?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  /** #226: a one-shot is a series holding exactly one chapter. */
+  kind?: "series" | "oneshot";
+  /** A one-shot's only chapter, so its library card opens it directly. */
+  oneshotChapterId?: string | null;
 }
+
+export const isOneshot = (series: Pick<Series, "kind"> | null | undefined) =>
+  series?.kind === "oneshot";
 
 export interface ResolvedModelSlot {
   provider: string;

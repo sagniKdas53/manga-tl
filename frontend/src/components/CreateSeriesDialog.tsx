@@ -9,7 +9,9 @@ import InputLabel from "@mui/material/InputLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
 import type { User, Series, SystemSettingsDto } from "../types";
+import { isOneshot } from "../types";
 import { safeFetch } from "../utils";
 import { useToast } from "./ToastContext";
 import ModelOverridesAccordion, {
@@ -22,6 +24,11 @@ interface CreateSeriesDialogProps {
   user: User;
   onClose: () => void;
   onSuccess: (series: Series) => void;
+  /**
+   * Create a one-shot (#216): a series holding one chapter, made in one call. Its model
+   * overrides go on the chapter. Editing a one-shot passes it as `editingSeries` instead.
+   */
+  oneshot?: boolean;
 }
 
 const LANG_OPTS = ["ja", "zh-TW", "zh-CN", "ko", "en"];
@@ -38,7 +45,10 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   user,
   onClose,
   onSuccess,
+  oneshot = false,
 }) => {
+  const forOneshot = editingSeries ? isOneshot(editingSeries) : oneshot;
+  const noun = forOneshot ? "One-shot" : "Series";
   const [title, setTitle] = useState(
     editingSeries ? editingSeries.title || "" : "",
   );
@@ -189,7 +199,9 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
     try {
       const url = editingSeries
         ? `/api/series/${editingSeries.id}`
-        : "/api/series";
+        : oneshot
+          ? "/api/series/oneshots"
+          : "/api/series";
       const res = await safeFetch(url, {
         method: editingSeries ? "PUT" : "POST",
         headers: {
@@ -219,10 +231,11 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
-      onSuccess(data);
+      // The one-shot route answers { series, chapter }.
+      onSuccess(!editingSeries && oneshot ? data.series : data);
       onClose();
     } catch {
-      showToast("Failed to save series", "error");
+      showToast(`Failed to save ${noun.toLowerCase()}`, "error");
       setSaving(false);
     }
   };
@@ -235,11 +248,11 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
       fullWidth
     >
       <DialogTitle>
-        {editingSeries ? "Edit Series" : "Create Series"}
+        {editingSeries ? `Edit ${noun}` : `Create ${noun}`}
       </DialogTitle>
       <DialogContent dividers>
         <TextField
-          label="Series Title"
+          label={`${noun} Title`}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required
@@ -308,29 +321,41 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
           </Select>
         </FormControl>
 
-        <ModelOverridesAccordion
-          token={user.token}
-          expanded={showOverrides}
-          onToggle={() => setShowOverrides(!showOverrides)}
-          value={overridesValue}
-          onChange={handleOverrideChange}
-          settings={settings}
-          inherited={{
-            ocrProvider: settings?.ocrProvider,
-            ocrModel: settings?.ocrModel,
-            tlProvider: settings?.tlProvider,
-            tlModel: settings?.tlModel,
-            qaProvider: settings?.qaProvider,
-            qaMode: settings?.qaMode,
-            qaLlmModel: settings?.qaLlmModel,
-            qaVlmModel: settings?.qaVlmModel,
-            routingStrategy: settings?.routingStrategy,
-            cleanupMode: settings?.cleanupMode,
-            ocrMergeThreshold: settings?.ocrMergeThreshold,
-            ocrTextAngle: settings?.ocrTextAngle,
-            useFallbackModels: settings?.useFallbackModels,
-          }}
-        />
+        {editingSeries && forOneshot ? (
+          // A one-shot's models live on its chapter (they move with it); editing them here
+          // would set the series' values, which the chapter's own values hide.
+          <Typography
+            variant="body2"
+            sx={{ color: "text.secondary", mt: 2 }}
+          >
+            A one-shot&apos;s models are set on its chapter: open it and use
+            Edit.
+          </Typography>
+        ) : (
+          <ModelOverridesAccordion
+            token={user.token}
+            expanded={showOverrides}
+            onToggle={() => setShowOverrides(!showOverrides)}
+            value={overridesValue}
+            onChange={handleOverrideChange}
+            settings={settings}
+            inherited={{
+              ocrProvider: settings?.ocrProvider,
+              ocrModel: settings?.ocrModel,
+              tlProvider: settings?.tlProvider,
+              tlModel: settings?.tlModel,
+              qaProvider: settings?.qaProvider,
+              qaMode: settings?.qaMode,
+              qaLlmModel: settings?.qaLlmModel,
+              qaVlmModel: settings?.qaVlmModel,
+              routingStrategy: settings?.routingStrategy,
+              cleanupMode: settings?.cleanupMode,
+              ocrMergeThreshold: settings?.ocrMergeThreshold,
+              ocrTextAngle: settings?.ocrTextAngle,
+              useFallbackModels: settings?.useFallbackModels,
+            }}
+          />
+        )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
@@ -342,8 +367,8 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
           {saving
             ? "Saving..."
             : editingSeries
-              ? "Update Series"
-              : "Create Series"}
+              ? `Update ${noun}`
+              : `Create ${noun}`}
         </Button>
       </DialogActions>
     </Dialog>

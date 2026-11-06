@@ -513,3 +513,266 @@ async fn series_list_pagination_and_sort_whitelist() {
         .await
         .expect("user cleanup");
 }
+
+/// #226: a one-shot is a series of kind `oneshot` holding exactly one chapter. Creating one
+/// makes both in one call; a second chapter is refused; `?kind=` filters the library list;
+/// deleting the chapter removes the one-shot, while a regular series keeps living.
+#[tokio::test]
+async fn oneshot_create_one_chapter_rule_and_kind_filter() {
+    let Some((app, pool, jwt)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL not set");
+        return;
+    };
+    // Its own probe prefix: cleanup() removes every `__series-e2e-` user and their series, and
+    // the CRUD test runs it beside this one.
+    oneshot_cleanup(&pool).await;
+    let email = format!("__oneshot-e2e-{}@example.invalid", Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO users (id, created_at, display_name, email, password_hash, role) \
+         VALUES (uuid_generate_v4(), now(), 'Probe', $1, 'x', 'translator')",
+    )
+    .bind(&email)
+    .execute(&pool)
+    .await
+    .expect("probe user insert");
+    let token = jwt.generate_token(&email).expect("token");
+
+    let (status, _, body) = body_string(
+        send(
+            app.clone(),
+            "POST",
+            "/tlhub/api/series/oneshots",
+            Some(&token),
+            Some(
+                r#"{"title":"  Probe One-shot ","sourceLanguage":"zh","qaMode":"off","useContextMemory":false}"#
+                    .into(),
+            ),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let created: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let series = &created["series"];
+    let chapter = &created["chapter"];
+    assert_eq!(series["kind"], "oneshot");
+    assert_eq!(series["title"], "Probe One-shot");
+    assert_eq!(series["originalLanguage"], "zh");
+    assert_eq!(series["targetLanguage"], "en", "target lang fallback");
+    assert_eq!(series["readingDirection"], "rtl", "direction fallback");
+    assert_eq!(series["oneshotChapterId"], chapter["id"]);
+    assert_eq!(chapter["seriesId"], series["id"]);
+    assert_eq!(chapter["chapterNumber"], 1.0);
+    assert_eq!(chapter["title"], "Probe One-shot");
+    assert_eq!(chapter["qaMode"], "off", "overrides go on the chapter");
+    assert_eq!(chapter["useContextMemory"], false);
+    assert!(series["qaMode"].is_null());
+    let oneshot_id = series["id"].as_str().unwrap().to_string();
+    let chapter_id = chapter["id"].as_str().unwrap().to_string();
+
+    // GET returns the chapter id too.
+    let (_, _, body) = body_string(
+        send(
+            app.clone(),
+            "GET",
+            &format!("/tlhub/api/series/{oneshot_id}"),
+            Some(&token),
+            None,
+        )
+        .await,
+    )
+    .await;
+    let fetched: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(fetched["oneshotChapterId"], chapter_id.as_str());
+
+    // A blank title is refused.
+    let (status, _, _) = body_string(
+        send(
+            app.clone(),
+            "POST",
+            "/tlhub/api/series/oneshots",
+            Some(&token),
+            Some(r#"{"title":"   "}"#.into()),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // A second chapter is refused by create.
+    let (status, _, body) = body_string(
+        send(
+            app.clone(),
+            "POST",
+            &format!("/tlhub/api/series/{oneshot_id}/chapters"),
+            Some(&token),
+            Some(r#"{"chapterNumber":2}"#.into()),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&body).unwrap()["message"],
+        "A one-shot holds one chapter. Move it into a series first."
+    );
+
+    // A regular series beside it, with two chapters.
+    let (_, _, body) = body_string(
+        send(
+            app.clone(),
+            "POST",
+            "/tlhub/api/series",
+            Some(&token),
+            Some(r#"{"title":"Probe Regular","readingDirection":"rtl"}"#.into()),
+        )
+        .await,
+    )
+    .await;
+    let regular: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(regular["kind"], "series");
+    assert!(regular["oneshotChapterId"].is_null());
+    let regular_id = regular["id"].as_str().unwrap().to_string();
+    let mut regular_chapters = Vec::new();
+    for number in [1, 2] {
+        let (status, _, body) = body_string(
+            send(
+                app.clone(),
+                "POST",
+                &format!("/tlhub/api/series/{regular_id}/chapters"),
+                Some(&token),
+                Some(format!(r#"{{"chapterNumber":{number}}}"#)),
+            )
+            .await,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let chapter: serde_json::Value = serde_json::from_str(&body).unwrap();
+        regular_chapters.push(chapter["id"].as_str().unwrap().to_string());
+    }
+
+    // ?kind= narrows the list and its count; anything else lists both.
+    let listed = |kind: &'static str| {
+        let app = app.clone();
+        let token = token.clone();
+        async move {
+            let (status, _, body) = body_string(
+                send(
+                    app,
+                    "GET",
+                    &format!("/tlhub/api/series?size=100{kind}"),
+                    Some(&token),
+                    None,
+                )
+                .await,
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            let page: serde_json::Value = serde_json::from_str(&body).unwrap();
+            let ids: Vec<String> = page["content"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|s| s["id"].as_str().unwrap().to_string())
+                .collect();
+            let kinds: Vec<String> = page["content"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|s| s["kind"].as_str().unwrap().to_string())
+                .collect();
+            (ids, kinds, page["totalElements"].as_i64().unwrap())
+        }
+    };
+    let (ids, kinds, total) = listed("&kind=oneshot").await;
+    assert!(ids.contains(&oneshot_id) && !ids.contains(&regular_id));
+    assert!(kinds.iter().all(|k| k == "oneshot"));
+    assert_eq!(total, ids.len() as i64, "the count is filtered too");
+    let (ids, kinds, _) = listed("&kind=series").await;
+    assert!(ids.contains(&regular_id) && !ids.contains(&oneshot_id));
+    assert!(kinds.iter().all(|k| k == "series"));
+    for all in ["", "&kind=volume"] {
+        let (ids, _, _) = listed(all).await;
+        assert!(ids.contains(&regular_id) && ids.contains(&oneshot_id));
+    }
+
+    // Deleting a regular series' chapters never deletes the series.
+    for chapter in &regular_chapters {
+        let response = send(
+            app.clone(),
+            "DELETE",
+            &format!("/tlhub/api/series/chapters/{chapter}"),
+            Some(&token),
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+    let response = send(
+        app.clone(),
+        "GET",
+        &format!("/tlhub/api/series/{regular_id}"),
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK, "an empty series stays");
+
+    // Deleting a one-shot's chapter removes the one-shot.
+    let response = send(
+        app.clone(),
+        "DELETE",
+        &format!("/tlhub/api/series/chapters/{chapter_id}"),
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = send(
+        app.clone(),
+        "GET",
+        &format!("/tlhub/api/series/{oneshot_id}"),
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    oneshot_cleanup(&pool).await;
+}
+
+async fn oneshot_cleanup(pool: &sqlx::PgPool) {
+    sqlx::query(
+        "DELETE FROM series WHERE created_by IN (SELECT id FROM users WHERE email LIKE '__oneshot-e2e-%')",
+    )
+    .execute(pool)
+    .await
+    .expect("cleanup one-shot series");
+    sqlx::query("DELETE FROM users WHERE email LIKE '__oneshot-e2e-%'")
+        .execute(pool)
+        .await
+        .expect("cleanup one-shot users");
+}
+
+/// #226: the upgrade script is safe to run again on a database that already has the column.
+#[tokio::test]
+async fn oneshot_upgrade_script_reruns() {
+    let Some((_, pool, _)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL not set");
+        return;
+    };
+    let script = include_str!("../../database/migrations/2026-10-19-oneshot-series-kind.sql");
+    for run in 1..=2 {
+        sqlx::raw_sql(script)
+            .execute(&pool)
+            .await
+            .unwrap_or_else(|e| panic!("upgrade script run {run}: {e}"));
+    }
+    let checks: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pg_constraint WHERE conname = 'series_kind_check'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(checks, 1);
+}

@@ -36,12 +36,17 @@ fn db_config_from_env() -> Option<DatabaseConfig> {
 }
 
 async fn app() -> Option<(Router, sqlx::PgPool)> {
+    app_with_storage(std::env::var("MINIO_TEST_ENDPOINT").ok()?).await
+}
+
+/// `app()` with its storage at `minio_endpoint`; an unreachable one makes every upload fail.
+async fn app_with_storage(minio_endpoint: String) -> Option<(Router, sqlx::PgPool)> {
     if std::env::var("MINIO_TEST_ENDPOINT").is_err() || std::env::var("REDIS_TEST_ADDR").is_err() {
         return None;
     }
     let pool = db::connect(&db_config_from_env()?).await.ok()?;
     let minio = MinioConfig {
-        endpoint: std::env::var("MINIO_TEST_ENDPOINT").ok()?,
+        endpoint: minio_endpoint,
         external_url: None,
         access_key: Some("minioadmin".into()),
         secret_key: Some("minioadmin".into()),
@@ -870,4 +875,180 @@ async fn reimporting_a_deleted_chapter_still_enters_the_pipeline() {
         .bind(&email)
         .execute(&pool)
         .await;
+}
+
+/// #226: importing a ZIP from the library makes a one-shot: one `oneshot` series holding one
+/// chapter, its pages owned by the importer, and a second chapter refused.
+#[tokio::test]
+async fn oneshot_import_makes_one_series_one_chapter() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL/REDIS_TEST_ADDR/MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    let token = probe_user(&pool).await;
+    // Fresh pixels each run: an image seen before takes the duplicate path and keeps its owner.
+    let seed = uuid::Uuid::new_v4().into_bytes();
+    let archive = zip_of(
+        vec![
+            ("p1.png".into(), png_bytes([seed[0], seed[1], seed[2]])),
+            ("p2.png".into(), png_bytes([seed[3], seed[4], seed[5]])),
+        ],
+        None,
+    );
+
+    // No title: it defaults to the file name.
+    let (status, _, body) = send(
+        &app,
+        "POST",
+        "/tlhub/api/series/oneshots/import",
+        &token,
+        Some("multipart/form-data; boundary=__import_boundary__"),
+        multipart(
+            &[
+                ("sourceLanguage", "ko".into()),
+                ("readingDirection", "ltr".into()),
+                ("tlModel", "probe/model".into()),
+            ],
+            Some(("file", "Oneshot Probe.zip", &archive)),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+    let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let series = &created["series"];
+    let chapter = &created["chapter"];
+    assert_eq!(series["kind"], "oneshot");
+    assert_eq!(series["title"], "Oneshot Probe");
+    assert_eq!(series["originalLanguage"], "ko");
+    assert_eq!(series["readingDirection"], "ltr");
+    assert_eq!(series["oneshotChapterId"], chapter["id"]);
+    assert_eq!(chapter["seriesId"], series["id"]);
+    assert_eq!(chapter["chapterNumber"], 1.0);
+    assert_eq!(chapter["pageCount"], 2);
+    // The overrides land on the chapter, not the one-shot series.
+    assert_eq!(chapter["tlModel"], "probe/model");
+    assert!(series["tlModel"].is_null());
+    let series_id: uuid::Uuid = series["id"].as_str().unwrap().parse().unwrap();
+    let chapter_id: uuid::Uuid = chapter["id"].as_str().unwrap().parse().unwrap();
+
+    // The importer owns every image, so the queue receives the jobs live (#212).
+    let unowned: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pages p JOIN images i ON i.id = p.image_id \
+         WHERE p.chapter_id = $1 AND i.created_by IS DISTINCT FROM \
+         (SELECT created_by FROM series WHERE id = $2)",
+    )
+    .bind(chapter_id)
+    .bind(series_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(unowned, 0, "every imported image is owned by the importer");
+
+    // A second chapter is refused by import.
+    let (status, _, body) = send(
+        &app,
+        "POST",
+        &format!("/tlhub/api/series/{series_id}/chapters/import"),
+        &token,
+        Some("multipart/form-data; boundary=__import_boundary__"),
+        multipart(
+            &[("chapterNumber", "2".into()), ("title", "Second".into())],
+            Some(("file", "second.zip", &archive)),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(
+        json_field(&body, "message").await,
+        "A one-shot holds one chapter. Move it into a series first."
+    );
+    let chapters: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM chapters WHERE series_id = $1")
+        .bind(series_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(chapters, 1);
+
+    sqlx::query("DELETE FROM series WHERE id = $1")
+        .bind(series_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    cleanup(&pool).await;
+}
+
+/// #226: a one-shot import that fails part-way leaves no series behind. The first page is a
+/// duplicate (committed without an upload), the second needs an upload and storage is down.
+#[tokio::test]
+async fn failed_oneshot_import_leaves_no_series() {
+    let Some((app, pool)) = app_with_storage("http://127.0.0.1:1".into()).await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL/REDIS_TEST_ADDR/MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    let token = probe_user(&pool).await;
+    let known_seed = uuid::Uuid::new_v4().into_bytes();
+    let known = png_bytes([known_seed[0], known_seed[1], known_seed[2]]);
+    let known_hash = {
+        use sha2::Digest;
+        hex::encode(sha2::Sha256::digest(&known))
+    };
+    let known_image = uuid::Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO images (id, created_at, filename, storage_path, hash) \
+         VALUES ($1, now(), 'known.png', 'originals/known.png', $2)",
+    )
+    .bind(known_image)
+    .bind(&known_hash)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let title = format!("Failing Oneshot {}", uuid::Uuid::new_v4());
+    let seed = uuid::Uuid::new_v4().into_bytes();
+    let archive = zip_of(
+        vec![
+            ("p1.png".into(), known),
+            ("p2.png".into(), png_bytes([seed[0], seed[1], seed[2]])),
+        ],
+        None,
+    );
+
+    let (status, _, body) = send(
+        &app,
+        "POST",
+        "/tlhub/api/series/oneshots/import",
+        &token,
+        Some("multipart/form-data; boundary=__import_boundary__"),
+        multipart(
+            &[("title", title.clone())],
+            Some(("file", "x.zip", &archive)),
+        ),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "{}",
+        String::from_utf8_lossy(&body)
+    );
+    assert!(json_field(&body, "message").await.contains("upload failed"));
+
+    let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM series WHERE title = $1")
+        .bind(&title)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(left, 0, "the failed one-shot was removed");
+    let pages: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM pages WHERE image_id = $1")
+        .bind(known_image)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(pages, 0, "the committed first page went with it");
+
+    sqlx::query("DELETE FROM images WHERE id = $1")
+        .bind(known_image)
+        .execute(&pool)
+        .await
+        .unwrap();
+    cleanup(&pool).await;
 }

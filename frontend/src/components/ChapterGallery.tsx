@@ -4,6 +4,7 @@ import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Typography from "@mui/material/Typography";
 import type { User, Series, Chapter, Page } from "../types";
+import { isOneshot } from "../types";
 import { safeFetch, toSlug, getContextPath } from "../utils";
 import CreateChapterDialog from "./CreateChapterDialog";
 import ConfirmModal from "./ConfirmModal";
@@ -482,6 +483,11 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     );
   }
 
+  // A one-shot has no series page: back and delete go to the library.
+  const seriesPath = isOneshot(selectedSeries)
+    ? "/"
+    : `/series/${selectedSeries.id}/${toSlug(selectedSeries.title)}`;
+
   const handleDeleteChapter = () => {
     setConfirmModal({
       isOpen: true,
@@ -493,16 +499,19 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
       onConfirm: async () => {
         closeConfirmModal();
         try {
-          const res = await safeFetch(`/api/chapters/${selectedChapter.id}`, {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${user.token}` },
-          });
+          // The chapter routes live under /api/series; /api/chapters/{id} has no DELETE.
+          const res = await safeFetch(
+            `/api/series/chapters/${selectedChapter.id}`,
+            {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${user.token}` },
+            },
+          );
           if (res.ok) {
             showToast("Chapter deleted successfully", "success");
             setSelectedChapter(null);
-            navigate(
-              `/series/${selectedSeries.id}/${toSlug(selectedSeries.title)}`,
-            );
+            // Deleting a one-shot's chapter deletes the one-shot too.
+            navigate(seriesPath);
           } else if (res.status === 403) {
             showToast(
               "You don't have permission to delete this chapter.",
@@ -647,9 +656,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         selectedChapter={selectedChapter}
         onBack={() => {
           setSelectedChapter(null);
-          navigate(
-            `/series/${selectedSeries.id}/${toSlug(selectedSeries.title)}`,
-          );
+          navigate(seriesPath);
         }}
         onEditClick={() => {
           setShowEditModal(true);

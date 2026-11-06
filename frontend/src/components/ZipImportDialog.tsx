@@ -47,7 +47,8 @@ import ModelOverridesAccordion, {
  * import, a new archive is built with exactly the kept pages, named in the chosen order, and sent
  * to the existing import route. Nothing on the server changes.
  *
- * Not here yet, because they need the server: one-shot chapters with no series (#216).
+ * From the library (no `series` given) it can also make a one-shot (#216): a series of kind
+ * `oneshot` holding just this chapter, created together with it by one server call.
  */
 
 const LANG_OPTS = ["ja", "zh-TW", "zh-CN", "ko", "en"];
@@ -58,6 +59,7 @@ const DIR_OPTS = [
   { value: "ttb", label: "Top to bottom (webtoon)" },
 ];
 const NEW_SERIES = "__new__";
+const ONESHOT = "__oneshot__";
 
 const EMPTY_OVERRIDES: ModelOverridesValue = {
   ocrProvider: "",
@@ -113,7 +115,7 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
   const [seriesOptions, setSeriesOptions] = useState<Series[]>([]);
-  const [destination, setDestination] = useState<string>(series?.id ?? "");
+  const [destination, setDestination] = useState<string>(series?.id ?? ONESHOT);
   const [newTitle, setNewTitle] = useState("");
   const [sourceLang, setSourceLang] = useState("ja");
   const [targetLang, setTargetLang] = useState("en");
@@ -140,7 +142,10 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
       null,
     [series, seriesOptions, destination],
   );
-  const isNewSeries = !series && destination === NEW_SERIES;
+  const isOneshotImport = !series && destination === ONESHOT;
+  // A one-shot asks for the same title, languages and direction as a new series.
+  const isNewSeries =
+    !series && (destination === NEW_SERIES || isOneshotImport);
 
   // --- reading the archive ----------------------------------------------------------------
 
@@ -208,7 +213,8 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
       setOverrides(EMPTY_OVERRIDES);
       setOverridesOpen(false);
       numberTouchedRef.current = false;
-      setDestination(series?.id ?? "");
+      // From the library a ZIP becomes a one-shot unless another destination is picked.
+      setDestination(series?.id ?? ONESHOT);
       if (initialFile) void loadFile(initialFile);
       else {
         setFile(null);
@@ -242,16 +248,14 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
       .then((d) => d && setSettings(d))
       .catch(() => {});
     if (series) return;
-    safeFetch("/api/series?page=0&size=100&sortBy=updatedAt&sortDir=desc", {
-      headers: { Authorization: `Bearer ${user.token}` },
-    })
+    // One-shots are left out of the list: they hold one chapter.
+    safeFetch(
+      "/api/series?page=0&size=100&sortBy=updatedAt&sortDir=desc&kind=series",
+      { headers: { Authorization: `Bearer ${user.token}` } },
+    )
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        const list: Series[] = d?.content ?? [];
-        setSeriesOptions(list);
-        setDestination((current) => current || list[0]?.id || NEW_SERIES);
-      })
-      .catch(() => setDestination((current) => current || NEW_SERIES));
+      .then((d) => setSeriesOptions(d?.content ?? []))
+      .catch(() => {});
   }, [open, series, user.token]);
 
   // Suggest the next chapter number of the chosen series (AUDIT-F18: ask the server, the loaded
@@ -357,7 +361,7 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
   const canImport =
     kept.length > 0 &&
     !importing &&
-    chapterNum > 0 &&
+    (isOneshotImport || chapterNum > 0) &&
     (isNewSeries ? newTitle.trim().length > 0 : Boolean(targetSeries));
 
   const createSeries = async (): Promise<Series> => {
@@ -384,14 +388,17 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
     setImportError("");
     setImporting(true);
     try {
-      let into: Series;
-      if (isNewSeries) {
-        into = await createSeries();
+      // A one-shot (null here) is created by the import call itself; a failed import leaves
+      // no one-shot behind.
+      let into: Series | null = null;
+      if (isNewSeries && !isOneshotImport) {
+        const created = await createSeries();
+        into = created;
         // Point the dialog at the series just made, so a retry after a failed upload imports
         // into it instead of creating a second one.
-        setSeriesOptions((prev) => [into, ...prev]);
-        setDestination(into.id);
-      } else {
+        setSeriesOptions((prev) => [created, ...prev]);
+        setDestination(created.id);
+      } else if (!isOneshotImport) {
         into = targetSeries!;
       }
       const formData = new FormData();
@@ -405,8 +412,15 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
         setBuildPercent(null);
         formData.append("file", archive, `${titleFromFileName(file.name)}.zip`);
       }
-      formData.append("chapterNumber", String(chapterNum));
-      formData.append("title", chapterTitle);
+      if (isOneshotImport) {
+        formData.append("title", newTitle.trim());
+        formData.append("sourceLanguage", sourceLang);
+        formData.append("targetLanguage", targetLang);
+        formData.append("readingDirection", direction);
+      } else {
+        formData.append("chapterNumber", String(chapterNum));
+        formData.append("title", chapterTitle);
+      }
       const o = overrides;
       if (o.ocrProvider) formData.append("ocrProvider", o.ocrProvider);
       if (o.ocrModel) formData.append("ocrModel", o.ocrModel);
@@ -429,7 +443,10 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
       if (o.useFallbackModels !== null)
         formData.append("useFallbackModels", String(o.useFallbackModels));
 
-      const res = await safeFetch(`/api/series/${into.id}/chapters/import`, {
+      const url = into
+        ? `/api/series/${into.id}/chapters/import`
+        : "/api/series/oneshots/import";
+      const res = await safeFetch(url, {
         method: "POST",
         headers: { Authorization: `Bearer ${user.token}` },
         body: formData,
@@ -444,8 +461,13 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
         }
         throw new Error(message);
       }
-      const chapter: Chapter = await res.json();
-      onImported(chapter, into, kept.length);
+      if (into) {
+        const chapter: Chapter = await res.json();
+        onImported(chapter, into, kept.length);
+      } else {
+        const made: { series: Series; chapter: Chapter } = await res.json();
+        onImported(made.chapter, made.series, kept.length);
+      }
       onClose();
     } catch (err) {
       setImportError(err instanceof Error ? err.message : String(err));
@@ -861,7 +883,7 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
           {!series && (
             <TextField
               select
-              label="Into"
+              label="Add to"
               value={destination}
               onChange={(e) => {
                 numberTouchedRef.current = false;
@@ -869,6 +891,8 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
               }}
               sx={{ gridColumn: { sm: "1 / -1" } }}
             >
+              <MenuItem value={ONESHOT}>One-shot (no series)</MenuItem>
+              <MenuItem value={NEW_SERIES}>New series…</MenuItem>
               {seriesOptions.map((option) => (
                 <MenuItem
                   key={option.id}
@@ -877,14 +901,13 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
                   {option.title}
                 </MenuItem>
               ))}
-              <MenuItem value={NEW_SERIES}>New series…</MenuItem>
             </TextField>
           )}
 
           {isNewSeries && (
             <>
               <TextField
-                label="Series title"
+                label={isOneshotImport ? "Title" : "Series title"}
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 required
@@ -951,27 +974,31 @@ export const ZipImportDialog: React.FC<ZipImportDialogProps> = ({
             </Typography>
           )}
 
-          <TextField
-            label="Chapter number"
-            type="number"
-            value={chapterNum}
-            onChange={(e) => {
-              numberTouchedRef.current = true;
-              setChapterNum(parseFloat(e.target.value) || 0);
-            }}
-            required
-          />
-          <TextField
-            label="Chapter title"
-            value={chapterTitle}
-            onChange={(e) => setChapterTitle(e.target.value)}
-            placeholder="Optional"
-            sx={{ gridColumn: { sm: "span 2" } }}
-          />
+          {!isOneshotImport && (
+            <>
+              <TextField
+                label="Chapter number"
+                type="number"
+                value={chapterNum}
+                onChange={(e) => {
+                  numberTouchedRef.current = true;
+                  setChapterNum(parseFloat(e.target.value) || 0);
+                }}
+                required
+              />
+              <TextField
+                label="Chapter title"
+                value={chapterTitle}
+                onChange={(e) => setChapterTitle(e.target.value)}
+                placeholder="Optional"
+                sx={{ gridColumn: { sm: "span 2" } }}
+              />
+            </>
+          )}
         </Box>
 
         {/* 3. How it is processed, collapsed: the defaults are right most of the time. ---- */}
-        {!isNewSeries ? (
+        {!isNewSeries || isOneshotImport ? (
           <Box sx={{ mt: 2 }}>
             <ModelOverridesAccordion
               token={user.token}
