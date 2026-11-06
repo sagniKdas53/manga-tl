@@ -66,6 +66,7 @@ If documentation contradicts the code, the code is authoritative. File discrepan
 | [`guides/qa_bench.md`](guides/qa_bench.md) | QA benchmark testing |
 | [`guides/perf_run_playbook.md`](guides/perf_run_playbook.md) | High-resolution performance profiling runbook |
 | [`guides/ollama.md`](guides/ollama.md) | Remote Ollama server setup and verification |
+| [`guides/corpus_batch_harness.md`](guides/corpus_batch_harness.md) | Submitting corpus samples to an instance as one chapter and harvesting the results |
 
 ---
 
