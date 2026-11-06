@@ -1387,10 +1387,7 @@ pub async fn move_chapter(
         return error::bad_request("Send either seriesId or oneshot: true.", INSTANCE);
     }
     // Zero is a real chapter number: it is what create_chapter stores when none is given.
-    if dto
-        .chapterNumber
-        .is_some_and(|n| !n.is_finite() || n < 0.0)
-    {
+    if dto.chapterNumber.is_some_and(|n| !n.is_finite() || n < 0.0) {
         return error::bad_request("chapterNumber must not be negative.", INSTANCE);
     }
     let defaults = PipelineDefaults::from_env();
