@@ -14,12 +14,25 @@
 
 ### Cloud API (via OpenRouter / provider)
 
+`config/providers.json` is the catalogue, and Settings chooses from it. Its defaults on a fresh stack:
+
 | Model | Type | Purpose |
 | ------- | ------ | --------- |
-| **qwen/qwen3-vl-32b-instruct** | VLM | Primary cloud OCR |
-| **deepseek/deepseek-v4-pro** | LLM | Primary translation |
-| **deepseek/deepseek-v4-flash** | LLM | QA (text) |
-| **google/gemini-3.1-flash-lite** | VLM | QA (vision) |
+| **qwen/qwen3.7-plus** | VLM | Cloud OCR (local PP-OCR is the usual choice) |
+| **z-ai/glm-5.3-flash** | LLM | Translation and QA (text) |
+| **google/gemini-3.5-flash-lite** | VLM | QA (vision) |
+
+The paid entries are curated by hand, each with a `tier`:
+
+| Tier | Translation and QA (text) | QA (vision) |
+| ------- | ------ | --------- |
+| `cheap` | MiMo V2.6 Flash, MiniMax M3.1 Flash, GLM 5.3 Flash, DeepSeek V4 Flash, GPT-6 Luna, Qwen3.7 Flash, Solar Pro 4 | MiMo V2.6 Flash, Mistral Small 3.2, MiniMax M3.1 Flash, GLM 5.3 Flash, GPT-6 Luna, Qwen3.7 Flash |
+| `fast` | Claude Haiku 5.5, DeepSeek V4.1 Flash 1017 | Gemini 3.5 Flash Lite, Claude Haiku 5.5 |
+| `quality` | GLM 5.3, MiMo V2.6 Pro, Gemini 3.8 Flash, GPT-6.1 Terra, Gemini 4 Argon, Kimi K3.1 Pro, Claude Sonnet 5.5 | Gemini 3.8 Flash, Qwen3.7 Plus, GPT-6.1 Terra, Gemini 4 Argon, Claude Sonnet 5.5 |
+
+- **Free entries are not curated.** The worker replaces them on a timer with the strongest current free models (`worker/src/worker/services/catalog_refresh.py`).
+- **Paid entries don't update themselves.** The worker refreshes their prices and drops those OpenRouter no longer lists, but never adds new ones. Its refresh report in Redis (`system:providers:catalog-refresh`) lists good-value candidates.
+- **Tiers are a record, not a guarantee.** The list as of 2026-11-07 used price and Artificial Analysis's general intelligence index, plus one short test call per model. Translation quality on manga, and refusals on explicit pages, were not measured.
 
 Each model has a configurable fallback chain via `_MODEL_LIST` env vars. See `worker/config.py` and `.env`.
 

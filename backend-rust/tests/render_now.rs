@@ -230,9 +230,9 @@ async fn an_edited_page_renders_in_the_request_and_queues_no_qa() {
     .expect("layer");
     sqlx::query(
         "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, word_wrap, layer_id, \
-           size, auto_size, is_manually_edited, box_shape, font_style) \
+           size, auto_size, is_manually_edited, box_shape, font_style, mask_polygon) \
          VALUES (uuid_generate_v4(), 'Hand-placed line', 20, 20, 120, 40, TRUE, FALSE, $1, \
-           30, FALSE, TRUE, 'elliptical', 'italic')",
+           30, FALSE, TRUE, 'elliptical', 'italic', '[[20,20],[140,20],[140,60],[20,60]]'::jsonb)",
     )
     .bind(layer_id)
     .execute(&pool)
@@ -267,6 +267,11 @@ async fn an_edited_page_renders_in_the_request_and_queues_no_qa() {
     assert_eq!(
         (&style["fontSize"], &style["shape"], &style["fontStyle"]),
         (&json!(30.0), &json!("elliptical"), &json!("italic"))
+    );
+    // Contract rule 9 (G2): the balloon outline the editor fits into reaches the renderer too.
+    assert_eq!(
+        style["maskPolygon"],
+        json!([[20.0, 20.0], [140.0, 20.0], [140.0, 60.0], [20.0, 60.0]])
     );
 
     let (status, png) = send(

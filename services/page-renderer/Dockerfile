@@ -11,6 +11,7 @@ FROM mcr.microsoft.com/playwright@sha256:dcc5531e97840b9b5e794f2814476b21571c512
 
 RUN apt-get update && apt-get install -y --no-install-recommends fonts-comic-neue \
     && echo "2728ee8f303e31934e62bf27b044fd7657b0613412d51f7444db1078cc3a7cb2  /usr/share/fonts/opentype/comic-neue/ComicNeue-Regular.otf" | sha256sum -c - \
+    && echo "0637fea8f858cd1d9a6e0ff786bed3d8cc2dc59b871a28e268a5a0106f052a92  /usr/share/fonts/opentype/comic-neue/ComicNeue-Bold.otf" | sha256sum -c - \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

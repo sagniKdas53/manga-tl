@@ -43,6 +43,22 @@ describe("fitTextInBox", () => {
     expect(result.fontSize).toBeGreaterThan(10);
   });
 
+  it("measures in normal weight when none is given, as the canvas draws it", () => {
+    const fonts: string[] = [];
+    const context = {
+      measureText: mockMeasureText,
+      set font(value: string) {
+        fonts.push(value);
+      },
+    };
+    vi.spyOn(document, "createElement").mockImplementation(
+      () => ({ getContext: () => context }) as unknown as HTMLCanvasElement,
+    );
+    fitTextInBox("Hello", 200, 100, "Arial");
+    expect(fonts.length).toBeGreaterThan(0);
+    expect(fonts.every((font) => font.startsWith("normal "))).toBe(true);
+  });
+
   it("wraps long text into multiple lines", () => {
     // 20 chars total => 200 width. If maxWidth is 100, it should split.
     const result = fitTextInBox("This is a long text", 100, 200, "Arial");
@@ -233,6 +249,14 @@ describe("ensureFontsLoaded", () => {
     expect(load).toHaveBeenCalledWith('bold 16px "Comic Neue"');
     expect(load).toHaveBeenCalledWith('bold 16px "Bangers"');
     expect(load).toHaveBeenCalledWith('normal italic 16px "Comic Neue"');
+  });
+
+  it("loads a face with no weight set in normal weight, as it is drawn", async () => {
+    const load = vi.fn().mockResolvedValue([]);
+    vi.stubGlobal("document", { ...document, fonts: { load } });
+
+    await ensureFontsLoaded([{ font: "Comic Neue" }]);
+    expect(load).toHaveBeenCalledWith('normal 16px "Comic Neue"');
   });
 
   it("does not throw when the Font Loading API is unavailable (e.g. jsdom)", async () => {

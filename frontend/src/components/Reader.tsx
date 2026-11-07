@@ -3666,7 +3666,7 @@ export const Reader: React.FC<ReaderProps> = ({
             fitBox.x,
             fitBox.y,
             el.maskPolygon,
-            el.fontWeight || "bold",
+            el.fontWeight || "normal",
             el.fontStyle || "normal",
           );
           const fSize = fit.fontSize;
@@ -3679,7 +3679,7 @@ export const Reader: React.FC<ReaderProps> = ({
             textCtx.rotate((el.rotation * Math.PI) / 180);
             textCtx.translate(-cx, -cy);
           }
-          textCtx.font = `${el.fontWeight || "bold"} ${el.fontStyle === "italic" ? "italic " : ""}${fSize}px "${el.font || "Comic Neue"}", sans-serif`;
+          textCtx.font = `${el.fontWeight || "normal"} ${el.fontStyle === "italic" ? "italic " : ""}${fSize}px "${el.font || "Comic Neue"}", sans-serif`;
           textCtx.fillStyle = el.textColor || "#000000";
           textCtx.textAlign = "center";
           textCtx.textBaseline = "middle";

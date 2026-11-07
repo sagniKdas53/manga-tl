@@ -7,6 +7,7 @@ const STATIC_ENTRY_PATH = fileURLToPath(
   new URL("../dist/scene-static.js", import.meta.url),
 );
 const SHA256 = /^[a-f0-9]{64}$/;
+const FONT_WEIGHT_RANGE = /^\d{1,4} \d{1,4}$/;
 const DATA_IMAGE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 export class RendererError extends Error {}
@@ -53,8 +54,14 @@ function pngDimensions(png) {
   return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
 }
 
+/** One `@font-face` per face, so a scene's weight picks the face drawn for it (#322). */
 function cssFontFace(font) {
-  return `@font-face{font-family:${JSON.stringify(font.family)};font-weight:100 1000;font-style:normal;src:url(data:${font.mimeType};base64,${font.base64}) format('${font.format}');font-display:block;}`;
+  return font.faces
+    .map(
+      (face) =>
+        `@font-face{font-family:${JSON.stringify(font.family)};font-weight:${face.weight};font-style:normal;src:url(data:${face.mimeType};base64,${face.base64}) format('${face.format}');font-display:block;}`,
+    )
+    .join("");
 }
 
 /**
@@ -84,23 +91,31 @@ export class PageRenderer {
     for (const config of this.fontConfigs) {
       const fontId = requireString(config.fontId, "fontId");
       const family = requireString(config.family, `font ${fontId}.family`);
-      const expectedSha256 = requireString(config.sha256, `font ${fontId}.sha256`);
-      if (!SHA256.test(expectedSha256)) {
-        throw new RendererError(`font ${fontId} has an invalid SHA-256`);
+      // A font lists its faces, or is itself its only face, used for every weight.
+      const faces = [];
+      for (const face of config.faces ?? [config]) {
+        const expectedSha256 = requireString(face.sha256, `font ${fontId}.sha256`);
+        if (!SHA256.test(expectedSha256)) {
+          throw new RendererError(`font ${fontId} has an invalid SHA-256`);
+        }
+        const weight = face.weight ?? "100 1000";
+        if (!FONT_WEIGHT_RANGE.test(weight)) {
+          throw new RendererError(`font ${fontId} has an invalid weight range`);
+        }
+        const bytes = await readFile(requireString(face.path, `font ${fontId}.path`));
+        const actualSha256 = sha256(bytes);
+        if (actualSha256 !== expectedSha256) {
+          throw new RendererError(`font ${fontId} SHA-256 mismatch`);
+        }
+        faces.push({
+          weight,
+          sha256: actualSha256,
+          mimeType: face.mimeType || "font/ttf",
+          format: face.format || "truetype",
+          base64: bytes.toString("base64"),
+        });
       }
-      const bytes = await readFile(requireString(config.path, `font ${fontId}.path`));
-      const actualSha256 = sha256(bytes);
-      if (actualSha256 !== expectedSha256) {
-        throw new RendererError(`font ${fontId} SHA-256 mismatch`);
-      }
-      this.fonts.set(fontId, {
-        fontId,
-        family,
-        sha256: actualSha256,
-        mimeType: config.mimeType || "font/ttf",
-        format: config.format || "truetype",
-        base64: bytes.toString("base64"),
-      });
+      this.fonts.set(fontId, { fontId, family, faces });
     }
     this.browser = await chromium.launch({ headless: true });
   }
@@ -273,7 +288,7 @@ export class PageRenderer {
         renderInputSha256: request.renderInputSha256,
         browserBuild: await this.browser.version(),
         playwrightVersion: this.playwrightVersion,
-        fontSha256s: fonts.map((font) => font.sha256),
+        fontSha256s: fonts.flatMap((font) => font.faces.map((face) => face.sha256)),
         diagnostics: diagnostics.diagnostics,
         layout: diagnostics.layout ?? [],
       };

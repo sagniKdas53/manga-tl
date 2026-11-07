@@ -94,6 +94,9 @@ export function resolvePageScene(input, measureText) {
             shape: object.style.shape === "elliptical" ? "elliptical" : "rectangular",
             boxX: fitBox.x,
             boxY: fitBox.y,
+            maskPolygon: object.style.maskPolygon
+                ? JSON.stringify(object.style.maskPolygon)
+                : undefined,
             fontWeight: String(object.style.weight),
             fontStyle: object.style.fontStyle === "italic" ? "italic" : "normal",
         }, measureText);

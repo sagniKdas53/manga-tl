@@ -6,6 +6,7 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt,
+    sync::LazyLock,
 };
 
 use serde_json::Value;
@@ -150,7 +151,29 @@ fn validate_editor_typography(item: &serde_json::Map<String, Value>) -> Result<(
     {
         return Err(error("style.shape must be rectangular or elliptical"));
     }
+    // Contract rule 9 (2026-11-07, G2): the balloon outline, at least three finite [x, y] pairs.
+    if let Some(polygon) = style.get("mask_polygon")
+        && !is_valid_mask_polygon(polygon)
+    {
+        return Err(error(
+            "style.mask_polygon must be at least three [x, y] pairs of finite numbers",
+        ));
+    }
     Ok(())
+}
+
+fn is_valid_mask_polygon(value: &Value) -> bool {
+    value.as_array().is_some_and(|points| {
+        points.len() >= 3
+            && points.iter().all(|point| {
+                point.as_array().is_some_and(|pair| {
+                    pair.len() == 2
+                        && pair
+                            .iter()
+                            .all(|c| c.as_f64().is_some_and(|v| v.is_finite() && v.abs() <= 1e12))
+                })
+            })
+    })
 }
 
 /// Shared authorization gate for every automatic replacement artifact. A policy authorizes
@@ -177,6 +200,33 @@ fn validate_replacement_request<'a>(
         return Err(error("automatic replacement text must be non-empty"));
     }
     Ok(())
+}
+
+/// The authoritative page-scene/v1 JSON Schema, compiled once. The file is compiled into the
+/// binary, so the Docker build copies `contracts/page-scene-v1.schema.json` next to the sources.
+static SCHEMA: LazyLock<jsonschema::Validator> = LazyLock::new(|| {
+    let schema: Value =
+        serde_json::from_str(include_str!("../../contracts/page-scene-v1.schema.json"))
+            .expect("contracts/page-scene-v1.schema.json is valid JSON");
+    jsonschema::draft7::new(&schema).expect("contracts/page-scene-v1.schema.json is a valid schema")
+});
+
+/// H1 (#176): checks a scene against the full JSON Schema. Runs before `validate_page_scene`'s
+/// hand-written rules, which stay the authority on ownership, digests and geometry.
+pub fn validate_against_schema(document: &Value) -> Result<(), PageSceneError> {
+    let messages: Vec<String> = SCHEMA
+        .iter_errors(document)
+        .take(3)
+        .map(|failure| format!("{} at {}", failure, failure.instance_path()))
+        .collect();
+    if messages.is_empty() {
+        Ok(())
+    } else {
+        Err(PageSceneError(format!(
+            "scene does not match the page-scene/v1 schema: {}",
+            messages.join("; ")
+        )))
+    }
 }
 
 pub fn validate_page_scene(document: Value) -> Result<ValidatedPageScene, PageSceneError> {

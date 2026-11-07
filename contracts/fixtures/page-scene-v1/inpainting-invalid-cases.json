@@ -7,6 +7,13 @@
     {"name": "automatic-text-cites-ownerless-cleanup", "operations": [{"op": "replace", "path": "/objects/0/cleanup_ids", "value": ["cleanup-kept"]}]},
     {"name": "font-size-zero", "operations": [{"op": "replace", "path": "/objects/0/style/font_size", "value": 0}]},
     {"name": "font-style-oblique", "operations": [{"op": "replace", "path": "/objects/0/style/font_style", "value": "oblique"}]},
-    {"name": "shape-polygon", "operations": [{"op": "replace", "path": "/objects/0/style/shape", "value": "polygon"}]}
+    {"name": "shape-polygon", "operations": [{"op": "replace", "path": "/objects/0/style/shape", "value": "polygon"}]},
+    {"name": "mask-polygon-two-points", "operations": [{"op": "replace", "path": "/objects/0/style/mask_polygon", "value": [[1, 2], [3, 4]]}]},
+    {"name": "mask-polygon-empty", "operations": [{"op": "replace", "path": "/objects/0/style/mask_polygon", "value": []}]},
+    {"name": "mask-polygon-not-numbers", "operations": [{"op": "replace", "path": "/objects/0/style/mask_polygon", "value": [[1, 2], [3, "4"], [5, 6]]}]},
+    {"name": "mask-polygon-three-coordinates", "operations": [{"op": "replace", "path": "/objects/0/style/mask_polygon", "value": [[1, 2, 3], [4, 5, 6], [7, 8, 9]]}]},
+    {"name": "mask-polygon-one-coordinate", "operations": [{"op": "replace", "path": "/objects/0/style/mask_polygon", "value": [[1], [4], [7]]}]},
+    {"name": "mask-polygon-a-string", "operations": [{"op": "replace", "path": "/objects/0/style/mask_polygon", "value": "[[1,2],[3,4],[5,6]]"}]},
+    {"name": "mask-polygon-out-of-range", "operations": [{"op": "replace", "path": "/objects/0/style/mask_polygon", "value": [[1, 2], [3, 4], [1e13, 6]]}]}
   ]
 }

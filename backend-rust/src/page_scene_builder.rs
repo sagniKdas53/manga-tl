@@ -33,9 +33,12 @@ pub fn scene_asset_path(page_id: Uuid, sha256: &str) -> String {
     format!("scene-assets/{page_id}/{sha256}.png")
 }
 
-/// The pinned renderer font. `services/page-renderer/fonts.json` is the source of truth for the
-/// digest; the byte length is the size of the same `ComicNeue-Regular.otf` the image installs.
-/// `PAGE_SCENE_FONTS_JSON` may override with the same shape as fonts.json plus `byteLength`.
+/// The font files a render depends on, pinned. `services/page-renderer/fonts.json` is the source of
+/// truth for the digests; the byte lengths are the sizes of the same files the image installs.
+/// Text is drawn with the first asset's id. The renderer serves both files as faces of that id;
+/// the second is listed so a change to it changes the scene digest, and old renders stop being
+/// reused (#322).
+/// `PAGE_SCENE_FONTS_JSON` may override: `{"fonts": [{fontId, family, sha256, byteLength}]}`.
 #[derive(Debug, Clone)]
 pub struct FontAsset {
     pub font_id: String,
@@ -45,24 +48,36 @@ pub struct FontAsset {
     pub mime_type: String,
 }
 
+fn default_fonts() -> Vec<FontAsset> {
+    vec![
+        FontAsset {
+            font_id: "comic-neue".into(),
+            family: "Comic Neue".into(),
+            sha256: "2728ee8f303e31934e62bf27b044fd7657b0613412d51f7444db1078cc3a7cb2".into(),
+            byte_length: 35628,
+            mime_type: "font/otf".into(),
+        },
+        FontAsset {
+            font_id: "comic-neue-bold".into(),
+            family: "Comic Neue".into(),
+            sha256: "0637fea8f858cd1d9a6e0ff786bed3d8cc2dc59b871a28e268a5a0106f052a92".into(),
+            byte_length: 30236,
+            mime_type: "font/otf".into(),
+        },
+    ]
+}
+
 pub fn configured_fonts() -> Vec<FontAsset> {
-    let default = FontAsset {
-        font_id: "comic-neue".into(),
-        family: "Comic Neue".into(),
-        sha256: "2728ee8f303e31934e62bf27b044fd7657b0613412d51f7444db1078cc3a7cb2".into(),
-        byte_length: 35628,
-        mime_type: "font/otf".into(),
-    };
     let Ok(raw) = std::env::var("PAGE_SCENE_FONTS_JSON") else {
-        return vec![default];
+        return default_fonts();
     };
     let parsed: Value = match serde_json::from_str(&raw) {
         Ok(value) => value,
         Err(err) => {
             tracing::error!(
-                "PAGE_SCENE_FONTS_JSON is not valid JSON ({err}); using the pinned default font"
+                "PAGE_SCENE_FONTS_JSON is not valid JSON ({err}); using the pinned default fonts"
             );
-            return vec![default];
+            return default_fonts();
         }
     };
     let fonts: Vec<FontAsset> = parsed
@@ -85,7 +100,7 @@ pub fn configured_fonts() -> Vec<FontAsset> {
         })
         .collect();
     if fonts.is_empty() {
-        vec![default]
+        default_fonts()
     } else {
         fonts
     }
@@ -888,7 +903,33 @@ fn style_for(
     {
         style["shape"] = json!("elliptical");
     }
+    // G2 (#176, owner D1 2026-10-04): the editor fits text into the element's balloon outline, so
+    // the scene carries it and the export fits the same way. Written only when the element has a
+    // whole outline the contract accepts; the editor ignores a malformed one the same way.
+    if let Some(outline) = scene_polygon(element.mask_polygon.as_ref()) {
+        style["mask_polygon"] = json!(outline);
+    }
     style
+}
+
+/// The element's `mask_polygon` as the contract's `[x, y]` pairs: at least three, every point a
+/// finite pair within the contract's range. The stored value is a JSON array or its text. The
+/// editor's `parsePolygon` takes the whole polygon or none, so this does too.
+fn scene_polygon(value: Option<&Value>) -> Option<Vec<[f64; 2]>> {
+    let parsed: Value = match value? {
+        Value::String(text) => serde_json::from_str(text).ok()?,
+        other => other.clone(),
+    };
+    let points = parsed
+        .as_array()?
+        .iter()
+        .map(|point| {
+            let pair = point.as_array()?;
+            let (x, y) = (pair.first()?.as_f64()?, pair.get(1)?.as_f64()?);
+            (pair.len() == 2 && x.abs() <= 1e12 && y.abs() <= 1e12).then_some([x, y])
+        })
+        .collect::<Option<Vec<_>>>()?;
+    (points.len() >= 3).then_some(points)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1077,6 +1118,67 @@ mod tests {
         );
         assert_eq!(italic["font_style"], json!("italic"));
         assert!(italic.get("shape").is_none() && italic.get("font_size").is_none());
+    }
+
+    /// A render depends on every face, and the scene's assets feed the digest that decides whether
+    /// an old render can be reused. So a face missing here would keep old renders after that face
+    /// changes (#322).
+    #[test]
+    fn the_scene_lists_every_font_file_the_renderer_draws_with() {
+        let config: Value =
+            serde_json::from_str(include_str!("../../services/page-renderer/fonts.json")).unwrap();
+        let font = &config["fonts"][0];
+        let faces: Vec<&str> = font["faces"]
+            .as_array()
+            .expect("the renderer's font lists its faces")
+            .iter()
+            .map(|face| face["sha256"].as_str().unwrap())
+            .collect();
+        let listed = configured_fonts();
+        assert_eq!(
+            listed.iter().map(|f| f.sha256.as_str()).collect::<Vec<_>>(),
+            faces
+        );
+        // Text is drawn with the first asset's id, which must stay the id the renderer knows.
+        assert_eq!(Some(listed[0].font_id.as_str()), font["fontId"].as_str());
+    }
+
+    #[test]
+    fn style_carries_the_balloon_outline_only_when_the_element_has_a_whole_one() {
+        let geometry = crate::settings::TextBoxGeometry::DEFAULT;
+        let outline = json!([[0.0, 0.0], [100.5, 0.0], [100.5, 80.0], [0.0, 80.0]]);
+        let carried = |value: Value| {
+            style_for(
+                &text_element(json!({ "maskPolygon": value })),
+                "comic-neue",
+                &geometry,
+            )
+        };
+        // The stored jsonb array, and the polygon's JSON text, both reach the scene as pairs.
+        assert_eq!(carried(outline.clone())["mask_polygon"], outline);
+        assert_eq!(carried(json!(outline.to_string()))["mask_polygon"], outline);
+        // No polygon, or one the editor and the contract would not take whole: nothing is written.
+        let none = style_for(&text_element(json!({})), "comic-neue", &geometry);
+        assert!(none.get("mask_polygon").is_none(), "an element without one");
+        for bad in [
+            json!([[0, 0], [1, 1]]),
+            json!([[0, 0], [1, 1], ["2", 3]]),
+            json!([[0, 0], [1, 1], [2, 3, 4]]),
+            json!([[0, 0], [1, 1], [1e13, 3]]),
+            json!("not json"),
+        ] {
+            assert!(
+                carried(bad.clone()).get("mask_polygon").is_none(),
+                "{bad} must not be written"
+            );
+        }
+        // Rectangular and elliptical elements both carry it: the editor fits both into it.
+        let rectangular = style_for(
+            &text_element(json!({ "boxShape": "rectangular", "maskPolygon": outline })),
+            "comic-neue",
+            &geometry,
+        );
+        assert_eq!(rectangular["mask_polygon"], outline);
     }
 
     #[test]
