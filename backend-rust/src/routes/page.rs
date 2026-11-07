@@ -917,6 +917,9 @@ pub async fn put_page_scene(
         Ok(json) => json,
         Err(_) => return error::unreadable_body(INSTANCE),
     };
+    if let Err(err) = crate::page_scene::validate_against_schema(&document) {
+        return error::bad_request(&err.to_string(), INSTANCE);
+    }
     let validated = match crate::page_scene::validate_page_scene(document) {
         Ok(scene) if scene.scene_kind == "logical" => scene,
         Ok(_) => return error::bad_request("API writes require a logical scene", INSTANCE),

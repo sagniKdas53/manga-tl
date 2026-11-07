@@ -22,6 +22,8 @@ backend-rust/target
 !services/page-renderer/
 services/page-renderer/node_modules
 !packages/page-scene/
+# H1: the backend compiles the page-scene schema into the binary (src/page_scene.rs).
+!contracts/page-scene-v1.schema.json
 packages/page-scene/dist
 
 # Never enter a build context, even via an allowed directory:

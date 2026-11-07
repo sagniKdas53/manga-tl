@@ -456,11 +456,13 @@ async fn draw(
             "padding": style["padding"],
             "safetyPercent": safety_percent,
         });
-        // Contract rule 8: the user's typography, passed on only when the scene carries it.
+        // Contract rules 8 and 9: the user's typography and the balloon outline, passed on only
+        // when the scene carries them.
         for (scene_key, renderer_key) in [
             ("font_size", "fontSize"),
             ("font_style", "fontStyle"),
             ("shape", "shape"),
+            ("mask_polygon", "maskPolygon"),
         ] {
             if let Some(value) = style.get(scene_key).filter(|v| !v.is_null()) {
                 renderer_style[renderer_key] = value.clone();
