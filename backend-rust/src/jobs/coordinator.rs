@@ -2371,6 +2371,15 @@ const FREE_TEXT_MIN_WIDTH_FRACTION: f64 = 0.07;
 /// F5: the share of the smaller box two text boxes may have in common before a wider box counts as
 /// running into its neighbour.
 const NEIGHBOUR_OVERLAP_LIMIT: f64 = 0.1;
+/// F5: `layout.ts` keeps an outline up to 2 px narrower than the box's inner edge, on each side. A
+/// grown box must keep it for certain, so it isn't given credit for the padding.
+const OUTLINE_SLACK_PX: f64 = 2.0;
+/// F5: today's box is counted as having its outline with the padding too, 4 px at most by default
+/// (`textBoxPaddingMaxPx`). Saying yes wrongly only gives up a small widening; saying no wrongly
+/// loses the outline and about 15 % of the size.
+const INSET_OUTLINE_SLACK_PX: f64 = 6.0;
+/// F5: how much more area makes up for the text setting about 15 % smaller without its outline.
+const OUTLINE_WORTH_LEAVING: f64 = 1.4;
 
 /// Where translated text is laid out, in original image pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -2688,15 +2697,17 @@ pub fn page_text_boxes(
         .collect()
 }
 
-/// F5 (#244): text alone in its balloon may use the balloon's `safe_text` box, which stays clear of
-/// the outline, instead of the fixed inset. The box only grows, because `safe_text` can be a narrow
-/// source column in a wide balloon, and it stays inside the balloon, because `safe_text` can reach
-/// past it.
+/// F5 (#244): text may use more of its balloon than the fixed inset. The box only grows.
+///
+/// - Text alone in its balloon grows into the balloon's `safe_text` box, which stays clear of the
+///   outline. It stays inside the balloon, because `safe_text` can reach past it, and can be a
+///   narrow source column, which is why it only grows.
+/// - Text sharing a balloon has only a crop around its own text as a balloon box, so `safe_text`
+///   says nothing about the balloon. It grows sideways into the room the worker measured on the
+///   page (`ownershipProvenance.textRoom`), when it measured any.
 ///
 /// Today's box is kept for:
 /// - free-standing text (LOCK-1) and turned text, which has its own box until E3;
-/// - text sharing a balloon: the worker gives those regions only a crop around their own text, so
-///   their `safe_text` says nothing about the balloon's size;
 /// - a `safe_text` box equal to the balloon, as the worker writes for a contour-recovered balloon:
 ///   it would put the text right against the outline;
 /// - growth that would run into a neighbour's box (#182).
@@ -2706,40 +2717,21 @@ pub fn grow_into_safe_text(
     page_regions: &[OcrRegion],
     neighbour_boxes: &[(Uuid, TextBox)],
 ) -> TextBox {
+    if !has_detected_bubble(region) || turned_text_area(region).is_some() {
+        return inset;
+    }
     let shares_balloon = |bubble_id: &String| {
         page_regions
             .iter()
             .any(|other| other.id != region.id && other.bubble_id.as_ref() == Some(bubble_id))
     };
-    if !has_detected_bubble(region)
-        || turned_text_area(region).is_some()
-        || region.bubble_id.as_ref().is_none_or(shares_balloon)
-    {
-        return inset;
-    }
-    let (Some((bx, by, bw, bh)), Some(sx), Some(sy), Some(sw), Some(sh)) = (
-        bubble_rect(region),
-        region.safe_text_x,
-        region.safe_text_y,
-        region.safe_text_w,
-        region.safe_text_h,
-    ) else {
-        return inset;
+    let grown = if region.bubble_id.as_ref().is_none_or(shares_balloon) {
+        grown_into_text_room(inset, region)
+    } else {
+        grown_into_balloon(inset, region)
     };
-    let (sx, sy, sw, sh) = (f64::from(sx), f64::from(sy), f64::from(sw), f64::from(sh));
-    if (sx, sy, sw, sh) == (bx, by, bw, bh) {
+    let Some(grown) = grown.map(|grown| kept_on_outline(grown, inset, region)) else {
         return inset;
-    }
-
-    let left = inset.x.min(sx.max(bx));
-    let top = inset.y.min(sy.max(by));
-    let right = (inset.x + f64::from(inset.w)).max((sx + sw).min(bx + bw));
-    let bottom = (inset.y + f64::from(inset.h)).max((sy + sh).min(by + bh));
-    let grown = TextBox {
-        x: left,
-        y: top,
-        w: (right - left).round() as i32,
-        h: (bottom - top).round() as i32,
     };
 
     let runs_into_neighbour = neighbour_boxes
@@ -2752,6 +2744,84 @@ pub fn grow_into_safe_text(
                 && shared > NEIGHBOUR_OVERLAP_LIMIT * smaller
         });
     if runs_into_neighbour { inset } else { grown }
+}
+
+fn grown_into_balloon(inset: TextBox, region: &OcrRegion) -> Option<TextBox> {
+    let (bx, by, bw, bh) = bubble_rect(region)?;
+    let (sx, sy, sw, sh) = (
+        f64::from(region.safe_text_x?),
+        f64::from(region.safe_text_y?),
+        f64::from(region.safe_text_w?),
+        f64::from(region.safe_text_h?),
+    );
+    if (sx, sy, sw, sh) == (bx, by, bw, bh) {
+        return None;
+    }
+    let left = inset.x.min(sx.max(bx));
+    let top = inset.y.min(sy.max(by));
+    let right = (inset.x + f64::from(inset.w)).max((sx + sw).min(bx + bw));
+    let bottom = (inset.y + f64::from(inset.h)).max((sy + sh).min(by + bh));
+    Some(TextBox {
+        x: left,
+        y: top,
+        w: (right - left).round() as i32,
+        h: (bottom - top).round() as i32,
+    })
+}
+
+fn grown_into_text_room(inset: TextBox, region: &OcrRegion) -> Option<TextBox> {
+    let room = region.ownership_provenance.as_ref()?.get("textRoom")?;
+    let (x, width) = (room.get("x")?.as_f64()?, room.get("width")?.as_f64()?);
+    let left = inset.x.min(x);
+    let right = (inset.x + f64::from(inset.w)).max(x + width);
+    Some(TextBox {
+        x: left,
+        y: inset.y,
+        w: (right - left).round() as i32,
+        h: inset.h,
+    })
+}
+
+/// A box wider than its outline loses it: `layout.ts` ignores an outline more than 2 px narrower
+/// than the box and fits an oval in the box instead, about 15 % smaller (48 to 41, 58 to 49, 54 to
+/// 44, 49 to 41 px at one size of box). So a small widening stops at the outline, and only one that
+/// pays for the loss goes past it. A box that has already lost its outline has nothing to lose.
+fn kept_on_outline(grown: TextBox, inset: TextBox, region: &OcrRegion) -> TextBox {
+    let Some((left, right)) = outline_x_extent(region) else {
+        return grown;
+    };
+    let on_outline = |text_box: TextBox, slack: f64| {
+        left <= text_box.x + slack && right >= text_box.x + f64::from(text_box.w) - slack
+    };
+    if on_outline(grown, OUTLINE_SLACK_PX)
+        || !on_outline(inset, INSET_OUTLINE_SLACK_PX)
+        || box_area(grown) >= OUTLINE_WORTH_LEAVING * box_area(inset)
+    {
+        return grown;
+    }
+    let x = grown.x.max(left).min(inset.x);
+    let end = (grown.x + f64::from(grown.w))
+        .min(right)
+        .max(inset.x + f64::from(inset.w));
+    TextBox {
+        x,
+        w: (end - x).round() as i32,
+        ..grown
+    }
+}
+
+fn outline_x_extent(region: &OcrRegion) -> Option<(f64, f64)> {
+    let points = region.mask_polygon.as_ref()?.as_array()?;
+    let xs: Vec<f64> = points
+        .iter()
+        .filter_map(|point| point.get(0)?.as_f64())
+        .collect();
+    (xs.len() >= 3).then(|| {
+        (
+            xs.iter().copied().fold(f64::INFINITY, f64::min),
+            xs.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+        )
+    })
 }
 
 fn box_rect(text_box: TextBox) -> Rect {
@@ -5988,6 +6058,115 @@ mod textbox_tests {
         value["bubbleH"] = serde_json::json!(400);
         let r = with_safe_text(value, (100, 200, 300, 400));
         assert_eq!(grown(&r, std::slice::from_ref(&r)), INSET_BOX);
+    }
+
+    /// `bubble_region(100, 200, 300, 400)` sharing its balloon with another region, as the worker
+    /// records it: the text room under `ownershipProvenance.textRoom`.
+    fn sharing_with_room(x: i32, width: i32) -> (OcrRegion, OcrRegion) {
+        let mut value = bubble_region(100, 200, 300, 400);
+        value["ownershipProvenance"] = serde_json::json!({
+            "containerResolution": "resolved-local-split",
+            "textRoom": {"x": x, "width": width, "method": "rays-v1"},
+        });
+        (region(value), region(bubble_region(900, 200, 300, 400)))
+    }
+
+    fn with_outline(mut r: OcrRegion, left: i32, right: i32) -> OcrRegion {
+        r.mask_polygon = Some(serde_json::json!([
+            [left, 200],
+            [right, 200],
+            [right, 600],
+            [left, 600]
+        ]));
+        r
+    }
+
+    #[test]
+    fn f5_text_sharing_a_balloon_grows_sideways_into_its_measured_room() {
+        let (r, other) = sharing_with_room(50, 500);
+        assert_eq!(
+            grown(&r, &[r.clone(), other]),
+            TextBox {
+                x: 50.0,
+                y: 210.0,
+                w: 500,
+                h: 380
+            }
+        );
+    }
+
+    #[test]
+    fn f5_measured_room_narrower_than_todays_box_never_shrinks_it() {
+        let (r, other) = sharing_with_room(200, 50);
+        assert_eq!(grown(&r, &[r.clone(), other]), INSET_BOX);
+    }
+
+    #[test]
+    fn f5_a_turned_region_ignores_its_measured_room() {
+        let mut value = turned(bubble_region(100, 200, 300, 400));
+        value["ownershipProvenance"] = serde_json::json!({
+            "textRoom": {"x": 0, "width": 800, "method": "rays-v1"},
+        });
+        let r = region(value);
+        let today = text_box_geometry(&r, None);
+        assert_eq!(grown(&r, std::slice::from_ref(&r)), today);
+    }
+
+    #[test]
+    fn f5_room_that_would_run_into_a_neighbour_keeps_todays_box() {
+        let (r, _) = sharing_with_room(50, 500);
+        let mut neighbour = bubble_region(380, 300, 200, 200);
+        neighbour["bubbleId"] = serde_json::json!("bubble_0");
+        let neighbour = region(neighbour);
+        assert_eq!(grown(&r, &[r.clone(), neighbour]), INSET_BOX);
+    }
+
+    #[test]
+    fn f5_a_small_widening_stops_at_the_outline_because_the_fitter_would_drop_it() {
+        // layout.ts ignores an outline more than 2 px narrower than the box, and the text then
+        // sets about 15 % smaller. Measured: 54 to 48 px in a box 13 % wider.
+        let (r, other) = sharing_with_room(90, 320);
+        let r = with_outline(r, 100, 400);
+        assert_eq!(
+            grown(&r, &[r.clone(), other]),
+            TextBox {
+                x: 100.0,
+                y: 210.0,
+                w: 300,
+                h: 380
+            }
+        );
+    }
+
+    #[test]
+    fn f5_a_large_widening_leaves_the_outline_because_it_pays_for_the_loss() {
+        // B ja p10's "Living expenses??": the outline is only a crop around the text, and leaving
+        // it takes the text from 24 to 53 px.
+        let (r, other) = sharing_with_room(50, 500);
+        let r = with_outline(r, 100, 400);
+        assert_eq!(grown(&r, &[r.clone(), other]).w, 500);
+    }
+
+    #[test]
+    fn f5_growth_inside_the_outline_is_untouched() {
+        let r = with_outline(balloon_with_safe_text((103, 203, 294, 394)), 100, 400);
+        assert_eq!(grown(&r, std::slice::from_ref(&r)).w, 294);
+    }
+
+    #[test]
+    fn f5_a_box_just_wider_than_its_outline_still_has_it_because_of_the_padding() {
+        // test p3: a box 6 px past its outline still fitted 58 px; 2 px wider it fitted 50.
+        let (r, other) = sharing_with_room(90, 320);
+        let r = with_outline(r, 116, 384);
+        assert_eq!(grown(&r, &[r.clone(), other]), INSET_BOX);
+    }
+
+    #[test]
+    fn f5_stopping_at_the_outline_never_makes_the_box_narrower_than_today() {
+        // The outline is narrower than today's box, so the fitter already ignores it.
+        let (r, other) = sharing_with_room(90, 320);
+        let r = with_outline(r, 200, 300);
+        assert_eq!(grown(&r, &[r.clone(), other]).w, 320);
     }
 
     #[test]

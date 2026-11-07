@@ -92,6 +92,19 @@ class CompareLayout(unittest.TestCase):
         self.assertEqual(kinds(report), [])
         self.assertEqual(report["accepted"][0]["reason"], "still large")
 
+    def test_text_appearing_is_counted_and_is_not_a_move(self):
+        hidden = region()
+        hidden["box"], hidden["px"], hidden["text_sha"] = None, None, None
+        report = compare(snapshot(hidden), snapshot(region()))
+        self.assertEqual(kinds(report), [])
+        self.assertEqual(report["counts"]["newly_drawn"], 1)
+        self.assertEqual(report["counts"]["boxes_moved"], 0)
+
+    def test_text_disappearing_fails(self):
+        hidden = region()
+        hidden["box"], hidden["px"], hidden["text_sha"] = None, None, None
+        self.assertEqual(kinds(compare(snapshot(region()), snapshot(hidden))), ["no-longer-drawn"])
+
     def test_a_page_missing_from_one_snapshot_fails(self):
         before = snapshot(region())
         after = copy.deepcopy(before)
