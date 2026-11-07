@@ -1118,10 +1118,7 @@ mod tests {
         };
         // The stored jsonb array, and the polygon's JSON text, both reach the scene as pairs.
         assert_eq!(carried(outline.clone())["mask_polygon"], outline);
-        assert_eq!(
-            carried(json!(outline.to_string()))["mask_polygon"],
-            outline
-        );
+        assert_eq!(carried(json!(outline.to_string()))["mask_polygon"], outline);
         // No polygon, or one the editor and the contract would not take whole: nothing is written.
         let none = style_for(&text_element(json!({})), "comic-neue", &geometry);
         assert!(none.get("mask_polygon").is_none(), "an element without one");
