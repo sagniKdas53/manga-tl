@@ -56,6 +56,7 @@ Its library is no longer empty: 92 pages on 2026-11-07, 32 of them the owner's o
 - Deleting a page, chapter or one-shot leaves its image row, job rows, cost rows and bucket objects behind (originals, thumbnails, renders, scene assets). Seen on 2026-11-07: a one-page test left 1 image, 8 jobs, 4 cost rows and 24 objects. Not new with SeaweedFS. No issue yet.
 - Left from one-shots: a one-shot's chapter page shows a "Series" row and a "Chapter 1" heading; the import dialog's series list stops at the first 100.
 - `minimatch` dev-only advisory (GHSA-g3hv-75wg-m249).
+- `rq` is in the worker's `requirements.txt`, but nothing imports it and it isn't loaded at runtime: `rq_tasks.py` is only a name. It can go.
 
 ## Status at a glance (2026-10-17 — E2, Korean and Reshape merged)
 
