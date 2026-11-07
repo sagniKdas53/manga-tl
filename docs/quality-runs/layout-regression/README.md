@@ -6,11 +6,13 @@ The owner's rule (2026-11-07): no regression that can't be traced back to its so
 
 | # | Change | Merged as | Declared footprint | Boxes moved | Bigger / smaller | Regrouped | Overlapping pairs | Tiny text | Violations | Run on |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0 | Baseline | main f075ec8, worker c8972c3 | none | | | | 90 | 183 | 0 | [baseline](baseline-f075ec8.json), 92 pages, 903 regions |
+| 0 | Baseline | main f075ec8, worker c8972c3 | none | | | | 90 | 183 | 0 | `baseline-f075ec8.json` in the evidence folder, 92 pages, 903 regions |
 | 1 | F5 part 1: text alone in a balloon grows into `safe_text`, keeping its outline | #328, with the outline rule from #331 | box: `resolved-bubble-container` | 220 | 173 / 0 | 0 | 90 | 173 | 0 | Prediction on all 92 pages. Live on Free ch1 p1 |
 | 2 | F5 part 2: text sharing a detector box grows into the measured room (`rays-v1`) | #331 (main 5803e70), worker #87 (9545dab) | box: `resolved-local-split` | 71 | 40 / 0 | 0 | 90 | 168 | 0 | Prediction on all 92 pages. Live on B ja p10: all 8 boxes as predicted, the other 91 pages unchanged |
 | 3 | Worker dependencies: FastAPI 0.162, `rq` 3.0, ruff 0.17.3 (worker #82, #83, #84) | pin at worker 8e61358 | none | 0 | 0 / 0 | 0 | 90 | 168 | 0 | Replay: groups identical on 92 of 92 pages. **No job run on it yet** |
-| 4 | #321: outside a balloon, a jump in column tops separates two speakers | worker #88 (ef7d3ea) | grouping: no-balloon text only | not predicted, the new regions have no translation yet | not predicted | 13 groups on 8 pages | 34 to 41 pairs on those 8 pages, overlapped area -23 % | not predicted | 0 groups outside the footprint | Replay on all 92 pages. **Not yet run live** |
+| 4 | #321: outside a balloon, a jump in column tops separates two speakers | worker #88 (ef7d3ea) | grouping: no-balloon text only | not predicted, the new regions have no translation yet | not predicted | 13 groups on 8 pages | 34 to 41 pairs on those 8 pages, overlapped area -23 % | not predicted | 0 groups outside the footprint | Replay on all 92 pages. Live in row 5 |
+| 5 | Pilot: rows 1-4 live on 5 pages (`test` p5, p16, p4, `test2` p6, B fixtures p5) | no code | everything on those 5 pages | 2 | 0 / 0 (45 reworded) | 30 regions, 12 more in all | 90 to 97 | 182 to 186 | 0 | Live. The other 87 pages unchanged. Text reworded by re-translation isn't compared for size. 2 boxes moved on `test2` p6 and `test` p16. Awaiting the owner's look |
+| 6 | CI checks; worker pin at the golden test | PR pending | none: tests and fixtures only | 0 | 0 / 0 | 0 | 97 | 186 | 0 | The two checks below pass on this code, and fail on deliberately broken code |
 
 "Tiny" is under 1.5 % of page width, a threshold chosen for comparison. Overlap is two text boxes sharing over 10 % of the smaller one.
 
@@ -19,6 +21,22 @@ The owner's rule (2026-11-07): no regression that can't be traced back to its so
 1. **Which run changed it?** Find the region by its key in the snapshots. A key is a hash of the region's OCR pieces, so it survives a re-OCR that groups them the same way. The first row where it moves is the change.
 2. **Which rule?** Each rule writes a marker on the region (`ownership_provenance`) and has its own switch. See the rule's row in the tracker's "Thresholds B tuned".
 3. **Why that page?** The capture (`OCR_CAPTURE_DIR`) holds the OCR pieces, and `replay_grouping.py` reruns the grouping with no model calls.
+
+## What CI checks
+
+All with no page images, no page text and no model calls, because both repos are public and the pages can't go in them.
+
+| Check | Where | What fails it |
+| --- | --- | --- |
+| **Ledger rule** (`check_ledger_row.py`) | `ci-layout.yml` | A PR touching the worker pin, the fitter, the renderer or the text-box code without adding a row here. `no-layout-effect` is the explicit way out |
+| **Layout check** (`layout_ci.cjs`) | `ci-layout.yml`, in the renderer's own image | Any change to a fitted size or line count, over 730 stored boxes with stand-in text (`scripts/quality/fixtures/layout-fixture.json`) |
+| **Grouping check** (`test_grouping_golden.py`) | Worker CI | Any change to grouping, over 91 pages' piece positions. It leaves out the one page whose balloon join needs its image |
+
+Each was checked by breaking things on purpose: turning off each of five grouping rules, or changing a threshold, failed 4 to 26 pages, and changing the outline rule or the line height failed 34 and 189 text objects.
+
+What CI still can't do: judge how a real page looks, or run the real ledger, which needs the stack and the originals. That stays by hand, with the owner's eye as the gate.
+
+When a change is meant, rewrite the fixture in the same PR: `make_grouping_fixture.py` for grouping, `layout_ci.cjs --dump` then `--write` for layout. The fixture's diff and the ledger row then show what moved.
 
 ## The tools
 
@@ -57,11 +75,13 @@ The prediction repeats backend logic in Python, so the two can drift. A live run
 ## Known at the baseline
 
 - 12 groups in the captures have no row in the database, on 10 pages (3 of the pages were hand-edited). Most are one piece. Not investigated.
+- **Symbols on the host:** `layout_snapshot.cjs` fits in the host's browser, so text with a symbol Comic Neue lacks takes another fallback font than in the renderer ([#325](https://github.com/sagniKdas53/manga-tl/issues/325)). Usually 1 px, but `test` p16's "O-ne~♡" in a 26 px box fits 6 px on the host and 16 px in the renderer. Every mismatch so far holds a symbol. To fix: fit in the renderer image, as `layout_ci.cjs` does. The CI layout check isn't affected: it runs in that image and its stand-in text has no symbols.
+- **Old renders:** a page's saved render can predate the current renderer. On 2026-11-08 three of five pilot "before" images did. Compare against a redraw by the current renderer: redrawing two pages that were current gave byte-identical images, which is how the method was checked. Snapshots aren't affected, since they always fit with the current layout code.
 - 4 pages are hand-edited: `db322cce`, `ccb6c221`, `2a0cea85` (`test` p5) and `6df55b91`.
 
 ## Evidence
 
-Not in the repo: `~/Projects/manga-tl-data-backup/20261107-before-f5-part2/` holds the originals, captures, panels, a database dump and `PROVENANCE.txt`. The next OCR run overwrites the live captures, so this copy is the only "before".
+Not in the repo, because run data stays out of it (`.gitignore`): `~/Projects/manga-tl-data-backup/20261107-before-f5-part2/` holds the baseline, originals, captures, panels, a database dump and `PROVENANCE.txt`. `20261108-before-rerun/` holds each page's saved render and scene, a dump and a snapshot from before the re-run, and the pilot's comparison. The next OCR run overwrites the live captures, so this copy is the only "before".
 
 ## Rerun
 
@@ -71,7 +91,7 @@ node scripts/quality/layout_snapshot.cjs --db-container manga-tl-test-db-1 \
   --renderer-container manga-tl-test-page-renderer-1 --label <name> --out after.json
 
 # Compare, declaring what the change may touch
-python3 scripts/quality/compare_layout.py docs/quality-runs/layout-regression/baseline-f075ec8.json after.json \
+python3 scripts/quality/compare_layout.py <evidence>/baseline-f075ec8.json after.json \
   --allow-box resolved-local-split --out diff.json
 
 # Replay grouping, in the worker image with this checkout's worker

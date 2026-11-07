@@ -1,0 +1,59 @@
+name: CI - Layout
+
+# Text layout must not change unnoticed. Two checks, with no page images, no page text and no model
+# calls, so they run on a public repo:
+#   - the ledger rule: a PR that can move text or regroup it adds a row to the layout ledger;
+#   - the layout check: the renderer's own layout code, in the renderer's own image, on stored boxes
+#     and outlines with stand-in text.
+# Grouping has its own check in the worker's tests (tests/test_grouping_golden.py).
+# See docs/quality-runs/layout-regression/README.md.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ledger-rule:
+    name: Ledger row for layout changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      layout_affecting: ${{ steps.rule.outputs.layout_affecting }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Test the tools
+        run: |
+          python3 -m unittest scripts/quality/test_check_ledger_row.py
+          python3 -m unittest scripts/quality/test_compare_layout.py
+      - name: Check the ledger rule
+        id: rule
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: >-
+          python3 scripts/quality/check_ledger_row.py --base "$BASE_SHA" --labels "$LABELS"
+          --github-output "$GITHUB_OUTPUT"
+
+  layout-check:
+    name: Text layout is unchanged
+    needs: ledger-rule
+    # Run when a change could affect layout, even if the rule failed, so the author sees both.
+    if: >-
+      always() && (github.event_name == 'workflow_dispatch'
+      || needs.ledger-rule.outputs.layout_affecting == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build the renderer image
+        run: docker build -f services/page-renderer/Dockerfile -t layout-renderer .
+      - name: Fit the stored boxes
+        run: >-
+          docker run --rm --network none -e HOME=/tmp -v "$PWD":/repo:ro -w /repo --entrypoint node layout-renderer
+          scripts/quality/layout_ci.cjs --fixture scripts/quality/fixtures/layout-fixture.json
