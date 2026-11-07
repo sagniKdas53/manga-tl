@@ -2368,6 +2368,9 @@ const FREE_TEXT_MAX_WIDEN: f64 = 2.5;
 /// hold an English word at a readable size, so widening earns the artwork it costs; above it,
 /// widening only buys line length the column's own height already pays for.
 const FREE_TEXT_MIN_WIDTH_FRACTION: f64 = 0.07;
+/// F5: the share of the smaller box two text boxes may have in common before a wider box counts as
+/// running into its neighbour.
+const NEIGHBOUR_OVERLAP_LIMIT: f64 = 0.1;
 
 /// Where translated text is laid out, in original image pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -2669,6 +2672,94 @@ pub fn text_box_geometry(region: &OcrRegion, page: Option<(f64, f64)>) -> TextBo
         w: if inset_w { w - TEXT_BOX_PADDING } else { w },
         h: if inset_h { h - TEXT_BOX_PADDING } else { h },
     }
+}
+
+/// Each region's text box on the page, as laid out before [`grow_into_safe_text`].
+pub fn page_text_boxes(
+    page_regions: &[OcrRegion],
+    page: Option<(f64, f64)>,
+) -> Vec<(Uuid, TextBox)> {
+    page_regions
+        .iter()
+        .map(|region| {
+            let laid_out = region_for_layout(region, page_regions);
+            (region.id, text_box_geometry(&laid_out, page))
+        })
+        .collect()
+}
+
+/// F5 (#244): text alone in its balloon may use the balloon's `safe_text` box, which stays clear of
+/// the outline, instead of the fixed inset. The box only grows, because `safe_text` can be a narrow
+/// source column in a wide balloon, and it stays inside the balloon, because `safe_text` can reach
+/// past it.
+///
+/// Today's box is kept for:
+/// - free-standing text (LOCK-1) and turned text, which has its own box until E3;
+/// - text sharing a balloon: the worker gives those regions only a crop around their own text, so
+///   their `safe_text` says nothing about the balloon's size;
+/// - growth that would run into a neighbour's box (#182).
+pub fn grow_into_safe_text(
+    inset: TextBox,
+    region: &OcrRegion,
+    page_regions: &[OcrRegion],
+    neighbour_boxes: &[(Uuid, TextBox)],
+) -> TextBox {
+    let shares_balloon = |bubble_id: &String| {
+        page_regions
+            .iter()
+            .any(|other| other.id != region.id && other.bubble_id.as_ref() == Some(bubble_id))
+    };
+    if !has_detected_bubble(region)
+        || turned_text_area(region).is_some()
+        || region.bubble_id.as_ref().is_none_or(shares_balloon)
+    {
+        return inset;
+    }
+    let (Some((bx, by, bw, bh)), Some(sx), Some(sy), Some(sw), Some(sh)) = (
+        bubble_rect(region),
+        region.safe_text_x,
+        region.safe_text_y,
+        region.safe_text_w,
+        region.safe_text_h,
+    ) else {
+        return inset;
+    };
+    let (sx, sy, sw, sh) = (f64::from(sx), f64::from(sy), f64::from(sw), f64::from(sh));
+
+    let left = inset.x.min(sx.max(bx));
+    let top = inset.y.min(sy.max(by));
+    let right = (inset.x + f64::from(inset.w)).max((sx + sw).min(bx + bw));
+    let bottom = (inset.y + f64::from(inset.h)).max((sy + sh).min(by + bh));
+    let grown = TextBox {
+        x: left,
+        y: top,
+        w: (right - left).round() as i32,
+        h: (bottom - top).round() as i32,
+    };
+
+    let runs_into_neighbour = neighbour_boxes
+        .iter()
+        .filter(|(id, _)| *id != region.id)
+        .any(|(_, neighbour)| {
+            let shared = overlap_area(box_rect(grown), box_rect(*neighbour));
+            let smaller = box_area(grown).min(box_area(*neighbour));
+            shared > overlap_area(box_rect(inset), box_rect(*neighbour))
+                && shared > NEIGHBOUR_OVERLAP_LIMIT * smaller
+        });
+    if runs_into_neighbour { inset } else { grown }
+}
+
+fn box_rect(text_box: TextBox) -> Rect {
+    (
+        text_box.x,
+        text_box.y,
+        f64::from(text_box.w),
+        f64::from(text_box.h),
+    )
+}
+
+fn box_area(text_box: TextBox) -> f64 {
+    f64::from(text_box.w) * f64::from(text_box.h)
 }
 
 /// Text box for a region: inset into a detected bubble, grown outward + squared up
@@ -3173,6 +3264,14 @@ pub async fn handle_translation_callback(
             .map_err(|e| e.to_string())?,
         None => Vec::new(),
     };
+    // F5: what a wider box must not run into. Computed once: each box needs the whole page.
+    let bounds = match page_regions.first() {
+        Some(region) => page_bounds(&state.pool, region)
+            .await
+            .map(|(w, h)| (f64::from(w), f64::from(h))),
+        None => None,
+    };
+    let neighbour_boxes = page_text_boxes(&page_regions, bounds);
 
     for t in translations {
         let Some(region_id) = t
@@ -3230,7 +3329,12 @@ pub async fn handle_translation_callback(
                         .await
                         .map_err(|e| e.to_string())?;
                 } else {
-                    let box_geom = text_box_for(&state.pool, region).await;
+                    let box_geom = grow_into_safe_text(
+                        text_box_for(&state.pool, region).await,
+                        region,
+                        &page_regions,
+                        &neighbour_boxes,
+                    );
                     let uncertain = awaits_uncertain_check(region);
                     sqlx::query(
                         "UPDATE layer_elements SET text=$2, x=$3, y=$4, max_width=$5, max_height=$6, mask_polygon=$7, visible=$8, \
@@ -3251,7 +3355,12 @@ pub async fn handle_translation_callback(
                 }
             }
             (_, Some(region)) => {
-                let box_geom = text_box_for(&state.pool, region).await;
+                let box_geom = grow_into_safe_text(
+                    text_box_for(&state.pool, region).await,
+                    region,
+                    &page_regions,
+                    &neighbour_boxes,
+                );
                 let uncertain = awaits_uncertain_check(region);
                 // visible = !failed. The worker reports a region it could not translate as
                 // translationFailed:true with a null translatedText, having already tried the
@@ -5777,6 +5886,110 @@ mod textbox_tests {
             "bboxX": 10, "bboxY": 10, "bboxW": 120, "bboxH": 120,
         });
         assert_eq!(text_box_geometry(&region(bbox_only), None).w, 140);
+    }
+
+    /// The balloon of `bubble_region(100, 200, 300, 400)`, with this `safe_text` box.
+    fn with_safe_text(mut value: serde_json::Value, safe: (i32, i32, i32, i32)) -> OcrRegion {
+        value["safeTextX"] = serde_json::json!(safe.0);
+        value["safeTextY"] = serde_json::json!(safe.1);
+        value["safeTextW"] = serde_json::json!(safe.2);
+        value["safeTextH"] = serde_json::json!(safe.3);
+        region(value)
+    }
+
+    fn balloon_with_safe_text(safe: (i32, i32, i32, i32)) -> OcrRegion {
+        with_safe_text(bubble_region(100, 200, 300, 400), safe)
+    }
+
+    fn grown(region: &OcrRegion, page: &[OcrRegion]) -> TextBox {
+        let boxes = page_text_boxes(page, None);
+        grow_into_safe_text(text_box_geometry(region, None), region, page, &boxes)
+    }
+
+    const INSET_BOX: TextBox = TextBox {
+        x: 110.0,
+        y: 210.0,
+        w: 280,
+        h: 380,
+    };
+
+    #[test]
+    fn f5_text_alone_in_its_balloon_takes_the_safe_text_box() {
+        let r = balloon_with_safe_text((103, 203, 294, 394));
+        assert_eq!(
+            grown(&r, std::slice::from_ref(&r)),
+            TextBox {
+                x: 103.0,
+                y: 203.0,
+                w: 294,
+                h: 394
+            }
+        );
+    }
+
+    #[test]
+    fn f5_a_safe_text_box_narrower_than_todays_never_shrinks_it() {
+        // safe_text can trace a tall, narrow source column inside a wide balloon.
+        let r = balloon_with_safe_text((220, 210, 60, 380));
+        assert_eq!(grown(&r, std::slice::from_ref(&r)), INSET_BOX);
+    }
+
+    #[test]
+    fn f5_a_safe_text_box_past_the_balloon_stops_at_the_balloon() {
+        let r = balloon_with_safe_text((90, 190, 320, 420));
+        assert_eq!(
+            grown(&r, std::slice::from_ref(&r)),
+            TextBox {
+                x: 100.0,
+                y: 200.0,
+                w: 300,
+                h: 400
+            }
+        );
+    }
+
+    #[test]
+    fn f5_text_sharing_its_balloon_keeps_todays_box() {
+        // Both regions are in `bubble_0`: each one's box is only a crop around its own text.
+        let r = balloon_with_safe_text((103, 203, 294, 394));
+        let other = with_safe_text(bubble_region(900, 200, 300, 400), (903, 203, 294, 394));
+        assert_eq!(grown(&r, &[r.clone(), other]), INSET_BOX);
+    }
+
+    #[test]
+    fn f5_lock_1_free_standing_text_is_never_widened() {
+        let mut value = direct_text_region(100, 200, 300, 400);
+        value["safeTextX"] = serde_json::json!(50);
+        value["safeTextW"] = serde_json::json!(500);
+        let r = region(value);
+        let today = text_box_geometry(&r, None);
+        assert_eq!(grown(&r, std::slice::from_ref(&r)), today);
+    }
+
+    #[test]
+    fn f5_a_turned_region_keeps_its_box_along_the_text() {
+        let r = region(turned(bubble_region(100, 200, 300, 400)));
+        let today = text_box_geometry(&r, None);
+        assert_eq!(grown(&r, std::slice::from_ref(&r)), today);
+    }
+
+    #[test]
+    fn f5_growing_into_a_neighbours_box_keeps_todays_box() {
+        let r = balloon_with_safe_text((103, 203, 294, 394));
+        let mut neighbour = bubble_region(380, 300, 200, 200);
+        neighbour["bubbleId"] = serde_json::json!("bubble_1");
+        let neighbour = region(neighbour);
+        // The neighbour's box starts at x 390, where today's box ends. The grown one would take
+        // 7 px of it, under the limit: that much is allowed.
+        let page = [r.clone(), neighbour];
+        assert_eq!(grown(&r, &page).w, 294);
+
+        // A small neighbour loses far more of itself to the same growth, so the box stays.
+        let mut small = bubble_region(380, 300, 40, 40);
+        small["bubbleId"] = serde_json::json!("bubble_2");
+        let small = region(small);
+        let page = [r.clone(), small];
+        assert_eq!(grown(&r, &page), INSET_BOX);
     }
 
     #[test]
