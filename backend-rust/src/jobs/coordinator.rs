@@ -2697,6 +2697,8 @@ pub fn page_text_boxes(
 /// - free-standing text (LOCK-1) and turned text, which has its own box until E3;
 /// - text sharing a balloon: the worker gives those regions only a crop around their own text, so
 ///   their `safe_text` says nothing about the balloon's size;
+/// - a `safe_text` box equal to the balloon, as the worker writes for a contour-recovered balloon:
+///   it would put the text right against the outline;
 /// - growth that would run into a neighbour's box (#182).
 pub fn grow_into_safe_text(
     inset: TextBox,
@@ -2725,6 +2727,9 @@ pub fn grow_into_safe_text(
         return inset;
     };
     let (sx, sy, sw, sh) = (f64::from(sx), f64::from(sy), f64::from(sw), f64::from(sh));
+    if (sx, sy, sw, sh) == (bx, by, bw, bh) {
+        return inset;
+    }
 
     let left = inset.x.min(sx.max(bx));
     let top = inset.y.min(sy.max(by));
@@ -5971,6 +5976,18 @@ mod textbox_tests {
         let r = region(turned(bubble_region(100, 200, 300, 400)));
         let today = text_box_geometry(&r, None);
         assert_eq!(grown(&r, std::slice::from_ref(&r)), today);
+    }
+
+    #[test]
+    fn f5_a_safe_text_box_equal_to_the_balloon_leaves_no_margin_so_keeps_todays_box() {
+        // A contour-recovered balloon: the worker sets safe_text to the contour box itself.
+        let mut value = direct_text_region(150, 250, 200, 300);
+        value["bubbleX"] = serde_json::json!(100);
+        value["bubbleY"] = serde_json::json!(200);
+        value["bubbleW"] = serde_json::json!(300);
+        value["bubbleH"] = serde_json::json!(400);
+        let r = with_safe_text(value, (100, 200, 300, 400));
+        assert_eq!(grown(&r, std::slice::from_ref(&r)), INSET_BOX);
     }
 
     #[test]
