@@ -888,7 +888,33 @@ fn style_for(
     {
         style["shape"] = json!("elliptical");
     }
+    // G2 (#176, owner D1 2026-10-04): the editor fits text into the element's balloon outline, so
+    // the scene carries it and the export fits the same way. Written only when the element has a
+    // whole outline the contract accepts; the editor ignores a malformed one the same way.
+    if let Some(outline) = scene_polygon(element.mask_polygon.as_ref()) {
+        style["mask_polygon"] = json!(outline);
+    }
     style
+}
+
+/// The element's `mask_polygon` as the contract's `[x, y]` pairs: at least three, every point a
+/// finite pair within the contract's range. The stored value is a JSON array or its text. The
+/// editor's `parsePolygon` takes the whole polygon or none, so this does too.
+fn scene_polygon(value: Option<&Value>) -> Option<Vec<[f64; 2]>> {
+    let parsed: Value = match value? {
+        Value::String(text) => serde_json::from_str(text).ok()?,
+        other => other.clone(),
+    };
+    let points = parsed
+        .as_array()?
+        .iter()
+        .map(|point| {
+            let pair = point.as_array()?;
+            let (x, y) = (pair.first()?.as_f64()?, pair.get(1)?.as_f64()?);
+            (pair.len() == 2 && x.abs() <= 1e12 && y.abs() <= 1e12).then_some([x, y])
+        })
+        .collect::<Option<Vec<_>>>()?;
+    (points.len() >= 3).then_some(points)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1077,6 +1103,44 @@ mod tests {
         );
         assert_eq!(italic["font_style"], json!("italic"));
         assert!(italic.get("shape").is_none() && italic.get("font_size").is_none());
+    }
+
+    #[test]
+    fn style_carries_the_balloon_outline_only_when_the_element_has_a_whole_one() {
+        let geometry = crate::settings::TextBoxGeometry::DEFAULT;
+        let outline = json!([[0.0, 0.0], [100.5, 0.0], [100.5, 80.0], [0.0, 80.0]]);
+        let carried = |value: Value| {
+            style_for(
+                &text_element(json!({ "maskPolygon": value })),
+                "comic-neue",
+                &geometry,
+            )
+        };
+        // The stored jsonb array, and the polygon's JSON text, both reach the scene as pairs.
+        assert_eq!(carried(outline.clone())["mask_polygon"], outline);
+        assert_eq!(carried(json!(outline.to_string()))["mask_polygon"], outline);
+        // No polygon, or one the editor and the contract would not take whole: nothing is written.
+        let none = style_for(&text_element(json!({})), "comic-neue", &geometry);
+        assert!(none.get("mask_polygon").is_none(), "an element without one");
+        for bad in [
+            json!([[0, 0], [1, 1]]),
+            json!([[0, 0], [1, 1], ["2", 3]]),
+            json!([[0, 0], [1, 1], [2, 3, 4]]),
+            json!([[0, 0], [1, 1], [1e13, 3]]),
+            json!("not json"),
+        ] {
+            assert!(
+                carried(bad.clone()).get("mask_polygon").is_none(),
+                "{bad} must not be written"
+            );
+        }
+        // Rectangular and elliptical elements both carry it: the editor fits both into it.
+        let rectangular = style_for(
+            &text_element(json!({ "boxShape": "rectangular", "maskPolygon": outline })),
+            "comic-neue",
+            &geometry,
+        );
+        assert_eq!(rectangular["mask_polygon"], outline);
     }
 
     #[test]

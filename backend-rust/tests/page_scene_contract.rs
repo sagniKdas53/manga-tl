@@ -1,4 +1,4 @@
-use manga_backend::page_scene::validate_page_scene;
+use manga_backend::page_scene::{validate_against_schema, validate_page_scene};
 use serde_json::Value;
 
 const FIXTURES: &str = concat!(
@@ -91,4 +91,56 @@ fn rejects_every_shared_invalid_fixture() {
             );
         }
     }
+}
+
+const VALID_FIXTURES: [&str; 4] = [
+    "logical-valid.json",
+    "resolved-valid.json",
+    "overlap-preserve-valid.json",
+    "inpainting-edits-valid.json",
+];
+
+/// H1 (#176): `PUT /pages/{id}/scene` is checked against the full JSON Schema before the
+/// hand-written rules. The risk is a scene those rules accept and the schema refuses, so every
+/// valid fixture must pass it.
+#[test]
+fn the_schema_accepts_every_shared_valid_fixture() {
+    for name in VALID_FIXTURES {
+        validate_against_schema(&fixture(name)).unwrap_or_else(|error| panic!("{name}: {error}"));
+    }
+}
+
+#[test]
+fn the_schema_refuses_what_it_describes() {
+    let cases = fixture("inpainting-invalid-cases.json");
+    let base = cases["base_fixture"].as_str().unwrap();
+    let mut refused = 0;
+    for case in cases["cases"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        // The schema-shaped cases: the editor typography and the opacity range. The rest are
+        // ownership and digest rules the schema cannot express.
+        if !["mask-polygon", "font-", "shape-", "opacity-"]
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
+        {
+            continue;
+        }
+        let mut scene = fixture(base);
+        for operation in case["operations"].as_array().unwrap() {
+            apply_operation(&mut scene, operation);
+        }
+        assert!(
+            validate_against_schema(&scene).is_err(),
+            "{name} must be refused by the schema"
+        );
+        refused += 1;
+    }
+    assert!(refused >= 10, "only {refused} schema cases ran");
+
+    let mut extra = fixture("logical-valid.json");
+    extra["unexpected"] = serde_json::json!(true);
+    assert!(
+        validate_against_schema(&extra).is_err(),
+        "an unknown top-level field"
+    );
 }

@@ -98,6 +98,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-${TARG
     fi
 
 COPY backend-rust/ ./
+# include_str! in src/page_scene.rs reads the page-scene schema at ../../contracts from the sources.
+COPY contracts/page-scene-v1.schema.json ../contracts/page-scene-v1.schema.json
 # rust-embed bakes this at compile time; the frontend stage must run first.
 COPY --from=frontend-build /app/dist ../frontend/dist
 # Static healthcheck probe (src/main/c/healthcheck.c) — see its header comment for why

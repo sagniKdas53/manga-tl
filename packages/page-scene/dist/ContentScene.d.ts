@@ -28,6 +28,12 @@ export interface SceneTextStyle {
     fontStyle?: "normal" | "italic";
     /** Contract rule 8: "elliptical" when the user chose that box shape; absent means rectangular. */
     shape?: "rectangular" | "elliptical";
+    /**
+     * Contract rule 9 (G2): the traced balloon outline, at least three [x, y] pairs in source px,
+     * present only when the element has one. The fitter narrows the lines to it wherever it is at
+     * least as wide as the text box, exactly as the editor's own fit does.
+     */
+    maskPolygon?: [number, number][];
 }
 export interface SceneTextObject {
     objectId: string;
