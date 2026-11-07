@@ -8,7 +8,7 @@ The owner's rule (2026-11-07): no regression that can't be traced back to its so
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 0 | Baseline | main f075ec8, worker c8972c3 | none | | | | 90 | 183 | 0 | [baseline](baseline-f075ec8.json), 92 pages, 903 regions |
 | 1 | F5 part 1: text alone in a balloon grows into `safe_text`, keeping its outline | #328, then the outline rule in this row's PR | box: `resolved-bubble-container` | 220 | 173 / 0 | 0 | 90 | 173 | 0 | Prediction on all 92 pages. Live on Free ch1 p1 |
-| 2 | F5 part 2: text sharing a detector box grows into the measured room (`rays-v1`) | PR pending, worker 45d65c3 | box: `resolved-local-split` | 71 | 40 / 0 | 0 | 90 | 168 | 0 | Prediction on all 92 pages. Live on B ja p10: all 8 boxes as predicted, the other 91 pages unchanged |
+| 2 | F5 part 2: text sharing a detector box grows into the measured room (`rays-v1`) | PR pending, worker 9545dab | box: `resolved-local-split` | 71 | 40 / 0 | 0 | 90 | 168 | 0 | Prediction on all 92 pages. Live on B ja p10: all 8 boxes as predicted, the other 91 pages unchanged |
 
 "Tiny" is under 1.5 % of page width, a threshold chosen for comparison. Overlap is two text boxes sharing over 10 % of the smaller one.
 
