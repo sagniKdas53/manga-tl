@@ -73,6 +73,13 @@ function outline(raw) {
   return Array.isArray(polygon) && polygon.length >= 3 ? polygon : null;
 }
 
+function outlineX(raw) {
+  const polygon = outline(raw);
+  if (!polygon) return null;
+  const xs = polygon.map((point) => point[0]);
+  return [Math.min(...xs), Math.max(...xs)];
+}
+
 function loadPages(psql) {
   const rows = psql(`select json_agg(json_build_object(
       'id', p.id, 'series', s.title, 'chapter', c.title, 'number', p.page_number, 'revision', p.scene_revision,
@@ -226,6 +233,7 @@ async function main() {
         bubble: region.bubble,
         safe: region.safe,
         box: t ? [t.x, t.y, t.width, t.height] : null,
+        outline_x: outlineX(object?.element?.outline),
         px: result?.font_size ?? null,
         recorded_px: recorded?.font_size ?? null,
         lines: result?.lines?.length ?? null,

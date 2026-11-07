@@ -7,6 +7,8 @@ The owner's rule (2026-11-07): no regression that can't be traced back to its so
 | # | Change | Merged as | Declared footprint | Boxes moved | Bigger / smaller | Regrouped | Overlapping pairs | Tiny text | Violations | Run on |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 0 | Baseline | main f075ec8, worker c8972c3 | none | | | | 90 | 183 | 0 | [baseline](baseline-f075ec8.json), 92 pages, 903 regions |
+| 1 | F5 part 1: text alone in a balloon grows into `safe_text`, keeping its outline | #328, then the outline rule in this row's PR | box: `resolved-bubble-container` | 220 | 173 / 0 | 0 | 90 | 173 | 0 | Prediction on all 92 pages. Live on Free ch1 p1 |
+| 2 | F5 part 2: text sharing a detector box grows into the measured room (`rays-v1`) | PR pending, worker 45d65c3 | box: `resolved-local-split` | 71 | 40 / 0 | 0 | 90 | 168 | 0 | Prediction on all 92 pages. Live on B ja p10: all 8 boxes as predicted, the other 91 pages unchanged |
 
 "Tiny" is under 1.5 % of page width, a threshold chosen for comparison. Overlap is two text boxes sharing over 10 % of the smaller one.
 
@@ -25,6 +27,7 @@ All are read only and make no model calls.
 | `scripts/quality/replay_grouping.py` | Reruns the worker's grouping from captures |
 | `scripts/quality/layout_snapshot.cjs` | Records each region's pieces, boxes and fitted font px. `--what-if` tries other boxes with the same text |
 | `scripts/quality/compare_layout.py` | Compares two snapshots and exits 1 on anything undeclared. Tested by `test_compare_layout.py` |
+| `scripts/quality/predict_text_boxes.py` | Applies the backend's box rules to a snapshot, for `--what-if`. `--room` uses the worker's own measurement |
 
 Text is stored only as a hash. A reworded translation is counted, not treated as a code effect; re-translating Free ch1 p1 turned "Oh~" (12 px) into "Ooooh~" (6 px) with no code involved.
 
@@ -40,6 +43,14 @@ Not covered:
 - **Looks:** none of this checks how a page looks, only boxes, sizes and groups. The owner's eye is still the gate.
 - **Corpus pages:** sample177, 222, 61, 93, 83, 197, 641 and sample7 aren't on this machine, so the fixtures here aren't the whole set the tracker names.
 - **Cleanup:** masks and cleanup patches aren't compared. A change must not touch them, and its tests say so.
+
+## Prediction and live runs
+
+Rows 1 and 2 are predictions: `predict_text_boxes.py` applies the backend's rules to the stored regions, and the same translated text is fitted into the new boxes. A live re-run is then compared with the prediction.
+
+The prediction repeats backend logic in Python, so the two can drift. A live run is what catches that, and on B ja p10 they agreed exactly: all 8 boxes the same to the pixel, and 7 of 8 font sizes the same. The eighth, 69 predicted and 67 live, was reworded by the re-translation.
+
+**Existing pages are not re-run yet.** Rows 1 and 2 only reach a page when it is next OCR'd or translated. Part 2 and the #321 split share one paid re-run, after the split.
 
 ## Known at the baseline
 

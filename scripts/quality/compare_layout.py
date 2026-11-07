@@ -11,6 +11,7 @@ These are violations, and make it exit 1:
 - anything moved on a hand-edited element;
 - a new overlap between two text boxes;
 - the same text set smaller, by more than --px-drop;
+- text that was drawn and no longer is;
 - a page missing from either snapshot.
 
 --accept lists the ones that were looked at, each with its reason:
@@ -34,8 +35,6 @@ def region_class(region):
 
 
 def box_moved(a, b):
-    if a is None or b is None:
-        return a is not b
     return any(abs(x - y) > BOX_TOLERANCE_PX for x, y in zip(a, b, strict=True))
 
 
@@ -57,6 +56,7 @@ def compare(before, after, allow_box=(), allow_grouping=(), px_drop=0.1, accepte
             "same_size": 0,
             "reworded": 0,
             "regrouped": 0,
+            "newly_drawn": 0,
             "overlaps_before": 0,
             "overlaps_after": 0,
             "tiny_before": 0,
@@ -98,6 +98,13 @@ def compare(before, after, allow_box=(), allow_grouping=(), px_drop=0.1, accepte
 
         for key in old_regions.keys() & new_regions.keys():
             a, b = old_regions[key], new_regions[key]
+            if a.get("box") is None or b.get("box") is None:
+                # Text appearing is a region gaining a translation. Text disappearing is a loss.
+                if a.get("box") is None and b.get("box") is not None:
+                    counts["newly_drawn"] += 1
+                elif a.get("box") is not None:
+                    flag("no-longer-drawn", page_id, key, region_class(a))
+                continue
             moved = box_moved(a.get("box"), b.get("box"))
             reworded = a.get("text_sha") != b.get("text_sha")
             counts["reworded"] += reworded
