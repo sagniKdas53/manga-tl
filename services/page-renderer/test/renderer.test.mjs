@@ -115,6 +115,62 @@ test("rejects missing fonts and untrusted image URLs before rendering", async ()
   }
 });
 
+const BOLD_FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
+
+async function twoFaceFont() {
+  const [regular, bold] = await Promise.all([readFile(FONT_PATH), readFile(BOLD_FONT_PATH)]);
+  return {
+    fontId: "dejavu-sans",
+    family: "DejaVu Sans",
+    faces: [
+      { path: FONT_PATH, sha256: digest(regular), weight: "100 599" },
+      { path: BOLD_FONT_PATH, sha256: digest(bold), weight: "600 1000" },
+    ],
+  };
+}
+
+function requestAtWeight(weight) {
+  const input = request();
+  input.scene.textObjects[0].style.weight = weight;
+  return input;
+}
+
+test("a font with two faces draws each weight in its own face (#322)", async () => {
+  const oneFace = await renderer();
+  const twoFaces = new PageRenderer({ fonts: [await twoFaceFont()], maxContexts: 1 });
+  try {
+    await twoFaces.start();
+    const regularFace400 = await oneFace.render(requestAtWeight(400));
+    const regularFace700 = await oneFace.render(requestAtWeight(700));
+    // One face answers for every weight: what the export did before #322.
+    assert.equal(regularFace700.pngSha256, regularFace400.pngSha256);
+
+    const drawn400 = await twoFaces.render(requestAtWeight(400));
+    const drawn700 = await twoFaces.render(requestAtWeight(700));
+    assert.equal(drawn400.pngSha256, regularFace400.pngSha256);
+    assert.notEqual(drawn700.pngSha256, regularFace700.pngSha256);
+    assert.equal(drawn700.fontSha256s.length, 2);
+  } finally {
+    await oneFace.stop();
+    await twoFaces.stop();
+  }
+});
+
+test("every face of a font must match its SHA-256 and declare a weight range", async () => {
+  const wrongHash = await twoFaceFont();
+  wrongHash.faces[1].sha256 = "0".repeat(64);
+  await assert.rejects(
+    new PageRenderer({ fonts: [wrongHash] }).start(),
+    (error) => error instanceof RendererError && /SHA-256 mismatch/.test(error.message),
+  );
+  const noRange = await twoFaceFont();
+  noRange.faces[1].weight = "bold; color:red";
+  await assert.rejects(
+    new PageRenderer({ fonts: [noRange] }).start(),
+    (error) => error instanceof RendererError && /weight/.test(error.message),
+  );
+});
+
 test("resolves a scene font ID to its registered browser family", async () => {
   const instance = await renderer();
   try {
