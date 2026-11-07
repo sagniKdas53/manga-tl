@@ -45,7 +45,7 @@ export function elementFit(
     box.x,
     box.y,
     element.maskPolygon,
-    element.fontWeight || "bold",
+    element.fontWeight || "normal",
     element.fontStyle || "normal",
   );
   if (element.autoSize) {

@@ -22,7 +22,7 @@ export const fontSpecs = (elements: Iterable<FontRef>): string[] => {
       (element.fontStyle || "normal").toLowerCase() === "italic"
         ? "italic "
         : "";
-    const weight = element.fontWeight || "bold";
+    const weight = element.fontWeight || "normal";
     const family = element.font || "Comic Neue";
     specs.add(`${weight} ${style}16px "${family}"`);
   }
@@ -66,7 +66,7 @@ export const fitTextInBox = (
   boxX: number = 0,
   boxY: number = 0,
   maskPolygon?: string | null,
-  fontWeight: string = "bold",
+  fontWeight: string = "normal",
   fontStyle: string = "normal",
 ): FitResult => {
   const input: FitTextInput = {

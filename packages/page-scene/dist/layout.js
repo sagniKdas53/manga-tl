@@ -69,7 +69,7 @@ function parsePolygon(maskPolygon) {
     }
     return null;
 }
-export function fitTextInBox({ text, maxWidth, maxHeight, fontFamily, defaultFontSize = 16, shape = "rectangular", boxX = 0, boxY = 0, maskPolygon, fontWeight = "bold", fontStyle = "normal", }, measureText) {
+export function fitTextInBox({ text, maxWidth, maxHeight, fontFamily, defaultFontSize = 16, shape = "rectangular", boxX = 0, boxY = 0, maskPolygon, fontWeight = "normal", fontStyle = "normal", }, measureText) {
     const cleanText = (text || "").replace(/\r\n/g, "\n");
     let polygonPoints = parsePolygon(maskPolygon);
     if (polygonPoints) {

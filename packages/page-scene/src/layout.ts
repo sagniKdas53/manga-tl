@@ -163,7 +163,7 @@ export function fitTextInBox(
     boxX = 0,
     boxY = 0,
     maskPolygon,
-    fontWeight = "bold",
+    fontWeight = "normal",
     fontStyle = "normal",
   }: FitTextInput,
   measureText: TextMeasurer,

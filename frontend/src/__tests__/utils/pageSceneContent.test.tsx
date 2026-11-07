@@ -291,6 +291,63 @@ describe("contract rule 8: the editor's typography", () => {
     );
   });
 
+  describe("the balloon outline (contract rule 9, G2)", () => {
+    const text = "word ".repeat(40).trim();
+    const box = { x: 0, y: 0, width: 400, height: 400, rotationDegrees: 0 };
+    // An elliptical element, as the layout stage marks most bubble text.
+    const input = (
+      maskPolygon?: [number, number][],
+    ): PageSceneContentInput => ({
+      source: { href: "s.png", width: 500, height: 500 },
+      cleanupAssets: [],
+      textObjects: [
+        {
+          ...page30({}).textObjects[0],
+          text,
+          transform: box,
+          style: {
+            ...page30({}).textObjects[0].style,
+            shape: "elliptical",
+            ...(maskPolygon ? { maskPolygon } : {}),
+          },
+        },
+      ],
+    });
+
+    it("fits an elliptical element into its balloon, which is wider than the ellipse", () => {
+      const balloon: [number, number][] = [
+        [0, 100],
+        [100, 0],
+        [300, 0],
+        [400, 100],
+        [400, 300],
+        [300, 400],
+        [100, 400],
+        [0, 300],
+      ];
+      const ellipse = resolvePageScene(input(), measureText);
+      const outlined = resolvePageScene(input(balloon), measureText);
+      expect(outlined.objects[0].fontSize).toBeGreaterThan(
+        ellipse.objects[0].fontSize,
+      );
+      expect(outlined.objects[0].lineBoxes).not.toEqual(
+        ellipse.objects[0].lineBoxes,
+      );
+    });
+
+    it("ignores an outline narrower than the box, as the editor does", () => {
+      const narrow: [number, number][] = [
+        [100, 0],
+        [300, 0],
+        [300, 400],
+        [100, 400],
+      ];
+      expect(resolvePageScene(input(narrow), measureText).objects).toEqual(
+        resolvePageScene(input(), measureText).objects,
+      );
+    });
+  });
+
   it("leaves a scene without the fields exactly as before", () => {
     const before = resolvePageScene(page30({}), measureText);
     const explicitDefaults = resolvePageScene(
