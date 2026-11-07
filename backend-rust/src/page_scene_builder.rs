@@ -33,9 +33,12 @@ pub fn scene_asset_path(page_id: Uuid, sha256: &str) -> String {
     format!("scene-assets/{page_id}/{sha256}.png")
 }
 
-/// The pinned renderer font. `services/page-renderer/fonts.json` is the source of truth for the
-/// digest; the byte length is the size of the same `ComicNeue-Regular.otf` the image installs.
-/// `PAGE_SCENE_FONTS_JSON` may override with the same shape as fonts.json plus `byteLength`.
+/// The font files a render depends on, pinned. `services/page-renderer/fonts.json` is the source of
+/// truth for the digests; the byte lengths are the sizes of the same files the image installs.
+/// Text is drawn with the first asset's id. The renderer serves both files as faces of that id;
+/// the second is listed so a change to it changes the scene digest, and old renders stop being
+/// reused (#322).
+/// `PAGE_SCENE_FONTS_JSON` may override: `{"fonts": [{fontId, family, sha256, byteLength}]}`.
 #[derive(Debug, Clone)]
 pub struct FontAsset {
     pub font_id: String,
@@ -45,24 +48,36 @@ pub struct FontAsset {
     pub mime_type: String,
 }
 
+fn default_fonts() -> Vec<FontAsset> {
+    vec![
+        FontAsset {
+            font_id: "comic-neue".into(),
+            family: "Comic Neue".into(),
+            sha256: "2728ee8f303e31934e62bf27b044fd7657b0613412d51f7444db1078cc3a7cb2".into(),
+            byte_length: 35628,
+            mime_type: "font/otf".into(),
+        },
+        FontAsset {
+            font_id: "comic-neue-bold".into(),
+            family: "Comic Neue".into(),
+            sha256: "0637fea8f858cd1d9a6e0ff786bed3d8cc2dc59b871a28e268a5a0106f052a92".into(),
+            byte_length: 30236,
+            mime_type: "font/otf".into(),
+        },
+    ]
+}
+
 pub fn configured_fonts() -> Vec<FontAsset> {
-    let default = FontAsset {
-        font_id: "comic-neue".into(),
-        family: "Comic Neue".into(),
-        sha256: "2728ee8f303e31934e62bf27b044fd7657b0613412d51f7444db1078cc3a7cb2".into(),
-        byte_length: 35628,
-        mime_type: "font/otf".into(),
-    };
     let Ok(raw) = std::env::var("PAGE_SCENE_FONTS_JSON") else {
-        return vec![default];
+        return default_fonts();
     };
     let parsed: Value = match serde_json::from_str(&raw) {
         Ok(value) => value,
         Err(err) => {
             tracing::error!(
-                "PAGE_SCENE_FONTS_JSON is not valid JSON ({err}); using the pinned default font"
+                "PAGE_SCENE_FONTS_JSON is not valid JSON ({err}); using the pinned default fonts"
             );
-            return vec![default];
+            return default_fonts();
         }
     };
     let fonts: Vec<FontAsset> = parsed
@@ -85,7 +100,7 @@ pub fn configured_fonts() -> Vec<FontAsset> {
         })
         .collect();
     if fonts.is_empty() {
-        vec![default]
+        default_fonts()
     } else {
         fonts
     }
@@ -1103,6 +1118,29 @@ mod tests {
         );
         assert_eq!(italic["font_style"], json!("italic"));
         assert!(italic.get("shape").is_none() && italic.get("font_size").is_none());
+    }
+
+    /// A render depends on every face, and the scene's assets feed the digest that decides whether
+    /// an old render can be reused. So a face missing here would keep old renders after that face
+    /// changes (#322).
+    #[test]
+    fn the_scene_lists_every_font_file_the_renderer_draws_with() {
+        let config: Value =
+            serde_json::from_str(include_str!("../../services/page-renderer/fonts.json")).unwrap();
+        let font = &config["fonts"][0];
+        let faces: Vec<&str> = font["faces"]
+            .as_array()
+            .expect("the renderer's font lists its faces")
+            .iter()
+            .map(|face| face["sha256"].as_str().unwrap())
+            .collect();
+        let listed = configured_fonts();
+        assert_eq!(
+            listed.iter().map(|f| f.sha256.as_str()).collect::<Vec<_>>(),
+            faces
+        );
+        // Text is drawn with the first asset's id, which must stay the id the renderer knows.
+        assert_eq!(Some(listed[0].font_id.as_str()), font["fontId"].as_str());
     }
 
     #[test]
