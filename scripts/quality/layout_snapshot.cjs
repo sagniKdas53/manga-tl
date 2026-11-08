@@ -9,8 +9,11 @@
 // --what-if FILE fits with other boxes ({"<region id>": [x, y, w, h]}) and the same text, to see a
 // change before any page is re-run.
 //
-// Read only. Uses the layout bundle and fonts inside the running renderer, and checks its fit
-// against the sizes the renderer recorded for each page (`page_render_jobs.layout_json`).
+// Read only. Fits inside the running renderer (layout_ci.cjs --fit), with its own bundle, fonts,
+// browser and font fallback, and checks that fit against the sizes the renderer recorded for each
+// page (`page_render_jobs.layout_json`). It used to fit in the host's browser, where a symbol Comic
+// Neue lacks falls back to another font: test p16's "O-ne~♡" fit 6 px there and 16 px in the
+// renderer (#325).
 //
 //   node scripts/quality/layout_snapshot.cjs --db-container manga-tl-test-db-1 \
 //     --renderer-container manga-tl-test-page-renderer-1 --label baseline --out snapshot.json
@@ -18,12 +21,9 @@
 const { execFileSync } = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
-const { chromium } = require("playwright");
 
-const FONT_DIR = "/usr/share/fonts/opentype/comic-neue";
-const BLANK = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+const FIT_SCRIPT = "/tmp/layout_ci.cjs";
 // The share of the smaller box two text boxes must have in common to count as overlapping. The
 // same limit as NEIGHBOUR_OVERLAP_LIMIT in backend-rust/src/jobs/coordinator.rs.
 const OVERLAP_SHARE = 0.1;
@@ -115,15 +115,8 @@ async function main() {
       maxBuffer: 2e9,
     }).trim();
 
-  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "layout-snapshot-"));
-  const bundle = path.join(temp, "scene-static.js");
-  execFileSync("docker", ["cp", "-q", `${renderer}:/app/dist/scene-static.js`, bundle]);
-  const fonts = {};
-  for (const name of ["ComicNeue-Regular.otf", "ComicNeue-Bold.otf"]) {
-    const file = path.join(temp, name);
-    execFileSync("docker", ["cp", "-qL", `${renderer}:${FONT_DIR}/${name}`, file]);
-    fonts[name] = fs.readFileSync(file).toString("base64");
-  }
+  execFileSync("docker", ["cp", "-q", path.join(__dirname, "layout_ci.cjs"), `${renderer}:${FIT_SCRIPT}`]);
+  const bundleSha = execFileSync("docker", ["exec", renderer, "sha256sum", "/app/dist/scene-static.js"], { encoding: "utf8" }).slice(0, 16);
   const rendererCreated = new Date(
     execFileSync("docker", ["inspect", "-f", "{{.Created}}", `${renderer}`], { encoding: "utf8" }).trim(),
   );
@@ -140,32 +133,13 @@ async function main() {
     backend_image: image(backend),
     worker_image: image(worker),
     renderer_image: image(renderer),
-    layout_bundle_sha256: sha(fs.readFileSync(bundle), 16),
+    layout_bundle_sha256: bundleSha,
+    fitted_in: "renderer",
     what_if: args["what-if"] ? path.basename(args["what-if"]) : null,
   };
   const whatIf = args["what-if"] ? JSON.parse(fs.readFileSync(args["what-if"], "utf8")) : {};
 
-  const face =
-    `@font-face{font-family:"Comic Neue";font-weight:100 599;src:url(data:font/otf;base64,${fonts["ComicNeue-Regular.otf"]})}` +
-    `@font-face{font-family:"Comic Neue";font-weight:600 1000;src:url(data:font/otf;base64,${fonts["ComicNeue-Bold.otf"]})}`;
-  const browser = await chromium.launch();
-  const page = await browser.newPage();
-  await page.setContent(`<!doctype html><html><head><style>${face}</style></head><body></body></html>`);
-  await page.evaluate(async () => {
-    await document.fonts.load('700 16px "Comic Neue"', "a");
-    await document.fonts.ready;
-  });
-  await page.addScriptTag({ path: bundle });
-  const fit = (textObjects, width, height) =>
-    page.evaluate(
-      (input) => globalThis.PageSceneStatic.mountPageScene(input),
-      { source: { href: BLANK, width, height }, cleanupAssets: [], textObjects },
-    );
-
-  const pages = [];
-  let compared = 0;
-  let agree = 0;
-  const mismatches = [];
+  const prepared = [];
   for (const source of loadPages(psql)) {
     const doc = typeof source.scene === "string" ? JSON.parse(source.scene) : source.scene;
     const { width, height } = doc.page.source;
@@ -205,8 +179,27 @@ async function main() {
         },
       });
     }
-    const layout = objects.length ? await fit(objects.map((o) => o.fit), width, height) : { layout: [] };
-    const fitted = new Map(layout.layout.map((o) => [o.object_id, o]));
+    prepared.push({ source, width, height, regions, stored, objects });
+  }
+
+  // One fit for every page, in the renderer. The text goes over stdin and is not kept.
+  const fits = JSON.parse(
+    execFileSync("docker", ["exec", "-i", renderer, "node", FIT_SCRIPT, "--fit"], {
+      input: JSON.stringify({
+        pages: prepared.map(({ source, width, height, objects }) => ({ page: source.id, width, height, objects: objects.map((o) => o.fit) })),
+      }),
+      encoding: "utf8",
+      maxBuffer: 2e9,
+    }),
+  );
+  execFileSync("docker", ["exec", "-u", "0", renderer, "rm", "-f", FIT_SCRIPT]);
+
+  const pages = [];
+  let compared = 0;
+  let agree = 0;
+  const mismatches = [];
+  for (const { source, width, height, regions, stored, objects } of prepared) {
+    const fitted = new Map(Object.entries(fits[source.id] ?? {}).map(([id, [px, lines]]) => [id, { font_size: px, lines }]));
     const drawn = new Map(objects.filter((o) => o.element?.region_id).map((o) => [o.element.region_id, o]));
 
     const rows = [];
@@ -236,7 +229,7 @@ async function main() {
         outline_x: outlineX(object?.element?.outline),
         px: result?.font_size ?? null,
         recorded_px: recorded?.font_size ?? null,
-        lines: result?.lines?.length ?? null,
+        lines: result?.lines ?? null,
         hand: Boolean(object?.element?.hand),
         text_sha: object ? sha(object.text) : null,
       });
@@ -260,8 +253,6 @@ async function main() {
       overlaps: overlaps.sort(),
     });
   }
-  await browser.close();
-  fs.rmSync(temp, { recursive: true, force: true });
   meta.fit_check = { compared, agree, mismatches };
   fs.writeFileSync(args.out, `${JSON.stringify({ meta, pages }, null, 0)}\n`);
   const regionCount = pages.reduce((total, p) => total + p.regions.length, 0);

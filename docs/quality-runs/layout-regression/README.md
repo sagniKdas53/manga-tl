@@ -28,8 +28,8 @@ All with no page images, no page text and no model calls, because both repos are
 
 | Check | Where | What fails it |
 | --- | --- | --- |
-| **Ledger rule** (`check_ledger_row.py`) | `ci-layout.yml` | A PR touching the worker pin, the fitter, the renderer or the text-box code without adding a row here. `no-layout-effect` is the explicit way out |
-| **Layout check** (`layout_ci.cjs`) | `ci-layout.yml`, in the renderer's own image | Any change to a fitted size or line count, over 730 stored boxes with stand-in text (`scripts/quality/fixtures/layout-fixture.json`) |
+| **Ledger rule** (`check_ledger_row.py`) | `ci-layout.yml` | A PR touching the worker pin, the fitter, the renderer or the text-box code without adding a row here. `no-layout-effect` is the explicit way out. CI sees only the pin move, not what changed in the worker, so a tests-only or provenance-only worker bump takes the label too |
+| **Layout check** (`layout_ci.cjs`) | `ci-layout.yml`, in the renderer's own image | Any change to a fitted size or line count, over 730 stored boxes with stand-in text (`scripts/quality/fixtures/layout-fixture.json`). Runs when the ledger rule finds a layout path, or when the check's own tooling (`layout_ci.cjs`, `ci-layout.yml`) changes |
 | **Grouping check** (`test_grouping_golden.py`) | Worker CI | Any change to grouping, over 91 pages' piece positions. It leaves out the one page whose balloon join needs its image |
 
 Each was checked by breaking things on purpose: turning off each of five grouping rules, or changing a threshold, failed 4 to 26 pages, and changing the outline rule or the line height failed 34 and 189 text objects.
@@ -75,8 +75,8 @@ The prediction repeats backend logic in Python, so the two can drift. A live run
 ## Known at the baseline
 
 - 12 groups in the captures have no row in the database, on 10 pages (3 of the pages were hand-edited). Most are one piece. Not investigated.
-- **Symbols on the host:** `layout_snapshot.cjs` fits in the host's browser, so text with a symbol Comic Neue lacks takes another fallback font than in the renderer ([#325](https://github.com/sagniKdas53/manga-tl/issues/325)). Usually 1 px, but `test` p16's "O-ne~♡" in a 26 px box fits 6 px on the host and 16 px in the renderer. Every mismatch so far holds a symbol. To fix: fit in the renderer image, as `layout_ci.cjs` does. The CI layout check isn't affected: it runs in that image and its stand-in text has no symbols.
-- **Old renders:** a page's saved render can predate the current renderer. On 2026-11-08 three of five pilot "before" images did. Compare against a redraw by the current renderer: redrawing two pages that were current gave byte-identical images, which is how the method was checked. Snapshots aren't affected, since they always fit with the current layout code.
+- **Symbols on the host (fixed 2026-11-08):** `layout_snapshot.cjs` used to fit in the host's browser, so text with a symbol Comic Neue lacks took another fallback font than in the renderer ([#325](https://github.com/sagniKdas53/manga-tl/issues/325)). Usually 1 px, but `test` p16's "O-ne~♡" in a 26 px box fit 6 px on the host and 16 px in the renderer. It now fits inside the running renderer (`layout_ci.cjs --fit`), and the fit check went from 293 to 299 of 299 elements matching what the renderer recorded. Snapshots taken before then (their `meta` has no `fitted_in`) can be off by a few px on text with a symbol: on 2026-11-08's stack, 10 sizes by 1–5 px and one line count.
+- **Old renders:** a page's saved render can predate the current renderer. On 2026-11-08 three of five pilot "before" images did, and three of five in the sample after it. Compare against a redraw by the current renderer: redrawing two pages that were current gave byte-identical images, which is how the method was checked. Snapshots aren't affected, since they always fit with the current layout code.
 - 4 pages are hand-edited: `db322cce`, `ccb6c221`, `2a0cea85` (`test` p5) and `6df55b91`.
 
 ## Evidence
