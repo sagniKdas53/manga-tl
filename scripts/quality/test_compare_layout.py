@@ -89,8 +89,20 @@ class CompareLayout(unittest.TestCase):
         self.assertEqual(kinds(report), [])
         self.assertEqual((report["counts"]["text_collisions_before"], report["counts"]["text_collisions_after"]), (1, 0))
 
+    def test_an_older_snapshot_without_collisions_is_not_compared_on_them(self):
+        # Snapshots before 2026-11-08 have no text_collisions; every collision would look new.
+        regions = (region(key="a"), region(key="b"))
+        old = snapshot(*regions)
+        new = snapshot(*regions)
+        new["pages"][0]["text_collisions"] = [["a", "b", 120, 0.2]]
+        report = compare(old, new)
+        self.assertEqual(kinds(report), [])
+        self.assertIsNone(report["counts"]["text_collisions_before"])
+
     def test_snapshots_without_text_collisions_still_compare(self):
-        self.assertEqual(compare(snapshot(region()), snapshot(region()))["counts"]["text_collisions_after"], 0)
+        report = compare(snapshot(region()), snapshot(region()))
+        self.assertEqual(kinds(report), [])
+        self.assertIsNone(report["counts"]["text_collisions_after"])
 
     def test_the_same_text_set_much_smaller_fails(self):
         self.assertEqual(kinds(compare(snapshot(region(px=40)), snapshot(region(px=30)))), ["smaller"])

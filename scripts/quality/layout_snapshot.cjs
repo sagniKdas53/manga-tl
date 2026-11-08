@@ -12,7 +12,7 @@
 // Read only. Fits inside the running renderer (layout_ci.cjs --fit), with its own bundle, fonts,
 // browser and font fallback, and checks that fit against the sizes the renderer recorded for each
 // page (`page_render_jobs.layout_json`). It used to fit in the host's browser, where a symbol Comic
-// Neue lacks falls back to another font: test p16's "O-ne~♡" fit 6 px there and 16 px in the
+// Neue lacks falls back to another font: a short line with ♡ on test p16 fit 6 px there and 16 px in the
 // renderer (#325).
 //
 //   node scripts/quality/layout_snapshot.cjs --db-container manga-tl-test-db-1 \

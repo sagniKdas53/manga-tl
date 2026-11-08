@@ -75,7 +75,7 @@ The prediction repeats backend logic in Python, so the two can drift. A live run
 ## Known at the baseline
 
 - 12 groups in the captures have no row in the database, on 10 pages (3 of the pages were hand-edited). Most are one piece. Not investigated.
-- **Symbols on the host (fixed 2026-11-08):** `layout_snapshot.cjs` used to fit in the host's browser, so text with a symbol Comic Neue lacks took another fallback font than in the renderer ([#325](https://github.com/sagniKdas53/manga-tl/issues/325)). Usually 1 px, but `test` p16's "O-ne~♡" in a 26 px box fit 6 px on the host and 16 px in the renderer. It now fits inside the running renderer (`layout_ci.cjs --fit`), and the fit check went from 293 to 299 of 299 elements matching what the renderer recorded. Snapshots taken before then (their `meta` has no `fitted_in`) can be off by a few px on text with a symbol: on 2026-11-08's stack, 10 sizes by 1–5 px and one line count.
+- **Symbols on the host (fixed 2026-11-08):** `layout_snapshot.cjs` used to fit in the host's browser, so text with a symbol Comic Neue lacks took another fallback font than in the renderer ([#325](https://github.com/sagniKdas53/manga-tl/issues/325)). Usually 1 px, but a short line with ♡ in a 26 px box on `test` p16 fit 6 px on the host and 16 px in the renderer. It now fits inside the running renderer (`layout_ci.cjs --fit`), and the fit check went from 293 to 299 of 299 elements matching what the renderer recorded. Snapshots taken before then (their `meta` has no `fitted_in`) can be off by a few px on text with a symbol: on 2026-11-08's stack, 10 sizes by 1–5 px and one line count.
 - **Old renders:** a page's saved render can predate the current renderer. On 2026-11-08 three of five pilot "before" images did, and three of five in the sample after it. Compare against a redraw by the current renderer: redrawing two pages that were current gave byte-identical images, which is how the method was checked. Snapshots aren't affected, since they always fit with the current layout code.
 - 4 pages are hand-edited: `db322cce`, `ccb6c221`, `2a0cea85` (`test` p5) and `6df55b91`.
 
@@ -97,8 +97,11 @@ the side that keeps the most, and a trim that would leave tiny text or too littl
 | Drawn lines collide | 9 | 55 → 43 | 8 | 188 → 188 | 44: 20 rotated, 18 too little left, 6 tiny |
 | Boxes overlap over 10% (all the backend sees before fitting) | 37 | 55 → 42 | 26 | 188 → 188 | 58 |
 
-In 26 of the 44 left for review, the two regions' source text overlaps by more than 30%: two regions over the
-same Japanese, an OCR or grouping fault no trim can fix. 20 are rotated text (E3, #180).
+Of the 44 left for review, 20 are rotated text (E3, #180). That is an upper bound: line and source boxes are
+axis-aligned around rotated text, so they overstate overlap. Of the 18 with too little left, 6 have source boxes
+overlapping by more than 30%, but checked against the pieces' own outlines only 2 truly share source text. In the
+other 4 a small region sits inside the rectangle of a bigger, oddly shaped group, so no trim of the small one can
+clear it.
 
 ## Evidence
 

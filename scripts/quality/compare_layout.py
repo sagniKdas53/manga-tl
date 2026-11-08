@@ -140,8 +140,14 @@ def compare(before, after, allow_box=(), allow_grouping=(), px_drop=0.1, accepte
             if pair[0] in old_regions and pair[1] in old_regions:
                 flag("new-overlap", page_id, "+".join(pair), "text boxes overlap")
 
-        old_hits = {tuple(hit[:2]) for hit in old.get("text_collisions", [])}
-        new_hits = {tuple(hit[:2]): hit for hit in new.get("text_collisions", [])}
+        # Only when both record them: an older snapshot has none, and every collision would look new.
+        if "text_collisions" not in old or "text_collisions" not in new:
+            counts["text_collisions_before"] = counts["text_collisions_after"] = None
+            continue
+        if counts["text_collisions_before"] is None:
+            continue
+        old_hits = {tuple(hit[:2]) for hit in old["text_collisions"]}
+        new_hits = {tuple(hit[:2]): hit for hit in new["text_collisions"]}
         counts["text_collisions_before"] += len(old_hits)
         counts["text_collisions_after"] += len(new_hits)
         for pair in sorted(new_hits.keys() - old_hits):
