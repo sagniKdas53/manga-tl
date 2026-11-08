@@ -21,7 +21,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     outputs:
-      layout_affecting: ${{ steps.rule.outputs.layout_affecting }}
+      run_layout_check: ${{ steps.rule.outputs.run_layout_check }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,10 +43,11 @@ jobs:
   layout-check:
     name: Text layout is unchanged
     needs: ledger-rule
-    # Run when a change could affect layout, even if the rule failed, so the author sees both.
+    # Run when a change could affect layout, or the check itself changed, even if the rule failed,
+    # so the author sees both.
     if: >-
       always() && (github.event_name == 'workflow_dispatch'
-      || needs.ledger-rule.outputs.layout_affecting == 'true')
+      || needs.ledger-rule.outputs.run_layout_check == 'true')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

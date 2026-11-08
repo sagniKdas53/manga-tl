@@ -27,6 +27,9 @@ AFFECTING_FILES = {
     "services/page-renderer/package-lock.json",
     "backend-rust/src/page_scene_builder.rs",
 }
+# The layout check's own tooling: a change here runs the check, so a broken check can't merge, but
+# needs no ledger row, since it can't move text on a page.
+CHECK_TOOLING = {"scripts/quality/layout_ci.cjs", ".github/workflows/ci-layout.yml"}
 COORDINATOR = "backend-rust/src/jobs/coordinator.rs"
 # coordinator.rs is large, so only changes to its text-box code count.
 COORDINATOR_WORDS = re.compile(
@@ -46,6 +49,11 @@ def affecting(paths, coordinator_patch):
     if any(COORDINATOR_WORDS.search(line) for line in changed_lines):
         found.append(COORDINATOR)
     return found
+
+
+def runs_layout_check(paths, found):
+    """True when the layout check must run: layout can change, or the check itself did."""
+    return bool(found) or any(path in CHECK_TOOLING for path in paths)
 
 
 def added_a_row(ledger_patch):
@@ -84,7 +92,7 @@ def main():
     )
     if args.github_output:
         with open(args.github_output, "a") as handle:
-            handle.write(f"layout_affecting={'true' if found else 'false'}\n")
+            handle.write(f"run_layout_check={'true' if runs_layout_check(paths, found) else 'false'}\n")
     print(f"Layout-affecting paths: {found or 'none'}")
     if failure:
         print(f"::error::{failure}")

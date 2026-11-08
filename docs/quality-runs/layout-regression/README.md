@@ -28,8 +28,8 @@ All with no page images, no page text and no model calls, because both repos are
 
 | Check | Where | What fails it |
 | --- | --- | --- |
-| **Ledger rule** (`check_ledger_row.py`) | `ci-layout.yml` | A PR touching the worker pin, the fitter, the renderer or the text-box code without adding a row here. `no-layout-effect` is the explicit way out |
-| **Layout check** (`layout_ci.cjs`) | `ci-layout.yml`, in the renderer's own image | Any change to a fitted size or line count, over 730 stored boxes with stand-in text (`scripts/quality/fixtures/layout-fixture.json`) |
+| **Ledger rule** (`check_ledger_row.py`) | `ci-layout.yml` | A PR touching the worker pin, the fitter, the renderer or the text-box code without adding a row here. `no-layout-effect` is the explicit way out. CI sees only the pin move, not what changed in the worker, so a tests-only or provenance-only worker bump takes the label too |
+| **Layout check** (`layout_ci.cjs`) | `ci-layout.yml`, in the renderer's own image | Any change to a fitted size or line count, over 730 stored boxes with stand-in text (`scripts/quality/fixtures/layout-fixture.json`). Runs when the ledger rule finds a layout path, or when the check's own tooling (`layout_ci.cjs`, `ci-layout.yml`) changes |
 | **Grouping check** (`test_grouping_golden.py`) | Worker CI | Any change to grouping, over 91 pages' piece positions. It leaves out the one page whose balloon join needs its image |
 
 Each was checked by breaking things on purpose: turning off each of five grouping rules, or changing a threshold, failed 4 to 26 pages, and changing the outline rule or the line height failed 34 and 189 text objects.
