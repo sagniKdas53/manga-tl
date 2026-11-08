@@ -10,6 +10,7 @@ These are violations, and make it exit 1:
 - a box moved, or a region's pieces regrouped, outside the classes the change declares;
 - anything moved on a hand-edited element;
 - a new overlap between two text boxes;
+- a new text collision: two regions' drawn lines sharing area (snapshots from 2026-11-08 on);
 - the same text set smaller, by more than --px-drop;
 - text that was drawn and no longer is;
 - a page missing from either snapshot.
@@ -59,6 +60,8 @@ def compare(before, after, allow_box=(), allow_grouping=(), px_drop=0.1, accepte
             "newly_drawn": 0,
             "overlaps_before": 0,
             "overlaps_after": 0,
+            "text_collisions_before": 0,
+            "text_collisions_after": 0,
             "tiny_before": 0,
             "tiny_after": 0,
         },
@@ -136,6 +139,14 @@ def compare(before, after, allow_box=(), allow_grouping=(), px_drop=0.1, accepte
             # A pair containing a regrouped region can't be compared with the old pairs.
             if pair[0] in old_regions and pair[1] in old_regions:
                 flag("new-overlap", page_id, "+".join(pair), "text boxes overlap")
+
+        old_hits = {tuple(hit[:2]) for hit in old.get("text_collisions", [])}
+        new_hits = {tuple(hit[:2]): hit for hit in new.get("text_collisions", [])}
+        counts["text_collisions_before"] += len(old_hits)
+        counts["text_collisions_after"] += len(new_hits)
+        for pair in sorted(new_hits.keys() - old_hits):
+            if pair[0] in old_regions and pair[1] in old_regions:
+                flag("new-text-collision", page_id, "+".join(pair), f"drawn lines share {new_hits[pair][2]} px²")
     report["violations"].sort(key=lambda v: (v["kind"], v["page"], v["key"]))
     return report
 

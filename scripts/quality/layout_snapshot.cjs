@@ -54,6 +54,14 @@ function regionKey(region) {
   return ids.length ? `f-${sha([...ids].sort().join(","))}` : `r-${region.id.slice(0, 12)}`;
 }
 
+function areaShared(a, b) {
+  const w = Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0]);
+  const h = Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]);
+  return w > 0 && h > 0 ? w * h : 0;
+}
+
+const rectsArea = (rects) => rects.reduce((total, r) => total + r[2] * r[3], 0);
+
 function overlapShare(a, b) {
   const w = Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0]);
   const h = Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]);
@@ -184,7 +192,7 @@ async function main() {
 
   // One fit for every page, in the renderer. The text goes over stdin and is not kept.
   const fits = JSON.parse(
-    execFileSync("docker", ["exec", "-i", renderer, "node", FIT_SCRIPT, "--fit"], {
+    execFileSync("docker", ["exec", "-i", renderer, "node", FIT_SCRIPT, "--fit", "--lines"], {
       input: JSON.stringify({
         pages: prepared.map(({ source, width, height, objects }) => ({ page: source.id, width, height, objects: objects.map((o) => o.fit) })),
       }),
@@ -199,7 +207,7 @@ async function main() {
   let agree = 0;
   const mismatches = [];
   for (const { source, width, height, regions, stored, objects } of prepared) {
-    const fitted = new Map(Object.entries(fits[source.id] ?? {}).map(([id, [px, lines]]) => [id, { font_size: px, lines }]));
+    const fitted = new Map(Object.entries(fits[source.id] ?? {}).map(([id, [px, lines, rects]]) => [id, { font_size: px, lines, rects }]));
     const drawn = new Map(objects.filter((o) => o.element?.region_id).map((o) => [o.element.region_id, o]));
 
     const rows = [];
@@ -232,6 +240,9 @@ async function main() {
         lines: result?.lines ?? null,
         hand: Boolean(object?.element?.hand),
         text_sha: object ? sha(object.text) : null,
+        // How much text, never the text: the tie-break when two boxes are about the same size (#182).
+        text_len: object ? [...object.text].length : null,
+        line_rects: result?.rects ?? null,
       });
     }
     const drawnRows = rows.filter((r) => r.box);
@@ -240,6 +251,21 @@ async function main() {
       for (let j = i + 1; j < drawnRows.length; j += 1) {
         const share = overlapShare(drawnRows[i].box, drawnRows[j].box);
         if (share > OVERLAP_SHARE) overlaps.push([...[drawnRows[i].key, drawnRows[j].key].sort(), Number(share.toFixed(3))]);
+      }
+    }
+    // Text that collides, not boxes: the drawn lines of two regions share area (#182). A box overlap
+    // that is only padding is not one. [key, key, shared px², share of the smaller text's area].
+    const collisions = [];
+    for (let i = 0; i < drawnRows.length; i += 1) {
+      for (let j = i + 1; j < drawnRows.length; j += 1) {
+        const a = drawnRows[i].line_rects ?? [];
+        const b = drawnRows[j].line_rects ?? [];
+        let shared = 0;
+        for (const x of a) for (const y of b) shared += areaShared(x, y);
+        if (shared > 0) {
+          const smaller = Math.min(rectsArea(a), rectsArea(b)) || 1;
+          collisions.push([...[drawnRows[i].key, drawnRows[j].key].sort(), Math.round(shared), Number((shared / smaller).toFixed(3))]);
+        }
       }
     }
     pages.push({
@@ -251,6 +277,7 @@ async function main() {
       height,
       regions: rows.sort((a, b) => a.key.localeCompare(b.key)),
       overlaps: overlaps.sort(),
+      text_collisions: collisions.sort(),
     });
   }
   meta.fit_check = { compared, agree, mismatches };
@@ -258,6 +285,9 @@ async function main() {
   const regionCount = pages.reduce((total, p) => total + p.regions.length, 0);
   console.log(`${args.label}: ${pages.length} pages, ${regionCount} regions`);
   console.log(`fit check: ${agree} of ${compared} elements match what the current renderer recorded`);
+  const collisionCount = pages.reduce((total, p) => total + p.text_collisions.length, 0);
+  const overlapCount = pages.reduce((total, p) => total + p.overlaps.length, 0);
+  console.log(`text collisions: ${collisionCount} region pairs; box overlaps over ${OVERLAP_SHARE * 100}%: ${overlapCount}`);
   for (const m of mismatches) console.log(`  differs ${m.page} ${m.region}: fitted ${m.fitted}, recorded ${m.recorded}`);
 }
 

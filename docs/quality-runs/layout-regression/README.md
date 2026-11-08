@@ -79,6 +79,27 @@ The prediction repeats backend logic in Python, so the two can drift. A live run
 - **Old renders:** a page's saved render can predate the current renderer. On 2026-11-08 three of five pilot "before" images did, and three of five in the sample after it. Compare against a redraw by the current renderer: redrawing two pages that were current gave byte-identical images, which is how the method was checked. Snapshots aren't affected, since they always fit with the current layout code.
 - 4 pages are hand-edited: `db322cce`, `ccb6c221`, `2a0cea85` (`test` p5) and `6df55b91`.
 
+## Text collisions (#182)
+
+Snapshots from 2026-11-08 on also record each region's drawn line boxes (read off the renderer's SVG) and
+`text_collisions`: pairs of regions whose drawn lines share area. A box overlap that is only padding is
+not one. `compare_layout.py` fails on a new collision.
+
+On the test stack (main 23286e3), 55 region pairs on 20 pages collide. Boxes overlapping by more than 10%
+catch 51 of them, but 44 of the 95 such overlaps have no colliding text.
+
+`predict_collisions.py` applies the owner's rule for #182: a hand-edited box keeps its shape; otherwise the
+bigger source footprint does, then the one with more translated text; the other is trimmed back from it on
+the side that keeps the most, and a trim that would leave tiny text or too little box goes to review.
+
+| Trigger | Boxes trimmed | Collisions | Text set smaller | Tiny text | Left for review |
+| --- | --- | --- | --- | --- | --- |
+| Drawn lines collide | 9 | 55 → 43 | 8 | 188 → 188 | 44: 20 rotated, 18 too little left, 6 tiny |
+| Boxes overlap over 10% (all the backend sees before fitting) | 37 | 55 → 42 | 26 | 188 → 188 | 58 |
+
+In 26 of the 44 left for review, the two regions' source text overlaps by more than 30%: two regions over the
+same Japanese, an OCR or grouping fault no trim can fix. 20 are rotated text (E3, #180).
+
 ## Evidence
 
 Not in the repo, because run data stays out of it (`.gitignore`): `~/Projects/manga-tl-data-backup/20261107-before-f5-part2/` holds the baseline, originals, captures, panels, a database dump and `PROVENANCE.txt`. `20261108-before-rerun/` holds each page's saved render and scene, a dump and a snapshot from before the re-run, and the pilot's comparison. The next OCR run overwrites the live captures, so this copy is the only "before".

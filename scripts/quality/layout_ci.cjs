@@ -15,7 +15,7 @@
 //     node scripts/quality/layout_ci.cjs --fixture <file> --write
 //
 //   Fit any text objects, for layout_snapshot.cjs: pages as {"pages":[{page,width,height,objects}]} on
-//   stdin, {page: {objectId: [font px, lines]}} on stdout. Run in the renderer, so the fit uses its own
+//   stdin, {page: {objectId: [font px, lines]}} on stdout; with --lines, [font px, lines, line boxes]. Run in the renderer, so the fit uses its own
 //   browser and font fallback (a symbol Comic Neue lacks falls back differently on a host, #325):
 //     docker exec -i <renderer> node /tmp/layout_ci.cjs --fit < pages.json
 
@@ -59,6 +59,7 @@ function args(argv) {
     if (argv[i] === "--write") out.write = true;
     else if (argv[i] === "--dump") out.dump = true;
     else if (argv[i] === "--fit") out.fit = true;
+    else if (argv[i] === "--lines") out.lines = true;
     else out[argv[i].slice(2)] = argv[(i += 1)];
   }
   if (!out.fixture && !out.fit) throw new Error("--fixture is required");
@@ -142,6 +143,29 @@ async function fitPage(layoutPage, entry) {
   return Object.fromEntries(result.layout.map((o) => [o.object_id, [o.font_size, o.lines.length]]));
 }
 
+/**
+ * fitPage, plus each drawn line's box in page px: [[x, y, w, h], ...] per object, read off the SVG the
+ * fit just drew (the fill pass's <text>, after the object's rotation). For layout_snapshot.cjs, to tell
+ * text that collides from boxes that only overlap in their padding.
+ */
+async function fitPageWithLines(layoutPage, entry) {
+  const sizes = await fitPage(layoutPage, entry);
+  if (!entry.objects.length) return sizes;
+  const rects = await layoutPage.evaluate(() => {
+    const svg = document.querySelector("svg[data-scene-content]");
+    const origin = svg.getBoundingClientRect();
+    const out = {};
+    for (const group of document.querySelectorAll("[data-text-object-id]")) {
+      out[group.dataset.textObjectId] = [...group.querySelectorAll('[data-text-pass="fill"] text')].map((text) => {
+        const r = text.getBoundingClientRect();
+        return [r.left - origin.left, r.top - origin.top, r.width, r.height].map((v) => Math.round(v * 10) / 10);
+      });
+    }
+    return out;
+  });
+  return Object.fromEntries(Object.entries(sizes).map(([id, fit]) => [id, [...fit, rects[id] ?? []]]));
+}
+
 function save(file, pages) {
   fs.writeFileSync(file, `{"pages":[\n${pages.map((entry) => JSON.stringify(entry)).join(",\n")}\n]}\n`);
 }
@@ -160,7 +184,7 @@ async function main() {
     if (options.fit) {
       const { pages } = JSON.parse(fs.readFileSync(0, "utf8"));
       const out = {};
-      for (const entry of pages) out[entry.page] = await fitPage(page, entry);
+      for (const entry of pages) out[entry.page] = await (options.lines ? fitPageWithLines : fitPage)(page, entry);
       process.stdout.write(`${JSON.stringify(out)}\n`);
       return;
     }

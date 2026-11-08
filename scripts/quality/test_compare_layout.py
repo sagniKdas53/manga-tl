@@ -78,6 +78,20 @@ class CompareLayout(unittest.TestCase):
         self.assertEqual(kinds(compare(old, copy.deepcopy(old))), [])
         self.assertEqual(kinds(compare(snapshot(*regions), old)), ["new-overlap"])
 
+    def test_a_new_text_collision_fails_and_a_removed_one_is_counted(self):
+        regions = (region(key="a"), region(key="b"))
+        colliding = snapshot(*regions)
+        colliding["pages"][0]["text_collisions"] = [["a", "b", 120, 0.2]]
+        clear = snapshot(*regions)
+        clear["pages"][0]["text_collisions"] = []
+        self.assertEqual(kinds(compare(clear, colliding)), ["new-text-collision"])
+        report = compare(colliding, clear)
+        self.assertEqual(kinds(report), [])
+        self.assertEqual((report["counts"]["text_collisions_before"], report["counts"]["text_collisions_after"]), (1, 0))
+
+    def test_snapshots_without_text_collisions_still_compare(self):
+        self.assertEqual(compare(snapshot(region()), snapshot(region()))["counts"]["text_collisions_after"], 0)
+
     def test_the_same_text_set_much_smaller_fails(self):
         self.assertEqual(kinds(compare(snapshot(region(px=40)), snapshot(region(px=30)))), ["smaller"])
         self.assertEqual(kinds(compare(snapshot(region(px=40)), snapshot(region(px=39)))), [])
