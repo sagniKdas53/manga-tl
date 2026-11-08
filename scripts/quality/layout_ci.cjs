@@ -13,6 +13,11 @@
 //   on the host; the expected sizes from the renderer image:
 //     node scripts/quality/layout_ci.cjs --fixture <file> --dump --db-container manga-tl-test-db-1
 //     node scripts/quality/layout_ci.cjs --fixture <file> --write
+//
+//   Fit any text objects, for layout_snapshot.cjs: pages as {"pages":[{page,width,height,objects}]} on
+//   stdin, {page: {objectId: [font px, lines]}} on stdout. Run in the renderer, so the fit uses its own
+//   browser and font fallback (a symbol Comic Neue lacks falls back differently on a host, #325):
+//     docker exec -i <renderer> node /tmp/layout_ci.cjs --fit < pages.json
 
 const { execFileSync } = require("node:child_process");
 const crypto = require("node:crypto");
@@ -53,9 +58,10 @@ function args(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--write") out.write = true;
     else if (argv[i] === "--dump") out.dump = true;
+    else if (argv[i] === "--fit") out.fit = true;
     else out[argv[i].slice(2)] = argv[(i += 1)];
   }
-  if (!out.fixture) throw new Error("--fixture is required");
+  if (!out.fixture && !out.fit) throw new Error("--fixture is required");
   return out;
 }
 
@@ -151,6 +157,13 @@ async function main() {
   }
   const { browser, page } = await openLayout();
   try {
+    if (options.fit) {
+      const { pages } = JSON.parse(fs.readFileSync(0, "utf8"));
+      const out = {};
+      for (const entry of pages) out[entry.page] = await fitPage(page, entry);
+      process.stdout.write(`${JSON.stringify(out)}\n`);
+      return;
+    }
     if (options.write) {
       const { pages } = JSON.parse(fs.readFileSync(options.fixture, "utf8"));
       for (const entry of pages) entry.expected = await fitPage(page, entry);
