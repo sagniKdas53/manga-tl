@@ -81,11 +81,17 @@ export interface ResolvedTextObject {
  * 40-77 px, i.e. 15-25 %. The previous 4 % was about five times too thin to read as a halo.
  */
 export declare const STROKE_WIDTH_RATIO = 0.18;
-/** What the renderer hands back per text object: the font px it settled on and the line breaks. */
+/**
+ * What the renderer hands back per text object: the font px it settled on, the line breaks, and each
+ * line's box `[x, y, width, height]` in page px. The boxes are before the object's rotation (the
+ * contract's `line_boxes` rect), one line height tall. The backend reads them to find text that
+ * collides with another object's text (#182).
+ */
 export interface ResolvedTextLayout {
     object_id: string;
     font_size: number;
     lines: string[];
+    line_boxes: [number, number, number, number][];
 }
 export declare function resolvedTextLayout(scene: ResolvedPageScene): ResolvedTextLayout[];
 export interface SceneLayoutDiagnostic {
