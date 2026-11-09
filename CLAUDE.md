@@ -58,3 +58,12 @@ Whenever you modify the backend API (e.g. creating/updating Controllers, DTOs, o
 1. Ensure the backend Docker container is running (`docker compose up backend`).
 2. Run `npm run generate-api` from the `frontend` directory.
 3. This will pull the live OpenAPI JSON spec from `http://localhost:8080/tlhub/v3/api-docs` and automatically regenerate `frontend/src/api/schema.d.ts`.
+
+## No page text in the repo
+
+This repo is public, and the test pages are copyrighted (some adult). Never copy a page's words, or an
+English translation of them, into code, tests, comments, docs, commit messages, PR or issue bodies. Tests
+need positions, lengths and scripts, not words: use made-up text (`こんにちは`) or plain filler of the same
+length and script (`あいうえお…`, `一二三…`). Never swap characters one-for-one with a fixed table: the
+repeats survive and the text can be decoded. In docs, describe a line (`a two-line shout`) or write
+`「…」`. The current tree was cleaned on 2026-11-10 (#340, worker #92); git history was left as it is.
