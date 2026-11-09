@@ -2,16 +2,21 @@
 
 The owner's rules (2026-11-08):
 - A hand-edited box keeps its shape: a person already chose it. Two hand-edited boxes are left for review.
+  A page edited by hand isn't touched at all, as machine QA leaves it alone.
 - Otherwise the bigger one keeps its shape, by a ladder: first the source text's footprint (its OCR box),
   and when those are about the same, the one with more translated text.
 - The other is trimmed back from it, on whichever side keeps the most of it. Never moved (LOCK-1).
-- A trim that would leave too little, or rotated text, goes to review instead.
+- A trim that would leave too little goes to review instead, as does a pair with rotated text on either
+  side: line boxes are before rotation, so they don't say where rotated text really is.
+- So does a trim whose text would come out tiny, judged before any render by scaling the drawn px by the
+  share of box area kept. On 2026-11-08's stack that flagged the 5 trims a re-render found tiny, and one
+  more (a 72 px line on a 4093 px wide page), so it errs toward not trimming.
+
+backend-rust/src/collision_trim.rs applies the same rules after each pipeline render; keep them in step.
 
 --trigger text trims only where drawn lines collide (the snapshot's text_collisions). --trigger box trims
 wherever boxes overlap by more than 10% of the smaller, which is all the backend can see before text is
 fitted. Comparing the two says what the box trigger costs.
-
---revert-tiny <what-if snapshot> undoes the trims whose text came out tiny there, and sends them to review.
 
     python3 scripts/quality/predict_collisions.py --snapshot base.json --trigger text --out whatif.json
 """
@@ -27,6 +32,8 @@ SAME_FOOTPRINT = 0.15
 KEEP_AT_LEAST = 0.4
 MIN_SIDE_PX = 24
 OVERLAP_SHARE = 0.1
+# Under this share of the page width, text counts as tiny (as compare_layout.py and the ledger count it).
+TINY_SHARE = 0.015
 
 
 def area(box):
@@ -89,8 +96,19 @@ def triggered_pairs(page, rows, boxes, trigger):
     return pairs
 
 
-def predict_page(page, trigger, frozen=()):
-    """({region id: new box}, [review entries]). `frozen` keys are never trimmed (reverted ones)."""
+def would_be_tiny(region, cut, page_width):
+    """Text that isn't tiny now but would be in `cut`, by the drawn px times the share of area kept."""
+    px = region.get("px")
+    if not px or not page_width:
+        return False
+    tiny = TINY_SHARE * page_width
+    return px >= tiny and px * area(cut) / (area(region["box"]) or 1) < tiny
+
+
+def predict_page(page, trigger):
+    """({region id: new box}, [review entries])."""
+    if page.get("hand_edited"):
+        return {}, []
     rows = {r["key"]: r for r in page["regions"] if r.get("box")}
     boxes = {key: list(r["box"]) for key, r in rows.items()}
     changed, review = {}, []
@@ -106,47 +124,32 @@ def predict_page(page, trigger, frozen=()):
             review.append({"pair": [a, b], "reason": "both hand-edited"})
             continue
         loser = b if keeper == a else a
-        if rows[loser].get("rotation"):
+        if rows[a].get("rotation") or rows[b].get("rotation"):
             review.append({"pair": [a, b], "loser": loser, "reason": "rotated"})
-            continue
-        if loser in frozen:
-            review.append({"pair": [a, b], "loser": loser, "reason": "text would be tiny"})
             continue
         cut = trimmed(boxes[loser], boxes[keeper])
         if cut is None:
             review.append({"pair": [a, b], "loser": loser, "reason": "too little would be left"})
+            continue
+        if would_be_tiny(rows[loser], cut, page.get("width")):
+            review.append({"pair": [a, b], "loser": loser, "reason": "text would be tiny"})
             continue
         boxes[loser] = cut
         changed[loser] = cut
     return {rows[key]["region_id"]: [round(v, 1) for v in box] for key, box in changed.items()}, review
 
 
-def tiny(region, page):
-    return region.get("px") is not None and region["px"] < 0.015 * page["width"]
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--snapshot", required=True)
     ap.add_argument("--trigger", choices=["text", "box"], default="text")
-    ap.add_argument("--revert-tiny", help="a snapshot taken with this prediction as --what-if")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
     snapshot = json.load(open(args.snapshot))
-    frozen_by_page = {}
-    if args.revert_tiny:
-        after = {p["page"]: p for p in json.load(open(args.revert_tiny))["pages"]}
-        for page in snapshot["pages"]:
-            before = {r["key"]: r for r in page["regions"]}
-            frozen_by_page[page["page"]] = {
-                r["key"]
-                for r in after[page["page"]]["regions"]
-                if tiny(r, page) and not tiny(before.get(r["key"], {}), page)
-            }
     whatif, report = {}, {"trigger": args.trigger, "pages": []}
     for page in snapshot["pages"]:
-        boxes, review = predict_page(page, args.trigger, frozen_by_page.get(page["page"], ()))
+        boxes, review = predict_page(page, args.trigger)
         whatif.update(boxes)
         if boxes or review:
             report["pages"].append({"page": page["page"], "trimmed": len(boxes), "review": review})

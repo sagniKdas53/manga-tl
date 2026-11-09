@@ -7,6 +7,7 @@
 pub mod archive;
 pub mod auth;
 pub mod clone;
+pub mod collision_trim;
 pub mod config;
 pub mod db;
 pub mod error;
