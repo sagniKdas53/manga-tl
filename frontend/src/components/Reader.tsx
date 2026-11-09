@@ -26,6 +26,7 @@ import {
 import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
 import { paintLayerMask } from "../utils/maskPaint";
 import { elementFit } from "../utils/elementFit";
+import { collisionsByRegion, drawnTexts } from "../utils/textCollisions";
 import { ocrFragmentLabel, ocrFragmentsOf } from "../utils/ocrFragments";
 import { isGroupLayer, isLayerShown } from "../utils/layerTree";
 import type { LayerActions, LayerHistory } from "./LayerPanelMenus";
@@ -1220,12 +1221,48 @@ export const Reader: React.FC<ReaderProps> = ({
   const reviewable = layers.some(
     (l) => l.layer.type === "translation" && isLayerShown(l.layer, layers),
   );
+  // #182: text that runs into another box's text, judged on the lines as the renderer draws them.
+  // The backend trims what it safely can after a pipeline render; what is left shows up here and
+  // clears as soon as it is fixed. Only the element that draws each region counts, so a redo
+  // overlay never collides with the reading it replaces.
+  const textCollisions = React.useMemo(() => {
+    const context =
+      typeof document === "undefined"
+        ? null
+        : document.createElement("canvas").getContext("2d");
+    if (!context) return new Map();
+    const measure = (font: string, text: string) => {
+      context.font = font;
+      return context.measureText(text).width;
+    };
+    return collisionsByRegion(
+      drawnTexts(
+        issueElements.values(),
+        (element) => elementFit(element, textBoxGeometry),
+        measure,
+      ),
+      new Map(ocrRegions.map((region) => [region.id, region])),
+    );
+    // fontsVersion is not read: a change means the same text now measures differently.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [issueElements, ocrRegions, textBoxGeometry, fontsVersion]);
   const issues = React.useMemo(
     () =>
       reviewable
-        ? regionIssues(ocrRegions, issueElements, overflowingElementIds)
+        ? regionIssues(
+            ocrRegions,
+            issueElements,
+            overflowingElementIds,
+            textCollisions,
+          )
         : [],
-    [reviewable, ocrRegions, issueElements, overflowingElementIds],
+    [
+      reviewable,
+      ocrRegions,
+      issueElements,
+      overflowingElementIds,
+      textCollisions,
+    ],
   );
   const regionIds = React.useMemo(
     () => new Set(ocrRegions.map((r) => r.id)),
