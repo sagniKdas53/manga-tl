@@ -3522,7 +3522,9 @@ async fn enqueue_snapshot_render(state: &AppState, page_id: Uuid, flags: Value) 
         tracing::error!("Cannot queue render: page {page_id} vanished after its snapshot");
         return;
     };
-    let extra = flags.as_object().cloned().unwrap_or_default();
+    let mut extra = flags.as_object().cloned().unwrap_or_default();
+    // A pipeline render may trim colliding text once (#182, collision_trim); editor renders never.
+    extra.insert("collisionTrim".into(), json!(true));
     match crate::jobs::recovery::enqueue_current_snapshot_render(state, &page, extra).await {
         Ok(true) => tracing::info!(
             "Queued immutable render for page {page_id} revision {}",
@@ -3873,6 +3875,14 @@ pub async fn handle_render_callback(
     if !artifact_current {
         // Accepted historical output is retained for diagnosis, but cannot judge/advance a new scene.
         return Ok(RenderCallbackOutcome::default());
+    }
+    if crate::collision_trim::after_render(state, job_id, &layout).await {
+        // #182 trimmed colliding text and queued the page's next render, carrying this job's QA
+        // intent; that render queues QA or completes the pipeline, not this one.
+        return Ok(RenderCallbackOutcome {
+            completes_pipeline: false,
+            artifact_current,
+        });
     }
 
     let pages: Vec<Page> = match page_id {
