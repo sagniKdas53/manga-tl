@@ -52,6 +52,7 @@ const KIND_LABELS: Record<IssueKind, string> = {
   failed: "Failed",
   untranslated: "Not translated",
   overflow: "Doesn't fit",
+  overlap: "Overlaps",
 };
 
 /**

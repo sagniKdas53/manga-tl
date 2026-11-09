@@ -1,5 +1,6 @@
 import { isLayerShown } from "./layerTree";
 import type { Layer, LayerElement, OcrRegion } from "../types";
+import type { TextCollision } from "./textCollisions";
 
 /** A quick resolution the issues view offers. */
 export type IssueAction =
@@ -14,7 +15,7 @@ export type IssueAction =
   | "fit";
 
 export type IssueKind =
-  "cleanup" | "qa" | "failed" | "untranslated" | "overflow";
+  "cleanup" | "qa" | "failed" | "untranslated" | "overflow" | "overlap";
 
 export interface RegionIssue {
   region: OcrRegion;
@@ -68,6 +69,7 @@ export function regionIssue(
   region: OcrRegion,
   element: LayerElement | undefined,
   overflowing: boolean,
+  collision?: TextCollision,
 ): RegionIssue | null {
   const base = { region, element, details: null, hint: null };
   switch (region.qaStatus) {
@@ -138,6 +140,23 @@ export function regionIssue(
       actions: element?.autoSize ? ["edit", "mask"] : ["fit", "edit", "mask"],
     };
   }
+  if (collision) {
+    // Last: fixing an overflow often clears the overlap too. Only the side that should change
+    // carries it (textCollisions `sidesToChange`, the backend trim's rule), so a pair is one issue.
+    const other =
+      collision.other?.bubbleReadingOrder != null
+        ? `bubble ${collision.other.bubbleReadingOrder}`
+        : "another text box";
+    return {
+      ...base,
+      kind: "overlap",
+      title: "Text runs into another box",
+      explanation: collision.turned
+        ? `This translation's text overlaps ${other}'s. One of them is drawn at an angle, and the automatic trim never cuts angled text. Make this box smaller or move it, or shorten the text.`
+        : `This translation's text overlaps ${other}'s. The automatic trim only cuts a box back when enough room and a readable size are left, so this one is yours. Make this box smaller or move it, or shorten the text.`,
+      actions: ["edit", "mask"],
+    };
+  }
   return null;
 }
 
@@ -146,6 +165,7 @@ export function regionIssues(
   regions: OcrRegion[],
   elementByRegion: Map<string, LayerElement>,
   overflowingElementIds: Set<string>,
+  collisions: Map<string, TextCollision> = new Map(),
 ): RegionIssue[] {
   return regions
     .map((region) => {
@@ -156,6 +176,7 @@ export function regionIssues(
         !!element &&
           element.visible === true &&
           overflowingElementIds.has(element.id),
+        collisions.get(region.id),
       );
     })
     .filter((issue): issue is RegionIssue => issue !== null)
