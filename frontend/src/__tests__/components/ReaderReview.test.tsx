@@ -283,7 +283,7 @@ describe("issues view", () => {
     const regions = [
       region("a", 3, {
         qaStatus: "manual_review",
-        qaFeedback: "Fragment 「あたって」; this bubble is a single sentence.",
+        qaFeedback: "Fragment 「ほまみむ」; this bubble is a single sentence.",
       }),
       region("b", 1, { translationFailed: true }),
       region("c", 2),
@@ -551,10 +551,10 @@ describe("issues view", () => {
     // Ch.3 p2's shape: OCR numbered the top halves of two columns #3 and #4 and their bottom
     // halves #8 and #9; the merge reads each column top to bottom.
     const regions = [
-      region("r3", 3, { text: "ブラ" }),
-      region("r4", 4, { text: "アイ" }),
-      region("r8", 8, { text: "イダルなんて" }),
-      region("r9", 9, { text: "ドルを" }),
+      region("r3", 3, { text: "あい" }),
+      region("r4", 4, { text: "けこ" }),
+      region("r8", 8, { text: "うえおかきく" }),
+      region("r9", 9, { text: "さしす" }),
     ];
     const selected = ["r3", "r4", "r8", "r9"];
     const { rerender } = render(
@@ -577,7 +577,7 @@ describe("issues view", () => {
         busy={false}
         preview={{
           order: ["r3", "r8", "r4", "r9"],
-          text: "ブライダルなんてアイドルを",
+          text: "あいうえおかきくけこさしす",
         }}
         onToggle={vi.fn()}
         onMerge={vi.fn()}
@@ -585,7 +585,7 @@ describe("issues view", () => {
       />,
     );
     expect(preview).toHaveTextContent("#3 → #8 → #4 → #9");
-    expect(preview).toHaveTextContent("ブライダルなんてアイドルを");
+    expect(preview).toHaveTextContent("あいうえおかきくけこさしす");
     // A preview for an older pick is not shown as if it were this one.
     rerender(
       <MergePanel
@@ -594,7 +594,7 @@ describe("issues view", () => {
         busy={false}
         preview={{
           order: ["r3", "r8", "r4", "r9"],
-          text: "ブライダルなんてアイドルを",
+          text: "あいうえおかきくけこさしす",
         }}
         onToggle={vi.fn()}
         onMerge={vi.fn()}

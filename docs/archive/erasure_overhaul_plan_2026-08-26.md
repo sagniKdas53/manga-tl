@@ -49,7 +49,7 @@ is what a reader sees.)
 
 295 components at ~215 px each is **per-glyph**. Seven components at 62 k px each is **per-bubble**.
 Rendered as black-on-white, toriitranslate.com's footprint is legible as Japanese text — you can read
-「Ｋおじさん気絶させてまうし」in the shape of what they deleted. Ours is the balloon silhouette
+「Ｋ…」in the shape of what they deleted. Ours is the balloon silhouette
 *including its outline stroke*, which is D2 confirmed visually.
 
 Our mask covers 99.8 % of toriitranslate.com's footprint, so **our detection is not the problem**. Our

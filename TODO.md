@@ -37,7 +37,7 @@ Where it stands, in leverage order:
   by kana-only-≤5-chars or 3:1-tall-≤6-chars — the two rules a mangled OCR read never matches. See
   issues.md §R4. Today SFX are suppressed by the QA VLM's `reject_sfx`, not by this gate.
 - [ ] **D16 — glyph-level font fallback.** Glyphs the lettering face lacks print as a blank box
-  (`♡`, `帅哥`). Reads as broken software, not a bad translation. **Note the title was misleading:**
+  (`♡`, `…`). Reads as broken software, not a bad translation. **Note the title was misleading:**
   a font *fallback chain already exists* (`DEFAULT_FONT_FALLBACK_ORDER`, `render.py:77-120`), but it
   only fires when a font **file fails to load**. Comic Neue loads fine, so the chain never runs and
   the tofu still renders. What is missing is **per-glyph coverage detection** — nothing in

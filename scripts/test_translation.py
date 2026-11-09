@@ -232,7 +232,7 @@ DEFAULT_TEST_REGIONS = [
         "speaker": None,
         "regionType": "sfx",
         "conversationGroup": None,
-        "text": "さす",
+        "text": "ドン",
     },
     {
         "id": "1fc84410-d20a-4453-b5a0-1ee061a914fb",
@@ -241,7 +241,7 @@ DEFAULT_TEST_REGIONS = [
         "speaker": None,
         "regionType": "sign",
         "conversationGroup": None,
-        "text": "さ苏",
+        "text": "か苏",
     },
     {
         "id": "c24cd5a8-112a-4a8e-a7a1-4334c32a5b8e",
@@ -250,7 +250,7 @@ DEFAULT_TEST_REGIONS = [
         "speaker": None,
         "regionType": "speech",
         "conversationGroup": None,
-        "text": "一緒に浴びましょうよー洗ってあげますからぁ",
+        "text": "今日はいい天気だね、一緒に散歩に行こうよ",
     },
 ]
 

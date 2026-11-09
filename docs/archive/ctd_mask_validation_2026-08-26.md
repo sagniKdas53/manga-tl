@@ -193,7 +193,7 @@ knob.
 ## Finding 4 — the mask must be gated by the region set
 
 CTD finds *all* text, including text we never replace: SFX (never typeset, by policy) and lettering
-that is part of the artwork — on sample128 it correctly segments the 明 characters printed on
+that is part of the artwork — on sample128 it correctly segments the 「…」 characters printed on
 characters' shirts. Erasing those leaves holes where nothing is drawn back.
 
 **The shipped mask is `CTD ∩ (final region set)`, not raw CTD.** Phase 0 already computes the plate

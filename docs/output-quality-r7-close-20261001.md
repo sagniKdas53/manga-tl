@@ -68,8 +68,8 @@ The user tested the deployed fixes on chapter "2nd Oct / Inheritance"
 | What the user saw | What it is | Decision |
 | --- | --- | --- |
 | Four Panel Detection jobs stuck PENDING after deleting accidentally uploaded pages | `delete_page` removes the page and its image but not its jobs. The worker finds no image and aborts before PROCESSING; its PENDING→FAILED report is refused (409), so the row stays PENDING and is sent again on every resume (seen 20:06 and 20:50 UTC). | Fix in #152 and #47: deleting a page, chapter or series cancels its queued jobs; the dispatcher drops a payload whose row is gone or no longer PENDING; a worker abort before start can land. |
-| SFX shown on a white box ("SLUR"); "old type masks" | SFX regions are excluded from cleanup (`cleanup_region_entry` → `exclude`), so a shown SFX falls back to the plain plate. They are shown because QA passes them: QA is never sent `regionType`, and its rule reads "reject_sfx: a sound effect … that shouldn't be translated", while the translator is told to give SFX an English sound word. QA rejected 4 of 36 SFX on this chapter. | User: enforce the policy in QA; and when QA keeps a region that has no cleanup, generate a patch for it, once, without a QA loop. |
-| An empty region drawn as a white box (page 12) | QA emptied a region's translation (SFX も, `fixed`); the editor still drew its plate. The export already skips empty elements. | Editor: no plate for a region's element with no text. |
+| SFX shown on a white box ; "old type masks" | SFX regions are excluded from cleanup (`cleanup_region_entry` → `exclude`), so a shown SFX falls back to the plain plate. They are shown because QA passes them: QA is never sent `regionType`, and its rule reads "reject_sfx: a sound effect … that shouldn't be translated", while the translator is told to give SFX an English sound word. QA rejected 4 of 36 SFX on this chapter. | User: enforce the policy in QA; and when QA keeps a region that has no cleanup, generate a patch for it, once, without a QA loop. |
+| An empty region drawn as a white box (page 12) | QA emptied a region's translation (SFX 「…」, `fixed`); the editor still drew its plate. The export already skips empty elements. | Editor: no plate for a region's element with no text. |
 | Clicking a review region does not highlight it | The selection outline is drawn only by the debug overlay ("Show debug"). | Always outline the selected region. |
 | The mask panel ignores the sidebar toggle | The panel host was always shown, so Apply and Done were never out of reach. | Follow the toggle; Esc still leaves the mode. |
 | Repaint / Restore labels | Too long for the toolbar. | Rename to **Draw** / **Erase**; same behaviour. |
@@ -186,7 +186,7 @@ Both renders are QA-free (`hand_edited_at`). Backend 247 / frontend 472 tests gr
 test was seen failing without its fix.
 
 **Editor and export wrap a line differently (RCA only; fix with the typesetting work).** Ch. 6
-page 1, "Hyoo! Say it with your beak…": the editor showed eight lines, the export six. Same inputs
+page 1, one balloon: the editor showed eight lines, the export six. Same inputs
 on both sides (172 px fixed, bold, box 799, inset 4, default System Settings, the same
 `fitTextInBox`) and the same font build (Comic Neue Bold 2.003 from Google Fonts and from Debian
 measure identically: "Say it with" 776 px, fits in 791). The editor's eight lines are exactly what
@@ -224,11 +224,11 @@ differently in the export (the project.json elements above have none).
   same for hand marks, and the labelled re-run.
 - **B — one balloon, one text unit (extends `AUDIT-R21`).** Regions sharing a bubble container are
   grouped in reading order and translated together. Gate: R21's 42 regions / 5 pages, the six
-  fixtures with no cross-balloon merge, and page 2's handwritten aside 良くないけど, which should stay
+  fixtures with no cross-balloon merge, and page 2's handwritten aside 「…」, which should stay
   its own text.
   **2026-10-05:** done as three narrower fixes, not "group everything sharing a container": the
-  user's own merges on 4Oct p. 3 kept 仕事とはいえ apart, and YOLO fuses touching balloons into one
-  container (4Oct p. 7, p. 19, p. 20). The gate passed live on chrome-box, 良くないけど included.
+  user's own merges on 4Oct p. 3 kept 「…」 apart, and YOLO fuses touching balloons into one
+  container (4Oct p. 7, p. 19, p. 20). The gate passed live on chrome-box, 「…」 included.
   Details and what remains in the tracker's 2026-10-05 status.
 - **C — text style (rest of 7 and 8).** Split `background_color` into an outline colour and a plate
   colour (migration, golden OpenAPI hand-edit, frontend types). Consider Torii's contrast halo:

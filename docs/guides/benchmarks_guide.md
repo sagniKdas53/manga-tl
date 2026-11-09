@@ -124,19 +124,19 @@ reverses the reading order of the same region, identically. Four variants at `--
 then not a robust majority but one wrong answer with three seconds. Observed on `sample1` r1:
 
 ```
-paddleocr_v6_medium    本当にやるの？お兄ちゃん…      <- reversed
-paddleocr_v5_server    本当にやるの？お兄ちゃん…      <- reversed, same bug
-qwen3-vl-32b           お兄ちゃん…\n本当にやるの？     <- correct
-gemini-3.1-flash-lite  お兄ちゃん…\n本当にやるの？     <- correct
+paddleocr_v6_medium    「…」      <- reversed
+paddleocr_v5_server    「…」      <- reversed, same bug
+qwen3-vl-32b           「…」\n「…」     <- correct
+gemini-3.1-flash-lite  「…」\n「…」     <- correct
 ```
 
 So `scripts/retier_ocr_corpus.py` collapses each **engine family** to a single vote (its own
 medoid) before voting across families, leaving three real opinions: paddle, qwen, gemini. Paddle
 keeps the strength it genuinely has — it beats both VLMs on short SFX crops they hallucinate over
-(`めざといなー`, which qwen read as `めんこいなー`) — without being able to outvote them on
+(`…`, which qwen read as `…`) — without being able to outvote them on
 reading order. Auditing the accepted regions: paddle never won alone, and no reversal was
 accepted. The 6 regions where paddle beat a dissenting qwen were short SFX that qwen hallucinated
-(`これにしよ！` read as `りょじゅうもー！`) — exactly the complementarity the rule preserves.
+(`…` read as `…`) — exactly the complementarity the rule preserves.
 
 Because `tier` is a pure function of the stored `candidates` plus the voting rule, **the
 threshold is free to revisit and expensive to get wrong up front.** Re-tier offline, never re-run
@@ -159,7 +159,7 @@ python scripts/retier_ocr_corpus.py           --min-agree 2 --tol 0.10   # apply
 | 0.30 | 83.5% |
 
 The 17 regions gained between 0.10 and 0.20 are mostly cases where the two VLMs differ by one
-character (`だろっ？` vs `だろう？`, `…はずなの` vs `…はすなの`). The vote resolves, but picks
+character (`…` vs `…`, `……` vs `……`). The vote resolves, but picks
 arbitrarily between a right and a wrong reading — putting a ~0.1 CER floor under every engine on
 that region. Coverage bought that way costs the discrimination the benchmark exists to provide;
 those regions belong in gold review instead.
@@ -172,7 +172,7 @@ cloud VLMs got the padded crop, so **the two families were transcribing differen
 box that clipped a glyph penalised paddle alone, which inflated the apparent disagreement between
 local and cloud engines and made the vote partly a measurement of the crop. Measured on sample7,
 switching paddle to the padded crop changed **8 of 20 regions**, consistently toward the truth
-(`*これもmD7*` → `*これもヨロジり*` against gold `これもヨロシク`); on sample3 it changed all 5.
+(`*「…」mD7*` → `*「…」*` against gold `…`); on sample3 it changed all 5.
 
 The review page had the same bug in the other direction — it rendered the raw bbox, so regions
 looked clipped in review when the engines had actually seen 10px more. All three sites now share
@@ -503,7 +503,7 @@ one vote. Running more than two mostly buys runtime.
 
 **Local and cloud engines resolve different regions, so the best pool has both:**
 
-- paddle recovers short SFX crops (`トッ`, `だーれだ`) where the VLMs hallucinate plausible-looking
+- paddle recovers short SFX crops (`…`, `…`) where the VLMs hallucinate plausible-looking
   wrong text — it won 6 regions over a dissenting qwen;
 - the VLMs carry multi-line dialogue, where paddle's column ordering reverses the reading.
 

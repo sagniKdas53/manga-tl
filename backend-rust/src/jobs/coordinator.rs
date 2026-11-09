@@ -2437,7 +2437,7 @@ fn overlap_area(a: Rect, b: Rect) -> f64 {
 /// balloon of its own. Laid out in that box, the text spreads across both balloons and runs into
 /// the other region's (Free ch 2 p27, owner 2026-10-11).
 ///
-/// A small piece of text inside a real balloon -- an SFX, a stray "1", a split-off "Huh...?" --
+/// A small piece of text inside a real balloon -- an SFX, a stray "1", a split-off interjection --
 /// is not enough: about 79 balloon boxes on the F stack hold another region's text, nearly all of
 /// them that kind, and only 2 are glued balloons.
 pub fn glued_balloon(region: &OcrRegion, page_regions: &[OcrRegion]) -> bool {
@@ -5671,12 +5671,12 @@ mod textbox_tests {
 
     #[test]
     fn a_small_piece_of_text_in_a_balloon_leaves_the_balloon_box_alone() {
-        // B #230 p4: "は！" sits inside the box of the "ここでサインですよね" balloon, as free text.
+        // B #230 p4: a two-character exclamation sits inside the box of a speech balloon, as free text.
         let balloon = on_page((576, 191, 288, 442), (682, 232, 135, 358));
         let sfx = on_page((599, 202, 57, 99), (599, 202, 57, 99));
         assert!(!glued_balloon(&balloon, &[balloon.clone(), sfx]));
 
-        // Test ch 1 p27: "む～" has a small balloon box of its own inside the column's box, apart
+        // Test ch 1 p27: a short sound has a small balloon box of its own inside the column's box, apart
         // from the column's text, but it is a fifth of the column's size.
         let column = on_page((0, 353, 104, 365), (8, 359, 34, 351));
         let aside = on_page((59, 369, 47, 82), (62, 377, 39, 66));
@@ -6150,7 +6150,7 @@ mod textbox_tests {
 
     #[test]
     fn f5_a_large_widening_leaves_the_outline_because_it_pays_for_the_loss() {
-        // B ja p10's "Living expenses??": the outline is only a crop around the text, and leaving
+        // B ja p10's short line: the outline is only a crop around the text, and leaving
         // it takes the text from 24 to 53 px.
         let (r, other) = sharing_with_room(50, 500);
         let r = with_outline(r, 100, 400);

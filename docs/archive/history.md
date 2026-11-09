@@ -3056,7 +3056,7 @@ Moved from `docs/issues.md` with their closing evidence. Checked against the tre
 - **Report (2026-09-19, R2 short list — [`R2.md`](quality-checkpoints/R2.md#short-list)):** on the
   first conventional-balloon pages measured live (`sample7` ja, `sample197` ko, `sample641` zh),
   region counts are 1.3–1.9× the August exports. `sample641`'s five-column balloon became five
-  regions, each translated on its own (*"I still" / "can't believe this" / "is homemade!" / …*)
+  regions, each translated on its own (*"…" / "…" / "…" / …*)
   and each set in a 30–41 px column at 8–33 px; `sample7` has five such balloons (18 regions),
   `sample197` three. Crop: [`compare/sample641-balloon.png`](quality-runs/r2-20260919-shortlist/compare/sample641-balloon.png).
 - **Root cause, from the persisted `ownerDecision` on every region:** F04's live owner veto

@@ -11,10 +11,10 @@ What it fixes: `build_ocr_corpus.pick_consensus()` treats every engine as indepe
 PaddleOCR variants are not — they share a vertical-column ordering bug on Japanese text, so they
 all reverse the reading order of the same region and vote as a bloc. Observed on sample1 r1:
 
-    paddleocr_v6_medium   本当にやるの？お兄ちゃん…          <- reversed
-    paddleocr_v5_server   本当にやるの？お兄ちゃん…          <- reversed, same bug
-    qwen3-vl-32b          お兄ちゃん…\n本当にやるの？         <- correct
-    gemini-3.1-flash-lite お兄ちゃん…\n本当にやるの？         <- correct
+    paddleocr_v6_medium   [line 2][line 1]          <- reversed
+    paddleocr_v5_server   [line 2][line 1]          <- reversed, same bug
+    qwen3-vl-32b          [line 1]\n[line 2]         <- correct
+    gemini-3.1-flash-lite [line 1]\n[line 2]         <- correct
 
 Two engines "agree" on each reading. With `--min-agree 3` nothing resolves; with `--min-agree 2`
 the tie is broken arbitrarily and the reversed text can win. Neither is a threshold problem —

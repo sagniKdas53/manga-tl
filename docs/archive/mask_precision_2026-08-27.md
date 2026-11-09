@@ -165,7 +165,7 @@ deliberate one. Two notes if you want it:
   `should_typeset_region` already exists as the gate.
 - The "not obstructing too much" half needs a definition, and **two obvious heuristics are already
   measured dead ends**: glyph size does not separate SFX from dialogue (over 804 fragments the
-  largest text on the page was dialogue), and recogniser confidence does not either (0.994 for ドキ,
+  largest text on the page was dialogue), and recogniser confidence does not either (0.994 for 「…」,
   0.976 for dialogue). Whatever "obstructing" means, it has to be geometric — SFX polygon area
   overlapping dialogue polygons — not a property of the text itself.
 

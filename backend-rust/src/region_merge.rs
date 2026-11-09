@@ -40,7 +40,7 @@ fn overlap(a0: i32, a1: i32, b0: i32, b1: i32) -> f64 {
 /// Indices in reading order.
 ///
 /// Vertical text (manga's default) reads columns right to left and each column top to bottom, so
-/// an OCR column split in two — ブラ above イダルなんて — rejoins as ブライダルなんて before the
+/// an OCR column split in two — あい above うえおかきく — rejoins as あいうえおかきく before the
 /// next column starts. Horizontal text reads lines top to bottom, each left to right.
 pub fn reading_order(fragments: &[Fragment]) -> Vec<usize> {
     let vertical = is_vertical(fragments);
@@ -216,16 +216,16 @@ mod tests {
     fn vertical_columns_read_right_to_left_and_rejoin_a_split_column() {
         // Ch.3 p2's balloon: two columns were each split in two by OCR.
         let fragments = vec![
-            frag(2026, 501, 114, 235, "ブラ"),
-            frag(1936, 508, 104, 207, "アイ"),
-            frag(1811, 491, 142, 726, "していなければ"),
-            frag(2002, 670, 162, 626, "イダルなんて"),
-            frag(1919, 677, 135, 332, "ドルを"),
+            frag(2026, 501, 114, 235, "あい"),
+            frag(1936, 508, 104, 207, "けこ"),
+            frag(1811, 491, 142, 726, "せそたちつてと"),
+            frag(2002, 670, 162, 626, "うえおかきく"),
+            frag(1919, 677, 135, 332, "さしす"),
         ];
         let order = reading_order(&fragments);
         assert_eq!(
             joined_text(&fragments, &order, "ja"),
-            "ブライダルなんてアイドルをしていなければ"
+            "あいうえおかきくけこさしすせそたちつてと"
         );
     }
 
@@ -235,18 +235,18 @@ mod tests {
         // plus that block, in the Reader's (OCR) numbering #3 #4 #5 #6 #8 #9, must still read as
         // one sentence, the merged block last because its column is leftmost.
         let fragments = vec![
-            frag(2026, 501, 114, 235, "ブラ"),
-            frag(1936, 508, 104, 207, "アイ"),
-            frag(1811, 491, 142, 726, "していなければ"),
-            frag(1628, 487, 232, 633, "縁が無かったでしょう："),
-            frag(2002, 670, 162, 626, "イダルなんて"),
-            frag(1919, 677, 135, 332, "ドルを"),
+            frag(2026, 501, 114, 235, "あい"),
+            frag(1936, 508, 104, 207, "けこ"),
+            frag(1811, 491, 142, 726, "せそたちつてと"),
+            frag(1628, 487, 232, 633, "なにぬねのはひふへほ："),
+            frag(2002, 670, 162, 626, "うえおかきく"),
+            frag(1919, 677, 135, 332, "さしす"),
         ];
         let order = reading_order(&fragments);
         assert_eq!(order, vec![0, 4, 1, 5, 2, 3]);
         assert_eq!(
             joined_text(&fragments, &order, "ja"),
-            "ブライダルなんてアイドルをしていなければ縁が無かったでしょう："
+            "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほ："
         );
     }
 
@@ -254,15 +254,15 @@ mod tests {
     fn horizontal_lines_read_top_to_bottom() {
         // Page 4's profile paragraph: three lines of one sentence.
         let fragments = vec![
-            frag(38, 284, 235, 16, "なければ基本どのような性癖"),
-            frag(37, 174, 236, 102, "課外活動まで積極的に"),
-            frag(37, 309, 199, 20, "だろうと肯定してくれる"),
+            frag(38, 284, 235, 16, "らりるれろわをんがぎぐげご"),
+            frag(37, 174, 236, 102, "まみむめもやゆよびぶ"),
+            frag(37, 309, 199, 20, "ざじずぜぞだぢづでどば"),
         ];
         let order = reading_order(&fragments);
         assert_eq!(order, vec![1, 0, 2]);
         assert_eq!(
             joined_text(&fragments, &order, "en"),
-            "課外活動まで積極的に なければ基本どのような性癖 だろうと肯定してくれる"
+            "まみむめもやゆよびぶ らりるれろわをんがぎぐげご ざじずぜぞだぢづでどば"
         );
     }
 

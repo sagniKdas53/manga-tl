@@ -70,7 +70,7 @@ not as separate fragments with separate English boxes.
 - **Known:** the owner veto (`worker/src/worker/services/owner_assignment.py::_line_continuity`) split
   42 regions on 5 pages of the dev "Tests" series (2026-09-25); 7 of 8 cases were inside one detected
   balloon. The cause: when OCR breaks a vertical column in two, the top piece's x-neighbour is the next
-  column and the continuity test fails (Ch.3 p2: ブラ above イダルなんて).
+  column and the continuity test fails (Ch.3 p2: 「…」 above 「…」).
 - **Fix idea (user-agreed direction):** join collinear pieces of one column before the continuity test.
   Opt-in first, checked with the grouping frozen-equivalence test, then measured.
 - **Not this step:** the proximity budget. It is already a setting (*OCR Grouping Threshold*, 0.35;

@@ -130,7 +130,7 @@ three obvious shortcuts are all wrong:
 - *"two images in one tweet = a pair"* — no. Those are usually **the same Japanese page reposted by
   two handles** (pair009/pair029).
 - *"the tweet text says which it is"* — no. pair062's tweet says "Eng ver" and the image is
-  Japanese; pair047's says "英語版です!" and the image is English.
+  Japanese; pair047's says "…" and the image is English.
 - *"`pairNNN_` is a pair id"* — no. pair001 and pair031 are the same two images.
 
 So both halves are recovered from pixels: **pairing** by 32×32 layout signature (washes out text,

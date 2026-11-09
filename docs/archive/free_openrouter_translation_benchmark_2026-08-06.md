@@ -105,7 +105,7 @@ slots. It's whether the model resolves the ambiguous parts of the source correct
 
 ### 3.1 The r6 test: who gets accused?
 
-Region r6, `てか毎晩いじるからエラー出ちゃってるし…!`, has no explicit subject — normal for
+Region r6, `…`, has no explicit subject — normal for
 Japanese, and the reference resolves it as accusatory: **"BESIDES, YOU MESS WITH IT EVERY
 NIGHT, SO IT'S CAUSING ERRORS...!"** (the maid blaming the commander).
 
@@ -119,11 +119,9 @@ scene. Every other model that produced output got the direction right.
 
 ### 3.2 The r4 test: who gets killed?
 
-Region r4, `やはり殺しておくべきでした…!`, reference: **"I REALLY SHOULD'VE KILLED HIM AFTER
-ALL...!"** — first person, third-person object.
+Region r4, `…`, reference: **"…"** — first person, third-person object.
 
-- `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` renders it **"I should have killed
-  YOU after all...!"** — turns an interior monologue about a third party into a direct
+- `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` renders it **"…" (with "you" as the object)** — turns an interior monologue about a third party into a direct
   address, which doesn't match the panel (nobody else is present to be spoken to).
 - `nvidia/nemotron-nano-12b-v2-vl:free`, `poolside/laguna-s-2.1:free`,
   `cohere/north-mini-code:free` all shift "I" → "**We**", diffusing personal culpability
@@ -135,28 +133,28 @@ ALL...!"** — first person, third-person object.
 
 ### 3.3 Proper nouns and titles
 
-`シェフィールド` (Sheffield — a character name) and `指揮官` (commander) are unambiguous, and
+`…` (Sheffield — a character name) and `…` (commander) are unambiguous, and
 most models got both right. Two didn't:
 
 - `poolside/laguna-s-2.1:free`: **"Shefield"** — dropped letter, not a translation issue,
   just wrong.
 - `poolside/laguna-xs-2.1:free`: **"the Shield"** — invented a generic noun in place of the
-  proper name entirely, and separately renders 指揮官 as **"captain"** instead of
+  proper name entirely, and separately renders 「…」 as **"captain"** instead of
   "commander." Both wrong in the same response; XS is the least reliable model tested
   despite being tied for fastest.
 
 ### 3.4 Terminology register: anal / anus / butt
 
-`肛門認証` appears twice (r1, r5) and every model kept it internally consistent within its
+`…` appears twice (r1, r5) and every model kept it internally consistent within its
 own response, but split three ways across models:
 
-- **"Anal authentication"** — `gemma-4-26b`, `nemotron-3-super`, `nemotron-3-ultra`,
+- **the clinical word** — `gemma-4-26b`, `nemotron-3-super`, `nemotron-3-ultra`,
   `nemotron-3-nano-30b-a3b`, `nemotron-nano-9b-v2`, `poolside` (both), `ling-3.0-flash`,
   `nemotron-nano-12b-v2-vl` — matches the reference.
-- **"Anus authentication"** — `gemma-4-31b`, `gpt-oss-20b` — more anatomically literal,
+- **the anatomical word** — `gemma-4-31b`, `gpt-oss-20b` — more anatomically literal,
   arguably *more* correct, but diverges from the reference wording. Not a defect, a
   register choice.
-- **"Butt authentication"** — `nemotron-3-nano-omni-30b-a3b-reasoning` — casualizes the
+- **the slang word** — `nemotron-3-nano-omni-30b-a3b-reasoning` — casualizes the
   deadpan clinical-error tone into something closer to slang, losing the joke (an
   authentication system deadpan-erroring on a crude term is funnier played straight).
 

@@ -152,15 +152,15 @@ PROVIDER_CONFIGS = {
 DEFAULT_QA_REGIONS = [
     {
         "regionId": "93b46505-541e-47c9-b44d-f7e2563a477e",
-        "ocrText": "さす",
+        "ocrText": "ドン",
         "ocrScore": 0.82,
-        "translatedText": "SASU (PIERCE)",
+        "translatedText": "BOOM",
         "translationScore": 0.78,
         "readingOrder": 2,
     },
     {
         "regionId": "1fc84410-d20a-4453-b5a0-1ee061a914fb",
-        "ocrText": "さ苏",
+        "ocrText": "か苏",
         "ocrScore": 0.61,
         "translatedText": "[Environmental text: uncertain reading]",
         "translationScore": 0.55,
@@ -168,9 +168,9 @@ DEFAULT_QA_REGIONS = [
     },
     {
         "regionId": "c24cd5a8-112a-4a8e-a7a1-4334c32a5b8e",
-        "ocrText": "一緒に浴びましょうよー洗ってあげますからぁ",
+        "ocrText": "今日はいい天気だね、一緒に散歩に行こうよ",
         "ocrScore": 0.97,
-        "translatedText": "Come on, let's take a bath together— I'll wash you!",
+        "translatedText": "Nice weather today — let's go for a walk together!",
         "translationScore": 0.95,
         "readingOrder": 1,
     },
