@@ -17,6 +17,7 @@ export function cleanupOpacity(opacity) {
  * 40-77 px, i.e. 15-25 %. The previous 4 % was about five times too thin to read as a halo.
  */
 export const STROKE_WIDTH_RATIO = 0.18;
+const tenth = (value) => Math.round(value * 10) / 10;
 export function resolvedTextLayout(scene) {
     return scene.objects
         .filter((object) => object.lineBoxes.length > 0)
@@ -24,6 +25,7 @@ export function resolvedTextLayout(scene) {
         object_id: object.objectId,
         font_size: object.fontSize,
         lines: object.lineBoxes.map((line) => line.text),
+        line_boxes: object.lineBoxes.map((line) => [tenth(line.x), tenth(line.y), tenth(line.width), tenth(line.height)]),
     }));
 }
 function fontSpec(style, fontSize) {

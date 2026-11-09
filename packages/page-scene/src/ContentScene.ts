@@ -105,12 +105,20 @@ export interface ResolvedTextObject {
  */
 export const STROKE_WIDTH_RATIO = 0.18;
 
-/** What the renderer hands back per text object: the font px it settled on and the line breaks. */
+/**
+ * What the renderer hands back per text object: the font px it settled on, the line breaks, and each
+ * line's box `[x, y, width, height]` in page px. The boxes are before the object's rotation (the
+ * contract's `line_boxes` rect), one line height tall. The backend reads them to find text that
+ * collides with another object's text (#182).
+ */
 export interface ResolvedTextLayout {
   object_id: string;
   font_size: number;
   lines: string[];
+  line_boxes: [number, number, number, number][];
 }
+
+const tenth = (value: number) => Math.round(value * 10) / 10;
 
 export function resolvedTextLayout(
   scene: ResolvedPageScene,
@@ -121,6 +129,15 @@ export function resolvedTextLayout(
       object_id: object.objectId,
       font_size: object.fontSize,
       lines: object.lineBoxes.map((line) => line.text),
+      line_boxes: object.lineBoxes.map(
+        (line) =>
+          [tenth(line.x), tenth(line.y), tenth(line.width), tenth(line.height)] as [
+            number,
+            number,
+            number,
+            number,
+          ],
+      ),
     }));
 }
 

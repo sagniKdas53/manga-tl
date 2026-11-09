@@ -92,6 +92,16 @@ test("renders source-sized deterministic PNGs with browser and font provenance",
     assert.equal(first.layout[0].object_id, "dialogue-1");
     assert.ok(first.layout[0].font_size > 0);
     assert.equal(first.layout[0].lines.join(" "), "Pinned browser text");
+    // #182: one box per line, in page px before the rotation, one line height (1.2 em) tall, inside
+    // the object's transform horizontally.
+    const { line_boxes: boxes, lines, font_size: px } = first.layout[0];
+    assert.equal(boxes.length, lines.length);
+    for (const [x, y, width, height] of boxes) {
+      assert.ok(Math.abs(height - px * 1.2) <= 0.1, `line height ${height} for ${px} px`);
+      assert.ok(width > 0 && x >= 20 && x + width <= 100.1, `line box ${x}+${width} inside 20..100`);
+      assert.ok(Number.isFinite(y));
+    }
+    for (let i = 1; i < boxes.length; i += 1) assert.ok(boxes[i][1] > boxes[i - 1][1], "lines run downward");
   } finally {
     await instance.stop();
   }

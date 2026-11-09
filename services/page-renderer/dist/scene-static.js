@@ -71,7 +71,7 @@ var PageSceneStatic = (() => {
     boxX = 0,
     boxY = 0,
     maskPolygon,
-    fontWeight = "bold",
+    fontWeight = "normal",
     fontStyle = "normal"
   }, measureText) {
     const cleanText = (text || "").replace(/\r\n/g, "\n");
@@ -375,11 +375,15 @@ var PageSceneStatic = (() => {
     return Math.max(0, opacity);
   }
   var STROKE_WIDTH_RATIO = 0.18;
+  var tenth = (value) => Math.round(value * 10) / 10;
   function resolvedTextLayout(scene) {
     return scene.objects.filter((object) => object.lineBoxes.length > 0).map((object) => ({
       object_id: object.objectId,
       font_size: object.fontSize,
-      lines: object.lineBoxes.map((line) => line.text)
+      lines: object.lineBoxes.map((line) => line.text),
+      line_boxes: object.lineBoxes.map(
+        (line) => [tenth(line.x), tenth(line.y), tenth(line.width), tenth(line.height)]
+      )
     }));
   }
   function fontSpec(style, fontSize) {
@@ -440,6 +444,7 @@ var PageSceneStatic = (() => {
           shape: object.style.shape === "elliptical" ? "elliptical" : "rectangular",
           boxX: fitBox.x,
           boxY: fitBox.y,
+          maskPolygon: object.style.maskPolygon ? JSON.stringify(object.style.maskPolygon) : void 0,
           fontWeight: String(object.style.weight),
           fontStyle: object.style.fontStyle === "italic" ? "italic" : "normal"
         },
