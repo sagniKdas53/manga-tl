@@ -877,7 +877,7 @@ async fn failed_translation_does_not_create_a_visible_masking_element() {
         .expect("region")
     }
     let ok_region = region(&pool, page_id, "こんにちは").await;
-    let failed_region = region(&pool, page_id, "違うんです").await;
+    let failed_region = region(&pool, page_id, "かきくけこ").await;
 
     let translations = vec![
         serde_json::json!({

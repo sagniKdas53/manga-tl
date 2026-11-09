@@ -1789,7 +1789,7 @@ async fn redo_callbacks_persist_their_spend() {
         internal(None),
         Some(
             serde_json::json!({
-                "text": "あんなに大きかったけ…",
+                "text": "あいうえおかきくけこ…",
                 "confidence": 1.0,
                 "detectedLanguage": "ja",
                 "cost": cost,
@@ -1885,7 +1885,7 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
     let (series_id, _chapter_id, page_id, image_id) = seed_pipeline(&pool).await;
 
     let region_id = Uuid::new_v4();
-    sqlx::query("INSERT INTO ocr_regions (id, text, translated_text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あんなに','Was it that big?','ja',10,20,100,50,$2)")
+    sqlx::query("INSERT INTO ocr_regions (id, text, translated_text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あいうえ','A plain line, ok','ja',10,20,100,50,$2)")
         .bind(region_id)
         .bind(page_id)
         .execute(&pool)
@@ -1902,7 +1902,7 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
         .await
         .unwrap();
     let base_element = Uuid::new_v4();
-    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, font, text_color, layer_id, region_id) VALUES ($1,'Was it that big?',10,20,100,50,TRUE,'Comic Neue','#000000',$2,$3)")
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, font, text_color, layer_id, region_id) VALUES ($1,'A plain line, ok',10,20,100,50,TRUE,'Comic Neue','#000000',$2,$3)")
         .bind(base_element)
         .bind(base_layer)
         .bind(region_id)
@@ -1944,7 +1944,7 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
         &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
         &serde_json::json!({
             "jobId": job_id,
-            "translatedText": "Was it really that big...?"
+            "translatedText": "Is it really that late...?"
         }),
     )
     .await;
@@ -1959,7 +1959,7 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
             .unwrap();
     assert_eq!(
         base_text.as_deref(),
-        Some("Was it that big?"),
+        Some("A plain line, ok"),
         "original text was overwritten"
     );
     assert_eq!(
@@ -2028,7 +2028,7 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
     );
     assert_eq!(
         overlay_elements[0].0.as_deref(),
-        Some("Was it really that big...?")
+        Some("Is it really that late...?")
     );
     assert_eq!(overlay_elements[0].1, Some(true));
     // Styling is inherited, or the redone bubble would typeset unlike the one it replaces.
@@ -2041,7 +2041,7 @@ async fn region_redo_lands_as_an_overlay_instead_of_overwriting() {
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_eq!(current.as_deref(), Some("Was it really that big...?"));
+    assert_eq!(current.as_deref(), Some("Is it really that late...?"));
 
     cleanup_series(&pool, series_id).await;
 }
@@ -2061,7 +2061,7 @@ async fn redo_ocr_requeues_the_translation_but_redo_translation_stands_alone() {
     let (series_id, _chapter_id, page_id, image_id) = seed_pipeline(&pool).await;
 
     let region_id = Uuid::new_v4();
-    sqlx::query("INSERT INTO ocr_regions (id, text, translated_text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あんなに','Was it that big?','ja',10,20,100,50,$2)")
+    sqlx::query("INSERT INTO ocr_regions (id, text, translated_text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あいうえ','A plain line, ok','ja',10,20,100,50,$2)")
         .bind(region_id)
         .bind(page_id)
         .execute(&pool)
@@ -2081,7 +2081,7 @@ async fn redo_ocr_requeues_the_translation_but_redo_translation_stands_alone() {
             .unwrap();
         sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES ($1,$2,10,20,100,50,TRUE,$3,$4)")
             .bind(Uuid::new_v4())
-            .bind(if kind == "ocr" { "あんなに" } else { "Was it that big?" })
+            .bind(if kind == "ocr" { "あいうえ" } else { "A plain line, ok" })
             .bind(layer)
             .bind(region_id)
             .execute(&pool)
@@ -2096,7 +2096,7 @@ async fn redo_ocr_requeues_the_translation_but_redo_translation_stands_alone() {
         &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
         internal(None),
         Some(
-            serde_json::json!({"text": "あんなに大きかったけ…", "detectedLanguage": "ja"})
+            serde_json::json!({"text": "あいうえおかきくけこ…", "detectedLanguage": "ja"})
                 .to_string(),
         ),
     )
@@ -2133,7 +2133,7 @@ async fn redo_ocr_requeues_the_translation_but_redo_translation_stands_alone() {
         "POST",
         &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
         internal(None),
-        Some(serde_json::json!({"translatedText": "Was it really that big...?"}).to_string()),
+        Some(serde_json::json!({"translatedText": "Is it really that late...?"}).to_string()),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -2180,7 +2180,7 @@ async fn redo_targets_the_region_even_when_its_layers_are_hidden() {
     let (series_id, _chapter_id, page_id, _image_id) = seed_pipeline(&pool).await;
 
     let region_id = Uuid::new_v4();
-    sqlx::query("INSERT INTO ocr_regions (id, text, translated_text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あんなに','first','ja',10,20,100,50,$2)")
+    sqlx::query("INSERT INTO ocr_regions (id, text, translated_text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あいうえ','first','ja',10,20,100,50,$2)")
         .bind(region_id)
         .bind(page_id)
         .execute(&pool)
@@ -2241,7 +2241,7 @@ async fn a_repeated_region_callback_is_applied_once() {
     let (series_id, _chapter_id, page_id, image_id) = seed_pipeline(&pool).await;
 
     let region_id = Uuid::new_v4();
-    sqlx::query("INSERT INTO ocr_regions (id, text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あんなに','ja',10,20,100,50,$2)")
+    sqlx::query("INSERT INTO ocr_regions (id, text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あいうえ','ja',10,20,100,50,$2)")
         .bind(region_id)
         .bind(page_id)
         .execute(&pool)
@@ -2256,7 +2256,7 @@ async fn a_repeated_region_callback_is_applied_once() {
         .execute(&pool)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES ($1,'あんなに',10,20,100,50,TRUE,$2,$3)")
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES ($1,'あいうえ',10,20,100,50,TRUE,$2,$3)")
         .bind(Uuid::new_v4())
         .bind(base_layer)
         .bind(region_id)
@@ -2275,7 +2275,7 @@ async fn a_repeated_region_callback_is_applied_once() {
 
     let body_json = serde_json::json!({
         "jobId": job_id,
-        "text": "あんなに大きかったけ…",
+        "text": "あいうえおかきくけこ…",
         "detectedLanguage": "ja",
         "cost": {
             "currency": "USD", "estimated_cost": 0.00004, "prompt_tokens": 400,
@@ -2517,7 +2517,7 @@ async fn redo_supersedes_the_element_that_is_actually_rendering() {
     let (series_id, _chapter_id, page_id, _image_id) = seed_pipeline(&pool).await;
 
     let region_id = Uuid::new_v4();
-    sqlx::query("INSERT INTO ocr_regions (id, text, translated_text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あんなに','visible one','ja',10,20,100,50,$2)")
+    sqlx::query("INSERT INTO ocr_regions (id, text, translated_text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あいうえ','visible one','ja',10,20,100,50,$2)")
         .bind(region_id)
         .bind(page_id)
         .execute(&pool)

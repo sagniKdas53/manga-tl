@@ -204,7 +204,7 @@ describe("contract rule 8: the editor's typography", () => {
     textObjects: [
       {
         objectId: "text-page-30",
-        text: "Which one do\n you think it'll \nbe today?",
+        text: "Where should\n we go eat lunch \ntomorrow?",
         transform: {
           x: 3559,
           y: 538,

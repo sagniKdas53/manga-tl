@@ -127,7 +127,7 @@ We need to replace "the book reads right-to-left, therefore the text is vertical
   classifiers.
 - How mixed-orientation pages are handled — a manga page can legitimately carry vertical dialogue
   and horizontal captions at once, so a single page-level answer may be wrong.
-- Reliability with few boxes, and known failure cases (single-character balloons like 「え!?」,
+- Reliability with few boxes, and known failure cases (single-character balloons like 「…」,
   square logos, sound effects).
 
 ### Q5 — Evaluation without ground truth

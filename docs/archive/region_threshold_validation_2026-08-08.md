@@ -83,17 +83,17 @@ of the exact-match bands across the pages that can match at all is **0.15 – 0.
 **`sample27` over-splits, and it is the only page that does.** 20 regions against a truth of 18.
 Inspecting the overlay, the two extra regions have different causes:
 
-1. Panel 1's balloon 「オタクくん」/「放課後デート しようよ」 splits in two. This is a **genuine
+1. Panel 1's balloon 「…」/「…」 splits in two. This is a **genuine
    threshold over-split** — the gap between the name and the line exceeds the budget until 0.75.
 2. The large borderless shout in panel 2 splits into a `bubble` region and a `direct_text`
-   region, because YOLO drew a bubble around the 「オタクくん」 half and left the rest unmatched.
+   region, because YOLO drew a bubble around the 「…」 half and left the rest unmatched.
    **No threshold can merge this** — the two halves are produced by different code paths.
 
 So the honest cost of tightening is **one over-split region, on one of seven pages**. Weighed
 against 11 regions recovered across the other four, tightening is clearly right.
 
 **`sample16` and `sample9` never reach truth, and the threshold is not why.** Both plateau below
-their hand count at every value. On `sample9` the 3-region gap is one SFX (「もぐもぐ」) never
+their hand count at every value. On `sample9` the 3-region gap is one SFX (「…」) never
 detected at all, plus two balloons whose text merges with an adjacent sub-caption inside a single
 YOLO bubble — neither is a threshold effect. Lowering the threshold still recovers 4 regions
 (11 → 15) on that page. Neither page over-splits at 0.15.
@@ -174,9 +174,9 @@ It governs the unmatched path — the one this bug hits hardest.
 - **Ground truth is still by eye.** Seven pages instead of one, and `sample30` and `sample23`
   were checked region-by-region against the art rather than by count alone — but no page has an
   independent hand-annotated region set.
-- **Two counts involve judgement.** On `sample9`, whether 「私ケイちゃんの恋バナ聴くの好きなんだ」and
-  its smaller sub-caption 「ご飯進むから」are one area or two; same for 「って」 and
-  「何ニヤニヤ笑ってるんですか」. On `sample27`, whether panel 3's two column groups sit in one
+- **Two counts involve judgement.** On `sample9`, whether 「…」and
+  its smaller sub-caption 「…」are one area or two; same for 「…」 and
+  「…」. On `sample27`, whether panel 3's two column groups sit in one
   balloon. Each is ±1. None of them change the ordering of thresholds.
 - **Nothing here measures OCR accuracy.** These are region-proposal counts. Whether better
   regions produce better transcriptions still needs the bundled cloud re-run.

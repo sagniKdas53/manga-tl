@@ -44,7 +44,7 @@ export const ISSUE_ACTION_LABELS: Record<IssueAction, string> = {
   fit: "Shrink to fit",
 };
 
-// QA says this when a bubble was split into pieces: "Fragment 「あたって」 … this bubble is a
+// QA says this when a bubble was split into pieces: "Fragment 「ほまみむ」 … this bubble is a
 // single sentence". Merging the pieces is the fix, so the issue says so.
 const FRAGMENT_FEEDBACK =
   /fragment|single sentence|part of (a|the|one) (longer )?sentence/i;

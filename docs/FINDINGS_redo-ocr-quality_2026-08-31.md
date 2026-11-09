@@ -14,10 +14,10 @@ Page 4, region `87b642b4-45e6-41d1-abed-c17e7efdc485`. A region redo was run on 
 bubble. `qwen/qwen3-vl-32b-instruct` returned:
 
 ```
-リスクの低い露出がしたい——ッ!! もう… ヒィッ ヒィッ ヒィッ ヒィッ ヒィッ …
+…——…
 ```
 
-with `ヒィッ` repeated 55 times, and `confidence: 1.0`. It was stored verbatim. Its
+with `…` repeated 55 times, and `confidence: 1.0`. It was stored verbatim. Its
 `translated_text` is empty, so the degenerate output also stalled the translation for that region.
 
 The interesting part is not that a VLM repeated a token — that is a known failure mode — but that

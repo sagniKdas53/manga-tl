@@ -109,10 +109,10 @@ all passing `(img, bbox)`; the masking goes behind an opt-in parameter that defa
 | longer | 1 |
 | **masked to empty** — polygon too tight | 1 |
 
-Clear wins where a neighbour's text was bleeding in: `sample10` r7 `121212122待って` → `待って`;
-`sample3` r1 shed a trailing `といずっ私の` belonging to the next balloon; `sample7` r8 dropped a
-`頑不` tail. Genuine recognition gains too, from removing distracting context: `sample6` r1
-`ぶコとばすねよ` → `ぶっとばすねよ`.
+Clear wins where a neighbour's text was bleeding in: `sample10` r7 `121212122…` → `…`;
+`sample3` r1 shed a trailing `…` belonging to the next balloon; `sample7` r8 dropped a
+`…` tail. Genuine recognition gains too, from removing distracting context: `sample6` r1
+`…` → `…`.
 
 The tail risk is real: `sample6` r4 (34% fill) masked to **empty**, i.e. the polygon excluded the
 text. Masking should therefore fall back to the bbox reading when the masked crop yields nothing.

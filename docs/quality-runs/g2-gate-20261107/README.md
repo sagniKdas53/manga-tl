@@ -34,7 +34,7 @@ Before building the fix, the renderer's own layout bundle was run offline on the
 
 ## The last difference: ♡ (#325)
 
-B fixtures p3, "Soo~ft and warm♡": 39 px in the editor, 38 px in the export, same line breaks. Comic Neue has no ♡, and the two systems substitute different fonts: at bold 39 px it is 35 px wide here (DejaVu Sans) and 39 px in the renderer image (WenQuanYi Zen Hei). Comic Neue's own text measures the same on both.
+B fixtures p3, a short line ending in ♡: 39 px in the editor, 38 px in the export, same line breaks. Comic Neue has no ♡, and the two systems substitute different fonts: at bold 39 px it is 35 px wide here (DejaVu Sans) and 39 px in the renderer image (WenQuanYi Zen Hei). Comic Neue's own text measures the same on both.
 
 So **this result holds for the machine that ran it**: a browser on another OS may pick another fallback.
 

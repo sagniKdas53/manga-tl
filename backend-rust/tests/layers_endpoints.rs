@@ -720,7 +720,7 @@ async fn hiding_or_deleting_a_redo_overlay_gives_the_original_back() {
     let token = jwt.generate_token(&email).expect("token");
 
     let region_id = Uuid::new_v4();
-    sqlx::query("INSERT INTO ocr_regions (id, text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あんなに','ja',10,20,100,50,$2)")
+    sqlx::query("INSERT INTO ocr_regions (id, text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あいうえ','ja',10,20,100,50,$2)")
         .bind(region_id)
         .bind(page_id)
         .execute(&pool)
@@ -902,7 +902,7 @@ async fn standing_down_an_overlay_leaves_a_newer_one_alone() {
     let token = jwt.generate_token(&email).expect("token");
 
     let region_id = Uuid::new_v4();
-    sqlx::query("INSERT INTO ocr_regions (id, text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あんなに','ja',10,20,100,50,$2)")
+    sqlx::query("INSERT INTO ocr_regions (id, text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あいうえ','ja',10,20,100,50,$2)")
         .bind(region_id).bind(page_id).execute(&pool).await.expect("region");
 
     // base ← overlay1 ← overlay2, each hiding the one before it.

@@ -1141,7 +1141,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   five free-standing vertical-source columns 75–83 px apart (`bbox_x` 847/930/1005, ownership
   correctly `single-fragment-owner` each, `validated_container_count: 0` — no shared balloon, so
   this is not an ownership/`AUDIT-R20` case), rendered as 137 px-wide English boxes that overlap
-  their neighbour by 44–62 px ("Open your legs." over "Lower your hips more." over "Number 4!").
+  their neighbour by 44–62 px (three lines, each over the next).
   Confirms the fix is neighbour-aware width/placement, not per-element fitting alone.
 - **M7 acceptance controls, 2026-09-20:** the page 12 case above is filed as
   `corpus/gaps/pending/ja/sample698` (fresh Torii reference fetched). Page 18 of the same chapter —
@@ -1228,7 +1228,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   back into singletons — 42 regions on 5 pages: 25 for `insufficient-lateral-line-overlap`, 17
   for `mixed-line-orientation`. 7 of the 8 had every member inside one detected balloon.
 - **Mechanism.** The check sorts members by x and needs each neighbour to overlap the next along
-  the line. When OCR breaks one vertical column in two (Ch.3 p2: ブラ above イダルなんて), the top
+  the line. When OCR breaks one vertical column in two (Ch.3 p2: 「…」 above 「…」), the top
   piece's x-neighbour is the next column (overlap ≈ 28 %), and the whole balloon is vetoed.
 - **Separate miss (Ch.1 p4).** Horizontal profile lines 8–9 px apart against a proximity budget of
   0.35 × line height ≈ 7 px (`OCR_MERGE_THRESHOLD=0.35`), so a paragraph's lines stay separate.
@@ -1244,11 +1244,11 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
   `OCR_JOIN_SPLIT_LINES` joins a column's pieces (same centre line) before the continuity test;
   `OCR_WAIST_ADJACENT_LINE_GAP=0.2` stops the clearance veto splitting two columns too close for a
   balloon wall (4Oct p. 17, a narrow balloon); `OCR_SPLIT_VETOED_AT_BREAKS` cuts a vetoed group at
-  its break instead of into single pieces (TELEA p. 2, the 良くないけど aside);
+  its break instead of into single pieces (TELEA p. 2, the 「…」 aside);
   `OCR_LINE_READING_ORDER` joins text line by line, so horizontal lines and broken columns read in
   order. Hand labels: false splits 28 → 15, false merges 0. Live on chrome-box: 4Oct p. 3 and
   p. 17 come out as the user's hand merges (p. 17's duplicated "Beat me." is gone), and
-  良くないけど stays its own text. Numbers and what is still open (paragraph gaps inside one
+  「…」 stays its own text. Numbers and what is still open (paragraph gaps inside one
   balloon, mixed-orientation vetoes) are in the tracker's 2026-10-05 status.
 
 ### `AUDIT-R22` (feature): LaMa-mpe as a cleanup mode
@@ -1268,7 +1268,7 @@ Severity is "how much does this cost the output", not "how hard is it to fix".
 
 ### `AUDIT-R23` (medium): OCR throws away the text angle it detects
 
-- **Report (2026-09-26, user):** a sign reading キュアット探偵事務所, tilted about 25°, comes out
+- **Report (2026-09-26, user):** a sign reading 「…」, tilted about 25°, comes out
   with level English on a tilted board; Torii rotates the text to the board.
 - **Measured.** Our detector already sees the angle. PP-OCRv6 on the sign returns quads whose top
   edges run at 23.9° and 26.9° (Torii's box: 25.3°). The OCR handler keeps only the axis-aligned

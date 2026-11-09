@@ -659,7 +659,7 @@ async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
         layers,
         4,
         (37, 174, 236, 102),
-        "課外活動",
+        "まみむめ",
         "a",
         None,
     )
@@ -670,7 +670,7 @@ async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
         layers,
         5,
         (38, 284, 235, 16),
-        "なければ",
+        "らりるれ",
         "b",
         Some("manual_review"),
     )
@@ -681,7 +681,7 @@ async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
         layers,
         6,
         (37, 309, 199, 20),
-        "だろう",
+        "ざじず",
         "c",
         None,
     )
@@ -734,7 +734,7 @@ async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
         preview["order"],
         serde_json::json!([first.to_string(), second.to_string(), third.to_string()])
     );
-    assert_eq!(preview["text"], "課外活動なければだろう");
+    assert_eq!(preview["text"], "まみむめらりるれざじず");
     let untouched: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ocr_regions WHERE page_id = $1")
         .bind(page_id)
         .fetch_one(&pool)
@@ -801,7 +801,7 @@ async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
         regions,
         vec![(
             first,
-            "課外活動なければだろう".to_string(),
+            "まみむめらりるれざじず".to_string(),
             37,
             174,
             236,
@@ -831,7 +831,7 @@ async fn merged_fragments_are_cleaned_and_translated_as_one_block() {
     .unwrap();
     assert_eq!(
         texts,
-        serde_json::json!(["課外活動", "なければ", "だろう"]),
+        serde_json::json!(["まみむめ", "らりるれ", "ざじず"]),
         "the pieces are kept, in reading order, for the translator"
     );
 

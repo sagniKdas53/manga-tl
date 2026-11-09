@@ -98,7 +98,7 @@ white.
 > the same footprint numerically, which is what the percentages in §2 come from.
 
 mangatranslator.ai's footprint is **the Japanese glyph strokes and nothing else** — you can
-read 「はぁ…中でめっちゃビクビクしてる…」 in the shape of what they deleted, with the new English
+read 「…」 in the shape of what they deleted, with the new English
 overlaid in the same footprint. The balloon outline, the balloon interior, the fur texture, the
 character: untouched, pixel-identical to the source.
 
@@ -135,12 +135,11 @@ is always small (D6, D7).
 A consistent policy of restraint across every reference output:
 
 - **Untranslatable or ambiguous text is left alone, not erased.** Every reference leaves the
-  hand-drawn SFX (はぁ, ドチュ, プルプル) exactly as drawn. So do we — except that we sometimes
+  hand-drawn SFX (「…」, 「…」, 「…」) exactly as drawn. So do we — except that we sometimes
   *erase* them first and then fail to put anything back (`sample21`, `sample20` have
-  erased-but-empty balloons; `sample10` flattens the 「うわああ」 SFX area to a lavender slab).
+  erased-but-empty balloons; `sample10` flattens the 「…」 SFX area to a lavender slab).
 - **Non-dialogue is skipped entirely.** mangatranslator.ai ignores the artist's signature on
-  `sample2`; we OCR it as `兔猫锚ommision@免猫锚`, translate it to "Rabbit-Cat-Anchor omission @
-  Exemption-Cat-Anchor", and hand it 24% of the page (D10).
+  `sample2`; we OCR it as `…ommision@…`, translate it to nonsense, and hand it 24% of the page (D10).
 - **When they can't preserve a shape, they preserve the art around it.** On `sample4`'s stats
   panel they typeset each radar-chart label in place and leave the chart; we merge the panel
   into one region and delete the chart.
@@ -240,7 +239,7 @@ columns pass within `avg_width × threshold` chain together; on an SFX-dense pag
 chains into one component. `_merged_mask_polygon` (`:58`) then takes the **convex hull** of
 the member polygons, which by construction fills the gap *between* them.
 
-- `sample1`: 「ああ、着替えたら向こうの岩場に集合な」 and 「こんなチャンスめったに無い…楽しみだろ？」 are two
+- `sample1`: 「…」 and 「…」 are two
   separate balloons in the art and **one region** in `project.json`. The hull spans both plus
   the luggage between them.
 - `sample4`: the entire bottom panel — radar chart, axis labels, stat list — merges into one
@@ -396,13 +395,11 @@ today either way.
 Nothing filters watermarks, signatures, page numbers, or logos.
 
 - `sample2`: the artist's handwritten "Commission" signature is read by PaddleOCR as
-  `兔猫锚ommision@免猫锚` (Latin script misclassified as CJK), translated to
-  **"Rabbit-Cat-Anchor omission @ Exemption-Cat-Anchor"**, and given a 1459×1100px region —
+  `…ommision@…` (Latin script misclassified as CJK), translated to
+  nonsense, and given a 1459×1100px region —
   24% of the page — with a solid fill.
-- `sample22`: `@yuzukano2` typeset as dialogue. `sample28`: a stray "M".
-- Translator glosses leak onto the page: "Haha (Giggle)" (`sample21`), "SHIMMER (SOUND OF A
-  REFLECTION)" (`sample19`), "OCHIN (PLOP)" / "MUYA (SQUISH)" (`sample24`), "PURUPUN (WOBBLE)"
-  (`sample6`). A gloss belongs in a note, not in the balloon.
+- `sample22`: an artist's handle typeset as dialogue. `sample28`: a stray "M".
+- Translator glosses leak onto the page: a sound with its meaning in brackets after it (`sample21`, `sample19`, `sample24`, `sample6`). A gloss belongs in a note, not in the balloon.
 - `sample24` renders the literal string **"[REDACTED]"** — model self-censorship reaching the
   page. 6 occurrences in `run-2.log`.
 
@@ -413,10 +410,7 @@ glosses in the render layer. Reject `[REDACTED]`-class outputs at QA.
 
 ### D11 — Colour SFX are dropped rather than re-lettered.
 
-`sample10`: the human scanlation re-letters「うわあああ」as a large blue outlined "WAAAAAH!" and
-「ピピ」as an orange "BEEP". We flatten the whole area to a lavender rectangle and set "FOR
-REAL?" in 20px black. Same for the yellow spike balloon — theirs is "HANG ON!" filling the
-shape, ours is "WAIT." at 10px in the middle of it.
+`sample10`: the human scanlation re-letters one SFX as a large blue outlined shout and another as an orange beep. We flatten the whole area to a lavender rectangle and set a short question in 20px black. Same for the yellow spike balloon — theirs fills the shape, ours is a single word at 10px in the middle of it.
 
 This is a genuine feature gap, not a bug, and it is the most visible remaining difference on
 pages where everything else is right. It needs a display-font path with stroke, fill, and
@@ -566,8 +560,8 @@ extreme (17 regions vs 2, the two rendered as paragraph-blobs over the character
 
 #### D14 — Grouping shreds vertical multi-column narration.
 
-`sample2`'s narration column becomes five regions, split mid-word (`違う星から来` | `たみたいだった`),
-each translated on its own. The page ships `"KITA (ARRIVED FROM)"` and four blocks of ~4px type.
+`sample2`'s narration column becomes five regions, split mid-word (`…` | `…`),
+each translated on its own. The page ships a romanised word with a gloss and four blocks of ~4px type.
 The baseline read it correctly as one block, and so does mangatranslator.ai.
 
 The gap budgets in `fragment_grouping.py:100-101` are symmetric in form but not in what they mean:
@@ -585,8 +579,7 @@ to say.
 
 #### D15 — The translation unit is the region, so a sentence spanning regions is translated as fragments.
 
-`sample9`'s `って` is its own balloon and is translated standalone as **"like"**; the human
-scanlation reads "W-WAIT". The batch prompt (`services/translation.py:58-60`) already sends every
+`sample9`'s `…` is its own balloon and is translated standalone as a filler word; the human scanlation reads it as the start of the next balloon's sentence. The batch prompt (`services/translation.py:58-60`) already sends every
 region of the page in reading order and asks for context to be maintained, but the response
 contract is 1:1 region→string, so a sentence broken across two balloons has to be broken back
 across two strings, and the model has no way to say "these two are one utterance".
@@ -601,7 +594,7 @@ complete utterance should be rendered as its natural English part, not as a stan
 
 #### D16 — Unsupported glyphs render as tofu boxes.
 
-`sample30` sets `senpai~♡` and the `♡` comes out as a notdef box; `sample23` carries `帅哥` through
+`sample30` sets a word ending in `~♡` and the `♡` comes out as a notdef box; `sample23` carries `…` through
 untranslated (D10) and prints two boxes. Comic Neue has neither, `render.py` loads exactly one face
 and PIL substitutes nothing.
 
@@ -630,9 +623,9 @@ loudly rather than printing a box.
   but nothing in this batch is drawing in the browser default font.
 - **D10 (non-dialogue text typeset) — unchanged in kind, up in volume.** Regions under 60px on a
   side: 83 on `main`, 59 on the baseline. Parenthetical glosses reaching the page: 29 and 23
-  (`"Puru-pun (STRUGGLING SOUND)"`, `"...Just kidding! (PLAYFUL RETRACTION)"`). Untranslated CJK
-  passed through as a translation on both branches: `迷途竹林`, `帅哥`, and the bare characters
-  `三 小 江 父 心 大`. The Phase 0 gloss strip and the Phase 4 classifier gate both still apply
+  (a sound or a line with its meaning in brackets after it). Untranslated CJK
+  passed through as a translation on both branches: `…`, `…`, and the bare characters
+  `…`. The Phase 0 gloss strip and the Phase 4 classifier gate both still apply
   as written.
 
 ### 7.4 What to do next

@@ -165,13 +165,13 @@ loop and the re-OCR handler reachable, so fixtures must include variants that em
 IDs echoed from the `Region ID: region_N` text parts interleaved between the image parts.
 
 ```json
-{"results":[{"id":"region_0","text":"ここは……","confidence":0.97}]}
+{"results":[{"id":"region_0","text":"…","confidence":0.97}]}
 ```
 
 ### 4.4 Single-crop OCR — `OCR_SINGLE_SCHEMA` (`services/ocr.py:40`)
 
 ```json
-{"text":"ここは……","confidence":0.97}
+{"text":"…","confidence":0.97}
 ```
 
 ### 4.5 Envelopes

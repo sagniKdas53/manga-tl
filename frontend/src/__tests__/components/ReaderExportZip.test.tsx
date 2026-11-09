@@ -104,7 +104,7 @@ const layerPayload = [
     elements: [
       {
         id: "el-1",
-        text: "Am I... going to be taken too...??",
+        text: "Is it... going to rain again...??",
         font: "Comic Neue",
         size: 16,
         autoSize: true,
@@ -448,7 +448,7 @@ describe("Reader project ZIP export", () => {
       (l: { type: string }) => l.type === "translation",
     );
     expect(translation.elements[0].text).toBe(
-      "Am I... going to be taken too...??",
+      "Is it... going to rain again...??",
     );
     // Cost is summed out of each layer's metadata rather than stored, so a change in that
     // shape would silently zero it.

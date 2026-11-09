@@ -18,8 +18,8 @@ against. These files are the comparison.
 | `ours-pil-rendered.png` | **Our worker/PIL render of the same data.** One plate (it skips empty text), large type (it has no size cap). Strictly better than the canvas — the divergence is the point. |
 | `torii-translated.png` | **Torii's output for the same page.** No flat plates. Dialogue set at 129px as a tall column of short lines over the art, pink fill + 14px white stroke. SFX left in the artwork with romanised text added beside them. |
 | `torii-inpainted.jpg` | **Torii's inpainted base.** Proof it *does* erase — but tightly around the glyphs, with real texture-aware inpainting, and it never touches SFX. |
-| `ours-project.json` | Our layer/element data for the page. Three translation elements; two have `"text": ""` with `isManuallyEdited: true`. |
-| `torii-metadata.json` | Torii's project metadata — the text object model, below. |
+| `ours-project.json` | Our layer/element data for the page: three translation elements, two with empty text and `isManuallyEdited: true`. **Removed from the repo 2026-11-09**: it held the page's text. |
+| `torii-metadata.json` | Torii's project metadata — the text object model, below. **Removed from the repo 2026-11-09**: it held every page's source and translated text. |
 | `compare.torii` | The whole Torii project (a zip: `images/N_{original,translated,inpainted}` + `metadata.json`), 6 pages. |
 | `torii-editor-ui.png` | Frames from the screen recording showing Torii's Edit-mode text tools. Source video: `~/Videos/vokoscreenNG-2026-09-06_12-09-42.mkv`. |
 
@@ -30,8 +30,8 @@ From `metadata.json` → `images[i].translated._textObjectsTemp[]`:
 ```json
 {
   "x": 3122, "y": 1066, "width": 612, "height": 1435,
-  "text": "Isn't\nyour\nasshole\na bit\ntoo\nsmelly,\nSensei?\nJust\nstay\nstill,\nokay?",
-  "originalText": "先生のアナルちょっと臭すぎない?ちゃんとまってろ?さ",
+  "text": "…\n…\n…",
+  "originalText": "…",
   "textAlign": "center",
   "strokeColor": "#fefefe", "lineWidth": 14,
   "fillColor": "#fa366a",

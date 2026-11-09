@@ -49,7 +49,7 @@ All are read only and make no model calls.
 | `scripts/quality/compare_layout.py` | Compares two snapshots and exits 1 on anything undeclared. Tested by `test_compare_layout.py` |
 | `scripts/quality/predict_text_boxes.py` | Applies the backend's box rules to a snapshot, for `--what-if`. `--room` uses the worker's own measurement |
 
-Text is stored only as a hash. A reworded translation is counted, not treated as a code effect; re-translating Free ch1 p1 turned "Oh~" (12 px) into "Ooooh~" (6 px) with no code involved.
+Text is stored only as a hash. A reworded translation is counted, not treated as a code effect; re-translating Free ch1 p1 turned a short exclamation (12 px) into a longer one (6 px) with no code involved.
 
 ## How far the tools are proven
 

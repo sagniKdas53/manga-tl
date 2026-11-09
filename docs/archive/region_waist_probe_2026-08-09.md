@@ -321,7 +321,7 @@ deploy invalidates, not quality.
 ### The veto had to learn what a gap is
 
 The first version of the clearance veto split two pages mid-sentence — `sample9` r13
-(`別に` + `恋バナじゃないですッ！`) and `sample27` r10 (`ご飯` + `できたよ`) — sending the
+(`…` + `…`) and `sample27` r10 (`…` + `…`) — sending the
 translator a fragment with no verb. Both pairs are parallel columns of one sentence whose *boxes
 overlap*, so `_nearest_points` collapsed to a single point and there was no segment to measure.
 The veto measured anyway and got the clearance at that one point: 27.4px and 34.4px against a

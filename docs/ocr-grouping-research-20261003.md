@@ -11,7 +11,7 @@ here verbatim so item B can start from it. Notes added by the session are in the
 > - H1 here (the owner veto over-splits) is already measured: on the dev "Tests" series it split
 >   8 groups, 42 regions on 5 pages, back into singletons: 25 for
 >   `insufficient-lateral-line-overlap`, 17 for `mixed-line-orientation`; 7 of the 8 sat inside one
->   detected balloon. Cause: when OCR breaks one vertical column in two (ブラ | イダル), the top
+>   detected balloon. Cause: when OCR breaks one vertical column in two (「…」 | 「…」), the top
 >   piece's x-neighbour is the next column, overlap about 28 %, so the whole balloon is vetoed.
 >   Separate miss (ch. 1 p. 4): lines 8–9 px apart against a budget of 0.35 × line height ≈ 7 px.
 >   Filed as `AUDIT-R21` (`docs/issues.md`); manual merge is the workaround.
