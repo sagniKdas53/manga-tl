@@ -2,6 +2,8 @@
 
 **Question:** can `typesafe/jev-1.14` act as a cheap, fast first pass that says "this region needs a fix, yes or no", ahead of the vision-QA model?
 
+**A fourth page was added later the same day; see [below](#a-fourth-page-e-rotation-test-ja-p1).**
+
 **Short answer from 3 pages:** at its 0.5 line Jev caught every seeded defect. It also flagged 22 to 30 of the 52 unseeded region-runs, but most of those come from one page, `test` p5. On the other two pages together it flagged 2 to 8 of 24, depending on layout. The vision models flagged almost nothing, seeded or not. Three pages is a smoke test, so read the "Limits" section before using any number.
 
 Run on 2026-11-10 with `scripts/quality/qa_judge_bench.py`. No page text or images are in this folder: regions are named by index.
@@ -214,6 +216,49 @@ A Jev call is billed on input tokens only, at $0.042 per million.
 - **Crop size.** A crop exactly 256 px on a side came back `400 "Invalid image dimensions"`, though the docs give 256 as the minimum. 300 was accepted. The script now pads crops to at least 320. A few of the extra `crop` attempts above were this.
 - **Gemini and the seeds.** The models passed regions whose English was swapped with another region's, and regions with the Japanese plainly still on the page. This was most complete on `test` p5.
 - **Image content.** Some of the test pages are adult. No call was refused or filtered.
+
+## A fourth page: `E rotation test (ja)` p1
+
+Run later the same day, on a page the owner picked as a complex one: turned text, 16 regions judged, 4 seeded (2 of each kind), two runs. Same script, with the bug above fixed, so all 16 regions are in the unmodified figures. Spend: $0.066 (8 Gemini calls, 91 Jev calls). It is kept apart from the three-page tables above.
+
+| Config | Seeded caught (of 8, both runs) | Unseeded regions flagged at 0.5 (of 16, run 1 / run 2) | Cost, one pass ($) | Time, one pass (s) |
+| --- | --- | --- | --- | --- |
+| Gemini 3.5 flash-lite | 3 | 0 / 0 | 0.0066 | 6.4 |
+| Gemini 3.1 flash-lite | 6 | 1 / 1 | 0.0048 | 7.5 |
+| Jev `page` | 8 | 15 / 15 | 0.0035 | 21.9 |
+| Jev `page_batch` | 8 | 15 / 14 | 0.0005 | 1.2 |
+| Jev `crop` | 8 | 13 / 13 | 0.0016 | 16.5 |
+
+"Unseeded regions flagged" counts all 16 regions on the unmodified page. Gemini 3.5 missed all 4 seeds in run 1 and caught 3 of 4 in run 2.
+
+Jev `noul` values, both runs pooled:
+
+| Layout | Group | n | min | median | max | >= 0.5 | >= 0.7 | >= 0.9 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `page` | untranslated | 4 | 0.88 | 0.89 | 0.91 | 4 | 4 | 1 |
+| `page` | wrong translation | 4 | 0.90 | 0.95 | 0.98 | 4 | 4 | 4 |
+| `page` | unseeded | 24 | 0.53 | 0.68 | 0.82 | 24 | 11 | 0 |
+| `page_batch` | untranslated | 4 | 0.81 | 0.85 | 0.89 | 4 | 4 | 0 |
+| `page_batch` | wrong translation | 4 | 0.87 | 0.93 | 0.96 | 4 | 4 | 3 |
+| `page_batch` | unseeded | 24 | 0.48 | 0.67 | 0.75 | 23 | 9 | 0 |
+| `crop` | untranslated | 4 | 0.91 | 0.93 | 0.94 | 4 | 4 | 4 |
+| `crop` | wrong translation | 4 | 0.89 | 0.94 | 0.98 | 4 | 4 | 3 |
+| `crop` | unseeded | 24 | 0.32 | 0.81 | 0.92 | 18 | 16 | 3 |
+
+- AUC, seeded against unseeded: `page` 1.0, `page_batch` 1.0, `crop` 0.95.
+- At 0.5 Jev flags nearly the whole page, so at that line it gates nothing here.
+- The ranking still holds in the whole-page layouts: every seeded region scored above every unseeded one. But the line that separates them is about 0.85 here, against about 0.7 on the first three pages, and the gap is thin (0.82 against 0.88 in `page`).
+- Nobody checked the unseeded regions. This is a rotation test page, and turned text is what the overlap shrink leaves for review, so some of those flags may be right.
+- Largest `noul` change between runs: 0.07. One flag changed between runs (`page_batch`).
+- Jev attempts against results: `page` 43 for 40, `crop` 44 for 40, `page_batch` 4 for 4. The failures were 529s, retried.
+
+## Where this leaves it (owner, 2026-11-10)
+
+Jev is not a replacement for the vision QA: it returns no corrected text, no feedback and no font size. It could be a first judge that decides which regions go on to the costlier model. No decision is taken yet. What the four pages say about that use:
+
+- One call per page (`page_batch`) is the only layout that is both cheaper and faster than Gemini: about a tenth of the cost and a fifth of the time.
+- A fixed pass/fail line did not hold across pages. Ranking the regions and sending the top few on is the variant worth testing next, on about 20 pages with regions checked by eye.
+- Gemini 3.5 flash-lite, the current QA model, missed 18 of the 32 seeded region-runs over the four pages. That matters whatever happens with Jev.
 
 ## Limits of this test
 
