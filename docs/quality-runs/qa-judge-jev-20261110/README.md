@@ -256,7 +256,7 @@ Jev `noul` values, both runs pooled:
 
 Jev is not a replacement for the vision QA: it returns no corrected text, no feedback and no font size. It could be a first judge that decides which regions go on to the costlier model. No decision is taken yet. What the four pages say about that use:
 
-- One call per page (`page_batch`) is the only layout that is both cheaper and faster than Gemini: about a tenth of the cost and a fifth of the time.
+- One call per page (`page_batch`) is the only layout that is both cheaper and faster than Gemini: about a tenth of the cost, and between a fifth and a half of the time depending on the page.
 - A fixed pass/fail line did not hold across pages. Ranking the regions and sending the top few on is the variant worth testing next, on about 20 pages with regions checked by eye.
 - Gemini 3.5 flash-lite, the current QA model, missed 18 of the 32 seeded region-runs over the four pages. That matters whatever happens with Jev.
 
