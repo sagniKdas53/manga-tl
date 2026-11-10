@@ -7,7 +7,6 @@
 pub mod archive;
 pub mod auth;
 pub mod clone;
-pub mod collision_trim;
 pub mod config;
 pub mod db;
 pub mod error;
@@ -20,6 +19,7 @@ pub mod layer_tree;
 pub mod logging;
 pub mod minio;
 pub mod models;
+pub mod overlap_shrink;
 pub mod page_freshness;
 pub mod page_scene;
 pub mod page_scene_builder;

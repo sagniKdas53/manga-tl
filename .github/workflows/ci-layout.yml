@@ -1,53 +1,40 @@
 name: CI - Layout
 
-# Text layout must not change unnoticed. Two checks, with no page images, no page text and no model
-# calls, so they run on a public repo:
-#   - the ledger rule: a PR that can move text or regroup it adds a row to the layout ledger;
+# Text layout must not change unnoticed. With no page images, no page text and no model calls, so it
+# runs on a public repo:
 #   - the layout check: the renderer's own layout code, in the renderer's own image, on stored boxes
-#     and outlines with stand-in text.
+#     and outlines with stand-in text;
+#   - the quality tools' own tests.
 # Grouping has its own check in the worker's tests (tests/test_grouping_golden.py).
+# Until 2026-11-10 a "ledger rule" also failed a layout PR that added no row to the layout ledger.
+# The owner dropped it: it checked that a row existed, not what it said.
 # See docs/quality-runs/layout-regression/README.md.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - "packages/page-scene/**"
+      - "services/page-renderer/**"
+      - "scripts/quality/**"
+      - ".github/workflows/ci-layout.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  ledger-rule:
-    name: Ledger row for layout changes
-    if: github.event_name == 'pull_request'
+  quality-tools:
+    name: Quality tools' tests
     runs-on: ubuntu-latest
-    outputs:
-      run_layout_check: ${{ steps.rule.outputs.run_layout_check }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Test the tools
         run: |
-          python3 -m unittest scripts/quality/test_check_ledger_row.py
           python3 -m unittest scripts/quality/test_compare_layout.py
-      - name: Check the ledger rule
-        id: rule
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
-        run: >-
-          python3 scripts/quality/check_ledger_row.py --base "$BASE_SHA" --labels "$LABELS"
-          --github-output "$GITHUB_OUTPUT"
+          python3 -m unittest scripts/quality/test_predict_collisions.py
 
   layout-check:
     name: Text layout is unchanged
-    needs: ledger-rule
-    # Run when a change could affect layout, or the check itself changed, even if the rule failed,
-    # so the author sees both.
-    if: >-
-      always() && (github.event_name == 'workflow_dispatch'
-      || needs.ledger-rule.outputs.run_layout_check == 'true')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

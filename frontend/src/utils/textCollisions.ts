@@ -15,8 +15,8 @@ export type MeasureText = (font: string, text: string) => number;
 /**
  * Where each line of an element's text lands, by the renderer's rule (page-scene ContentScene):
  * lines 1.2 × the font size apart, centred on the box, each at its fitted centre, clamped into
- * the fit box, as wide as the text measures. The backend's collision trim (#182) reads these same
- * boxes from the renderer, so the editor and the trim agree on what touches.
+ * the fit box, as wide as the text measures. The backend's overlap shrink (#182) reads these same
+ * boxes from the renderer, so the editor and the shrink agree on what touches.
  */
 export function elementLineBoxes(
   element: LayerElement,
@@ -140,7 +140,7 @@ export function textCollisions(drawn: DrawnText[]): [string, string][] {
   return pairs;
 }
 
-/** Within this share, two source footprints count as the same size (collision_trim.rs). */
+/** Within this share, two source footprints count as the same size (overlap_shrink.rs). */
 const SAME_FOOTPRINT = 0.15;
 
 export interface CollisionSide {
@@ -149,8 +149,8 @@ export interface CollisionSide {
 }
 
 /**
- * Which side of a collision should change, by the owner's rule as the backend trim applies it
- * (collision_trim.rs `keeps_its_shape`): a hand-edited box keeps its shape; otherwise the bigger
+ * Which side of a collision should change, by the owner's rule as the backend shrink applies it
+ * (overlap_shrink.rs `keeps_its_shape`): a hand-edited box keeps its shape; otherwise the bigger
  * source footprint keeps it (within 15 % is a tie), then the longer text. Two hand-edited boxes:
  * both, since neither has the better claim.
  */
@@ -182,7 +182,7 @@ export function sidesToChange(
 export interface TextCollision {
   /** The region this one's text runs into, when it has one. */
   other: OcrRegion | undefined;
-  /** Either text is drawn at an angle: the automatic trim never cuts those. */
+  /** Either text is drawn at an angle: the automatic shrink never cuts those. */
   turned: boolean;
 }
 

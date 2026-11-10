@@ -1,6 +1,8 @@
 # Layout regression ledger
 
-The owner's rule (2026-11-07): no regression that can't be traced back to its source. Each change that can move text or regroup it gets a row here, and declares what it may touch before it runs. Anything else it moves fails the check.
+The owner's rule (2026-11-07): no regression that can't be traced back to its source. A change that can move text or regroup it gets a row here, and declares what it may touch before it runs. Anything else it moves fails the comparison (`compare_layout.py`).
+
+Rows are written by hand. Until 2026-11-10 a CI rule failed any layout PR that added no row; the owner dropped it, because it only checked that a row existed, not what it said. The layout check below stays.
 
 ## The ledger
 
@@ -13,7 +15,7 @@ The owner's rule (2026-11-07): no regression that can't be traced back to its so
 | 4 | #321: outside a balloon, a jump in column tops separates two speakers | worker #88 (ef7d3ea) | grouping: no-balloon text only | not predicted, the new regions have no translation yet | not predicted | 13 groups on 8 pages | 34 to 41 pairs on those 8 pages, overlapped area -23 % | not predicted | 0 groups outside the footprint | Replay on all 92 pages. Live in row 5 |
 | 5 | Pilot: rows 1-4 live on 5 pages (`test` p5, p16, p4, `test2` p6, B fixtures p5) | no code | everything on those 5 pages | 2 | 0 / 0 (45 reworded) | 30 regions, 12 more in all | 90 to 97 | 182 to 186 | 0 | Live. The other 87 pages unchanged. Text reworded by re-translation isn't compared for size. 2 boxes moved on `test2` p6 and `test` p16. Awaiting the owner's look |
 | 6 | CI checks; worker pin at the golden test | PR pending | none: tests and fixtures only | 0 | 0 / 0 | 0 | 97 | 186 | 0 | The two checks below pass on this code, and fail on deliberately broken code |
-| 7 | #182: where two texts' drawn lines collide after a pipeline render, the smaller box is trimmed back from the bigger and the page renders once more | renderer #338, this PR | box: text whose lines collide; never a hand-edited box or a page edited by hand | 8 | 0 / 8 (accepted by the owner, 2026-11-09) | 0 | 95 to 88 | 188 to 188 | 0 beyond the 8 accepted | Prediction on all 92 pages, fitted in the renderer: text collisions 49 to 39, no new one. The Rust planner's test reproduces the same 8 trims on the same geometry. Live on the 6 pages (test stack, 2026-11-09, renders flagged as final passes so no QA ran): the same 8 boxes to the pixel, font px as predicted or 1 px larger, collisions 49 to 39, one more render each and no second trim |
+| 7 | #182: where two texts' drawn lines collide after a pipeline render, the smaller box is shrunk back from the bigger and the page renders once more | renderer #338, this PR | box: text whose lines collide; never a hand-edited box or a page edited by hand | 8 | 0 / 8 (accepted by the owner, 2026-11-09) | 0 | 95 to 88 | 188 to 188 | 0 beyond the 8 accepted | Prediction on all 92 pages, fitted in the renderer: text collisions 49 to 39, no new one. The Rust planner's test reproduces the same 8 shrinks on the same geometry. Live on the 6 pages (test stack, 2026-11-09, renders flagged as final passes so no QA ran): the same 8 boxes to the pixel, font px as predicted or 1 px larger, collisions 49 to 39, one more render each and no second shrink |
 
 "Tiny" is under 1.5 % of page width, a threshold chosen for comparison. Overlap is two text boxes sharing over 10 % of the smaller one.
 
@@ -29,8 +31,7 @@ All with no page images, no page text and no model calls, because both repos are
 
 | Check | Where | What fails it |
 | --- | --- | --- |
-| **Ledger rule** (`check_ledger_row.py`) | `ci-layout.yml` | A PR touching the worker pin, the fitter, the renderer or the text-box code without adding a row here. `no-layout-effect` is the explicit way out. CI sees only the pin move, not what changed in the worker, so a tests-only or provenance-only worker bump takes the label too |
-| **Layout check** (`layout_ci.cjs`) | `ci-layout.yml`, in the renderer's own image | Any change to a fitted size or line count, over 730 stored boxes with stand-in text (`scripts/quality/fixtures/layout-fixture.json`). Runs when the ledger rule finds a layout path, or when the check's own tooling (`layout_ci.cjs`, `ci-layout.yml`) changes |
+| **Layout check** (`layout_ci.cjs`) | `ci-layout.yml`, in the renderer's own image | Any change to a fitted size or line count, over 730 stored boxes with stand-in text (`scripts/quality/fixtures/layout-fixture.json`). Runs when a PR touches the fitter (`packages/page-scene/`), the renderer (`services/page-renderer/`), the fixture, or the check's own tooling (`layout_ci.cjs`, `ci-layout.yml`) |
 | **Grouping check** (`test_grouping_golden.py`) | Worker CI | Any change to grouping, over 91 pages' piece positions. It leaves out the one page whose balloon join needs its image |
 
 Each was checked by breaking things on purpose: turning off each of five grouping rules, or changing a threshold, failed 4 to 26 pages, and changing the outline rule or the line height failed 34 and 189 text objects.
@@ -90,10 +91,10 @@ On the test stack (main 23286e3), 55 region pairs on 20 pages collide. Boxes ove
 catch 51 of them, but 44 of the 95 such overlaps have no colliding text.
 
 `predict_collisions.py` applies the owner's rule for #182: a hand-edited box keeps its shape; otherwise the
-bigger source footprint does, then the one with more translated text; the other is trimmed back from it on
-the side that keeps the most, and a trim that would leave tiny text or too little box goes to review.
+bigger source footprint does, then the one with more translated text; the other is shrunk back from it on
+the side that keeps the most, and a shrink that would leave tiny text or too little box goes to review.
 
-| Trigger | Boxes trimmed | Collisions | Text set smaller | Tiny text | Left for review |
+| Trigger | Boxes shrunk | Collisions | Text set smaller | Tiny text | Left for review |
 | --- | --- | --- | --- | --- | --- |
 | Drawn lines collide | 9 | 55 → 43 | 8 | 188 → 188 | 44: 20 rotated, 18 too little left, 6 tiny |
 | Boxes overlap over 10% (all the backend sees before fitting) | 37 | 55 → 42 | 26 | 188 → 188 | 58 |
@@ -101,24 +102,26 @@ the side that keeps the most, and a trim that would leave tiny text or too littl
 Of the 44 left for review, 20 are rotated text (E3, #180). That is an upper bound: line and source boxes are
 axis-aligned around rotated text, so they overstate overlap. Of the 18 with too little left, 6 have source boxes
 overlapping by more than 30%, but checked against the pieces' own outlines only 2 truly share source text. In the
-other 4 a small region sits inside the rectangle of a bigger, oddly shaped group, so no trim of the small one can
+other 4 a small region sits inside the rectangle of a bigger, oddly shaped group, so no shrink of the small one can
 clear it.
 
 ### In the pipeline (2026-11-09)
 
-`backend-rust/src/collision_trim.rs` does this after each render the pipeline queues (after translation,
+This step is the **overlap shrink**. It was called the "collision trim" until 2026-11-10, which read as cutting the translation; it only ever shrinks a box. Older PRs, job payloads (`collisionTrim`) and diagnostics (`text-collision-trimmed`) carry the old name.
+
+`backend-rust/src/overlap_shrink.rs` does this after each render the pipeline queues (after translation,
 and QA's final pass), never after an editor render. It reads the renderer's own line boxes (`line_boxes`,
 renderer #338), which agree with the DOM's on unrotated text; any pair with rotated text goes to review.
-A trim whose text would come out tiny is judged before rendering, by scaling the drawn px by the share of
-box area kept, rather than by a second render. Trimmed boxes are saved like any other, the page is
-snapshotted and rendered once more without the trim flag, and that render queues QA. Each trim
-(`text-collision-trimmed`, with the old box and the keeper) and each review (`text-collision`, with the
-reason) is written to the render job's `diagnostics_json`. `COLLISION_TRIM=off` turns it off.
+A shrink whose text would come out tiny is judged before rendering, by scaling the drawn px by the share of
+box area kept, rather than by a second render. Shrunk boxes are saved like any other, the page is
+snapshotted and rendered once more without the shrink flag, and that render queues QA. Each shrink
+(`text-overlap-shrunk`, with the old box and the keeper) and each review (`text-collision`, with the
+reason) is written to the render job's `diagnostics_json`. `OVERLAP_SHRINK=off` turns it off.
 
-On the stack it predicts 8 trims on 6 pages: the 9 the owner looked at, less one 72 px line on a 4093 px
-wide page that the size estimate sends to review. Run live on those 6 pages it trimmed the same 8 boxes to the pixel. To get
+On the stack it predicts 8 shrinks on 6 pages: the 9 the owner looked at, less one 72 px line on a 4093 px
+wide page that the size estimate sends to review. Run live on those 6 pages it shrank the same 8 boxes to the pixel. To get
 there for free, each page's render pointer was cleared and its revision advanced so the debounce queued a
-render, and the queued jobs were marked `collisionTrim` and `finalPass` before the worker took them.
+render, and the queued jobs were marked `overlapShrink` and `finalPass` before the worker took them.
 
 ## Evidence
 

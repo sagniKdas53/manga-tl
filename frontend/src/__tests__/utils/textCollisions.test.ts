@@ -141,7 +141,7 @@ describe("textCollisions", () => {
   });
 });
 
-describe("sidesToChange (collision_trim.rs keeps_its_shape)", () => {
+describe("sidesToChange (overlap_shrink.rs keeps_its_shape)", () => {
   const side = (id: string, el: Partial<LayerElement>, area: number) => ({
     element: element(id, el),
     region: region(`r-${id}`, 1, { bboxW: area, bboxH: 1 }),
@@ -199,7 +199,7 @@ describe("overlap issues", () => {
     expect(issues[0].explanation).toContain("bubble 1");
   });
 
-  it("says when angled text is why the trim left it", () => {
+  it("says when angled text is why the shrink left it", () => {
     const issue = regionIssue(region("r-a", 1), element("a"), false, {
       other: region("r-b", 2),
       turned: true,

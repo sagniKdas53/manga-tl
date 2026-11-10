@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from predict_collisions import GAP_PX, keeps_its_shape, predict_page, trimmed
+from predict_collisions import GAP_PX, keeps_its_shape, predict_page, shrunk
 
 
 def row(key, box, bbox=None, text_len=10, hand=False, rotation=0, region_id=None, px=None):
@@ -49,14 +49,14 @@ class Trimming(unittest.TestCase):
         loser = (100, 100, 200, 100)
         keeper = (250, 50, 200, 200)
         # Cutting the right edge back to the keeper's left keeps 150 - GAP of 200 px of width.
-        self.assertEqual(trimmed(loser, keeper), [100, 100, 150 - GAP_PX, 100])
+        self.assertEqual(shrunk(loser, keeper), [100, 100, 150 - GAP_PX, 100])
 
-    def test_a_trim_that_would_leave_too_little_is_refused(self):
-        self.assertIsNone(trimmed((100, 100, 100, 100), (90, 90, 120, 120)))
+    def test_a_shrink_that_would_leave_too_little_is_refused(self):
+        self.assertIsNone(shrunk((100, 100, 100, 100), (90, 90, 120, 120)))
 
 
 class APage(unittest.TestCase):
-    def test_only_colliding_text_is_trimmed(self):
+    def test_only_colliding_text_is_shrunk(self):
         page = {
             "regions": [row("a", (0, 0, 200, 300)), row("b", (180, 0, 100, 300)), row("c", (500, 0, 100, 100))],
             "text_collisions": [["a", "b", 300, 0.2]],
@@ -66,7 +66,7 @@ class APage(unittest.TestCase):
         self.assertEqual(boxes["id-b"][0], 200 + GAP_PX)
         self.assertEqual(review, [])
 
-    def test_rotated_text_on_either_side_is_left_for_review_not_trimmed(self):
+    def test_rotated_text_on_either_side_is_left_for_review_not_shrunk(self):
         # Line boxes are before rotation, so a rotated keeper's boxes don't say where its text is either.
         for rotated in ("a", "b"):
             page = {
@@ -80,7 +80,7 @@ class APage(unittest.TestCase):
             self.assertEqual(boxes, {})
             self.assertEqual(review[0]["reason"], "rotated")
 
-    def test_a_trim_whose_text_would_come_out_tiny_goes_to_review(self):
+    def test_a_shrink_whose_text_would_come_out_tiny_goes_to_review(self):
         # 1000 px wide: tiny is under 15 px. Cutting b back to the keeper's left edge keeps 51 of 100 px of
         # width, so 25 px text scales to about 13: tiny.
         page = {
@@ -91,11 +91,11 @@ class APage(unittest.TestCase):
         boxes, review = predict_page(page, trigger="text")
         self.assertEqual(boxes, {})
         self.assertEqual(review[0]["reason"], "text would be tiny")
-        # The same trim of 40 px text leaves about 20 px, not tiny: trimmed.
+        # The same shrink of 40 px text leaves about 20 px, not tiny: shrunk.
         page["regions"][1]["px"] = 40
         self.assertEqual(predict_page(page, trigger="text")[0], {"id-b": [0, 0, 55 - GAP_PX, 300]})
 
-    def test_text_that_is_already_tiny_may_still_be_trimmed(self):
+    def test_text_that_is_already_tiny_may_still_be_shrunk(self):
         page = {
             "width": 1000,
             "regions": [row("a", (0, 0, 200, 300)), row("b", (180, 0, 100, 300), px=10)],
@@ -111,7 +111,7 @@ class APage(unittest.TestCase):
         }
         self.assertEqual(predict_page(page, trigger="text"), ({}, []))
 
-    def test_the_box_trigger_also_trims_boxes_whose_text_does_not_collide(self):
+    def test_the_box_trigger_also_shrinks_boxes_whose_text_does_not_collide(self):
         page = {"regions": [row("a", (0, 0, 200, 300)), row("b", (150, 0, 100, 300))], "text_collisions": []}
         self.assertEqual(predict_page(page, trigger="text")[0], {})
         self.assertIn("id-b", predict_page(page, trigger="box")[0])
