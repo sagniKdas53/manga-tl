@@ -6,8 +6,8 @@ already decided, where the code is, and the gate. **R7 is implementation work.**
 
 Read first, in this order:
 1. This file.
-2. [Tracker, R3-closed section](../output-quality-implementation-tracker.md#status-at-a-glance-2026-09-26-night--r3-closed), especially question 1 of "Explored before the typesetting phase".
-3. The R7 row of the [realigned order](../output-quality-implementation-tracker.md#realigned-order-replaces-m6m8-sequencing-until-r3-lands), which has the original scope and gate.
+2. [Tracker, R3-closed section](../output-quality-tracker-history.md#status-at-a-glance-2026-09-26-night--r3-closed), especially question 1 of "Explored before the typesetting phase".
+3. The R7 row of the [realigned order](../output-quality-tracker-history.md#realigned-order-replaces-m6m8-sequencing-until-r3-lands), which has the original scope and gate.
 4. [OQ-03 and OQ-05](../output-quality-next-session-20260922.md) (Reader cleanup parity, project round-trip) and its "page 8 evidence" section.
 5. Issues: [`AUDIT-R24`](../issues.md#audit-r24-medium-cleanup-smears-the-art-when-text-crosses-a-figure) (why a user needs to hide or delete one patch), [`AUDIT-R26`](../issues.md#audit-r26-feature-image-generation-models-as-an-opt-in-re-inpaint-for-hard-regions) (a later re-inpaint action will plug into this layer; not in scope).
 
