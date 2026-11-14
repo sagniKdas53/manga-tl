@@ -7,7 +7,7 @@ decision, stop and write it down (section 7).
 
 Read first, in this order:
 1. This file.
-2. [Tracker status](../output-quality-implementation-tracker.md#status-at-a-glance-2026-09-26--test-round-passed-r3-closes-in-a-new-chat), then the 2026-09-25 sections below it.
+2. [Tracker status](../output-quality-tracker-history.md#status-at-a-glance-2026-09-26--test-round-passed-r3-closes-in-a-new-chat), then the 2026-09-25 sections below it.
 3. [R3 handoff § Packet 4](R3-phase-separation-handoff-20260921.md#packet-4--measurement-and-the-bounded-gate) and its "Three separate acceptance decisions" table.
 4. [R3.md § time](R3.md#time--this-is-the-failed-part) — the historical numbers you will be compared with.
 5. [R6.md § Gate runbook](R6.md#gate-runbook) — the stack and harness commands this runbook reuses.
@@ -256,7 +256,7 @@ numbers from the artifacts:
 5. **reference_compare.md highlights**, copied as numbers, not re-derived.
 6. **Spend:** the sum of `job_costs` for these pages (SQL in section 9), estimated vs billed where known.
 7. **Protected-art checklist:** one row per item in the tracker's
-   [per-fixture acceptance checklist](../output-quality-implementation-tracker.md#per-fixture-acceptance-checklist)
+   [per-fixture acceptance checklist](../output-quality-tracker-history.md#per-fixture-acceptance-checklist)
    that concerns cleanup, filled from the `cleanup-only.png` crops. For example, sample99's preserved
    SFX unchanged, sample83's central art protected, sample93's large page completing. Outside-support
    invariance cannot see art damaged *inside* a patch's bounds; these rows are how that gets looked at.
