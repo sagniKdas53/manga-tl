@@ -3523,8 +3523,8 @@ async fn enqueue_snapshot_render(state: &AppState, page_id: Uuid, flags: Value) 
         return;
     };
     let mut extra = flags.as_object().cloned().unwrap_or_default();
-    // A pipeline render may trim colliding text once (#182, collision_trim); editor renders never.
-    extra.insert("collisionTrim".into(), json!(true));
+    // A pipeline render may shrink a colliding text box once (#182, overlap_shrink); editor renders never.
+    extra.insert("overlapShrink".into(), json!(true));
     match crate::jobs::recovery::enqueue_current_snapshot_render(state, &page, extra).await {
         Ok(true) => tracing::info!(
             "Queued immutable render for page {page_id} revision {}",
@@ -3876,8 +3876,8 @@ pub async fn handle_render_callback(
         // Accepted historical output is retained for diagnosis, but cannot judge/advance a new scene.
         return Ok(RenderCallbackOutcome::default());
     }
-    if crate::collision_trim::after_render(state, job_id, &layout).await {
-        // #182 trimmed colliding text and queued the page's next render, carrying this job's QA
+    if crate::overlap_shrink::after_render(state, job_id, &layout).await {
+        // #182 shrank a colliding text box and queued the page's next render, carrying this job's QA
         // intent; that render queues QA or completes the pipeline, not this one.
         return Ok(RenderCallbackOutcome {
             completes_pipeline: false,

@@ -142,7 +142,7 @@ export function regionIssue(
   }
   if (collision) {
     // Last: fixing an overflow often clears the overlap too. Only the side that should change
-    // carries it (textCollisions `sidesToChange`, the backend trim's rule), so a pair is one issue.
+    // carries it (textCollisions `sidesToChange`, the backend shrink's rule), so a pair is one issue.
     const other =
       collision.other?.bubbleReadingOrder != null
         ? `bubble ${collision.other.bubbleReadingOrder}`
@@ -152,8 +152,8 @@ export function regionIssue(
       kind: "overlap",
       title: "Text runs into another box",
       explanation: collision.turned
-        ? `This translation's text overlaps ${other}'s. One of them is drawn at an angle, and the automatic trim never cuts angled text. Make this box smaller or move it, or shorten the text.`
-        : `This translation's text overlaps ${other}'s. The automatic trim only cuts a box back when enough room and a readable size are left, so this one is yours. Make this box smaller or move it, or shorten the text.`,
+        ? `This translation's text overlaps ${other}'s. One of them is drawn at an angle, and the automatic shrink never cuts angled text. Make this box smaller or move it, or shorten the text.`
+        : `This translation's text overlaps ${other}'s. The automatic shrink only cuts a box back when enough room and a readable size are left, so this one is yours. Make this box smaller or move it, or shorten the text.`,
       actions: ["edit", "mask"],
     };
   }

@@ -5,16 +5,16 @@ The owner's rules (2026-11-08):
   A page edited by hand isn't touched at all, as machine QA leaves it alone.
 - Otherwise the bigger one keeps its shape, by a ladder: first the source text's footprint (its OCR box),
   and when those are about the same, the one with more translated text.
-- The other is trimmed back from it, on whichever side keeps the most of it. Never moved (LOCK-1).
-- A trim that would leave too little goes to review instead, as does a pair with rotated text on either
+- The other is shrunk back from it, on whichever side keeps the most of it. Never moved (LOCK-1).
+- A shrink that would leave too little goes to review instead, as does a pair with rotated text on either
   side: line boxes are before rotation, so they don't say where rotated text really is.
-- So does a trim whose text would come out tiny, judged before any render by scaling the drawn px by the
-  share of box area kept. On 2026-11-08's stack that flagged the 5 trims a re-render found tiny, and one
+- So does a shrink whose text would come out tiny, judged before any render by scaling the drawn px by the
+  share of box area kept. On 2026-11-08's stack that flagged the 5 shrinks a re-render found tiny, and one
   more (a 72 px line on a 4093 px wide page), so it errs toward not trimming.
 
-backend-rust/src/collision_trim.rs applies the same rules after each pipeline render; keep them in step.
+backend-rust/src/overlap_shrink.rs applies the same rules after each pipeline render; keep them in step.
 
---trigger text trims only where drawn lines collide (the snapshot's text_collisions). --trigger box trims
+--trigger text shrinks only where drawn lines collide (the snapshot's text_collisions). --trigger box shrinks
 wherever boxes overlap by more than 10% of the smaller, which is all the backend can see before text is
 fitted. Comparing the two says what the box trigger costs.
 
@@ -28,7 +28,7 @@ import sys
 GAP_PX = 4
 # About the same footprint: within this share of the smaller.
 SAME_FOOTPRINT = 0.15
-# A trim must keep this share of the box and this many px on each side, or it goes to review.
+# A shrink must keep this share of the box and this many px on each side, or it goes to review.
 KEEP_AT_LEAST = 0.4
 MIN_SIDE_PX = 24
 OVERLAP_SHARE = 0.1
@@ -60,7 +60,7 @@ def keeps_its_shape(a, b):
     return a["key"] if fa >= fb else b["key"]
 
 
-def trimmed(loser, keeper):
+def shrunk(loser, keeper):
     """The loser's box cut back from the keeper's on one side, or None if every cut leaves too little."""
     x, y, w, h = loser
     kx, ky, kw, kh = keeper
@@ -118,7 +118,7 @@ def predict_page(page, trigger):
     )
     for a, b in pairs:
         if not area_shared(boxes[a], boxes[b]):
-            continue  # an earlier trim already parted them
+            continue  # an earlier shrink already parted them
         keeper = keeps_its_shape(rows[a], rows[b])
         if keeper is None:
             review.append({"pair": [a, b], "reason": "both hand-edited"})
@@ -127,7 +127,7 @@ def predict_page(page, trigger):
         if rows[a].get("rotation") or rows[b].get("rotation"):
             review.append({"pair": [a, b], "loser": loser, "reason": "rotated"})
             continue
-        cut = trimmed(boxes[loser], boxes[keeper])
+        cut = shrunk(boxes[loser], boxes[keeper])
         if cut is None:
             review.append({"pair": [a, b], "loser": loser, "reason": "too little would be left"})
             continue
@@ -152,14 +152,14 @@ def main():
         boxes, review = predict_page(page, args.trigger)
         whatif.update(boxes)
         if boxes or review:
-            report["pages"].append({"page": page["page"], "trimmed": len(boxes), "review": review})
+            report["pages"].append({"page": page["page"], "shrunk": len(boxes), "review": review})
     json.dump(whatif, open(args.out, "w"))
     json.dump(report, open(args.out.replace(".json", "") + "-report.json", "w"), indent=1)
     reasons = {}
     for page in report["pages"]:
         for entry in page["review"]:
             reasons[entry["reason"]] = reasons.get(entry["reason"], 0) + 1
-    print(f"trigger {args.trigger}: {len(whatif)} boxes trimmed on {sum(1 for p in report['pages'] if p['trimmed'])} pages; review: {reasons or 'none'}")
+    print(f"trigger {args.trigger}: {len(whatif)} boxes shrunk on {sum(1 for p in report['pages'] if p['shrunk'])} pages; review: {reasons or 'none'}")
     return 0
 
 

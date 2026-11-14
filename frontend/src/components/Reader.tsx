@@ -1222,7 +1222,7 @@ export const Reader: React.FC<ReaderProps> = ({
     (l) => l.layer.type === "translation" && isLayerShown(l.layer, layers),
   );
   // #182: text that runs into another box's text, judged on the lines as the renderer draws them.
-  // The backend trims what it safely can after a pipeline render; what is left shows up here and
+  // The backend shrinks what it safely can after a pipeline render; what is left shows up here and
   // clears as soon as it is fixed. Only the element that draws each region counts, so a redo
   // overlay never collides with the reading it replaces.
   const textCollisions = React.useMemo(() => {

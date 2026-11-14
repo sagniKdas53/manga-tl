@@ -1,25 +1,27 @@
-//! #182: where two texts' drawn lines collide after a pipeline render, the smaller one gives way.
+//! #182, the overlap shrink: where two texts' drawn lines collide after a pipeline render, the
+//! smaller one's box is shrunk on one side until it clears the bigger one's. Only the box changes:
+//! the translation is never cut. (Called the "collision trim" until 2026-11-10.)
 //!
 //! The owner's rules (2026-11-08):
 //! - A hand-edited box keeps its shape: a person already chose it. Two hand-edited boxes are left
 //!   for review, and a page edited by hand is not touched at all (machine QA leaves it alone too).
 //! - Otherwise the bigger one keeps its shape, by a ladder: first the source text's footprint (its
 //!   OCR box), and when those are about the same, the one with more translated text.
-//! - The other is trimmed back from it on whichever side keeps the most of it. Never moved.
-//! - Review instead of a trim: rotated text on either side (line boxes are before rotation, so
-//!   they don't say where rotated text is), a trim that leaves too little box, or one whose text
+//! - The other is shrunk back from it on whichever side keeps the most of it. Never moved.
+//! - Review instead of a shrink: rotated text on either side (line boxes are before rotation, so
+//!   they don't say where rotated text is), a shrink that leaves too little box, or one whose text
 //!   would come out tiny (the drawn px scaled by the share of box area kept).
 //!
 //! Collisions come from the renderer's `line_boxes`, so only text that is drawn on top of other
 //! text counts, not boxes that overlap in their padding. Only renders the pipeline queued
-//! (`collisionTrim` in the job payload, set by `coordinator::enqueue_snapshot_render`) are
-//! trimmed: never an editor render. The trimmed page is snapshotted and rendered once more,
-//! without the flag, so a trim never leads to another trim. Each trim and review is written to
-//! the render job's `diagnostics_json` (`text-collision-trimmed` with the old box and the
-//! keeper, `text-collision` with the reason). `COLLISION_TRIM=off` turns it off.
+//! (`overlapShrink` in the job payload, set by `coordinator::enqueue_snapshot_render`) are
+//! shrunk: never an editor render. The shrunk page is snapshotted and rendered once more,
+//! without the flag, so a shrink never leads to another shrink. Each shrink and review is written
+//! to the render job's `diagnostics_json` (`text-overlap-shrunk` with the old box and the keeper,
+//! `text-collision` with the reason). `OVERLAP_SHRINK=off` turns it off.
 //!
 //! `scripts/quality/predict_collisions.py` predicts the same thing from a snapshot; keep the two
-//! in step. `tests/fixtures/collision-trim.json` holds its output on the test stack's geometry.
+//! in step. `tests/fixtures/overlap-shrink.json` holds its output on the test stack's geometry.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -32,7 +34,7 @@ use crate::state::AppState;
 const GAP_PX: f64 = 4.0;
 /// About the same footprint: within this share of the smaller.
 const SAME_FOOTPRINT: f64 = 0.15;
-/// A trim must keep this share of the box and this many px on each side, or it goes to review.
+/// A shrink must keep this share of the box and this many px on each side, or it goes to review.
 const KEEP_AT_LEAST: f64 = 0.4;
 const MIN_SIDE_PX: f64 = 24.0;
 /// Under this share of the page width, text counts as tiny (as the layout ledger counts it).
@@ -59,7 +61,7 @@ pub struct TextObject {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Trim {
+pub struct Shrink {
     pub id: String,
     pub keeper: String,
     pub from: Rect,
@@ -127,7 +129,7 @@ fn keeps_its_shape(objects: &[TextObject], a: usize, b: usize) -> Option<usize> 
 }
 
 /// The loser's box cut back from the keeper's on one side, or None if every cut leaves too little.
-fn trimmed(loser: &Rect, keeper: &Rect) -> Option<Rect> {
+fn shrunk(loser: &Rect, keeper: &Rect) -> Option<Rect> {
     let [x, y, w, h] = *loser;
     let [kx, ky, kw, kh] = *keeper;
     let mut options = Vec::new();
@@ -172,8 +174,8 @@ fn would_be_tiny(object: &TextObject, cut: &Rect, page_width: f64) -> bool {
     px >= tiny && px * area(cut) / if original > 0.0 { original } else { 1.0 } < tiny
 }
 
-/// The trims and reviews for one page's drawn text.
-pub fn plan(objects: &[TextObject], page_width: f64) -> (Vec<Trim>, Vec<Review>) {
+/// The shrinks and reviews for one page's drawn text.
+pub fn plan(objects: &[TextObject], page_width: f64) -> (Vec<Shrink>, Vec<Review>) {
     let mut rects: Vec<Rect> = objects.iter().map(|o| o.rect).collect();
     let mut pairs = collisions(objects);
     // Biggest overlap first, so a box that gives way to two neighbours does so for the worst one
@@ -181,12 +183,12 @@ pub fn plan(objects: &[TextObject], page_width: f64) -> (Vec<Trim>, Vec<Review>)
     pairs.sort_by(|p, q| {
         area_shared(&rects[q.0], &rects[q.1]).total_cmp(&area_shared(&rects[p.0], &rects[p.1]))
     });
-    let mut trims: BTreeMap<usize, Trim> = BTreeMap::new();
+    let mut shrinks: BTreeMap<usize, Shrink> = BTreeMap::new();
     let mut review = Vec::new();
     let pair_ids = |a: usize, b: usize| (objects[a].id.clone(), objects[b].id.clone());
     for (a, b) in pairs {
         if area_shared(&rects[a], &rects[b]) == 0.0 {
-            continue; // an earlier trim already parted them
+            continue; // an earlier shrink already parted them
         }
         let Some(keeper) = keeps_its_shape(objects, a, b) else {
             review.push(Review {
@@ -203,7 +205,7 @@ pub fn plan(objects: &[TextObject], page_width: f64) -> (Vec<Trim>, Vec<Review>)
             });
             continue;
         }
-        let Some(cut) = trimmed(&rects[loser], &rects[keeper]) else {
+        let Some(cut) = shrunk(&rects[loser], &rects[keeper]) else {
             review.push(Review {
                 pair: pair_ids(a, b),
                 reason: "too little would be left",
@@ -218,25 +220,25 @@ pub fn plan(objects: &[TextObject], page_width: f64) -> (Vec<Trim>, Vec<Review>)
             continue;
         }
         rects[loser] = cut;
-        trims
+        shrinks
             .entry(loser)
             .and_modify(|t| {
                 t.to = cut;
                 t.keeper = objects[keeper].id.clone();
             })
-            .or_insert(Trim {
+            .or_insert(Shrink {
                 id: objects[loser].id.clone(),
                 keeper: objects[keeper].id.clone(),
                 from: objects[loser].rect,
                 to: cut,
             });
     }
-    (trims.into_values().collect(), review)
+    (shrinks.into_values().collect(), review)
 }
 
 fn enabled() -> bool {
     !matches!(
-        std::env::var("COLLISION_TRIM")
+        std::env::var("OVERLAP_SHRINK")
             .unwrap_or_default()
             .trim()
             .to_ascii_lowercase()
@@ -286,7 +288,7 @@ type ElementRow = (
     Option<i32>,
 );
 
-/// Called by `handle_render_callback` once a render is current. True when it trimmed boxes and
+/// Called by `handle_render_callback` once a render is current. True when it shrank boxes and
 /// queued the page's next render, which then queues QA or completes the pipeline instead of this
 /// one. Any failure leaves the page as it was, and is logged.
 pub async fn after_render(state: &AppState, job_id: Option<&str>, layout: &Value) -> bool {
@@ -296,16 +298,16 @@ pub async fn after_render(state: &AppState, job_id: Option<&str>, layout: &Value
     if !enabled() {
         return false;
     }
-    match trim(state, job_id, layout).await {
-        Ok(trimmed) => trimmed,
+    match shrink(state, job_id, layout).await {
+        Ok(shrunk) => shrunk,
         Err(err) => {
-            tracing::warn!("#182 collision trim after render job {job_id} skipped: {err}");
+            tracing::warn!("#182 overlap shrink after render job {job_id} skipped: {err}");
             false
         }
     }
 }
 
-async fn trim(state: &AppState, job_id: &str, layout: &Value) -> Result<bool, String> {
+async fn shrink(state: &AppState, job_id: &str, layout: &Value) -> Result<bool, String> {
     let payload: Option<String> = sqlx::query_scalar("SELECT payload FROM jobs WHERE id = $1")
         .bind(job_id)
         .fetch_optional(&state.pool)
@@ -315,7 +317,7 @@ async fn trim(state: &AppState, job_id: &str, layout: &Value) -> Result<bool, St
     let payload: Value = payload
         .and_then(|raw| serde_json::from_str(&raw).ok())
         .unwrap_or(Value::Null);
-    if payload.get("collisionTrim").and_then(Value::as_bool) != Some(true) {
+    if payload.get("overlapShrink").and_then(Value::as_bool) != Some(true) {
         return Ok(false);
     }
     let Some((page_id, revision)): Option<(Uuid, i32)> =
@@ -386,19 +388,19 @@ async fn trim(state: &AppState, job_id: &str, layout: &Value) -> Result<bool, St
         .await
         .map_err(|e| e.to_string())?
         .flatten();
-    // Unknown width: the tiny-text guard can't judge, so nothing is trimmed.
+    // Unknown width: the tiny-text guard can't judge, so nothing is shrunk.
     let Some(page_width) = page_width.filter(|w| *w > 0).map(f64::from) else {
         return Ok(false);
     };
-    let (trims, review) = plan(&objects, page_width);
-    if trims.is_empty() && review.is_empty() {
+    let (shrinks, review) = plan(&objects, page_width);
+    if shrinks.is_empty() && review.is_empty() {
         return Ok(false);
     }
 
-    let mut notes: Vec<Value> = trims
+    let mut notes: Vec<Value> = shrinks
         .iter()
         .map(|t| {
-            json!({"code": "text-collision-trimmed", "objectId": t.id, "keeperObjectId": t.keeper,
+            json!({"code": "text-overlap-shrunk", "objectId": t.id, "keeperObjectId": t.keeper,
                    "from": t.from, "to": t.to})
         })
         .collect();
@@ -428,7 +430,7 @@ async fn trim(state: &AppState, job_id: &str, layout: &Value) -> Result<bool, St
     .await
     .map_err(|e| e.to_string())?;
     let mut applied = 0;
-    for t in &trims {
+    for t in &shrinks {
         let id =
             t.id.strip_prefix("text-")
                 .and_then(|id| Uuid::parse_str(id).ok());
@@ -455,7 +457,7 @@ async fn trim(state: &AppState, job_id: &str, layout: &Value) -> Result<bool, St
     crate::page_scene_builder::snapshot_pipeline_scene(state, &mut tx, page_id).await?;
     tx.commit().await.map_err(|e| e.to_string())?;
 
-    // The next render carries this one's QA intent, and no collisionTrim: it never trims again.
+    // The next render carries this one's QA intent, and no overlapShrink: it never shrinks again.
     let mut extra = Map::new();
     for key in ["finalPass", "completesPipeline"] {
         if let Some(flag) = payload.get(key).and_then(Value::as_bool) {
@@ -469,7 +471,7 @@ async fn trim(state: &AppState, job_id: &str, layout: &Value) -> Result<bool, St
         .map_err(|e| e.to_string())?;
     crate::jobs::recovery::enqueue_current_snapshot_render(state, &page, extra).await?;
     tracing::info!(
-        "#182: page {page_id} revision {revision}: trimmed {applied} colliding text box(es), {} left for review; rendering again",
+        "#182: page {page_id} revision {revision}: shrank {applied} colliding text box(es), {} left for review; rendering again",
         review.len()
     );
     Ok(true)
@@ -539,11 +541,11 @@ mod tests {
     fn the_smaller_one_is_cut_back_from_the_keeper_never_moved() {
         let a = object("a", [0.0, 0.0, 200.0, 300.0]);
         let b = object("b", [180.0, 0.0, 100.0, 300.0]);
-        let (trims, review) = plan(&[a, b], 1000.0);
+        let (shrinks, review) = plan(&[a, b], 1000.0);
         assert!(review.is_empty());
         assert_eq!(
-            trims,
-            vec![Trim {
+            shrinks,
+            vec![Shrink {
                 id: "b".into(),
                 keeper: "a".into(),
                 from: [180.0, 0.0, 100.0, 300.0],
@@ -560,8 +562,8 @@ mod tests {
                 object("b", [180.0, 0.0, 100.0, 300.0]),
             ];
             objects[rotated].rotated = true;
-            let (trims, review) = plan(&objects, 1000.0);
-            assert!(trims.is_empty());
+            let (shrinks, review) = plan(&objects, 1000.0);
+            assert!(shrinks.is_empty());
             assert_eq!(review[0].reason, "rotated");
         }
     }
@@ -572,19 +574,19 @@ mod tests {
         let mut b = object("b", [180.0, 0.0, 100.0, 300.0]);
         a.hand = true;
         b.hand = true;
-        let (trims, review) = plan(&[a, b], 1000.0);
-        assert!(trims.is_empty());
+        let (shrinks, review) = plan(&[a, b], 1000.0);
+        assert!(shrinks.is_empty());
         assert_eq!(review[0].reason, "both hand-edited");
     }
 
     #[test]
-    fn a_trim_whose_text_would_come_out_tiny_goes_to_review() {
+    fn a_shrink_whose_text_would_come_out_tiny_goes_to_review() {
         let mut keeper = object("a", [55.0, 0.0, 200.0, 300.0]);
         keeper.source_area = 120_000.0;
         let mut loser = object("b", [0.0, 0.0, 100.0, 300.0]);
         loser.px = Some(25.0);
-        let (trims, review) = plan(&[keeper.clone(), loser.clone()], 1000.0);
-        assert!(trims.is_empty());
+        let (shrinks, review) = plan(&[keeper.clone(), loser.clone()], 1000.0);
+        assert!(shrinks.is_empty());
         assert_eq!(review[0].reason, "text would be tiny");
         loser.px = Some(40.0);
         assert_eq!(plan(&[keeper, loser], 1000.0).0.len(), 1);
@@ -607,7 +609,7 @@ mod tests {
     #[test]
     fn agrees_with_the_python_prediction_on_the_test_stack() {
         let fixture: Value =
-            serde_json::from_str(include_str!("../tests/fixtures/collision-trim.json")).unwrap();
+            serde_json::from_str(include_str!("../tests/fixtures/overlap-shrink.json")).unwrap();
         let rect = |v: &Value| -> Rect {
             let n: Vec<f64> = v
                 .as_array()
@@ -618,7 +620,7 @@ mod tests {
             [n[0], n[1], n[2], n[3]]
         };
         let round = |r: Rect| r.map(|v| (v * 10.0).round() / 10.0);
-        let (mut trims_seen, mut review_seen) = (0, 0);
+        let (mut shrinks_seen, mut review_seen) = (0, 0);
         for page in fixture["pages"].as_array().unwrap() {
             let objects: Vec<TextObject> = page["objects"]
                 .as_array()
@@ -648,17 +650,17 @@ mod tests {
             if page["hand_edited"].as_bool().unwrap() {
                 continue;
             }
-            let (trims, review) = plan(&objects, page["width"].as_f64().unwrap());
-            let trims: Map<String, Value> = trims
+            let (shrinks, review) = plan(&objects, page["width"].as_f64().unwrap());
+            let shrinks: Map<String, Value> = shrinks
                 .into_iter()
                 .map(|t| (t.id, json!(round(t.to))))
                 .collect();
-            let expected = page["expected"]["trims"].as_object().unwrap();
-            assert_eq!(trims.len(), expected.len(), "{name}: trims");
+            let expected = page["expected"]["shrinks"].as_object().unwrap();
+            assert_eq!(shrinks.len(), expected.len(), "{name}: shrinks");
             for (id, to) in expected {
                 let to = round(rect(to));
                 assert_eq!(
-                    trims.get(id).map(|t| round(rect(t))),
+                    shrinks.get(id).map(|t| round(rect(t))),
                     Some(to),
                     "{name}: {id}"
                 );
@@ -672,9 +674,9 @@ mod tests {
                 page["expected"]["review"],
                 "{name}: review"
             );
-            trims_seen += expected.len();
+            shrinks_seen += expected.len();
             review_seen += review.len();
         }
-        assert_eq!((trims_seen, review_seen), (8, 39));
+        assert_eq!((shrinks_seen, review_seen), (8, 39));
     }
 }
