@@ -18,7 +18,7 @@ It ends in three steps:
 
 The pipeline stages are rebuilt and live on the test stack. What is left is text fitting, a handful of grouping and OCR bugs, and the final validation.
 
-**The next step is the paid re-run.** Three merged changes only apply to a page when it is next OCR'd and translated, so the 92 existing test pages still show the old result:
+**The step most of this waits on is the paid re-run.** Three merged changes only apply to a page when it is next OCR'd and translated, so the 92 existing test pages still show the old result:
 
 | Change | Issue | What it has been proven on |
 | --- | --- | --- |
@@ -26,11 +26,11 @@ The pipeline stages are rebuilt and live on the test stack. What is left is text
 | Two speakers outside a balloon become two text units | #321 | Replay on 92 pages (13 groups on 8 pages), live on 5 |
 | Overlap shrink: the smaller of two colliding text boxes is shrunk back | #182 | Prediction on 92 pages, live on 6 (8 boxes, exactly as predicted) |
 
-One re-run covers all three. It costs OCR, translation and QA on 92 pages, and it has waited for the owner's go since 2026-11-08.
+One re-run covers all three. It costs OCR, translation and QA on 92 pages. It is on hold until the owner has bought credits (2026-11-15), so E3 goes ahead of it: E3 needs renders only, which cost nothing.
 
 ## What is left, in order
 
-### 1. The paid re-run (waits for the owner)
+### 1. The paid re-run (on hold for credits)
 
 - Before it: check which `main` and worker commit the test stack runs. It must include #339 and worker #88. The off switch is now `OVERLAP_SHRINK=off` (it was `COLLISION_TRIM` before #344); the test stack sets neither.
 - Run it against the [layout regression ledger](quality-runs/layout-regression/README.md) and add a row by hand. CI no longer demands one (#344).
@@ -68,12 +68,16 @@ One re-run covers all three. It costs OCR, translation and QA on 92 pages, and i
 
 ## Decisions waiting for the owner
 
-- **The go for the paid re-run**, and whether it is all 92 pages.
-- **Jev as a first judge ahead of the vision QA.** The [bench](quality-runs/qa-judge-jev-20261110/README.md) on four pages: Jev caught every seeded defect at under a tenth of the cost, and flagged many regions nobody seeded. Whether those flags are real is unchecked. No decision yet.
-- **The 5-page pilot** (ledger row 5) still says "awaiting the owner's look".
-- **One-shots and moves** (#288, #307) passed CI and an API check, but nobody has driven them in a browser on the test stack.
 - **#174 and #228:** keep or drop.
-- **Two dependency updates left open on 2026-11-14:** jsdom 31 (#346) fails three `ReaderInpainting` tests, and the worker's Python 3.15 base image (worker #93) is not exercised by PR CI, which tests on 3.13.
+- **The 5-page pilot** (ledger row 5) still says "awaiting the owner's look". The pages are `test` p5, p16 and p4, `test2` p6, and B fixtures p5.
+- **One-shots and moves** (#288, #307) passed CI and an API check. The owner will drive them in a browser on the test stack and report back.
+- **jsdom 31** (#346) stays open: it fails three `ReaderInpainting` tests.
+
+Decided 2026-11-15:
+
+- **The paid re-run is on hold** until the owner has bought credits.
+- **Jev does not become a first QA judge now.** The [bench](quality-runs/qa-judge-jev-20261110/README.md) didn't show much benefit. Revisit when its image mode is out of beta: #356.
+- **The worker stays on Python 3.13.** The 3.15 base image (worker #93) was merged and the image build failed, because paddlepaddle 3.3.1 has no build for 3.15. Worker #97 reverts it.
 
 ## What is done
 
